@@ -1,0 +1,42 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /*
+   * Garden palette. The plan wizard is a light utility UI and does not follow the
+   * prefers-color-scheme flip below, so these are literal rather than var() indirections.
+   */
+  --color-garden-canvas: #f7f8f5;
+  --color-garden-forest: #1b4332;
+  --color-garden-green: #2f7a3e;
+  --color-garden-sage: #e8f0e6;
+  --color-garden-line: #e3e6e0;
+  --color-garden-ink: #1a231c;
+  --color-garden-muted: #6b7a6e;
+  /* Nudges rather than errors — the character counter nearing its cap. Same hex as the
+     "replace" status stroke, so the wizard keeps one warm colour rather than two. */
+  --color-garden-warn: #d98324;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* Geist is loaded in layout.tsx; without this the fallback stack wins. */
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}

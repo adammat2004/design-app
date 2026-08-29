@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  /*
+   * `include` is pinned to src so the root-level config files (drizzle.config.ts,
+   * vitest.config.ts) stay out of the build. With them in, TypeScript infers the package root
+   * as the common source directory and emits `dist/src/main.js`, which is not where
+   * package.json's `start` script looks.
+   */
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "**/*spec.ts", "**/*test.ts"]
+}

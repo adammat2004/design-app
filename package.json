@@ -1,0 +1,26 @@
+{
+  "name": "garden-studio",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @garden-studio/api dev\" \"pnpm --filter @garden-studio/web dev\"",
+    "build": "pnpm --filter @garden-studio/schema build && pnpm --filter @garden-studio/api build && pnpm --filter @garden-studio/web build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "esbuild",
+      "unrs-resolver"
+    ]
+  }
+}
