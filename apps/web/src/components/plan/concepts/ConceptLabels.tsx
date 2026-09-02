@@ -1,10 +1,12 @@
 'use client';
 
+import { Fragment } from 'react';
 import type { Point } from '@garden-studio/schema';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { describeElement, elementAnchor, type DesignElement } from '@/lib/concepts';
-import { stackLabels } from '@/lib/label-layout';
+import { LABEL_MAX_WIDTH, stackLabels, type Stacked } from '@/lib/label-layout';
+import { LabelLeader } from '../LabelLeader';
 import { formatArea, type Unit } from '@/lib/units';
 import type { GardenZone } from '@/lib/zones';
 
@@ -53,21 +55,28 @@ export function ConceptLabels({
     <>
       {layOutConceptLabels(elements, zones, transform, size).map((entry) =>
         entry.kind === 'element' ? (
-          <span
-            key={entry.element.id}
-            data-testid={`element-label-${entry.element.id}`}
-            style={{ left: entry.at.x, top: entry.at.y }}
-            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-garden-line bg-white/90 px-1.5 py-0.5 text-center leading-tight whitespace-nowrap shadow-sm"
-          >
-            <span className="block text-[11px] font-semibold text-garden-ink">
-              {entry.element.name}
-            </span>
-            {describeElement(entry.element, unit) ? (
-              <span className="block text-[10px] text-garden-muted">
-                {describeElement(entry.element, unit)}
+          <Fragment key={entry.element.id}>
+            {/* A pushed label points at nothing without this. See `LabelLeader`. */}
+            {entry.displaced ? <LabelLeader anchor={entry.anchor} at={entry.at} /> : null}
+            <span
+              data-testid={`element-label-${entry.element.id}`}
+              style={{ left: entry.at.x, top: entry.at.y }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md border border-garden-line bg-white/90 px-1.5 py-0.5 text-center leading-tight whitespace-nowrap shadow-sm"
+            >
+              <span
+                title={entry.element.name}
+                style={{ maxWidth: LABEL_MAX_WIDTH }}
+                className="block truncate text-[11px] font-semibold text-garden-ink"
+              >
+                {entry.element.name}
               </span>
-            ) : null}
-          </span>
+              {describeElement(entry.element, unit) ? (
+                <span className="block text-[10px] text-garden-muted">
+                  {describeElement(entry.element, unit)}
+                </span>
+              ) : null}
+            </span>
+          </Fragment>
         ) : (
           <span
             key={entry.zone.id}
@@ -111,7 +120,7 @@ export function layOutConceptLabels(
   zones: GardenZone[],
   transform: CanvasTransform,
   size: { width: number; height: number },
-): LabelEntry[] {
+): Stacked<LabelEntry>[] {
   const zoneLabels: LabelEntry[] = zones.map((zone) => ({
     kind: 'zone' as const,
     zone,

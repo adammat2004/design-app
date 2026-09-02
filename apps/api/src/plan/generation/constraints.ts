@@ -1,9 +1,5 @@
 import {
-  elementArea,
-  findMaterial,
-  MATERIALS,
   type BudgetBand,
-  type DesignElement,
   type ElementCategory,
   type GardenBrief,
   type MaintenanceLevel,
@@ -188,51 +184,6 @@ export function featureAttempts(
 }
 
 /* ---------------------------------------------------------------- indicative cost */
-
-/**
- * What a concept's materials come to, on the catalogue's own 1-to-4 scale, weighted by area.
- *
- * Expressed as a `BudgetBand` rather than as money, deliberately. `Material.cost` is documented as
- * a *rough relative* figure; turning it into pounds would be inventing a number the model cannot
- * support, and the review screen is exactly where a marker looks hardest. A band reuses the
- * vocabulary the user already chose from on step 3, which also makes "does this concept match the
- * budget they asked for" a question with an answer.
- *
- * Base fills dominate the weighting, and they should: the ground cover really is most of the cost
- * of a garden.
- */
-export function materialCostIndex(elements: DesignElement[]): number {
-  let area = 0;
-  let weighted = 0;
-
-  for (const element of elements) {
-    if (element.hidden) continue;
-
-    const size = elementArea(element);
-    // Point features have no area; a tree should not weigh the same as a terrace.
-    if (size <= 0) continue;
-
-    const material = findMaterial(element.material) ?? MATERIALS[element.category][0];
-    if (!material) continue;
-
-    area += size;
-    weighted += size * material.cost;
-  }
-
-  return area > 0 ? weighted / area : 0;
-}
-
-/** Thresholds sit between the catalogue's integer costs, so a uniform spec lands in its own band. */
-export function bandForCostIndex(index: number): BudgetBand {
-  if (index < 1.5) return 'low';
-  if (index < 2.5) return 'medium';
-  if (index < 3.5) return 'high';
-  return 'premium';
-}
-
-export function estimateBudgetBand(elements: DesignElement[]): BudgetBand {
-  return bandForCostIndex(materialCostIndex(elements));
-}
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));

@@ -1,9 +1,11 @@
 'use client';
 
+import { Fragment } from 'react';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
 import { STATUS_COLOURS } from '@/lib/feature-colours';
 import { featureAnchor, featureArea, polylineLength, type PlacedFeature } from '@/lib/features';
-import { stackLabels } from '@/lib/label-layout';
+import { LABEL_MAX_WIDTH, stackLabels, type Stacked } from '@/lib/label-layout';
+import { LabelLeader } from '../LabelLeader';
 import { formatArea, formatLength, type Unit } from '@/lib/units';
 import { FeatureIcon } from './FeatureIcon';
 import { StatusPill } from './StatusPill';
@@ -35,22 +37,31 @@ export function FeatureLabels({
 
   return (
     <>
-      {placed.map(({ feature, at, full }) =>
+      {placed.map(({ feature, at, full, anchor, displaced }) =>
         full ? (
-          <span
-            key={feature.id}
-            data-testid={`feature-label-${feature.id}`}
-            style={{ left: at.x, top: at.y }}
-            className="absolute -translate-x-1/2 text-center leading-tight whitespace-nowrap"
-          >
-            <span className="block text-[11px] font-semibold text-garden-ink">{feature.name}</span>
-            {describeSize(feature, unit) ? (
-              <span className="block text-[10px] text-garden-muted">
-                {describeSize(feature, unit)}
+          <Fragment key={feature.id}>
+            {/* A pushed label points at nothing without this. See `LabelLeader`. */}
+            {displaced ? <LabelLeader anchor={anchor} at={at} /> : null}
+            <span
+              data-testid={`feature-label-${feature.id}`}
+              style={{ left: at.x, top: at.y }}
+              className="absolute -translate-x-1/2 text-center leading-tight whitespace-nowrap"
+            >
+              <span
+                title={feature.name}
+                style={{ maxWidth: LABEL_MAX_WIDTH }}
+                className="block truncate text-[11px] font-semibold text-garden-ink"
+              >
+                {feature.name}
               </span>
-            ) : null}
-            <StatusPill status={feature.status} size="xs" />
-          </span>
+              {describeSize(feature, unit) ? (
+                <span className="block text-[10px] text-garden-muted">
+                  {describeSize(feature, unit)}
+                </span>
+              ) : null}
+              <StatusPill status={feature.status} size="xs" />
+            </span>
+          </Fragment>
         ) : (
           /*
            * Zoomed out, the name and the pill are what collide, not the shapes — so the text
@@ -102,7 +113,7 @@ export function layOut(
   detailed: boolean,
   transform: CanvasTransform,
   size: { width: number; height: number },
-): { feature: PlacedFeature; at: { x: number; y: number }; full: boolean }[] {
+): Stacked<{ feature: PlacedFeature; at: { x: number; y: number }; full: boolean }>[] {
   return stackLabels(
     features.map((feature) => ({
       feature,

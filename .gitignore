@@ -37,3 +37,11 @@ Thumbs.db
 # Docker volumes (bind-mounted data, if any)
 .docker-data/
 .gstack/
+
+# Graphify
+graphify-out/
+
+# Wrong package manager. This is a pnpm workspace; an npm or yarn lockfile at the root
+# means someone ran the wrong install and will get a tree that does not match pnpm-lock.yaml.
+package-lock.json
+yarn.lock

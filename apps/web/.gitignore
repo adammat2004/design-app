@@ -35,6 +35,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the example IS committed, and must be. The bare `.env*` above silently swallowed it,
+# which is why README.md could honestly claim this file was committed while it was not in the
+# repo at all. The root .gitignore has always carried this negation; this one did not.
+!.env.example
 
 # vercel
 .vercel

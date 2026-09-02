@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+#
+# Garden Studio — one-command setup.
+#
+# Gets a fresh clone (or a machine you have not touched for weeks) from nothing to a
+# working development loop, and then tells you where you left off.
+#
+#     ./script/setup              full run, including tests
+#     ./script/setup --skip-tests skip the suite when you only want the app up
+#
+# Why this exists rather than the six steps in README.md: a README is an untested script.
+# The six documented commands had no coverage of any kind, which is how two of them came
+# to be broken without anyone noticing. This file is what CI runs, so it cannot rot
+# silently — if it stops working, the build goes red.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+START=$(date +%s)
+SKIP_TESTS=0
+[ "${1:-}" = "--skip-tests" ] && SKIP_TESTS=1
+
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; }
+info() { printf '  \033[2m·\033[0m %s\n' "$1"; }
+head1() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+
+fail() {
+  bad "$1"
+  [ -n "${2:-}" ] && printf '    \033[2m→ %s\033[0m\n' "$2"
+  exit 1
+}
+
+# ------------------------------------------------------------------ preflight
+#
+# Every check names the thing that is missing AND the command that fixes it. A setup
+# script that dies on a raw ECONNREFUSED would be reproducing the problem it exists to
+# solve — the whole point is that you never have to guess what went wrong.
+
+head1 "Preflight"
+
+command -v node >/dev/null 2>&1 \
+  || fail "Node is not installed" "Install Node 20-24, or run: nvm use"
+
+NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
+if [ "$NODE_MAJOR" -lt 20 ] || [ "$NODE_MAJOR" -ge 25 ]; then
+  fail "Node $(node -v) is outside the supported range (>=20 <25)" \
+       "nvm use  (this repo ships a .nvmrc pinned to 24)"
+fi
+ok "Node $(node -v)"
+
+command -v pnpm >/dev/null 2>&1 \
+  || fail "pnpm is not installed" "corepack enable  (package.json pins the version)"
+ok "pnpm $(pnpm --version)"
+
+# The database may already be up — a service container in CI, or a `docker compose up` you
+# left running. Only require Docker when we would actually have to start something. This is
+# what lets CI run THIS script rather than a parallel copy of its steps, which is the whole
+# point: a setup path nothing executes is a setup path that rots.
+db_port_open() { (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null; }
+
+if db_port_open; then
+  DB_ALREADY_UP=1
+  ok "Something is already listening on 5432 — will not start a container"
+else
+  DB_ALREADY_UP=0
+  command -v docker >/dev/null 2>&1 \
+    || fail "Docker is not installed" "Install Docker Desktop — Postgres and PostGIS run in it"
+  docker info >/dev/null 2>&1 \
+    || fail "Docker is installed but the daemon is not running" "Start Docker Desktop, then re-run this script"
+  ok "Docker daemon is up"
+fi
+
+# ------------------------------------------------------------------ install
+
+head1 "Install"
+pnpm install --prefer-offline
+ok "Dependencies installed"
+
+if [ ! -f apps/api/.env ]; then
+  cp apps/api/.env.example apps/api/.env
+  ok "Created apps/api/.env from the example (the assistant key is optional — blank is fine)"
+else
+  info "apps/api/.env already exists, left alone"
+fi
+
+# ------------------------------------------------------------------ database
+
+head1 "Database"
+
+if [ "$DB_ALREADY_UP" -eq 1 ]; then
+  ok "Using the database already listening on 5432"
+else
+  docker compose up -d >/dev/null
+  ok "Postgres + PostGIS container started"
+
+  printf '  · waiting for the database to accept connections'
+  for _ in $(seq 1 30); do
+    if db_port_open; then
+      printf '\r'; ok "Database is accepting connections   "
+      break
+    fi
+    printf '.'
+    sleep 1
+  done
+
+  db_port_open \
+    || fail "The database never became ready" "docker compose logs db"
+fi
+
+# ------------------------------------------------------------------ build
+
+head1 "Build"
+
+# Schema first, always. Both apps import its COMPILED output, so a stale dist/ shows up
+# in the apps as type errors that look like unrelated bugs.
+pnpm --filter @garden-studio/schema build >/dev/null
+ok "Shared schema built"
+
+pnpm --filter @garden-studio/api db:migrate >/dev/null
+ok "Migrations applied"
+
+# ------------------------------------------------------------------ verify
+
+if [ "$SKIP_TESTS" -eq 0 ]; then
+  head1 "Verify"
+  if pnpm test >/tmp/gs-setup-test.log 2>&1; then
+    # Match "Tests  126 passed" only. A bare `[0-9]+ passed` also catches vitest's
+    # "Test Files  8 passed" line and silently inflates the total by the file count.
+    ok "$(grep -hoE 'Tests +[0-9]+ passed' /tmp/gs-setup-test.log \
+          | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}') tests passing"
+  else
+    bad "Test suite is RED"
+    info "Full output: /tmp/gs-setup-test.log"
+    tail -20 /tmp/gs-setup-test.log | sed 's/^/    /'
+  fi
+fi
+
+# ------------------------------------------------------------- where you left off
+#
+# The other half of this script, and the reason it is not just `make install`. Coming
+# back after weeks away, the question is never "do the dependencies install" — it is
+# "what was I doing". A one-line git log answers that with nothing.
+
+head1 "Where you left off"
+
+info "Branch:      $(git rev-parse --abbrev-ref HEAD)"
+info "Last commit: $(git log -1 --format='%h %s (%ar)')"
+
+DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
+if [ "$DIRTY" -gt 0 ]; then
+  info "Uncommitted: $DIRTY file(s)"
+  git status --porcelain | head -5 | sed 's/^/      /'
+  [ "$DIRTY" -gt 5 ] && printf '      \033[2m… and %s more\033[0m\n' "$((DIRTY - 5))"
+else
+  info "Uncommitted: none — working tree clean"
+fi
+
+if [ -f TODOS.md ]; then
+  NEXT=$(grep -m3 -E '^\s*[-*] \[ \]' TODOS.md || true)
+  if [ -n "$NEXT" ]; then
+    printf '  \033[2m·\033[0m Next up:\n'
+    printf '%s\n' "$NEXT" | sed 's/^/      /'
+  fi
+fi
+
+# ------------------------------------------------------------------ done
+
+ELAPSED=$(( $(date +%s) - START ))
+head1 "Ready in ${ELAPSED}s"
+printf '  pnpm dev              start the API and web app (schema rebuilds on change)\n'
+printf '  pnpm render:material  render the material contact sheet to look at\n'
+printf '  pnpm test             unit tests\n'
+printf '  pnpm test:e2e         end-to-end (needs pnpm dev running)\n\n'

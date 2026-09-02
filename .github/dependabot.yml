@@ -1,0 +1,28 @@
+version: 2
+
+# Security advisories ONLY. No version-bump PRs.
+#
+# Deliberate: this is a fixed-duration single-developer project. A weekly stream of upgrade
+# PRs becomes noise you learn to ignore, at which point it protects nothing, and a breaking
+# major landing mid-scope costs more than the drift it prevents. An unpatched advisory in a
+# repo someone grades is both embarrassing and free to avoid — so watch for those and nothing
+# else.
+#
+# Revisit once CI is green and the 963 tests actually gate an upgrade: at that point full
+# version PRs become much more attractive, because the suite can judge them.
+#
+# `open-pull-requests-limit: 0` disables version-update PRs while leaving Dependabot's
+# security-update PRs enabled — those are not governed by this file and fire regardless.
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0

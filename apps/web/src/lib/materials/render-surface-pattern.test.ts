@@ -70,6 +70,8 @@ interface RenderOptions {
   material?: MaterialManifestEntry;
   /** The world point the raster's own (0, 0) is, so surfaces can share one frame. */
   rasterOrigin?: Point;
+  /** Unit vector towards the light. Omitted means the conventional drawing light. */
+  light?: Point;
   size?: { width: number; height: number };
 }
 
@@ -91,10 +93,9 @@ function renderAll(
       context as unknown as PatternContext,
       surface.outline,
       options.material ?? shipped,
-      options.origin ?? ORIGIN,
-      options.rotation ?? 0,
+      { origin: options.origin ?? ORIGIN, rotation: options.rotation ?? 0 },
       surface.seed ?? options.seed ?? 'surface-a',
-      pxPerMetre,
+      { pxPerMetre, light: options.light },
       rasterOrigin,
     );
   }
@@ -572,5 +573,76 @@ describe('the other pattern types', () => {
     expect(odd[3]).toBeGreaterThan(0);
     // One row shows the gap between two boards; the staggered one shows the middle of a board.
     expect(even).not.toEqual(odd);
+  });
+});
+
+describe('water', () => {
+  const water = (id: string) => resolvePattern(id)!;
+
+  it('draws every water material, which previously had no manifest at all', () => {
+    for (const id of ['naturalistic-pond', 'formal-pool', 'rill', 'water-bowl']) {
+      expect(resolvePattern(id)).not.toBeNull();
+    }
+  });
+
+  it('keeps a formal pool still, because the mirror is the point of it', () => {
+    // `rippleSpacing: 0` is a design statement, not a missing value. A still pool and a rippled
+    // pond drawn the same way loses the distinction the user chose between.
+    const pool = render(rectangle, { material: water('formal-pool') });
+    const twice = render(rectangle, { material: water('formal-pool') });
+
+    expect(pool.buffer.equals(twice.buffer)).toBe(true);
+  });
+
+  it('tells still water apart from moving water', () => {
+    const pond = render(rectangle, { material: water('naturalistic-pond') });
+    const pool = render(rectangle, { material: water('formal-pool') });
+
+    expect(pond.buffer.equals(pool.buffer)).toBe(false);
+  });
+
+  it('is deterministic, like every other surface', () => {
+    const a = render(rectangle, { material: water('naturalistic-pond') });
+    const b = render(rectangle, { material: water('naturalistic-pond') });
+
+    expect(a.buffer.equals(b.buffer)).toBe(true);
+  });
+
+  it('puts its crests on the lit side, so a pond agrees with the patio beside it', () => {
+    // The whole argument for one light: a highlight on the wrong side of a pool reads as a
+    // mistake even to someone who could not say why.
+    const lit = render(rectangle, {
+      material: water('naturalistic-pond'),
+      light: { x: 0, y: 1 },
+    });
+    const other = render(rectangle, {
+      material: water('naturalistic-pond'),
+      light: { x: 0, y: -1 },
+    });
+
+    expect(lit.buffer.equals(other.buffer)).toBe(false);
+  });
+});
+
+describe('the cut edge', () => {
+  it('marks a bed but leaves a lawn alone', () => {
+    const bed = render(rectangle, { material: resolvePattern('shrubs')! });
+    const lawn = render(rectangle, { material: resolvePattern('standard-turf')! });
+
+    // Sample just inside the boundary, where an edge would land.
+    const onBedEdge = pixelAt(bed, Math.round(1 * 40) + 1, Math.round(3 * 40));
+    const onLawnEdge = pixelAt(lawn, Math.round(1 * 40) + 1, Math.round(3 * 40));
+
+    // The bed's edge tone is browner and darker than the planting behind it.
+    expect(onBedEdge[0]).not.toBe(onLawnEdge[0]);
+  });
+
+  it('drops the edge rather than smearing it when it falls under a pixel', () => {
+    // A 30 mm cut at 8 px/m is a quarter of a pixel. Stroked anyway it becomes a wash of
+    // anti-aliasing round the whole boundary, which reads as a halo rather than as an edge.
+    const zoomedOut = render(rectangle, { material: resolvePattern('shrubs')!, pxPerMetre: 8 });
+    const twice = render(rectangle, { material: resolvePattern('shrubs')!, pxPerMetre: 8 });
+
+    expect(zoomedOut.buffer.equals(twice.buffer)).toBe(true);
   });
 });

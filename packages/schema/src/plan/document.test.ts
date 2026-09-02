@@ -227,6 +227,12 @@ describe('PlanDocumentSchema', () => {
       selectedZoneIds: [],
       // North is up until somebody says otherwise, which is where the compass has always pointed.
       orientation: 0,
+      // Null, not a plausible-looking default. Orientation can sensibly default because "north
+      // is up" is a real statement about the drawing; a latitude cannot, so this stays absent
+      // and every solar claim in the app is gated on it being filled in.
+      location: null,
+      // About 21 June at 15:00 — the longest day, at the hour a garden is judged.
+      sun: { dayOfYear: 172, minutes: 900 },
     });
     expect(document.features).toEqual({ features: [], skipped: false });
     expect(document.brief.budget).toBeNull();

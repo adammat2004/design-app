@@ -251,7 +251,10 @@ export function firstFreeOffset(
   const offers = [length / 2];
   let cursor = 0;
 
-  for (const [from, to] of occupied) {
+  // The span's start is deliberately not read. An offer only has to be a *candidate* — the
+  // loop below runs every one through `fitsOnWall`, so narrowing the gap here would duplicate
+  // a check that already has to happen and could only disagree with it.
+  for (const [, to] of occupied) {
     offers.push(cursor + half);
     cursor = Math.max(cursor, to);
   }

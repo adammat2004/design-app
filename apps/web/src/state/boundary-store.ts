@@ -8,7 +8,12 @@ import {
   fitsOnWall,
   houseWalls,
   OPENING_DEFAULTS,
+  SiteLocationSchema,
+  SiteSectionSchema,
+  SiteSunSchema,
   type Opening,
+  type SiteLocation,
+  type SiteSun,
   type OpeningType,
   type Point,
   type WallKind,
@@ -106,8 +111,16 @@ function editOpening(
   };
 }
 
+/**
+ * Parsed from the schema rather than written out here.
+ *
+ * The literal version was a second copy of the section's defaults, and it drifted the moment the
+ * schema grew a field — silently, because a missing key in an object literal is only a type error
+ * if something typechecks it, and `vitest` runs through esbuild which does not. Deriving means an
+ * empty plan and a stored one can never disagree about what "empty" is.
+ */
 function initialDraft(): BoundaryDraft {
-  return { vertices: [], closed: false, house: null, selectedZoneIds: [], orientation: 0 };
+  return SiteSectionSchema.parse({});
 }
 
 interface BoundaryState {
@@ -182,6 +195,16 @@ interface BoundaryState {
   removeOpening: (openingId: string) => void;
   /** Degrees clockwise from screen-up to true north. */
   setOrientation: (degrees: number) => void;
+  /**
+   * Where the garden is. `null` clears it, which switches every solar claim back off.
+   *
+   * Setting this is the deliberate act that turns shadows on: `orientation` says which way the
+   * plot is turned, but solar altitude is a function of latitude, so no honest sun exists until
+   * this is filled in.
+   */
+  setLocation: (location: SiteLocation | null) => void;
+  /** The instant the plan is drawn at: day of the year and minutes after local midnight. */
+  setSun: (sun: Partial<SiteSun>) => void;
 
   toggleZone: (id: ZoneId) => void;
   toggleAllZones: () => void;
@@ -629,6 +652,23 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
       commit((draft) =>
         Number.isFinite(degrees) ? { ...draft, orientation: normaliseDegrees(degrees) } : null,
       ),
+
+    setLocation: (location) =>
+      commit((draft) => {
+        if (location === null) return { ...draft, location: null };
+
+        // Refused rather than clamped. A latitude of 91 is not a garden slightly too far north,
+        // it is a bad reading — and silently moving it to 90 would draw a plausible arctic sun
+        // over whatever the user actually meant.
+        const parsed = SiteLocationSchema.safeParse(location);
+        return parsed.success ? { ...draft, location: parsed.data } : null;
+      }),
+
+    setSun: (sun) =>
+      commit((draft) => {
+        const parsed = SiteSunSchema.safeParse({ ...draft.sun, ...sun });
+        return parsed.success ? { ...draft, sun: parsed.data } : null;
+      }),
 
     toggleZone: (id) =>
       commit((draft) => ({

@@ -1,7 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { elementOutline, patternAnchor, type DesignElement, type Point } from '@garden-studio/schema';
+import {
+  elementOutline,
+  patternAnchor,
+  type DesignElement,
+  type Point,
+} from '@garden-studio/schema';
 import { getSurfacePattern } from './pattern-cache';
 import { resolvePattern } from './palette';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
@@ -60,7 +65,12 @@ const makeBrowserCanvas: MakeCanvas = (width, height) => {
  *
  * `scale` is `CanvasTransform.scale`, which is pixels per metre.
  */
-export function useSurfacePattern(element: DesignElement, scale: number): SurfacePattern | null {
+export function useSurfacePattern(
+  element: DesignElement,
+  scale: number,
+  /** Unit vector towards the light. Omitted means the conventional top-left drawing light. */
+  light?: Point,
+): SurfacePattern | null {
   const material = resolvePattern(element.material);
   const kind = element.shape.kind;
   const patternable = material !== null && (kind === 'polygon' || kind === 'rect');
@@ -82,6 +92,7 @@ export function useSurfacePattern(element: DesignElement, scale: number): Surfac
         origin,
         rotation,
         pxPerMetre: scale,
+        light,
       },
       makeBrowserCanvas,
     );
@@ -93,5 +104,5 @@ export function useSurfacePattern(element: DesignElement, scale: number): Surfac
       originMetres: raster.originMetres,
       scale: scale / raster.pxPerMetre,
     };
-  }, [material, patternable, element, scale]);
+  }, [material, patternable, element, scale, light]);
 }

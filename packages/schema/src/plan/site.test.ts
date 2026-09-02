@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultWalls,
+  hasSolarPosition,
   houseSize,
   houseWalls,
   identifyOutline,
   rectangleHouse,
   scaleHouseAbout,
+  SiteSectionSchema,
   type HouseFootprint,
 } from './site.js';
 
@@ -138,5 +140,46 @@ describe('what the ids have to survive', () => {
 
     expect(new Set(custom.outline.map((vertex) => vertex.id)).size).toBe(6);
     expect(houseWalls(custom)).toHaveLength(6);
+  });
+});
+
+/**
+ * Every solar claim in the app is gated on `location`, not on `orientation`.
+ *
+ * `orientation` can sensibly default, because "north is up" is a real statement about a drawing
+ * and it is where the compass has always pointed. A latitude cannot: there is no default that is
+ * true of anywhere, and solar altitude is a function of it. A plausible-looking default would put
+ * the app in the position of building a design around a fact the user never stated — the same
+ * failure `suggestedDoorWall` avoids by offering the inferred patio door rather than applying it.
+ */
+describe('hasSolarPosition', () => {
+  it('is false on a plan nobody has located, which is every existing plan', () => {
+    expect(hasSolarPosition(SiteSectionSchema.parse({}))).toBe(false);
+  });
+
+  it('stays false when only the orientation has been set', () => {
+    const site = SiteSectionSchema.parse({ orientation: 137 });
+
+    expect(site.orientation).toBe(137);
+    expect(hasSolarPosition(site)).toBe(false);
+  });
+
+  it('is true once a location is stored', () => {
+    const site = SiteSectionSchema.parse({ location: { latitude: 53.4, longitude: -2.98 } });
+
+    expect(hasSolarPosition(site)).toBe(true);
+  });
+
+  it('rejects coordinates that are not on Earth', () => {
+    expect(() => SiteSectionSchema.parse({ location: { latitude: 91, longitude: 0 } })).toThrow();
+    expect(() => SiteSectionSchema.parse({ location: { latitude: 0, longitude: 181 } })).toThrow();
+  });
+
+  it('defaults the sun to a real instant, and refuses an impossible one', () => {
+    expect(SiteSectionSchema.parse({}).sun).toEqual({ dayOfYear: 172, minutes: 900 });
+
+    // 1440 is midnight the following day, which would silently shift the date by one.
+    expect(() => SiteSectionSchema.parse({ sun: { dayOfYear: 1, minutes: 1440 } })).toThrow();
+    expect(() => SiteSectionSchema.parse({ sun: { dayOfYear: 367, minutes: 0 } })).toThrow();
   });
 });

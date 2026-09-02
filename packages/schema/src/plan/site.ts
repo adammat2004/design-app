@@ -79,6 +79,48 @@ export const HouseFootprintSchema = z.object({
 });
 export type HouseFootprint = z.infer<typeof HouseFootprintSchema>;
 
+/**
+ * Where on Earth the plot is.
+ *
+ * `orientation` says which way the plot is turned relative to north. It does not say where the
+ * garden *is*, and solar altitude is a function of latitude — so shadow length, which is
+ * `height / tan(altitude)`, cannot be computed from orientation alone. That is why this exists.
+ *
+ * **Nullable, and null is the honest default.** A silent UK centroid would be the same mistake
+ * as a silently inferred patio door: the design gets built confidently around a fact the user
+ * never stated and cannot see they should check. Setting a location is the deliberate act that
+ * switches the plan from a conventional drawing light to a real sun, and nothing claims to know
+ * where the sun is until it happens.
+ */
+export const SiteLocationSchema = z.object({
+  /** Degrees north, -90 to 90. */
+  latitude: z.number().min(-90).max(90),
+  /** Degrees east, -180 to 180. */
+  longitude: z.number().min(-180).max(180),
+});
+export type SiteLocation = z.infer<typeof SiteLocationSchema>;
+
+/**
+ * The instant the plan is drawn at.
+ *
+ * On the document rather than in browser state, for the reason `DesignElement.pattern` gives
+ * about which way the decking boards run: it is a real design decision and it has to survive a
+ * reload. The sharper consequence here is the printed sheet — a plan exported at 1:100 with
+ * shadows on it has to be reproducible from the stored document, or the drawing in someone's
+ * hand and the drawing on screen disagree and neither is wrong.
+ *
+ * Two integers rather than a date string and a time string, deliberately: no format to parse,
+ * no timezone to get wrong, trivially comparable, and they quantise cleanly for the raster
+ * cache key (a slider drag within one quantum must not regenerate every surface).
+ */
+export const SiteSunSchema = z.object({
+  /** 1-366. Defaults to 172, about 21 June — the longest day, when a garden is judged. */
+  dayOfYear: z.number().int().min(1).max(366).default(172),
+  /** Minutes after local midnight, 0-1439. Defaults to 900, which is 15:00. */
+  minutes: z.number().int().min(0).max(1439).default(900),
+});
+export type SiteSun = z.infer<typeof SiteSunSchema>;
+
 export const SiteSectionSchema = z.object({
   vertices: z.array(BoundaryVertexSchema).default([]),
   /** False while the user is still clicking corners in draw mode. */
@@ -95,8 +137,25 @@ export const SiteSectionSchema = z.object({
    * existing plan is unchanged and the compass keeps pointing exactly where it did.
    */
   orientation: z.number().default(0),
+  /**
+   * Null until the user says where the garden is. See `SiteLocationSchema` — this is the gate
+   * on every solar claim in the app, and `orientation` alone is not enough to make one.
+   */
+  location: SiteLocationSchema.nullable().default(null),
+  sun: SiteSunSchema.default({ dayOfYear: 172, minutes: 900 }),
 });
 export type SiteSection = z.infer<typeof SiteSectionSchema>;
+
+/**
+ * Whether this plan can make a claim about where the sun is.
+ *
+ * Total by construction, so no caller has to remember the rule. Without a location the renderer
+ * falls back to the conventional top-left drawing light and says nothing about sun or shade;
+ * with one it computes a real position. Offered, not applied.
+ */
+export function hasSolarPosition(site: SiteSection): boolean {
+  return site.location !== null;
+}
 
 export interface HouseSize {
   width: number;

@@ -1,6 +1,7 @@
 import type { Point } from '@garden-studio/schema';
 import type { MaterialManifestEntry } from './palette';
 import { hashString } from './prng';
+import { RasterLru } from './raster-lru';
 import {
   renderSurfacePattern,
   type MakeCanvas,
@@ -39,11 +40,19 @@ export function bucketScale(bucket: number): number {
 }
 
 /**
- * How many rasters to keep. Eight surfaces is a busy plan, and a user zooming through the range
- * touches a handful of buckets for each — 48 holds that comfortably without holding a garden's
- * worth of bitmaps forever.
+ * How many rasters to keep.
+ *
+ * Was 48, on the estimate that "eight surfaces is a busy plan". A *generated* plan is roughly
+ * double that before anything is edited: a base fill per zone in scope, several accent beds, a
+ * perimeter border cut per zone, and the placed features — call it sixteen patterned surfaces.
+ * At the three zoom buckets a user touches while looking around, that working set was exactly
+ * the old cap, so ordinary panning and zooming was evicting entries it was about to want back.
+ *
+ * 150 covers an estate-scale plan across a zoom range with room to spare. Note the level-of-
+ * detail tiers must stay keyed off the existing √2 bucket rather than becoming a separate
+ * dimension of the key — as a new dimension they would multiply this number, not add to it.
  */
-const MAX_ENTRIES = 48;
+export const MAX_ENTRIES = 150;
 
 export interface PatternRequest {
   /** The surface's own id, which is also what makes its tones differ from its neighbour's. */
@@ -54,6 +63,16 @@ export interface PatternRequest {
   origin: Point;
   rotation: number;
   pxPerMetre: number;
+  /**
+   * Unit vector towards the light. Absent means the conventional drawing light.
+   *
+   * In the key because the pixels genuinely depend on it — module bevels and blob highlights are
+   * lit from this side. Leaving it out was fine while the light was a compile-time constant, and
+   * became a correctness bug the moment it started following the sun: moving the time slider
+   * would repaint only the surfaces that happened to fall out of the cache, so the plan would
+   * relight in patches. That reads as a rendering fault rather than a stale cache.
+   */
+  light?: Point;
 }
 
 interface CacheEntry {
@@ -61,7 +80,7 @@ interface CacheEntry {
   bucket: number;
 }
 
-const cache = new Map<string, CacheEntry>();
+const cache = new RasterLru<CacheEntry>(MAX_ENTRIES);
 
 /**
  * The cache key.
@@ -69,17 +88,42 @@ const cache = new Map<string, CacheEntry>();
  * It names everything the pixels depend on and nothing else, which is the whole design: the
  * outline is hashed, so dragging a vertex misses and re-clips, while selecting the shape,
  * renaming it, or moving a *different* element leaves the key identical and hits.
+ *
+ * ```
+ *   IN THE KEY                     NOT IN THE KEY               WHY IT MATTERS
+ *   ──────────                     ──────────────               ──────────────
+ *   elementId ─┐                   pan / stage offset     ──▶   a pan costs zero redraws:
+ *   material   │                   selection, hover             the raster is anchored in
+ *   outline#   ├─▶ raster          element name                  world metres, so scrolling
+ *   anchor#    │   identity        any OTHER element             changes nothing about it
+ *   light      │                   the store's revision
+ *   zoomBucket ┘                   raw scale within a bucket ─▶  eased zoom changes the raw
+ *                                                                value every frame; the
+ *                                                                bucket holds it still
+ * ```
+ *
+ * The rule to keep: if a change alters the pixels, it belongs above the line. `light` was added
+ * the day the light stopped being a compile-time constant — before that it was correctly absent,
+ * and afterwards its absence would have relit the plan in patches.
  */
 export function patternKey(request: PatternRequest): string {
   const outline = request.outline.map((point) => `${round(point.x)},${round(point.y)}`).join(';');
 
   const anchor = `${round(request.origin.x)},${round(request.origin.y)},${round(request.rotation)}`;
 
+  /*
+   * Quantised to three decimals — about a twentieth of a degree of arc. Fine enough that no
+   * visible relighting is ever missed, coarse enough that floating-point noise in the solar
+   * maths cannot invalidate a raster on its own.
+   */
+  const light = request.light ? `${round(request.light.x)},${round(request.light.y)}` : 'default';
+
   return [
     request.elementId,
     request.material.id,
     hashString(outline).toString(36),
     hashString(anchor).toString(36),
+    light,
     zoomBucket(request.pxPerMetre),
   ].join(':');
 }
@@ -102,40 +146,25 @@ export function getSurfacePattern(
   const key = patternKey(request);
   const existing = cache.get(key);
 
-  if (existing) {
-    // Re-inserting moves it to the end of the Map's insertion order, which is the LRU list.
-    cache.delete(key);
-    cache.set(key, existing);
-    return existing.raster;
-  }
+  if (existing) return existing.raster;
 
   const bucket = zoomBucket(request.pxPerMetre);
 
   const raster = renderSurfacePattern(
     request.outline,
     request.material,
-    request.origin,
-    request.rotation,
+    { origin: request.origin, rotation: request.rotation },
     request.elementId,
-    bucketScale(bucket),
-    makeCanvas,
+    // The bucket's scale, never the raw zoom — that substitution is the whole point of the
+    // cache, and doing it here rather than at the call site is what keeps it impossible to skip.
+    { pxPerMetre: bucketScale(bucket), makeCanvas, light: request.light },
   );
 
   if (!raster) return null;
 
   cache.set(key, { raster, bucket });
-  evict();
 
   return raster;
-}
-
-function evict(): void {
-  while (cache.size > MAX_ENTRIES) {
-    // Map iterates in insertion order, so the first key is the least recently used.
-    const oldest = cache.keys().next();
-    if (oldest.done) return;
-    cache.delete(oldest.value);
-  }
 }
 
 /* ---------------------------------------------------------------- test seams */
@@ -151,4 +180,9 @@ export function patternCacheSize(): number {
 /** Whether a request would be served without drawing. Only the tests need to ask. */
 export function patternCacheHas(request: PatternRequest): boolean {
   return cache.has(patternKey(request));
+}
+
+/** Hit rate and occupancy, for the dev HUD. Nothing in the app reads this. */
+export function patternCacheStats() {
+  return cache.stats;
 }

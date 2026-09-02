@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CanvasTransform } from '@/lib/canvas-transform';
 import type { DesignElement } from '@/lib/concepts';
-import { LABEL_HEIGHT } from '@/lib/label-layout';
+import { LABEL_HEIGHT, LABEL_MAX_WIDTH } from '@/lib/label-layout';
 import type { GardenZone } from '@/lib/zones';
 import { layOutConceptLabels } from './ConceptLabels';
 
@@ -122,5 +122,32 @@ describe('layOutConceptLabels', () => {
 
   it('has nothing to lay out for a concept with no zones and no features', () => {
     expect(layOutConceptLabels([], [], TRANSFORM, SIZE)).toEqual([]);
+  });
+});
+
+describe('long names', () => {
+  /**
+   * Names are user-supplied and the label is centred on the thing it points at with
+   * `whitespace-nowrap`, so a long one grows in both directions and runs off the canvas at each
+   * end. `stackLabels` cannot catch it — it resolves vertical collisions, and this is horizontal.
+   */
+  it('caps the label width rather than letting a name run off the plan', () => {
+    expect(LABEL_MAX_WIDTH).toBeGreaterThan(0);
+    // Wide enough for a real name at 11px, narrow enough that it cannot span the canvas.
+    expect(LABEL_MAX_WIDTH).toBeLessThan(200);
+  });
+
+  it('still lays out an element whose name is absurd', () => {
+    // The layout pass must not care how long the text is — truncation is CSS's job, and this is
+    // the assertion that the two stay separate concerns.
+    const long = {
+      ...element('a', { x: 5, y: 5 }, 'feature'),
+      name: 'Wildflower meadow with mixed native perennials and seasonal bulbs throughout',
+    };
+
+    const laid = layOutConceptLabels([long], [], TRANSFORM, SIZE);
+
+    expect(laid).toHaveLength(1);
+    expect(laid[0]!.kind).toBe('element');
   });
 });

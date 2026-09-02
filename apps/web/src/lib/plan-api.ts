@@ -21,7 +21,13 @@ import {
 } from '@garden-studio/schema';
 import { z } from 'zod';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+/**
+ * Where the API lives.
+ *
+ * Exported because the "cannot reach the API" screen names the address it tried — a message that
+ * says a server is unreachable without saying which one leaves the reader no better off.
+ */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 /** Thrown when the API rejects a request for breaking a spatial constraint. */
 export class ValidationError extends Error {

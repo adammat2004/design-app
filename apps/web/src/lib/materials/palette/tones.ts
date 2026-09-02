@@ -1,11 +1,4 @@
-import {
-  findMaterial,
-  materialPattern,
-  MATERIALS,
-  type ElementCategory,
-  type MaterialId,
-  type MaterialPattern,
-} from '@garden-studio/schema';
+import type { MaterialId } from '@garden-studio/schema';
 
 /**
  * The tones a patterned material draws in.
@@ -75,6 +68,26 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
     palette: ['#ded9cb', '#e5e1d4', '#d3cdbd', '#dad4c4', '#e8e4d8'],
     jointColour: '#cfc9b9',
   },
+
+  /* ---- water-feature ---- */
+  /*
+   * Water is lit from *above* and coloured from *below*: the tone is the pool floor seen through
+   * depth, and the light comes back off the surface. So the palette is the body and the joint
+   * colour is the deeper margin, and the specular the renderer adds is neither of them.
+   *
+   * A naturalistic pond reads greener because it is alive; a formal pool reads bluer and flatter
+   * because it is meant to be a mirror.
+   */
+  'naturalistic-pond': {
+    palette: ['#5e7f7a', '#688a83', '#567670', '#628480'],
+    jointColour: '#3f5c59',
+  },
+  'formal-pool': {
+    palette: ['#5a7793', '#63809c', '#54708b', '#5f7d99'],
+    jointColour: '#3d566d',
+  },
+  rill: { palette: ['#5d7c95', '#66849c', '#57748d'], jointColour: '#41586c' },
+  'water-bowl': { palette: ['#5b7a90', '#648398'], jointColour: '#3f5665' },
 
   /* ---- lawn ---- */
   /*
@@ -162,54 +175,3 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
  * the point of use keeps both files honest about what they are for without making the renderer
  * reach into two catalogues.
  */
-export interface MaterialManifestEntry {
-  id: MaterialId;
-  category: ElementCategory;
-  displayName: string;
-  pattern: MaterialPattern;
-  palette: string[];
-  jointColour: string;
-}
-
-/**
- * A material's full pattern manifest, or `null` when it has no pattern — which is the flat-fill
- * path and the honest answer for still water and powder-coated steel.
- *
- * Null also when a material has geometry but no tones, or the reverse. That is a half-finished
- * catalogue entry, and drawing it would mean inventing one of the two halves. `palette.test.ts`
- * fails loudly when that happens rather than letting the material quietly go flat.
- */
-export function resolvePattern(materialId: string | undefined): MaterialManifestEntry | null {
-  const material = findMaterial(materialId);
-  if (!material) return null;
-
-  const pattern = materialPattern(material.id);
-  const tones = MATERIAL_TONES[material.id];
-  if (!pattern || !tones) return null;
-
-  return {
-    id: material.id,
-    category: categoryOf(material.id),
-    displayName: material.label,
-    pattern,
-    palette: tones.palette,
-    jointColour: tones.jointColour,
-  };
-}
-
-/**
- * Which category a material belongs to.
- *
- * `findMaterial` deliberately searches across every category and does not report which one it
- * matched in, so the index is derived from `MATERIALS` itself rather than written out again — a
- * second hand-maintained table is exactly how a material ends up filed under two categories.
- */
-const CATEGORY_BY_MATERIAL: Record<string, ElementCategory> = Object.fromEntries(
-  Object.entries(MATERIALS).flatMap(([category, materials]) =>
-    materials.map((material) => [material.id, category as ElementCategory]),
-  ),
-);
-
-function categoryOf(id: MaterialId): ElementCategory {
-  return CATEGORY_BY_MATERIAL[id]!;
-}

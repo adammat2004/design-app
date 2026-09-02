@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { MATERIALS, MATERIAL_PATTERNS, type ElementCategory, type MaterialId } from '@garden-studio/schema';
+import { describe, expect, it, afterEach, vi } from 'vitest';
+import {
+  MATERIALS,
+  MATERIAL_PATTERNS,
+  type ElementCategory,
+  type MaterialId,
+} from '@garden-studio/schema';
 import { MATERIAL_TONES, resolvePattern } from './palette';
 
 /** Which category each material sits in, for the rules below that differ by category. */
@@ -29,11 +34,21 @@ describe('resolvePattern', () => {
   });
 
   it('returns null for a material with no pattern, which is the flat-fill path', () => {
-    // Still water and powder-coated steel have no texture at this scale, and should not be given
-    // one for the sake of completeness.
+    /*
+     * `formal-pool` was here and is not any more: it has a manifest now, a deliberately still one.
+     * Powder-coated steel and "existing, unchanged" genuinely have no texture at this scale and
+     * should not be given one for the sake of completeness.
+     */
     expect(resolvePattern('powder-coated-steel')).toBeNull();
-    expect(resolvePattern('formal-pool')).toBeNull();
     expect(resolvePattern('existing')).toBeNull();
+  });
+
+  it('gives every water material a manifest, still or moving', () => {
+    // These four drew as a flat blue shape for the whole life of the renderer. Water is a focal
+    // point, so it was the one obviously unfinished element on an otherwise finished plan.
+    for (const id of ['naturalistic-pond', 'formal-pool', 'rill', 'water-bowl']) {
+      expect(resolvePattern(id), id).not.toBeNull();
+    }
   });
 
   it('returns null for an unknown or absent material rather than throwing', () => {
@@ -161,5 +176,55 @@ describe('colour maths', () => {
 
   it('rounds to whole channels on the way out', () => {
     expect(rgbToCss({ r: 10.4, g: 10.6, b: 10 })).toBe('rgb(10, 11, 10)');
+  });
+});
+
+describe('a palette entry that is not a colour', () => {
+  const pavers = MATERIAL_TONES['stone-pavers'];
+
+  afterEach(() => {
+    (MATERIAL_TONES as Record<string, unknown>)['stone-pavers'] = pavers;
+    // `process.env.NODE_ENV` is readonly in Next's types, so assigning it fails the build even
+    // though it works at runtime. `stubEnv` is vitest's supported way in and it typechecks.
+    vi.unstubAllEnvs();
+  });
+
+  it('stops you at once while tuning, naming the material and the key', () => {
+    // A typo in a hand-written manifest is a bug, and the person who can fix it is looking at the
+    // file. Bisecting a palette by hand is the alternative.
+    (MATERIAL_TONES as Record<string, unknown>)['stone-pavers'] = {
+      ...pavers,
+      palette: ['#dcdcd5', '#ff00', '#d5d6cf'],
+    };
+
+    expect(() => resolvePattern('stone-pavers')).toThrow(/stone-pavers\.palette\[1\]/);
+  });
+
+  it('names a bad joint colour too, not just the units', () => {
+    (MATERIAL_TONES as Record<string, unknown>)['stone-pavers'] = {
+      ...pavers,
+      jointColour: 'grey',
+    };
+
+    expect(() => resolvePattern('stone-pavers')).toThrow(/stone-pavers\.jointColour/);
+  });
+
+  it('falls back rather than taking the canvas down in production', () => {
+    /*
+     * `hexToRgb` throws, the throw escapes through Konva's render, and with no error boundary
+     * above it the whole plan vanishes. In front of an audience a slightly wrong grey is the
+     * better answer — and it is only safe because this is a colour. The return-null-rather-than-
+     * guess rule exists for geometry, where a guess misleads about where things are.
+     */
+    vi.stubEnv('NODE_ENV', 'production');
+    (MATERIAL_TONES as Record<string, unknown>)['stone-pavers'] = {
+      ...pavers,
+      palette: ['#dcdcd5', 'not-a-colour'],
+    };
+
+    const resolved = resolvePattern('stone-pavers');
+
+    expect(resolved).not.toBeNull();
+    expect(resolved!.palette[1]).toBe('#8a8a8a');
   });
 });

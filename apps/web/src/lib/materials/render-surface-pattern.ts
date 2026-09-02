@@ -1,12 +1,12 @@
 import {
   boundingBox,
   MM_PER_METRE,
+  scatterForm,
   type MaterialPattern,
   type Point,
 } from '@garden-studio/schema';
 import {
   LIGHT_DIRECTION,
-  MIN_SHADED_MODULE_PX,
   MODULE_BEVEL_RATIO,
   MODULE_HIGHLIGHT,
   MODULE_SHADOW,
@@ -14,7 +14,8 @@ import {
   rgbToCss,
   shiftBrightness,
 } from './light';
-import type { MaterialManifestEntry } from './palette';
+import { edgeFor, type MaterialManifestEntry } from './palette';
+import { shadesAt, tierFor } from './lod';
 import { moduleRandom, pick } from './prng';
 
 /**
@@ -31,30 +32,32 @@ import { moduleRandom, pick } from './prng';
  * of the right size, taking the canvas factory as an argument so the browser path can pass its own
  * without this module importing anything Node-only.
  *
- * Four pattern types share one preamble — clip, lay the background, decide the level of detail —
- * and then diverge. Adding a fifth should be a case in `paint`, not a second pipeline.
+ * Five pattern types share one preamble — clip, lay the background, decide the level of detail —
+ * and then diverge. Adding a sixth should be a case in `paint`, not a second pipeline.
+ *
+ * ```
+ *   outline ─▶ clip to it ─▶ fill jointColour ─▶ tierFor() === mass? ─yes─▶ one averaged tone
+ *   (world m)   (the only        (the ground        │                     (done)
+ *                clip here)      behind units)      no
+ *                                                   ▼
+ *                                              paint() ── dispatch on patternType
+ *                    ┌──────────────┬──────────────┼──────────────┬──────────────┐
+ *                    ▼              ▼              ▼              ▼              ▼
+ *                 grid          board          scatter         water         stripe
+ *                    └──── drawModule ────┘        │              │             │
+ *                         (bevel: light)           │         (crests: light)    │
+ *                                                  ▼                            │
+ *                                         scatterForm() ──▶ blob / tufted /     │
+ *                                                           clipped-mass        │
+ *                                                    (highlight: light) ────────┘
+ *
+ *   `light` is the same unit vector everywhere it appears above, and the same one the cast
+ *   shadow layer uses. That agreement is most of what separates a render from a diagram.
+ * ```
  */
 
 /** How much a unit's tone may drift from its palette entry, either way. */
 const TONE_JITTER = 0.03;
-
-/**
- * The smallest module, in pixels, still worth drawing individually. Below it the surface is filled
- * with one averaged tone: at two pixels a slab the joints alias into a grey haze that costs a
- * thousand fill calls to produce and looks worse than a flat colour.
- */
-const MIN_DRAWN_MODULE_PX = 3;
-
-/**
- * The scatter equivalent. Below this a unit is too small to read as a thing, and a bed of ten
- * thousand sub-pixel blobs is both slower and worse-looking than the averaged tone.
- *
- * Lower than the module floor, and deliberately: a gravel chipping really is about a pixel and a
- * half at a normal editing zoom, and at 2.5 every aggregate in the app fell back to a single flat
- * colour and read as dead beige card. A stone drawn at a pixel and a half is grain rather than a
- * stone, which is exactly what gravel looks like from standing height.
- */
-const MIN_DRAWN_UNIT_PX = 1.4;
 
 /**
  * A hard ceiling on scattered units per raster.
@@ -79,6 +82,16 @@ export interface PatternCanvas {
  */
 export interface PatternContext {
   fillStyle: string;
+  /**
+   * Stroking is used for exactly one thing: the cut edge where a surface meets whatever it sits
+   * on. Because the context is already clipped to the outline, a stroke centred on that outline
+   * renders only its inner half — which is precisely a bed's cut edge, with no inset polygon to
+   * compute. Widening the interface for it is safe: this is narrowed to avoid the DOM's *nominal*
+   * type, not to avoid capability, and both the DOM and `@napi-rs/canvas` have all three.
+   */
+  strokeStyle: string;
+  lineWidth: number;
+  stroke(): void;
   save(): void;
   restore(): void;
   beginPath(): void;
@@ -94,6 +107,49 @@ export interface PatternContext {
 }
 
 export type MakeCanvas = (width: number, height: number) => PatternCanvas;
+
+/**
+ * Where a surface's pattern starts and which way its courses run.
+ *
+ * Exactly the shape `patternAnchor()` in the shared package already returns, so the two travel
+ * together instead of being taken apart into positional arguments and reassembled here.
+ */
+export interface PatternAnchor {
+  origin: Point;
+  rotation: number;
+}
+
+/**
+ * Everything about the drawing *pass* rather than about the surface being drawn.
+ *
+ * This exists because the argument lists were about to get away from us. `drawSurfacePattern`
+ * already took eight positional parameters, and the render work coming needs three more that are
+ * cross-cutting rather than per-surface — where the sun is, which level of detail this zoom
+ * warrants, and how tall the thing is. Threaded positionally that is eleven arguments, and every
+ * new one means editing every signature and every call site again.
+ *
+ * Deliberately NOT a React context. `use-surface-pattern.ts` is the only React in this directory
+ * and everything below it is a pure function of data, which is what lets the renderer be tested
+ * against a real canvas in Node without mounting anything. A plain value object keeps that.
+ */
+export interface DrawPass {
+  /** Pixels per metre this pass draws at. */
+  pxPerMetre: number;
+  /**
+   * Unit vector pointing **towards** the light, in plan space.
+   *
+   * Optional, defaulting to the conventional top-left drawing light. When the plan knows where it
+   * is, `lightDirection(site)` supplies the real sun instead — and then the slab bevels, the blob
+   * highlights and the cast shadows are all lit by one source. Two suns in one drawing is the
+   * most obvious way a render gives itself away.
+   */
+  light?: Point;
+}
+
+/** A `DrawPass` that also has to allocate its own canvas. */
+export interface RenderPass extends DrawPass {
+  makeCanvas: MakeCanvas;
+}
 
 /** Where a surface's raster sits in the world, so a caller can position the image it gets back. */
 export interface PatternRaster {
@@ -124,12 +180,12 @@ const MAX_RASTER_PX = 4096;
 export function renderSurfacePattern(
   outline: Point[],
   material: MaterialManifestEntry,
-  origin: Point,
-  rotation: number,
+  anchor: PatternAnchor,
   seed: string,
-  pxPerMetre: number,
-  makeCanvas: MakeCanvas,
+  pass: RenderPass,
 ): PatternRaster | null {
+  const { pxPerMetre, makeCanvas } = pass;
+
   const box = boundingBox(outline);
   if (box.width <= 0 || box.length <= 0 || pxPerMetre <= 0) return null;
 
@@ -148,7 +204,7 @@ export function renderSurfacePattern(
 
   const originMetres = { x: box.minX, y: box.minY };
 
-  drawSurfacePattern(context, outline, material, origin, rotation, seed, scale, originMetres);
+  drawSurfacePattern(context, outline, material, anchor, seed, { pxPerMetre: scale }, originMetres);
 
   return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
 }
@@ -165,12 +221,15 @@ export function drawSurfacePattern(
   context: PatternContext,
   outline: Point[],
   material: MaterialManifestEntry,
-  origin: Point,
-  rotation: number,
+  anchor: PatternAnchor,
   seed: string,
-  pxPerMetre: number,
+  pass: DrawPass,
   rasterOrigin: Point = boundingBoxOrigin(outline),
 ): void {
+  const { origin, rotation } = anchor;
+  const { pxPerMetre } = pass;
+  const light = pass.light ?? LIGHT_DIRECTION;
+
   if (outline.length < 3) return;
 
   const toPx = (point: Point): Point => ({
@@ -200,7 +259,7 @@ export function drawSurfacePattern(
   context.fillStyle = material.jointColour;
   context.fill();
 
-  if (tooSmallToRead(material.pattern, pxPerMetre)) {
+  if (tierFor(material.pattern, pxPerMetre) === 'mass') {
     // One averaged tone, and no thousand-fill sweep to produce something nobody can resolve.
     context.fillStyle = averageTone(material.palette);
     context.fill();
@@ -218,7 +277,9 @@ export function drawSurfacePattern(
   context.translate(originPx.x, originPx.y);
   context.rotate((rotation * Math.PI) / 180);
 
-  paint(context, material, outline, origin, rotation, seed, pxPerMetre);
+  paint(context, material, outline, origin, rotation, seed, pxPerMetre, light);
+
+  drawCutEdge(context, material, outline, pxPerMetre, toPx);
 
   context.restore();
 }
@@ -232,20 +293,146 @@ function paint(
   rotation: number,
   seed: string,
   pxPerMetre: number,
+  light: Point,
 ): void {
   const { pattern } = material;
 
   switch (pattern.patternType) {
     case 'grid':
     case 'board':
-      paintModules(context, material, pattern, outline, origin, rotation, seed, pxPerMetre);
+      paintModules(context, material, pattern, outline, origin, rotation, seed, pxPerMetre, light);
       return;
     case 'scatter':
-      paintScatter(context, material, pattern, outline, origin, rotation, seed, pxPerMetre);
+      paintScatter(context, material, pattern, outline, origin, rotation, seed, pxPerMetre, light);
+      return;
+    case 'water':
+      paintWater(context, material, pattern, outline, origin, rotation, seed, pxPerMetre, light);
       return;
     case 'stripe':
+      // Mown stripes are flat bands of one grass catching the light two ways; there is no lit
+      // edge to place, so the sun does not reach this branch.
       paintStripes(context, material, pattern, outline, origin, rotation, seed, pxPerMetre);
       return;
+  }
+}
+
+/**
+ * The cut edge, drawn last and still inside the clip.
+ *
+ * Inside the clip is what makes this cheap. A stroke is centred on the path it follows, so half of
+ * it falls outside the outline and is clipped away — leaving exactly the inner half, which is a
+ * bed's spade-cut edge. Computing an inset polygon to fill instead would be real work for the same
+ * picture, and would have to handle a concave outline eating itself.
+ *
+ * Drawn after the pattern rather than before it, or the units scattered near the boundary would
+ * cover the line they are supposed to be contained by.
+ */
+function drawCutEdge(
+  context: PatternContext,
+  material: MaterialManifestEntry,
+  outline: Point[],
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  const edge = edgeFor(material.category);
+  if (!edge) return;
+
+  const widthPx = (edge.widthMm / MM_PER_METRE) * pxPerMetre;
+
+  /*
+   * Below a pixel the stroke stops being a line and becomes a wash of anti-aliasing over the whole
+   * boundary, which reads as a halo rather than as an edge — the same reasoning that gives module
+   * shading a minimum size.
+   */
+  if (widthPx < 1) return;
+
+  context.beginPath();
+  outline.forEach((point, index) => {
+    const at = toPx(point);
+    if (index === 0) context.moveTo(at.x, at.y);
+    else context.lineTo(at.x, at.y);
+  });
+  context.closePath();
+
+  // Doubled, because the clip throws the outer half away.
+  context.lineWidth = widthPx * 2;
+  context.strokeStyle = edge.colour;
+  context.stroke();
+}
+
+/* ---------------------------------------------------------------- water */
+
+/**
+ * Water, from above.
+ *
+ * Three things in order, and the order is the whole effect: the body, the depth at its margin,
+ * then the light coming back off the surface. Drawn the other way round the specular sits under
+ * the shading and the pool reads as wet stone.
+ *
+ * The specular is placed by the same light every slab bevel and every plant crown uses, so a pond
+ * beside a patio catches the sun from the same place. That agreement is most of what separates a
+ * render from a diagram, and water is where its absence is most obvious — a highlight on the wrong
+ * side of a pool reads as a mistake even to someone who could not say why.
+ */
+function paintWater(
+  context: PatternContext,
+  material: MaterialManifestEntry,
+  pattern: Extract<MaterialPattern, { patternType: 'water' }>,
+  outline: Point[],
+  origin: Point,
+  rotation: number,
+  seed: string,
+  pxPerMetre: number,
+  light: Point,
+): void {
+  const box = boundingBox(outline);
+  const width = box.width * pxPerMetre;
+  const height = box.length * pxPerMetre;
+  const left = (box.minX - origin.x) * pxPerMetre;
+  const top = (box.minY - origin.y) * pxPerMetre;
+
+  const body = hexToRgb(material.palette[0] ?? material.jointColour);
+
+  context.fillStyle = rgbToCss(body);
+  context.fillRect(left, top, width, height);
+
+  /*
+   * Still water gets nothing more, and that is the point of it. A formal pool is meant to read as
+   * a mirror, so `rippleSpacing` of 0 is a design statement rather than a missing value.
+   */
+  if (pattern.rippleSpacing <= 0) return;
+
+  const spacing = (pattern.rippleSpacing / MM_PER_METRE) * pxPerMetre;
+  if (spacing < 3) return;
+
+  /*
+   * Fine broken lines, brighter on the lit side, and nothing else.
+   *
+   * The first attempt drew a broad rectangular sheen in the middle. It was wrong twice over: a
+   * hard-edged slab of pale colour reads as a UI panel rather than as light, and even softened it
+   * would still be wrong, because a bright patch in the centre of a pond is not how water is drawn
+   * in plan. What reads as water is a few crest lines catching the sun — so the light does not get
+   * its own shape here, it just decides which crests are brightest.
+   *
+   * `PatternContext` has no gradients and no alpha by design, so softness is not available. That
+   * turns out not to matter: the marks are one or two pixels of low contrast, and at that size a
+   * hard edge is invisible.
+   */
+  const random = moduleRandom(seed, 0, 0);
+  const rows = Math.ceil(height / spacing);
+
+  for (let i = 0; i < rows; i += 1) {
+    const y = top + i * spacing + random() * spacing * 0.4;
+
+    // How far down the lit axis this crest sits, 0 at the shaded edge and 1 at the lit one.
+    const along =
+      light.y >= 0 ? (y - top) / Math.max(height, 1) : 1 - (y - top) / Math.max(height, 1);
+
+    const inset = width * (0.05 + random() * 0.28);
+    const run = (width - inset * 2) * (0.35 + random() * 0.5);
+
+    context.fillStyle = rgbToCss(shiftBrightness(body, MODULE_HIGHLIGHT * (0.5 + along * 1.6)));
+    context.fillRect(left + inset, y, run, Math.max(1, spacing * 0.1));
   }
 }
 
@@ -260,6 +447,7 @@ function paintModules(
   rotation: number,
   seed: string,
   pxPerMetre: number,
+  light: Point,
 ): void {
   const moduleWidth = pattern.moduleSize.w / MM_PER_METRE;
   const moduleHeight = pattern.moduleSize.h / MM_PER_METRE;
@@ -274,7 +462,7 @@ function paintModules(
   const stagger = pattern.patternType === 'board' ? 0.5 : 0;
 
   const modulePx = Math.min(moduleWidth, moduleHeight) * pxPerMetre;
-  const shaded = modulePx >= MIN_SHADED_MODULE_PX;
+  const shaded = shadesAt(modulePx);
   // At least a whole pixel, or the bevel is drawn at a fraction of one and simply does not appear.
   const bevel = Math.max(1, Math.round(modulePx * MODULE_BEVEL_RATIO));
 
@@ -287,6 +475,7 @@ function paintModules(
 
     for (let col = minCol; col <= range.maxCol; col += 1) {
       drawModule(context, {
+        light,
         col,
         row,
         seed,
@@ -304,6 +493,8 @@ function paintModules(
 }
 
 interface ModuleDraw {
+  /** Unit vector towards the light. Carried per module so one pass cannot mix two suns. */
+  light: Point;
   col: number;
   row: number;
   seed: string;
@@ -329,7 +520,7 @@ function drawModule(context: PatternContext, module: ModuleDraw): void {
   if (!module.shaded || module.bevel <= 0) return;
 
   /*
-   * The bevel: two lit edges and two unlit, decided once by `LIGHT_DIRECTION` so every module in
+   * The bevel: two lit edges and two unlit, decided by the pass's light so every module in
    * the app catches the sun from the same side. Drawn as strips inside the module's own rectangle
    * rather than as an outline, so the shading is part of the slab rather than a border between
    * slabs — a border would read as a second, wrong-coloured joint.
@@ -337,8 +528,8 @@ function drawModule(context: PatternContext, module: ModuleDraw): void {
   const lit = rgbToCss(shiftBrightness(tone, MODULE_HIGHLIGHT));
   const unlit = rgbToCss(shiftBrightness(tone, -MODULE_SHADOW));
 
-  const left = LIGHT_DIRECTION.x < 0;
-  const top = LIGHT_DIRECTION.y < 0;
+  const left = module.light.x < 0;
+  const top = module.light.y < 0;
 
   context.fillStyle = left ? lit : unlit;
   context.fillRect(module.x, module.y, module.bevel, module.height);
@@ -362,7 +553,10 @@ function paintScatter(
   rotation: number,
   seed: string,
   pxPerMetre: number,
+  light: Point,
 ): void {
+  const form = scatterForm(pattern);
+
   /*
    * A jittered grid, not true Poisson-disc sampling.
    *
@@ -399,6 +593,8 @@ function paintScatter(
       const centreY = (row + random()) * cell;
 
       drawBlob(context, {
+        light,
+        form,
         x: centreX * pxPerMetre,
         y: centreY * pxPerMetre,
         radius: (size / 2) * pxPerMetre,
@@ -411,6 +607,10 @@ function paintScatter(
 }
 
 interface BlobDraw {
+  /** Unit vector towards the light, the same one the slab bevels use. */
+  light: Point;
+  /** What this unit is shaped like. Resolved by `scatterForm` before it gets here. */
+  form: 'blob' | 'tufted' | 'clipped-mass';
   x: number;
   y: number;
   radius: number;
@@ -428,17 +628,37 @@ interface BlobDraw {
  * separates gravel from planting: four is angular, nine is leafy.
  */
 function drawBlob(context: PatternContext, blob: BlobDraw): void {
+  if (blob.form === 'tufted') {
+    drawTuft(context, blob);
+    return;
+  }
+
+  /*
+   * A clipped hedge is not a loose bobble. Keeping the reaches in a narrow band makes each unit
+   * nearly circular, so at this density they overlap into one scalloped band with a defined edge
+   * — which is how a hedge has always been drawn in plan by hand — rather than reading as a row
+   * of separate shrubs.
+   */
+  const spread =
+    blob.form === 'clipped-mass' ? { base: 0.92, jitter: 0.14 } : { base: 0.65, jitter: 0.45 };
+
   const reaches: number[] = [];
   for (let i = 0; i < blob.lobes; i += 1) {
     // Never below 65% of the radius, or a lobe folds through the centre and the blob self-crosses.
-    reaches.push(blob.radius * (0.65 + blob.random() * 0.45));
+    reaches.push(blob.radius * (spread.base + blob.random() * spread.jitter));
   }
 
   context.fillStyle = rgbToCss(blob.tone);
   traceBlob(context, blob, reaches, 1, 0, 0);
   context.fill();
 
-  if (blob.radius < MIN_SHADED_MODULE_PX) return;
+  /*
+   * A radius against a threshold named for a full dimension, which is what this has always
+   * compared. Arguably over-conservative — a blob 16 px across goes unshaded where a slab of the
+   * same size would not — but it is preserved exactly here rather than corrected, because this
+   * refactor's gate is that it changes no pixels. Noted in TODOS.md as a tuning candidate.
+   */
+  if (!shadesAt(blob.radius)) return;
 
   /*
    * The lit crown: the plant's *own* outline, shrunk and shifted towards the light.
@@ -446,12 +666,12 @@ function drawBlob(context: PatternContext, blob: BlobDraw): void {
    * Drawn as a scaled copy rather than as a circle laid on top, which is what the first attempt
    * did and which made every shrub look like a fried egg — a hard round highlight reads as a
    * separate object, where a smaller copy of the same ragged shape reads as the top of this one
-   * catching the sun. Same `LIGHT_DIRECTION` as every slab bevel, so a bed and the patio beside it
+   * catching the sun. The same light as every slab bevel, so a bed and the patio beside it
    * are lit from the same place.
    */
   const offset = blob.radius * 0.22;
   context.fillStyle = rgbToCss(shiftBrightness(blob.tone, MODULE_HIGHLIGHT));
-  traceBlob(context, blob, reaches, 0.62, LIGHT_DIRECTION.x * offset, LIGHT_DIRECTION.y * offset);
+  traceBlob(context, blob, reaches, 0.62, blob.light.x * offset, blob.light.y * offset);
   context.fill();
 }
 
@@ -463,6 +683,95 @@ function drawBlob(context: PatternContext, blob: BlobDraw): void {
  * is a control point and each edge midpoint an anchor, which is the standard way to round a
  * polygon without computing tangents.
  */
+/**
+ * A grass, from above.
+ *
+ * Ornamental grasses were the clearest failure of drawing every planting material as the same
+ * round lobed blob: from above a grass is a *rosette of radiating leaves*, not a mound, and no
+ * amount of size, density or hue turns one into the other. That is the whole argument for a form
+ * axis — colour can substitute for shape up to a point, which is why `wildflower` and
+ * `mixed-border` already read well, but a grass is a different shape from a shrub.
+ *
+ * Each blade is filled on its own path rather than all of them into one. A single path would be
+ * fewer calls, but the blades all meet at the centre and the non-zero winding rule cancels
+ * overlapping subpaths against each other — which would punch a hole through the middle of every
+ * tuft. Planting densities are single figures per square metre, so the extra fills are cheap; the
+ * aggregates that run to hundreds per square metre are all `blob`.
+ */
+function drawTuft(context: PatternContext, blob: BlobDraw): void {
+  const blades: { angle: number; reach: number }[] = [];
+
+  for (let i = 0; i < blob.lobes; i += 1) {
+    blades.push({
+      // Evenly spaced, then jittered by less than half a step so leaves never cross over.
+      angle:
+        (i / blob.lobes) * Math.PI * 2 + (blob.random() - 0.5) * ((Math.PI * 2) / blob.lobes) * 0.8,
+      // Less length variance than a blob's lobes: a rosette is roughly round overall.
+      reach: blob.radius * (0.72 + blob.random() * 0.34),
+    });
+  }
+
+  context.fillStyle = rgbToCss(blob.tone);
+  traceBlades(context, blob, blades, 1, 0, 0);
+
+  /*
+   * A radius against a threshold named for a full dimension, which is what this has always
+   * compared. Arguably over-conservative — a blob 16 px across goes unshaded where a slab of the
+   * same size would not — but it is preserved exactly here rather than corrected, because this
+   * refactor's gate is that it changes no pixels. Noted in TODOS.md as a tuning candidate.
+   */
+  if (!shadesAt(blob.radius)) return;
+
+  // The lit side of the rosette, on the same principle as a blob's crown: a smaller copy of the
+  // plant's own shape shifted towards the light, never a separate highlight laid on top.
+  const offset = blob.radius * 0.18;
+  context.fillStyle = rgbToCss(shiftBrightness(blob.tone, MODULE_HIGHLIGHT));
+  traceBlades(context, blob, blades, 0.6, blob.light.x * offset, blob.light.y * offset);
+}
+
+function traceBlades(
+  context: PatternContext,
+  blob: BlobDraw,
+  blades: { angle: number; reach: number }[],
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+): void {
+  const cx = blob.x + offsetX;
+  const cy = blob.y + offsetY;
+
+  for (const blade of blades) {
+    const reach = blade.reach * scale;
+    const tipX = cx + Math.cos(blade.angle) * reach;
+    const tipY = cy + Math.sin(blade.angle) * reach;
+
+    // Half the leaf's width at its base, perpendicular to its own axis. Narrower than this and
+    // the tuft reads as a starburst rather than as a plant; wider and the blades merge back into
+    // the blob this form exists to escape.
+    const width = reach * 0.3;
+    const px = -Math.sin(blade.angle) * width;
+    const py = Math.cos(blade.angle) * width;
+
+    // Out along one side and back along the other, bowed slightly so the leaf arches.
+    context.beginPath();
+    context.moveTo(cx + px, cy + py);
+    context.quadraticCurveTo(
+      cx + px * 0.5 + (tipX - cx) * 0.5,
+      cy + py * 0.5 + (tipY - cy) * 0.5,
+      tipX,
+      tipY,
+    );
+    context.quadraticCurveTo(
+      cx - px * 0.5 + (tipX - cx) * 0.5,
+      cy - py * 0.5 + (tipY - cy) * 0.5,
+      cx - px,
+      cy - py,
+    );
+    context.closePath();
+    context.fill();
+  }
+}
+
 function traceBlob(
   context: PatternContext,
   blob: BlobDraw,
@@ -599,20 +908,6 @@ function gridRange(
 /* ---------------------------------------------------------------- helpers */
 
 /** Whether a unit of this pattern is too small at this zoom to be worth drawing individually. */
-function tooSmallToRead(pattern: MaterialPattern, pxPerMetre: number): boolean {
-  switch (pattern.patternType) {
-    case 'grid':
-    case 'board': {
-      const smallest = Math.min(pattern.moduleSize.w, pattern.moduleSize.h) / MM_PER_METRE;
-      return smallest * pxPerMetre < MIN_DRAWN_MODULE_PX;
-    }
-    case 'scatter':
-      return (pattern.sizeRange.max / MM_PER_METRE) * pxPerMetre < MIN_DRAWN_UNIT_PX;
-    case 'stripe':
-      // A band is metres wide; it only stops reading when the whole surface is a few pixels.
-      return (pattern.bandWidth / MM_PER_METRE) * pxPerMetre < MIN_DRAWN_MODULE_PX;
-  }
-}
 
 function boundingBoxOrigin(outline: Point[]): Point {
   const box = boundingBox(outline);

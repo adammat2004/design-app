@@ -13,6 +13,7 @@ import {
   hasPattern,
   materialPattern,
   modulePitchMetres,
+  scatterForm,
 } from './material-patterns.js';
 
 const element = (overrides: Partial<DesignElement> = {}): DesignElement =>
@@ -127,8 +128,12 @@ describe('the pattern manifest', () => {
   });
 
   it('answers null for a material with no pattern', () => {
-    // Still water and powder-coated steel have no texture worth drawing at 1:100.
-    expect(materialPattern('formal-pool')).toBeNull();
+    /*
+     * `formal-pool` used to be here. It has a manifest now — a still one, `rippleSpacing: 0`,
+     * because a formal pool is meant to read as a mirror and that is a design statement rather
+     * than an absence. Powder-coated steel genuinely has no texture worth drawing at 1:100.
+     */
+    expect(materialPattern('powder-coated-steel')).toBeNull();
     expect(materialPattern(undefined)).toBeNull();
     expect(materialPattern('not-a-material')).toBeNull();
     expect(hasPattern('stone-pavers')).toBe(true);
@@ -187,5 +192,51 @@ describe('the pattern manifest', () => {
     // 600 mm slab on a 10 mm joint is a 0.61 m pitch — what a costing pass divides an area by.
     expect(modulePitchMetres(pattern)).toEqual({ x: 0.61, y: 0.61 });
     expect(MM_PER_METRE).toBe(1000);
+  });
+});
+
+describe('scatterForm', () => {
+  const scatter = (over = {}) => ({
+    patternType: 'scatter' as const,
+    density: 3,
+    sizeRange: { min: 100, max: 200 },
+    lobes: 8,
+    ...over,
+  });
+
+  it('resolves an absent form to a blob, which is what every scatter did before', () => {
+    // The manifest is hand-written literals that never go through `.parse()`, so a Zod default
+    // would look like it applied and never fire. Resolving here is what makes it total.
+    expect(scatterForm(scatter())).toBe('blob');
+  });
+
+  it('returns what was asked for', () => {
+    expect(scatterForm(scatter({ form: 'tufted' }))).toBe('tufted');
+    expect(scatterForm(scatter({ form: 'clipped-mass' }))).toBe('clipped-mass');
+  });
+});
+
+describe('the forms the catalogue actually uses', () => {
+  /*
+   * Pinned because these are the two materials the form axis was introduced for. Looking at the
+   * contact sheet was how the gap was found: every planting material drew the same round blob and
+   * differed only in size, density and hue, so grasses read as pale cauliflower and a hedge read
+   * as loose bobbles rather than a clipped mass.
+   */
+  it('draws ornamental grasses as a rosette, not a mound', () => {
+    const pattern = materialPattern('ornamental-grasses')!;
+    expect(pattern.patternType).toBe('scatter');
+    expect(scatterForm(pattern as never)).toBe('tufted');
+  });
+
+  it('draws a hedge as a continuous clipped mass', () => {
+    const pattern = materialPattern('hedging')!;
+    expect(scatterForm(pattern as never)).toBe('clipped-mass');
+  });
+
+  it('leaves the aggregates as blobs, because a gravel chip is a blob', () => {
+    for (const id of ['bark-mulch', 'decorative-gravel', 'play-bark', 'slate-chippings'] as const) {
+      expect(scatterForm(materialPattern(id) as never)).toBe('blob');
+    }
   });
 });

@@ -30,13 +30,30 @@ export const MODULE_SHADOW = 0.1;
  */
 export const MODULE_BEVEL_RATIO = 0.035;
 
+/* ---------------------------------------------------------------- cast shadows */
+
 /**
- * Below this many pixels per module, shading is skipped entirely.
+ * The colour a cast shadow is drawn in, at **full opacity**.
  *
- * At three or four pixels a slab, a highlight and a shadow are a pixel each and read as noise —
- * they make the paving look dithered rather than lit. The flat tone alone is more honest.
+ * Opaque on purpose, and the reason is the whole trick behind the shadow layer. Two overlapping
+ * shadows are one shadow — a tree standing in a hedge's shade does not make that patch twice as
+ * dark — but drawing translucent shapes one after another does exactly that. Filling every piece
+ * opaque into a layer of its own and compositing that layer once at `SHADOW_OPACITY` makes the
+ * overlap merge for free, with no polygon-union library anywhere.
+ *
+ * A blue-grey rather than a neutral one. Shadowed ground outdoors is lit by the sky rather than
+ * by the sun, and sky light is blue; a grey shadow reads as dirt on the drawing.
  */
-export const MIN_SHADED_MODULE_PX = 12;
+export const SHADOW_TONE = '#4a5a63';
+
+/**
+ * How dark the composited shadow layer sits over the plan.
+ *
+ * Low enough that the material underneath still reads — the point of a shadow here is to say
+ * "this corner is shaded", not to hide what is in it. A plan where you cannot tell paving from
+ * planting in the shade has traded information for atmosphere.
+ */
+export const SHADOW_OPACITY = 0.26;
 
 /* ---------------------------------------------------------------- colour maths */
 

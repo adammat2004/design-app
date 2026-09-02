@@ -18,6 +18,7 @@ import {
   type Point,
   type RequestedFeatureCheck,
   type ZoneId,
+  estimateBudgetBand,
 } from '@garden-studio/schema';
 import {
   ARCHETYPES,
@@ -34,7 +35,7 @@ import {
   shiftBudget,
   type FeatureSpec,
 } from './archetypes.js';
-import { estimateBudgetBand, featureAttempts, resolveConstraints } from './constraints.js';
+import { featureAttempts, resolveConstraints } from './constraints.js';
 import { FillService } from './fill.service.js';
 import { PlacementService } from './placement.service.js';
 import { conceptSeed, makeRng, sqlSeed } from './rng.js';

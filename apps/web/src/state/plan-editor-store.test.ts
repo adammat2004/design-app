@@ -3,6 +3,7 @@ import type { ProposedChange } from '@garden-studio/schema';
 import type { DesignElement, GeneratedConcept } from '@/lib/concepts';
 import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
 import {
+  hydratePlanEditorStore,
   resetPlanEditorStoreForTests,
   selectedElement,
   usePlanEditorStore,
@@ -605,5 +606,34 @@ describe('history', () => {
     store().undo();
 
     expect(store().present.elements).toHaveLength(2);
+  });
+});
+
+describe('the labels toggle', () => {
+  /**
+   * A viewing preference, so it follows `gridVisible` exactly — including the part that bites.
+   * `CLAUDE.md` records that the flag has several edit points and the one people miss is
+   * `ephemeralState()`, shared by the test reset and the hydrator: miss it and the setting survives
+   * a reload it was never meant to survive.
+   */
+  it('starts on, because a plan you cannot read is a picture', () => {
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+  });
+
+  it('toggles', () => {
+    usePlanEditorStore.getState().toggleLabels();
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
+
+    usePlanEditorStore.getState().toggleLabels();
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+  });
+
+  it('does not survive a reload, which is the edit point that gets missed', () => {
+    usePlanEditorStore.getState().toggleLabels();
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
+
+    hydratePlanEditorStore({ elements: [], seededFrom: null, pristine: null }, Date.now());
+
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
   });
 });

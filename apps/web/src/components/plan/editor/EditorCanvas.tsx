@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { Circle, Group, Layer, Line, Stage } from 'react-konva';
 import type Konva from 'konva';
 import { CircleAlert } from 'lucide-react';
-import type { Point } from '@garden-studio/schema';
+import { lightDirection, type Point } from '@garden-studio/schema';
 import { draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
 import {
@@ -35,6 +35,7 @@ import { CanvasChrome } from '../CanvasChrome';
 import { HouseShape } from '../HouseShape';
 import { ShapeHandles } from '../ShapeHandles';
 import { ElementDrawing } from '../ElementDrawing';
+import { ShadowLayer } from '../ShadowLayer';
 import {
   AlignmentLines,
   FenceLine,
@@ -71,10 +72,29 @@ export function EditorCanvas() {
   const allElements = usePlanEditorStore((state) => state.present.elements);
   const elements = useMemo(() => allElements.filter((element) => !element.hidden), [allElements]);
 
+  /*
+   * One sun for the whole drawing. `undefined` means the plan has never said where it is, and
+   * everything falls back to the conventional top-left drawing light — bevels, blob highlights
+   * and cast shadows together, rather than some of each.
+   */
+  const light = useMemo(() => lightDirection(boundaryDraft) ?? undefined, [boundaryDraft]);
+
+  /*
+   * Where the shadow layer is spliced in: after every fill, before every feature.
+   *
+   * Found rather than assumed. `-1` means the plan is all ground and no objects, in which case
+   * the shadows go last and nothing is drawn over them — which is correct, not a fallback.
+   */
+  const firstFeatureIndex = useMemo(() => {
+    const index = elements.findIndex((element) => element.role === 'feature');
+    return index === -1 ? elements.length : index;
+  }, [elements]);
+
   const selected = usePlanEditorStore(selectedElement);
   const selectedId = usePlanEditorStore((state) => state.selectedId);
   const mode = usePlanEditorStore((state) => state.mode);
   const gridVisible = usePlanEditorStore((state) => state.gridVisible);
+  const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
   const placingCategory = usePlanEditorStore((state) => state.placingCategory);
   const alignments = usePlanEditorStore((state) => state.alignments);
   const measurement = usePlanEditorStore((state) => state.measurement);
@@ -271,9 +291,14 @@ export function EditorCanvas() {
             {/*
               The layout. Array order is stacking order — base fills, accent fills, then
               features — which is what keeps every chosen zone covered. See `concept-fill.ts`.
+
+              The shadow layer is spliced in at the fill-to-feature seam rather than given a
+              Layer of its own: shadows fall ON surfaces so they must sit above them, and a tree
+              stands up out of the ground so it must be drawn over the shadow it casts. Slicing
+              the same array preserves the ordering guarantee above; two Konva layers would not.
             */}
             <Layer>
-              {elements.map((element) => (
+              {elements.slice(0, firstFeatureIndex).map((element) => (
                 <ElementShape
                   key={element.id}
                   element={element}
@@ -281,6 +306,27 @@ export function EditorCanvas() {
                   selected={element.id === selectedId}
                   draggable={elementsDraggable && !isLocked(element)}
                   listening={elementsListening}
+                  light={light}
+                />
+              ))}
+
+              <ShadowLayer
+                elements={elements}
+                house={boundaryDraft.house}
+                boundary={polygon}
+                site={boundaryDraft}
+                transform={transform}
+              />
+
+              {elements.slice(firstFeatureIndex).map((element) => (
+                <ElementShape
+                  key={element.id}
+                  element={element}
+                  transform={transform}
+                  selected={element.id === selectedId}
+                  draggable={elementsDraggable && !isLocked(element)}
+                  listening={elementsListening}
+                  light={light}
                 />
               ))}
             </Layer>
@@ -346,7 +392,9 @@ export function EditorCanvas() {
                 <Label
                   at={{
                     x: metresToPx(elementAnchor(selected), transform).x,
-                    y: metresToPx(elementAnchor(selected), transform).y + selectedBadgeOffset(selected, transform),
+                    y:
+                      metresToPx(elementAnchor(selected), transform).y +
+                      selectedBadgeOffset(selected, transform),
                   }}
                   text={describeElement(selected, unit)!}
                   tone={COLOUR.handle}
@@ -410,7 +458,7 @@ export function EditorCanvas() {
       {/* Chrome in HTML, so it uses the same tokens and icons as the rest of the screen. */}
       <div className="pointer-events-none absolute inset-0">
         {/* No `zones` passed: step 5 draws feature chips only — see the prop's own note for why. */}
-        {canRender ? (
+        {canRender && labelsVisible ? (
           <ConceptLabels
             elements={elements}
             detailed={detailed}
@@ -513,12 +561,15 @@ function ElementShape({
   selected,
   draggable,
   listening,
+  light,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
   selected: boolean;
   draggable: boolean;
   listening: boolean;
+  /** Unit vector towards the light, resolved once per canvas so every element shares one sun. */
+  light?: Point;
 }) {
   const anchor = metresToPx(elementAnchor(element), transform);
   const relative = (points: Point[]): number[] =>
@@ -564,7 +615,7 @@ function ElementShape({
         if (current) event.target.position(metresToPx(elementAnchor(current), transform));
       }}
     >
-      <ElementDrawing element={element} transform={transform} offsetPx={anchor} />
+      <ElementDrawing element={element} transform={transform} offsetPx={anchor} light={light} />
 
       {/*
         Selection is drawn *over* the element rather than by restyling it.

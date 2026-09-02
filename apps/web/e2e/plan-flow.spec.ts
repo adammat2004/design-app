@@ -148,8 +148,51 @@ test('a patio door added to the house survives a reload', async ({ page }) => {
   await expect(page.getByTestId('openings-count')).toContainText('1 placed');
 });
 
-test('an unknown plan id is a 404 rather than an empty wizard', async ({ page }) => {
+test('an unknown plan id is a 404, and says so rather than blaming the server', async ({
+  page,
+}) => {
+  /*
+   * Two assertions because they can disagree. The status is what a crawler and the browser see;
+   * the screen is what the person sees, and until the layout learned to tell three failures apart
+   * it showed this same "could not be found" page to anyone who had simply not started the API.
+   */
   const response = await page.goto('/plan/11111111-2222-3333-4444-555555555555/map');
 
   expect(response?.status()).toBe(404);
+  await expect(page.getByTestId('plan-not-found')).toBeVisible();
+  await expect(page.getByTestId('api-unreachable')).toHaveCount(0);
+});
+
+/**
+ * The other half of persistence.
+ *
+ * "A drawn boundary survives a reload" proves the plan is *stored*. This proves it is
+ * *reachable* — which is a different claim, and for most of this project's life it was false:
+ * `GET /plan-projects` existed, `listProjects()` existed, and nothing called it, so closing the
+ * tab without bookmarking the URL lost the garden. Only the full stack can test this.
+ */
+test('a saved plan can be found again from the front door', async ({ page }) => {
+  await page.goto('/plan');
+  await page.waitForURL(/\/plan\/[0-9a-f-]{36}\/map$/);
+  const planUrl = page.url();
+
+  await drawBoundary(page);
+  // Let the debounced autosave land, so the plan has a real updatedAt to list.
+  await expect(page.getByTestId('autosave-status')).toContainText(/saved/i, {
+    timeout: 15_000,
+  });
+
+  // Leave entirely, as someone closing the tab would.
+  await page.goto('/');
+  await page.getByTestId('your-plans').click();
+  await expect(page).toHaveURL(/\/projects$/);
+
+  const listed = page.getByTestId('projects-list').locator('a').first();
+  await expect(listed).toBeVisible();
+  await listed.click();
+
+  // Back in a plan, and the boundary is still closed.
+  await expect(page).toHaveURL(/\/plan\/[0-9a-f-]{36}\/map$/);
+  await expect(page.getByTestId('close-shape')).toHaveCount(0);
+  expect(page.url()).toBe(planUrl);
 });

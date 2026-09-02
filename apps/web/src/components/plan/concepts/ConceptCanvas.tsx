@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { Group, Layer, Line, Stage } from 'react-konva';
 import type Konva from 'konva';
+import { lightDirection, type Point } from '@garden-studio/schema';
 import { boundaryEdges, draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
 import { metresToPx, polygonToKonvaPoints, type CanvasTransform } from '@/lib/canvas-transform';
@@ -12,6 +13,7 @@ import { formatLength } from '@/lib/units';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { CanvasChrome } from '../CanvasChrome';
 import { ElementDrawing } from '../ElementDrawing';
+import { ShadowLayer } from '../ShadowLayer';
 import { HouseShape } from '../HouseShape';
 import { Label, SquareGrid } from '../canvas-primitives';
 import { useCanvasViewport } from '../use-canvas-viewport';
@@ -60,13 +62,23 @@ export function ConceptCanvas({
 
   const polygon = useMemo(() => draftPolygon(boundaryDraft), [boundaryDraft]);
   const zones = useMemo(() => selectZones({ present: boundaryDraft }), [boundaryDraft]);
+
   const houseOutline = useMemo(
     () => (boundaryDraft.house ? housePolygon(boundaryDraft.house) : null),
     [boundaryDraft.house],
   );
 
-  const elements = concept?.elements ?? [];
+  const elements = useMemo(() => concept?.elements ?? [], [concept]);
   const isPane = variant === 'pane';
+
+  /* One sun for the whole drawing — see the editor. */
+  const light = useMemo(() => lightDirection(boundaryDraft) ?? undefined, [boundaryDraft]);
+
+  /* Where the shadow layer is spliced in: after every fill, before every feature. */
+  const firstFeatureIndex = useMemo(() => {
+    const index = elements.findIndex((element) => element.role === 'feature');
+    return index === -1 ? elements.length : index;
+  }, [elements]);
 
   /*
    * Compare panes refit whenever they are resized; the full canvas fits once and then the
@@ -137,8 +149,36 @@ export function ConceptCanvas({
               cosmetic choice — it is how full coverage is guaranteed. See `concept-fill.ts`.
             */}
             <Layer listening={false}>
-              {elements.map((element) => (
-                <ElementShape key={element.id} element={element} transform={transform} />
+              {elements.slice(0, firstFeatureIndex).map((element) => (
+                <ElementShape
+                  key={element.id}
+                  element={element}
+                  transform={transform}
+                  light={light}
+                />
+              ))}
+
+              {/*
+                Shadows go in at the same seam the editor uses, for the same reason. Step 4 is
+                where the concept is *chosen*, so it must not show a different garden from the
+                one step 5 opens — that divergence is exactly what merging the two element
+                drawings into one component was meant to end.
+              */}
+              <ShadowLayer
+                elements={elements}
+                house={boundaryDraft.house}
+                boundary={polygon}
+                site={boundaryDraft}
+                transform={transform}
+              />
+
+              {elements.slice(firstFeatureIndex).map((element) => (
+                <ElementShape
+                  key={element.id}
+                  element={element}
+                  transform={transform}
+                  light={light}
+                />
               ))}
             </Layer>
 
@@ -227,13 +267,15 @@ export function ConceptCanvas({
 function ElementShape({
   element,
   transform,
+  light,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
+  light?: Point;
 }) {
   return (
     <Group listening={false}>
-      <ElementDrawing element={element} transform={transform} />
+      <ElementDrawing element={element} transform={transform} light={light} />
     </Group>
   );
 }

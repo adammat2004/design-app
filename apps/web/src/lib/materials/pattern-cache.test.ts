@@ -6,6 +6,7 @@ import {
   bucketScale,
   clearPatternCache,
   getSurfacePattern,
+  MAX_ENTRIES,
   patternCacheHas,
   patternCacheSize,
   patternKey,
@@ -156,21 +157,28 @@ describe('the pattern cache', () => {
   });
 
   it('evicts the least recently used raster once it is full', () => {
-    // Fill past the cap, touching the first entry part-way so it is not the coldest.
+    /*
+     * Derived from MAX_ENTRIES rather than repeating its value. The cap is a tuning number that
+     * moves when the shape of a generated plan changes; this test is about the eviction ORDER,
+     * and it should not fail merely because the cap was resized.
+     */
+    const touchAt = Math.floor(MAX_ENTRIES * 0.6);
+
+    // Fill to the cap, touching the first entry part-way so it is not the coldest.
     const first = request({ elementId: 'element-0' });
     getSurfacePattern(first, makeCanvas);
 
-    for (let i = 1; i < 48; i += 1) {
+    for (let i = 1; i < MAX_ENTRIES; i += 1) {
       getSurfacePattern(request({ elementId: `element-${i}` }), makeCanvas);
-      if (i === 30) getSurfacePattern(first, makeCanvas);
+      if (i === touchAt) getSurfacePattern(first, makeCanvas);
     }
 
-    expect(patternCacheSize()).toBe(48);
+    expect(patternCacheSize()).toBe(MAX_ENTRIES);
 
-    getSurfacePattern(request({ elementId: 'element-48' }), makeCanvas);
+    getSurfacePattern(request({ elementId: `element-${MAX_ENTRIES}` }), makeCanvas);
 
-    expect(patternCacheSize()).toBe(48);
-    // Touched at 30, so it outlived the entries added before that.
+    expect(patternCacheSize()).toBe(MAX_ENTRIES);
+    // Touched part-way through, so it outlived the entries added before that.
     expect(patternCacheHas(first)).toBe(true);
     expect(patternCacheHas(request({ elementId: 'element-1' }))).toBe(false);
   });
@@ -195,5 +203,35 @@ describe('patternKey', () => {
 
     expect(key.startsWith('element-1:stone-pavers:')).toBe(true);
     expect(key.endsWith(`:${zoomBucket(32)}`)).toBe(true);
+  });
+});
+
+describe('the light in the key', () => {
+  /**
+   * Added when the light stopped being a compile-time constant.
+   *
+   * Leaving it out was harmless while every surface was lit from the same hardcoded corner. The
+   * moment it follows the sun it becomes a correctness bug: moving the time slider would repaint
+   * only the surfaces that happened to fall out of the cache, so the plan relights in patches —
+   * which reads as a rendering fault rather than as a stale cache.
+   */
+  it('changes when the light moves', () => {
+    const noon = request({ light: { x: 0, y: 1 } });
+    const evening = request({ light: { x: -0.7, y: -0.7 } });
+
+    expect(patternKey(noon)).not.toBe(patternKey(evening));
+  });
+
+  it('tells the conventional light apart from a real one', () => {
+    expect(patternKey(request())).not.toBe(patternKey(request({ light: { x: 0, y: 1 } })));
+  });
+
+  it('absorbs floating-point noise rather than invalidating on it', () => {
+    // The solar maths returns values that wobble in the far decimals between calls; a raster
+    // must not be thrown away for that.
+    const a = request({ light: { x: 0.7071067811865476, y: -0.7071067811865475 } });
+    const b = request({ light: { x: 0.70710678118654, y: -0.70710678118654 } });
+
+    expect(patternKey(a)).toBe(patternKey(b));
   });
 });

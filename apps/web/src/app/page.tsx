@@ -20,9 +20,16 @@ export default function Home() {
 
           <h1 className="text-lg font-semibold text-garden-forest">Garden Studio</h1>
 
+          {/*
+            This used to end "Nothing is saved between visits yet", which stopped being true a long
+            time before it stopped being written: every section autosaves and the README's headline
+            claim is that the garden is still there tomorrow. Copy that undersells the product is
+            still copy that lies about it, and this one talked users out of trusting the one
+            feature they most needed to trust.
+          */}
           <p className="text-xs leading-relaxed text-garden-muted">
             Map your outdoor space, tell us what you want from it, and compare design concepts you
-            can edit. Nothing is saved between visits yet.
+            can edit. Everything saves as you go, so you can close the tab and come back to it.
           </p>
 
           {/* `/plan` creates a plan and redirects into it, so the id is minted server-side. */}
@@ -33,6 +40,14 @@ export default function Home() {
           >
             Start planning
             <ArrowRight aria-hidden className="h-4 w-4" />
+          </Link>
+
+          <Link
+            href="/projects"
+            data-testid="your-plans"
+            className="text-xs font-semibold text-garden-forest underline-offset-2 hover:underline"
+          >
+            Open a saved plan
           </Link>
         </div>
       </main>

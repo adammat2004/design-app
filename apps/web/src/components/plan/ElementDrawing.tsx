@@ -25,15 +25,24 @@ export function ElementDrawing({
   element,
   transform,
   offsetPx = ORIGIN,
+  light,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
   /** Where the caller's group sits, in stage pixels. Zero when drawing absolutely. */
   offsetPx?: Point;
+  /**
+   * Unit vector towards the light. Omitted falls back to the conventional drawing light, which
+   * is what a thumbnail or a plan with no location gets.
+   *
+   * Passed in rather than read from a store, because everything below the single hook in
+   * `lib/materials` is a pure function of data and reaching into state here would end that.
+   */
+  light?: Point;
 }) {
   const style = CATEGORY_COLOURS[element.category];
   const fill = materialFill(element);
-  const pattern = useSurfacePattern(element, transform.scale);
+  const pattern = useSurfacePattern(element, transform.scale, light);
   const { shape } = element;
   const isFill = element.role === 'fill';
 

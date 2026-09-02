@@ -5,6 +5,7 @@ import type { CanvasTransform } from '@/lib/canvas-transform';
 import type { Unit } from '@/lib/units';
 import { formatViewportSpan, viewportSpan } from '@/lib/grid';
 import { CompassRose } from './CompassRose';
+import { RenderHud } from './RenderHud';
 import { ScaleBar, ZoomButton } from './canvas-primitives';
 
 /**
@@ -33,6 +34,8 @@ export function CanvasChrome({
     <>
       <CompassRose />
       <ScaleBar transform={transform} unit={unit} />
+      {/* Development only, and it renders nothing in a production build. See `RenderHud`. */}
+      <RenderHud />
 
       <div className="pointer-events-auto absolute right-4 bottom-4 flex flex-col overflow-hidden rounded-lg border border-garden-line bg-white shadow-sm">
         <ZoomButton label="Zoom in" testId="zoom-in" onClick={onZoomIn}>

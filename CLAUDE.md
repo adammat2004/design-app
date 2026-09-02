@@ -47,9 +47,11 @@ house by `computeZones`, so storing them could only create something stale.
   ordinary layout patch afterwards.
 
 - **procedural surface materials**: surfaces draw as generated texture rather than a flat hex
-  (`apps/web/src/lib/materials/`). Four pattern types — `grid`, `board`, `scatter`, `stripe` —
-  cover twenty of the twenty-seven materials, and the generator now assigns a material to every
-  element it places. `pnpm --filter @garden-studio/web render:material` writes PNGs to a gitignored
+  (`apps/web/src/lib/materials/`). Five pattern types — `grid`, `board`, `scatter`, `stripe`,
+  `water` — cover twenty-six of the twenty-eight materials (all but `powder-coated-steel` and
+  `existing`), and the generator now assigns a
+  material to every element it places. `scatter` carries a `form` axis (`blob`, `tufted`,
+  `clipped-mass`) so a grass is a different _shape_ from a shrub rather than a different shade. `pnpm --filter @garden-studio/web render:material` writes PNGs to a gitignored
   `.material-preview/` to look at; the contact sheet is the one to judge by.
 - **the plan reads as an enclosed garden**: a fence with posts round the boundary, feature chips
   without zone labels, and a size badge on the selected shape.
@@ -60,14 +62,27 @@ house by `computeZones`, so storing them could only create something stale.
   `ElementDrawing` component draws every element, shared by step 4 and step 5.
 - **plot dimensions** outside the fence with arrowheads, and a grid that is clipped to the plot and
   can be turned off.
+- **one sun over the whole drawing**: `site.location` plus `site.sun` feed `suncalc`, and the same
+  unit vector lights slab bevels, plant crowns, water crests and a real cast-shadow layer. Set a
+  location in step 1's Sun and shade panel and the shadows appear; leave it unset and the plan
+  keeps the conventional top-left drawing light and says nothing about shade.
+- **a schedule of materials on step 6**: areas, slab and board counts, the budget asked for against
+  what the materials came to, and which requested features made it in. Every figure is derived from
+  the geometry at read time; nothing is stored.
+- **a way back to a saved plan**: `/projects` lists them, and the landing page links to it.
 
-**Not built yet:** costing and the review screen's numbers, and the 3D preview. React Three Fiber
-is installed but unused. Step 6 is still a signpost card that reads no plan data.
+**Not built yet:** printing at true scale, and the 3D preview. React Three Fiber is installed but
+unused. There is also **no evaluation of any kind** — no benchmark over the generator, no user
+study, no measured numbers beyond the generation timings quoted above. That is the largest
+outstanding gap in the project and it is not a feature.
 
-**No live Anthropic call has been made yet** — the assistant's server tests mock the SDK, and
-there is no key in `apps/api/.env`. Everything up to the request is exercised; the first real
-call is worth watching (check `usage.cache_read_input_tokens` before claiming the caching win).
-Server-side `fallbacks` was deliberately left off for the same reason: it cannot be tested here.
+**No _automated_ Anthropic call has ever been made** — every assistant test injects a fake client
+(`Pick<Anthropic, 'messages'>`), constructing real `Anthropic.*Error` classes only to check the
+error mapping. Everything up to the request is exercised. `apps/api/.env` now carries a key and
+`ASSISTANT_ENABLED` is unset (so, enabled), which means the running app _is_ live-capable; whether
+a real call has been made through the UI is not something the repository records. The first one is
+still worth watching — check `usage.cache_read_input_tokens` before claiming the caching win.
+Server-side `fallbacks` remains off for the same reason: it cannot be tested here.
 
 ## Decisions worth knowing
 
@@ -108,7 +123,7 @@ banner on screen teaches the user that the fix does not work.
 
 **The house's corners and walls carry ids, and `PLAN_DOCUMENT_VERSION` is 2 because of it.**
 `HouseFootprint.outline` is `HouseVertex[]` (a point plus an id) and the footprint carries a
-parallel `walls[]`. The ids exist so things can be *attached* to a wall: a door recorded as "0.9 m
+parallel `walls[]`. The ids exist so things can be _attached_ to a wall: a door recorded as "0.9 m
 along this wall" survives a move and a rotation with positional identity, but not a resize — which
 rewrites every coordinate — and not a corner being inserted on a custom outline, which renumbers
 every edge after it and silently moves every opening on them to a different wall. That is the
@@ -117,7 +132,7 @@ failure this codebase least tolerates, and it is the same reason `BoundaryVertex
 Consequences worth knowing:
 
 - **`MIGRATIONS[1]` is the first migration that does real work.** Every earlier shape change was an
-  addition with a default, which Zod fills for free; this one changes an element *type*, so a stored
+  addition with a default, which Zod fills for free; this one changes an element _type_, so a stored
   row genuinely does not parse without help. Ids are assigned positionally, because that is all a v1
   document carries — the point is not that `h0` is meaningful, it is that from here on it is stable.
 - **`PlanDocumentSchema.parse` does not migrate; `readPlanDocument` does.** Test fixtures call the
@@ -144,7 +159,7 @@ Four things about that module worth knowing before touching it:
   `housePolygon` from `site.ts` — a direct cycle. Same fix, same reason, as `zone-id.ts`.
 - **Every resolver returns `null` rather than guessing.** A wall id that no longer exists, or an
   opening that overruns a wall a resize has shortened, is a state the model can genuinely reach. A
-  door hanging off the end of the building is geometry that *looks* valid, which is worse than one
+  door hanging off the end of the building is geometry that _looks_ valid, which is worse than one
   the caller skips.
 - **`openingNormal` probes rather than assuming a winding direction.** `rectangleOutline` runs one
   way and a hand-drawn custom outline may run the other; an outward normal that is silently inward
@@ -157,7 +172,7 @@ Four things about that module worth knowing before touching it:
 **Openings are captured on a wall elevation strip, not on the plan.** Placing a 900 mm door on a
 footprint at step-1 zoom is an unreasonable ask — the whole building is a couple of centimetres
 across. `WallElevationStrip.tsx` unrolls one wall flat with a ruler on it, which turns a hard 2D
-task into an easy 1D one, and the horizontal axis *is* `offsetAlongEdge`: the number under the
+task into an easy 1D one, and the horizontal axis _is_ `offsetAlongEdge`: the number under the
 pointer and the number in the document are the same number. It is plain DOM rather than Konva —
 a ruler with draggable blocks is React's job, and it keeps the panel out of the `ssr: false` dance.
 The vertical axis is illustrative only, which is why sill height is typed and never dragged.
@@ -169,12 +184,12 @@ arcs on hinged doors — because otherwise the strip is a form whose effect the 
 
 **The inferred patio door is offered, not applied.** `suggestedDoorWall` picks the wall facing the
 back garden using the same bearing `computeZones` does, and the panel puts it behind a one-tap chip.
-The whole value of an opening is that the generator *trusts* it: a wrong silent door has the design
+The whole value of an opening is that the generator _trusts_ it: a wrong silent door has the design
 built confidently around a fiction the user never stated and cannot see they should check.
 
 **Legality about a wall lives in `fitsOnWall`, not in the panel.** Two openings cannot share wall,
 an opening must sit wholly on its wall, and a party wall holds nothing. Reclassifying a wall
-*removes* the openings that are no longer legal on it rather than hiding them — a door left on a
+_removes_ the openings that are no longer legal on it rather than hiding them — a door left on a
 party wall would have the generator route a path to a doorway into next door's kitchen. Note these
 edits deliberately do **not** go through `commitHouse`: that guard is about the footprint leaving
 the plot, and none of them move it.
@@ -182,21 +197,75 @@ the plot, and none of them move it.
 **`openingCounter` is re-seeded in `hydrateBoundaryStore`,** alongside `vertexCounter`. Miss it and
 the first opening added after a reload takes an id already in use.
 
-**A side gate is a `FeatureKind`, not an `Opening`.** An opening is keyed on a *wall id* and the
+**A side gate is a `FeatureKind`, not an `Opening`.** An opening is keyed on a _wall id_ and the
 boundary has vertices, not walls; reusing it would make `wallId` mean a house wall in one place and
 a boundary edge in another — the ambiguity `ZoneId` got its own module to avoid. As a feature it is
 placed on step 2 with everything else physical and the existing placement and validation machinery
 handles it unchanged.
 
-**`site.orientation` exists, and nothing reads it yet.** Degrees clockwise from screen-up to true
-north, defaulting to 0. The compass on every canvas has always been a *drawing* — it points up and
-no code consults it — so height shadows, sun-aware placement and "which windows face the light" all
-needed the field to exist before they could be built. Defaulting to 0 means every stored plan is
+**`site.orientation` is read by the sun model.** Degrees clockwise from screen-up to true
+north, defaulting to 0. The compass was a _drawing_ for most of this project's life — it pointed up
+and no code consulted it. `shadowCast` consults it now. Defaulting to 0 means every stored plan is
 unchanged and the compass keeps pointing exactly where it did.
+
+**Orientation is not enough for a sun, and `site.location` is the gate.** Which way the plot is
+turned says nothing about where on Earth it is, and solar altitude is a function of latitude —
+shadow length is `height / tan(altitude)`. So `location` is nullable and **null means the app makes
+no solar claim at all**: no cast shadows, and the conventional top-left drawing light everywhere.
+There is no latitude that is true of anywhere, and a plausible guess would have the design built
+confidently around a fact the user never stated. Offered, not applied, exactly as
+`suggestedDoorWall` handles the inferred patio door.
+
+**`site.sun` is on the document, like `pattern`.** "Show me half three in June" is a design decision
+of the same kind as which way the decking boards run, and it has to survive a reload for the same
+reason — otherwise a plan printed with shadows on it cannot be reproduced from the stored document.
+Both fields are additions with defaults, so no migration and no `PLAN_DOCUMENT_VERSION` bump.
+
+**The ephemeris is `suncalc`, not ours.** Two kilobytes, no dependencies, Meeus' algorithms, and it
+returns azimuth clockwise from north — the convention `orientation` already uses. Writing one is a
+week of work and a source of quiet wrongness. Note the SDK-shaped trap avoided here is the opposite
+of the usual one: the tempting thing was to hand-roll, not to over-import.
+
+**Shadow geometry is returned unmerged, and that dissolves the hard part.** A shadow is the
+footprint, the footprint translated to where its top lands, and the quads swept between them.
+Unioning those in TypeScript needs a polygon-boolean dependency; `projectShadow` returns the pieces
+instead, because every consumer already has a better union. The canvas gets one free by filling
+them opaque into one layer, and a future PostGIS query would use `ST_Union` anyway.
+
+**Shadows are drawn opaque and composited once.** Two overlapping shadows are one shadow — a tree
+standing in a hedge's shade is not twice as dark — and drawing translucent shapes in sequence
+double-darkens the overlap, which reads instantly as a bug. Fill every piece at full opacity into a
+layer of its own, then draw that layer once at `SHADOW_OPACITY`. There is a test that samples the
+overlap and demands it match either shadow alone.
+
+**The shadow layer is spliced into the elements layer, not given its own.** Shadows fall _on_
+surfaces so they must sit above them, and a tree stands up out of the ground so it must be drawn
+over the shadow it casts. Inserting at the fill-to-feature seam inside the existing layer preserves
+the "array order is stacking order" guarantee; two Konva layers would not.
+
+**The shadow raster covers the plot, not the shadows.** Anchoring to the shadows' own bounding box
+would move the raster's origin every time the time of day changed, shifting every pixel of the
+layer sideways as its extent grew and shrank. It is also clipped to the boundary: a shadow really
+does cross a fence, but a garden plan that shades the neighbour's property is describing land it
+does not own — the same clamp `borderRegions` already applies.
+
+**Heights live in a manifest, and a fence and a tree must not cast the same shadow.** `heightFor`
+resolves a material to a height with an explicit per-element override, because a pergola and a
+raised bed are both softwood structures. `HOUSE_HEIGHT` is a constant rather than a manifest lookup
+— the house is not a `DesignElement` and the plan records its footprint, not its storeys. Guessing
+six metres is honest in a way guessing a latitude is not: the answer varies by a metre or two
+rather than by the hemisphere.
+
+**One light reaches everything, through `DrawPass.light`.** Slab bevels, blob highlights, water
+crests and cast shadows all take the same unit vector. Two suns in one drawing is the single most
+obvious way a render gives itself away, and it happens by default the moment shadows follow a real
+sun while shading stays on a compile-time constant. The light is in `patternKey` for the same
+reason: leave it out and moving the time slider relights only the surfaces that happened to fall out
+of the cache, so the plan repaints in patches.
 
 **Step 1 opens on a shape, not on a blank grid.** `plot-presets.ts` builds a rectangle (12 × 8 m by
 default) or an L, and corner-by-corner drawing is the escape hatch for irregular plots rather than
-the mandatory route. Drawing a scaled polygon on an empty grid asks the user to *originate* a
+the mandatory route. Drawing a scaled polygon on an empty grid asks the user to _originate_ a
 measurement from nothing, which is how a 113 × 74.5 m plot got drawn; a preset turns the same task
 into adjusting a default. This is the single biggest reduction in that error class, and the sanity
 band is the net under it rather than the primary defence.
@@ -219,7 +288,7 @@ mid-edit whenever it guessed wrong.
 
 **`nextDrawPoint` is called by both the ghost preview and the store**, so the preview cannot promise
 a position the click then fails to deliver — the same rule the tessellation layer follows for the
-canvas and the validator. Right angles are held relative to the *previous side*, not to the world
+canvas and the validator. Right angles are held relative to the _previous side_, not to the world
 axes: a plot drawn 20° off screen still has right angles, and axis snapping would fight every one of
 them. Only the **distance** along the chosen direction is grid-snapped; snapping the resulting point
 to the grid is the obvious way to write it and knocks the corner straight back off the axis.
@@ -256,7 +325,7 @@ reason the user cannot see anywhere on screen.
 — 32 pixels per metre — and nothing else: not the fit, not device pixels, not any real-world
 ratio, so two plans at "100%" were not comparable. A printed drawing states a ratio instead, and
 1:100 was the obvious alternative; it is rejected because a ratio is only true if the display's
-*physical* size is known, which in a browser it is not. Metres-across needs no calibration and is
+_physical_ size is known, which in a browser it is not. Metres-across needs no calibration and is
 exactly true. The grid square size is written under the scale bar for the same reason — it is what
 the user measures against while drawing, and nothing used to say how big one square was.
 
@@ -330,9 +399,9 @@ concept. Layout elements are checked for containment and house clearance only �
 `resolveConstraints` (`apps/api/src/plan/generation/constraints.ts`) is called once per concept and
 everything downstream takes its answer. This is not tidiness: the card's badge used to come from
 `archetype.maintenance(brief)` while `fillPalette` read `brief.maintenance`, so a brief saying
-*medium* produced a concept badged **Low** with a lawn under it. One call means there is no second
+_medium_ produced a concept badged **Low** with a lawn under it. One call means there is no second
 source left to diverge from. The rule lives here rather than in a prompt for the same reason
-coordinates do — "low maintenance means no lawn" is a thing that can be *checked*.
+coordinates do — "low maintenance means no lawn" is a thing that can be _checked_.
 
 The forbidden list is applied to the palette's **result**, not folded into its tables. Even when
 badge and palette agreed, a `gravel-mulch` base took `['planting-bed', 'lawn']` as its accents, so
@@ -343,14 +412,14 @@ low-maintenance takes the formal branch and lands on `mixed-border`.
 **A stated maintenance level is a ceiling, not a suggestion.** The archetypes declare their own
 upkeep — the entertaining concept is `medium` whatever was asked — so without `cappedMaintenance` a
 user who asked for low maintenance is still offered a medium-upkeep concept among the three. Capping
-rather than overriding: an archetype may still come in *under* the ceiling, and the retreat stays low
+rather than overriding: an archetype may still come in _under_ the ceiling, and the retreat stays low
 on a medium brief.
 
 **Feature footprints scale sub-linearly with the plot, exponent 0.35.** `FEATURE_SPECS` stays quoted
 at suburban scale so the manifest still reads as "a dining pergola is 3.6 × 3.6 m", and `scaledSpec`
 applies the factor at the point of use. Linear scaling gives a 130 m² pergola; no scaling gives the
 defect that prompted this, a 13 m² pergola on 8,400 m². The surplus from `featureAttempts` becomes a
-*second* of something in `REPEATABLE_FEATURES` rather than nothing — an estate given the same six
+_second_ of something in `REPEATABLE_FEATURES` rather than nothing — an estate given the same six
 things slightly larger still reads as a suburban design marooned in a field. `designedArea` is the
 zones in scope, not the whole plot: a user who ticked only the back garden of a large property is
 designing a suburban-sized space.
@@ -420,7 +489,7 @@ also why `DesignElement.pattern` holds only an origin and a rotation — present
 geometry — and why it is optional, with `patternAnchor` resolving the absent case.
 
 **A surface's pattern is anchored to the plan origin, not to its own bounding box.** Anchoring each
-surface to its own corner guarantees two touching patios *miss* at the seam, which is the one thing
+surface to its own corner guarantees two touching patios _miss_ at the seam, which is the one thing
 real paving never does. One shared origin makes continuous courses the default and re-anchoring an
 explicit decision. There is a test that draws two abutting surfaces and one wide one and demands
 identical pixels.
@@ -446,7 +515,7 @@ later shade to the same sun.
 
 **Rasters are cached per surface per √2 zoom bucket, and panning must never miss.** The cache key
 hashes the outline and the anchor, so a vertex drag invalidates while selecting, renaming or moving
-another element does not. `pattern.x/y` are differences in *metres*, so a pan changes neither — which
+another element does not. `pattern.x/y` are differences in _metres_, so a pan changes neither — which
 is what keeps a pan at zero regenerations. Bucketing matters because `use-canvas-viewport` eases zoom
 through `requestAnimationFrame`: keyed on raw scale, the pattern would be redrawn every frame of
 every wheel gesture.
@@ -477,7 +546,7 @@ the feature vanishes with no error at all. `borderRegions` refuses a narrow band
 
 **Fill elements are never checked by `geometryIsLegal` — except the border.** Accents are legal by
 construction, being negative buffers of a subset of the zone. A band grown from the boundary has no
-such guarantee, and `ST_SimplifyPreserveTopology` preserves topology but *not* containment, so the
+such guarantee, and `ST_SimplifyPreserveTopology` preserves topology but _not_ containment, so the
 border is clamped with `ST_Intersection(..., boundary)` **and** guarded explicitly in
 `concepts.service.ts`. Nothing downstream would catch an escapee: it would generate cleanly and then
 be refused by the validator that guards its own save.
@@ -494,9 +563,9 @@ They also have to go through `placement.candidates` and be pushed onto `obstacle
 concept tests require every feature footprint to be pairwise disjoint.
 
 **One `ElementDrawing`, used by both canvases.** There were two, and they had already drifted — the
-editor drew textures while step 4 drew flat category colours, so the screen where the user *chooses*
+editor drew textures while step 4 drew flat category colours, so the screen where the user _chooses_
 a concept contradicted the next one. Interaction stays in the editor's wrapper; selection is drawn
-as an outline *over* the shared drawing rather than by restyling it, so the drawing stays a pure
+as an outline _over_ the shared drawing rather than by restyling it, so the drawing stays a pure
 function of the element. `offsetPx` is how the two frames are reconciled: the editor parks a group
 on the element's anchor, step 4 draws absolutely.
 
@@ -513,8 +582,8 @@ be drawn offset outside the fence while the label still reports the true edge le
 `resetPlanEditorStoreForTests` and `hydratePlanEditorStore`. Miss it and the flag survives a reload.
 
 **Two kinds of material share the `scatter` renderer for opposite reasons.** Gravel, bark and
-chippings are a *mass*: the units are texture on a body of the same stuff, so the ground behind them
-is drawn from the middle of their own palette. Planting and meadow are *figure on ground*: plants on
+chippings are a _mass_: the units are texture on a body of the same stuff, so the ground behind them
+is drawn from the middle of their own palette. Planting and meadow are _figure on ground_: plants on
 soil, flowers in grass, where a darker ground is the point. Getting this backwards is what made the
 first attempt's aggregates read as sparse dots scattered on mud, and there is a test either side of
 the line — `palette.test.ts` holds the aggregate rule, the renderer's suite holds the coverage rule.
@@ -524,6 +593,56 @@ square metre closes up in a season; drawn at five a square metre it reads as dot
 plan shows one instant and a garden is judged by how it will look. `density × the mean unit's area`
 is kept appreciably above 1 so units overlap, and a test in `material-patterns.test.ts` pins it. Do
 not read these numbers as a quantity to order.
+
+**Size, density and hue were not enough: `scatter` has a `form` axis.** Every planting material drew
+the same round lobed blob, so ornamental grasses read as pale cauliflower and a hedge read as loose
+bobbles. `blob` is the default and nothing changed without opting in; `tufted` draws a rosette of
+radiating leaves (a grass seen from above); `clipped-mass` keeps the reaches in a narrow band so the
+units merge into one scalloped body with a defined edge. Colour can stand in for form up to a point
+— which is exactly why `wildflower` and `mixed-border` already worked — but a grass is a different
+_shape_ from a shrub, not a different shade of one.
+
+**A form change moves the density with it.** A rosette covers roughly half the ground a blob of the
+same radius does, so the `density × mean unit area` rule was calibrated against the wrong shape:
+grasses at the blob-era 8 per square metre read as soil with stars on it. Now 15. The number belongs
+to the form, not to the planting.
+
+**`form` is optional in the manifest and resolved by `scatterForm`.** `MATERIAL_PATTERNS` is
+hand-written literals that never go through `.parse()`, so a Zod `.default()` would look like it
+applied and never fire. Same reason `patternAnchor` and `heightFor` exist.
+
+**Still water is a design statement, not a missing value.** `rippleSpacing: 0` on a formal pool and a
+water bowl is deliberate — a formal pool is meant to read as a mirror, and drawing it like a pond
+loses the distinction the user chose between. The first version of the water renderer drew a broad
+rectangular sheen in the middle; it was wrong twice over, because a hard-edged slab of pale colour
+reads as a UI panel and because a bright patch in the centre of a pond is not how water is drawn in
+plan anyway. Fine crest lines brightening towards the lit side, and nothing else.
+
+**A cut edge is keyed on the surface's own category, not on the pair of categories that meet.** The
+pair was the intent and it fights the architecture: an edge is drawn on the _upper_ surface's
+outline, and every surface is rasterised independently and clipped to its own outline, so it does
+not know what is underneath. Teaching it would put its neighbours in the cache key and destroy the
+independence the renderer rests on — moving one bed would invalidate every surface near it. Little
+is lost: a border has a spade-cut edge whether it sits on lawn or gravel, and gravel needs
+containment either way. Widths are millimetres like every other product dimension, and the first
+attempt at 60 mm of near-black read as a picture frame rather than a cut in the ground.
+
+**Stroking the clipped outline _is_ the cut edge.** The context is already clipped to the outline, so
+a stroke centred on that path renders only its inner half. Computing an inset polygon to fill would
+be real work for the same picture, and would have to handle a concave outline eating itself.
+
+**Level of detail is a policy in `lod.ts`, not four thresholds in four files.** `tierFor` answers
+`mass | units | detail` and `shadesAt` answers whether a thing is big enough to light. The floors
+differ by pattern type on purpose: a slab stops reading at three pixels, but a gravel chipping
+genuinely _is_ about a pixel and a half at a normal editing zoom, and raising its floor to match
+made every aggregate fall back to flat colour and read as dead beige card.
+
+**Palette hexes are validated once per surface, in `resolvePattern`.** Loud in development — naming
+the material and the key, because a typo in a static manifest is a bug and you are the person who
+can fix it in the next keystroke — and a fallback grey in production, because `hexToRgb` throws, the
+throw escapes through Konva's render, and the whole plan disappears. Safe _only because it is a
+colour_: the return-null-rather-than-guess rule exists for geometry, where a guess misleads about
+where things are.
 
 **A blob's highlight is a scaled copy of its own outline, not a circle laid on top.** The circle
 version made every shrub look like a fried egg — a hard round highlight reads as a separate object.
@@ -555,9 +674,56 @@ a tolerance; `grid` fills axis-aligned rectangles, has no anti-aliased edges, an
 as 600 × 600 on a 10 mm joint because that is how products are specified and what a costing pass
 will count. The renderer divides by `MM_PER_METRE` once, at its top edge; nothing below that line
 sees a millimetre. The manifest is deliberately split — geometry in `packages/schema`, palette hexes
-in `apps/web/src/lib/materials/palette.ts` — for the reason `materials.ts` already gives about
+in `apps/web/src/lib/materials/palette/` — for the reason `materials.ts` already gives about
 colour being presentation. `resolvePattern` joins the halves, and returns `null` if either is
 missing, which is the flat-fill path.
+
+**Quantities live in `packages/schema/src/plan/quantities.ts`, and this is the architecture paying
+off.** A plan here is real geometry rather than a generated picture, and the point of insisting on
+that — the tessellation rules, the PostGIS validation, deriving rather than storing — is that
+quantities _fall out of it_. Nothing in that file measures anything; it reads areas `elementArea`
+already computed from shapes the validator already checked. The cost functions moved there from the
+API's generator for the same reason: stranded server-side, the screen that most needs a budget could
+not reach them without a second implementation.
+
+**Unit counts are given for modular products only, and the restriction is load-bearing.**
+`unitsPerSquareMetre` returns a number for a scatter quite happily. Multiplying it by an area would
+print "412 plants" — turning the _drawn_ density that `material-patterns.ts` warns about into a
+shopping list. Slabs and boards are safe because their manifest entries are real product dimensions.
+Planting gets an area and a dash, and the dash is the honest answer rather than a gap in the work.
+
+**`groundCoverArea` counts base fills only, and that is what makes it exact.** Element areas overlap
+by design — a base fill is the whole zone and everything else is drawn over it — so summing them all
+reported 196 m² for a garden whose ground was 135 m². Base fills are one per zone and `computeZones`
+clips half-planes, so they tile without overlapping. The schedule groups by layer for the same
+reason and says plainly that the groups must not be added. The exact net remainder _is_ computable —
+`FillService.accentRegions` does it in PostGIS — but deriving it client-side from element areas would
+lean on the generator's disjointness guarantees, which the editor breaks the moment someone drags one
+bed over another.
+
+**The review screen stores nothing.** Schedule, ground area and cost band are all derived at read
+time. There is no `review` section on the document and there should not be, for the same reason zones
+are recomputed: a summary that can disagree with the thing it summarises is worse than no summary.
+
+**Three failures, three answers, decided where they are still knowable.** The plan layout used to do
+`getProject(id).catch(() => null)` then `notFound()`, which told someone whose API was simply not
+running that their URL was wrong. Now a 404 is `notFound()`, an unreachable server gets a screen
+naming the address and the commands to start it, and anything else is rethrown to `error.tsx`. The
+middle case is handled in the layout rather than in the boundary because **Next scrubs server-side
+error messages in production** and hands the boundary only a digest — by the time an error page sees
+it, what went wrong is no longer knowable.
+
+**A displaced label needs a line back to what it names.** `stackLabels` resolves collisions by pushing
+labels down and used to overwrite `at`, throwing the original away — so a label that moved pointed at
+nothing. It returns `anchor` and `displaced` now, and `LabelLeader` draws a hairline to a dot at the
+subject, only when the label genuinely moved. The leader is vertical because the displacement is;
+there is a test asserting `at.x === anchor.x` so that assumption fails loudly if it ever changes.
+
+**Label width is capped in CSS, not in JavaScript.** Names are user-supplied and the label is centred
+with `whitespace-nowrap`, so a long one grows in both directions and runs off the canvas —
+`stackLabels` never sees it, because that collision is horizontal. `text-overflow: ellipsis` cuts at
+the exact rendered pixel in whatever font actually loaded, where a character count is wrong for
+"Wildflower meadow" and "IIIIIIIIII" in opposite directions. The full name goes on `title`.
 
 ## Traps already hit
 
@@ -640,9 +806,24 @@ argument and the tests hand it an `@napi-rs/canvas` one — which is why `drawSu
 from `renderSurfacePattern`. `@napi-rs/canvas` rather than `canvas`: it ships prebuilt binaries, so
 it needs no node-gyp or Visual Studio Build Tools and cannot break `pnpm install` for a marker.
 
-**Run `pnpm` through PowerShell, not the Bash tool.** `node` is not on the Bash tool's PATH here, so
-any install with a postinstall step (esbuild's, for one) fails halfway and leaves the store in a
-state only a second `pnpm install` fixes.
+**The API test suite truncates the dev database.** `apps/api/src/test/db.ts` runs
+`truncate table plan_projects` against the same Postgres `pnpm dev` uses, so `pnpm test` silently
+deletes every plan you were looking at. Not wrong — the tests need a clean table — but seed any
+plan you are inspecting _after_ the last test run, not before.
+
+**`next dev` writes `apps/web/AGENTS.md` and re-creates it if deleted.** Its warning is real: this
+Next.js has breaking changes from what a model remembers. Following it caught `reset` vs `retry` on
+the error boundaries — Next 16 demoted `reset` (which re-renders without re-fetching) in favour of
+`retry`, and `reset` is the name that comes to hand from memory. `global-error` also renders its own
+document and gets **no** global styles, so its styles have to be inline.
+
+**`pnpm install` can fail halfway from a shell without `node` on its PATH**, leaving the store in a
+state only a second `pnpm install` fixes — any package with a postinstall step (esbuild's, for one)
+will do it. This was written as "always use PowerShell, never the Bash tool", and that is too strong
+on at least some machines: `node` and `pnpm` resolve fine from the Bash tool here, and every script
+in this file — `pnpm test`, `build`, `lint`, `render:material`, `playwright test` — has been run
+through it. Check `which node` before assuming either way; the hazard is the _install_, not running
+a script.
 
 ## Conventions
 

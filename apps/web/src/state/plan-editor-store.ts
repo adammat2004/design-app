@@ -104,6 +104,14 @@ interface PlanEditorState {
   snapEnabled: boolean;
   /** Graph paper on or off. A view preference, so it never enters the undo history. */
   gridVisible: boolean;
+  /**
+   * Whether the plan is annotated.
+   *
+   * A viewing preference, not a design decision, so it sits in `ephemeralState` beside
+   * `gridVisible` rather than on the document — the same reasoning that keeps the grid out of the
+   * saved plan. Labels are on by default because a plan you cannot read is a picture.
+   */
+  labelsVisible: boolean;
   alignments: AlignmentGuide[];
   measurement: { from: Point; to: Point | null } | null;
   clash: string | null;
@@ -135,6 +143,7 @@ interface PlanEditorState {
 
   toggleSnap: () => void;
   toggleGrid: () => void;
+  toggleLabels: () => void;
   setMode: (mode: PlanEditorMode) => void;
   setPlacing: (category: ElementCategory | null) => void;
   addMeasurePoint: (point: Point) => void;
@@ -337,6 +346,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     placingCategory: null,
     snapEnabled: true,
     gridVisible: true,
+    labelsVisible: true,
     alignments: [],
     measurement: null,
     clash: null,
@@ -604,6 +614,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      */
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
 
+    toggleLabels: () => set((state) => ({ labelsVisible: !state.labelsVisible })),
+
     setMode: (mode) => set({ mode, placingCategory: null, measurement: null, clash: null }),
 
     setPlacing: (category) => set({ placingCategory: category, mode: 'select', clash: null }),
@@ -782,6 +794,7 @@ function ephemeralState() {
     placingCategory: null as ElementCategory | null,
     snapEnabled: true,
     gridVisible: true,
+    labelsVisible: true,
     alignments: [] as AlignmentGuide[],
     measurement: null,
     clash: null as string | null,

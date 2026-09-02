@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { DesignElement, GardenBrief } from '@garden-studio/schema';
+import type { GardenBrief } from '@garden-studio/schema';
 import { ARCHETYPES } from './archetypes.js';
 import {
-  estimateBudgetBand,
   featureAttempts,
-  materialCostIndex,
   resolveConstraints,
   resolvePlotScale,
   SUBURBAN_REFERENCE,
@@ -27,20 +25,6 @@ function brief(overrides: Partial<GardenBrief> = {}): GardenBrief {
     style: null,
     styleOther: '',
     ...overrides,
-  };
-}
-
-function surface(area: number, material: string): DesignElement {
-  const side = Math.sqrt(area);
-
-  return {
-    id: material,
-    category: 'paved-area',
-    role: 'fill',
-    fillKind: 'accent',
-    shape: { kind: 'rect', centre: { x: 0, y: 0 }, width: side, depth: side, rotation: 0 },
-    zone: 'back',
-    material,
   };
 }
 
@@ -185,54 +169,5 @@ describe('featureAttempts', () => {
     const constraints = resolveConstraints(brief({ budget: 'low' }), balanced!, 40);
 
     expect(featureAttempts(0, balanced!, constraints)).toBe(0);
-  });
-});
-
-describe('the indicative cost band', () => {
-  it('is the area-weighted mean of what the materials cost', () => {
-    // Equal areas of cost 1 and cost 3.
-    expect(
-      materialCostIndex([surface(50, 'gravel-paving'), surface(50, 'timber-decking')]),
-    ).toBeCloseTo(2);
-  });
-
-  it('weights by area, so the ground cover counts for most of it', () => {
-    const index = materialCostIndex([
-      surface(200, 'gravel-paving'), // cost 1, and most of the garden
-      surface(4, 'stone-pavers'), // cost 4, and a corner of it
-    ]);
-
-    expect(index).toBeLessThan(1.1);
-  });
-
-  it('ignores the things that have no area', () => {
-    const tree: DesignElement = {
-      id: 'tree',
-      category: 'planting-bed',
-      role: 'feature',
-      shape: { kind: 'point', at: { x: 0, y: 0 }, radius: 1.6 },
-      zone: 'back',
-      material: 'shrubs',
-    };
-
-    expect(materialCostIndex([surface(100, 'gravel-paving'), tree])).toBeCloseTo(1);
-  });
-
-  it('falls back to the category default when a material is missing', () => {
-    const bare = { ...surface(100, 'stone-pavers'), material: undefined };
-
-    // `paved-area`'s first entry is natural stone, cost 4.
-    expect(materialCostIndex([bare])).toBeCloseTo(4);
-  });
-
-  it('reads as a band on the same four the user chose from', () => {
-    expect(estimateBudgetBand([surface(10, 'gravel-paving')])).toBe('low');
-    expect(estimateBudgetBand([surface(10, 'concrete')])).toBe('medium');
-    expect(estimateBudgetBand([surface(10, 'timber-decking')])).toBe('high');
-    expect(estimateBudgetBand([surface(10, 'stone-pavers')])).toBe('premium');
-  });
-
-  it('has nothing to say about an empty concept', () => {
-    expect(materialCostIndex([])).toBe(0);
   });
 });

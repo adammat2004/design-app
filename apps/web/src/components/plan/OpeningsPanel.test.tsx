@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { houseWalls, openingNormal, wallLength } from '@garden-studio/schema';
+import { houseWalls, openingNormal } from '@garden-studio/schema';
 import { resetBoundaryStoreForTests, useBoundaryStore } from '@/state/boundary-store';
 import { OpeningsPanel } from './OpeningsPanel';
 import { pointerOffset } from './WallElevationStrip';
@@ -197,22 +197,5 @@ describe('pointerOffset', () => {
 
   it('has no answer before the track has been laid out', () => {
     expect(pointerOffset(100, 0, 0, 8)).toBe(0);
-  });
-});
-
-describe('orientation', () => {
-  it('records where north is', () => {
-    render(<OpeningsPanel />);
-
-    fireEvent.change(screen.getByTestId('orientation'), { target: { value: '90' } });
-
-    expect(store().present.orientation).toBe(90);
-  });
-
-  it('starts pointing up, which is where the compass has always pointed', () => {
-    render(<OpeningsPanel />);
-
-    expect(screen.getByTestId('orientation')).toHaveValue(0);
-    expect(wallLength(house(), houseWalls(house())[0]!.id)).toBeCloseTo(8);
   });
 });

@@ -7,6 +7,7 @@ import { BoundaryToolsPanel } from './BoundaryToolsPanel';
 import { CanvasToolbar } from './CanvasToolbar';
 import { DesignAreasPanel } from './DesignAreasPanel';
 import { HouseToolsPanel } from './HouseToolsPanel';
+import { SunPanel } from './SunPanel';
 import { LegendPanel } from './LegendPanel';
 import { MeasuredCornerPanel } from './MeasuredCornerPanel';
 import { PlanBottomBar } from './PlanBottomBar';
@@ -82,6 +83,15 @@ export function MapScreen() {
               <BoundaryToolsPanel />
             </>
           )}
+
+          {/*
+            Sun and shade sits outside the sub-step switch, and that placement is the point.
+            Where the garden is, which way it faces and when you are looking at it are facts about
+            the *site* — they are not part of drawing a boundary and they are not part of placing a
+            house. It first went in beside the openings controls, which buried it behind the House
+            tool and left the shadows unreachable for anyone who never opened that sub-step.
+          */}
+          <SunPanel />
 
           <PropertySummary />
           <TipCallout />

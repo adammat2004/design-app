@@ -97,6 +97,20 @@ export const DesignElementSchema = z.object({
     .optional(),
   /** Metres above grade. Carried for costing later; nothing renders differently because of it. */
   elevation: z.number().optional(),
+  /**
+   * How tall the thing itself is, in metres. **Not `elevation`** — that is where its base sits,
+   * this is how far it rises from there, and a raised bed has both.
+   *
+   * Optional because `heightFor` resolves the absent case from the material and then the
+   * category, which covers every surface and most planting. It is here for the cases neither can
+   * know: a pergola and a raised bed are both `structure` built from `softwood`, and they are
+   * 2.4 m and 0.45 m. The placer knows which it is placing, so it sets this.
+   *
+   * Real data rather than presentation, which is why it is on the document and its manifest is
+   * in this package: the shadow it produces is a claim about the garden, and the server has to
+   * be able to read it.
+   */
+  height: z.number().nonnegative().optional(),
   /** Hidden from the plan and from the area summary, without being deleted. */
   hidden: z.boolean().optional(),
 });

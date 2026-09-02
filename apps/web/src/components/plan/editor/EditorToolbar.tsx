@@ -11,6 +11,7 @@ import {
   Redo2,
   RotateCcw,
   Ruler,
+  Tag,
   Undo2,
 } from 'lucide-react';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
@@ -64,6 +65,8 @@ export function EditorToolbar() {
   const snapEnabled = usePlanEditorStore((state) => state.snapEnabled);
   const toggleSnap = usePlanEditorStore((state) => state.toggleSnap);
   const gridVisible = usePlanEditorStore((state) => state.gridVisible);
+  const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
+  const toggleLabels = usePlanEditorStore((state) => state.toggleLabels);
   const toggleGrid = usePlanEditorStore((state) => state.toggleGrid);
   const canUndo = usePlanEditorStore((state) => state.past.length > 0);
   const canRedo = usePlanEditorStore((state) => state.future.length > 0);
@@ -225,6 +228,36 @@ export function EditorToolbar() {
           ].join(' ')}
         >
           {gridVisible ? 'ON' : 'OFF'}
+        </span>
+      </button>
+
+      {/*
+        Labels off is for judging how the garden looks; labels on is for reading it as a document.
+        A viewing preference like the grid, so it lives beside it and is not saved with the plan.
+      */}
+      <button
+        type="button"
+        data-testid="editor-labels"
+        aria-pressed={labelsVisible}
+        title="Name the things on the plan"
+        onClick={toggleLabels}
+        className={[
+          'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium shadow-sm transition-colors',
+          'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
+          labelsVisible
+            ? 'border-garden-forest bg-garden-forest text-white'
+            : 'border-garden-line bg-white text-garden-muted hover:border-garden-green',
+        ].join(' ')}
+      >
+        <Tag aria-hidden className="h-4 w-4" />
+        Labels
+        <span
+          className={[
+            'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+            labelsVisible ? 'bg-white/20 text-white' : 'bg-garden-line text-garden-muted',
+          ].join(' ')}
+        >
+          {labelsVisible ? 'ON' : 'OFF'}
         </span>
       </button>
 

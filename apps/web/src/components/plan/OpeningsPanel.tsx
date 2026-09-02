@@ -1,6 +1,6 @@
 'use client';
 
-import { Compass, DoorOpen } from 'lucide-react';
+import { DoorOpen } from 'lucide-react';
 import {
   gardenDoors,
   houseWalls,
@@ -26,7 +26,6 @@ export function OpeningsPanel() {
   const selectedWallId = useBoundaryStore((state) => state.selectedWallId);
   const selectWall = useBoundaryStore((state) => state.selectWall);
   const addOpening = useBoundaryStore((state) => state.addOpening);
-  const setOrientation = useBoundaryStore((state) => state.setOrientation);
 
   const house = draft.house;
   if (!house) return null;
@@ -108,30 +107,6 @@ export function OpeningsPanel() {
       </div>
 
       <WallElevationStrip />
-
-      {/*
-        North, at last as data rather than as a drawing. The compass on every canvas has always
-        pointed up and nothing consulted it; shadows, sun-aware placement and "which windows face
-        the light" all need this to exist before they can be built.
-      */}
-      <div className="flex items-center gap-2 border-t border-garden-line pt-3">
-        <Compass aria-hidden className="h-4 w-4 shrink-0 text-garden-muted" />
-        <label className="flex flex-1 items-center gap-2 text-[11px] text-garden-muted">
-          North is
-          <input
-            type="number"
-            step={5}
-            min={0}
-            max={359}
-            data-testid="orientation"
-            aria-label="Degrees clockwise from the top of the plan to true north"
-            value={Math.round(draft.orientation)}
-            onChange={(event) => setOrientation(Number(event.target.value))}
-            className="w-16 rounded-md border border-garden-line bg-white px-2 py-1 text-sm text-garden-ink focus-visible:outline-none"
-          />
-          <span aria-hidden>° from up</span>
-        </label>
-      </div>
     </section>
   );
 }

@@ -62,12 +62,40 @@ export const MaterialPatternSchema = z.discriminatedUnion('patternType', [
     sizeRange: z.object({ min: z.number().positive(), max: z.number().positive() }),
     /** Points around one unit's outline. 4 reads as gravel, 9 reads as a shrub. */
     lobes: z.number().int().min(3).max(16),
+    /**
+     * What one unit *is*, as a shape.
+     *
+     * Added because size, density and hue turned out not to be enough. Every planting material
+     * drew the same round lobed blob and differed only in those three, which is why ornamental
+     * grasses read as pale cauliflower and a hedge read as loose bobbles rather than a clipped
+     * mass. Colour can stand in for form up to a point — `wildflower` and `mixed-border` work
+     * precisely because their colour variation does the work — but a grass is a different *shape*
+     * from a shrub, not a different shade of one.
+     *
+     * Optional, and resolved through `scatterForm` rather than defaulted here. `MATERIAL_PATTERNS`
+     * is a hand-written manifest of literals that never goes through `.parse()`, so a Zod
+     * `.default()` would look like it applied and never actually fire. Absent means `blob`, which
+     * is what every scatter did before this existed — so nothing changes without opting in.
+     */
+    form: z.enum(['blob', 'tufted', 'clipped-mass']).optional(),
   }),
 
   /**
    * Mown bands. Turf, and the only pattern with no discrete unit at all — which is why it cannot
    * be expressed as a grid with a very long module: there is nothing to count.
    */
+  z.object({
+    patternType: z.literal('water'),
+    /**
+     * Millimetres between ripple crests, or 0 for a surface held still.
+     *
+     * Water is the one material where *stillness* is a design statement: a formal pool is meant to
+     * be a mirror and a naturalistic pond is meant to move, and drawing both the same loses the
+     * distinction the user chose between.
+     */
+    rippleSpacing: z.number().nonnegative(),
+  }),
+
   z.object({
     patternType: z.literal('stripe'),
     /** Millimetres. One band — a mower's cutting width. */
@@ -133,13 +161,36 @@ export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
   },
   shrubs: { patternType: 'scatter', density: 2.4, sizeRange: { min: 700, max: 1250 }, lobes: 9 },
   'ornamental-grasses': {
+    form: 'tufted',
     patternType: 'scatter',
-    density: 8,
+    /*
+     * Denser than the blob-era value of 8, and the reason is the form rather than the planting.
+     * The rule above — density x mean unit area comfortably over 1 — was calibrated against solid
+     * blobs. A rosette of leaves covers perhaps half the ground a blob of the same radius does,
+     * so the same number left a bed of grasses reading as soil with stars on it.
+     */
+    density: 15,
     sizeRange: { min: 340, max: 640 },
     lobes: 7,
   },
   /** Dense enough to close up into a mass, which is what distinguishes a hedge from a row. */
-  hedging: { patternType: 'scatter', density: 6.5, sizeRange: { min: 450, max: 680 }, lobes: 8 },
+  hedging: {
+    patternType: 'scatter',
+    form: 'clipped-mass',
+    density: 6.5,
+    sizeRange: { min: 450, max: 680 },
+    lobes: 8,
+  },
+  /*
+   * The four water materials, which had no manifest at all and drew as a flat blue shape. Water is
+   * a focal point — a plan with beautifully rendered paving next to a flat blob has exactly one
+   * obviously unfinished element and it is the one the eye goes to.
+   */
+  'naturalistic-pond': { patternType: 'water', rippleSpacing: 260 },
+  rill: { patternType: 'water', rippleSpacing: 150 },
+  'formal-pool': { patternType: 'water', rippleSpacing: 0 },
+  'water-bowl': { patternType: 'water', rippleSpacing: 0 },
+
   'ground-cover': {
     patternType: 'scatter',
     density: 18,
@@ -148,7 +199,12 @@ export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
   },
 
   /* ---- gravel-mulch ---- */
-  'bark-mulch': { patternType: 'scatter', density: 130, sizeRange: { min: 45, max: 105 }, lobes: 4 },
+  'bark-mulch': {
+    patternType: 'scatter',
+    density: 130,
+    sizeRange: { min: 45, max: 105 },
+    lobes: 4,
+  },
   'decorative-gravel': {
     patternType: 'scatter',
     density: 240,
@@ -214,8 +270,20 @@ export function modulePitchMetres(pattern: ModularPattern): { x: number; y: numb
  */
 export function unitsPerSquareMetre(pattern: MaterialPattern): number | null {
   if (pattern.patternType === 'scatter') return pattern.density;
-  if (pattern.patternType === 'stripe') return null;
+  if (pattern.patternType === 'stripe' || pattern.patternType === 'water') return null;
 
   const pitch = modulePitchMetres(pattern);
   return 1 / (pitch.x * pitch.y);
+}
+
+/**
+ * What one scattered unit is shaped like, resolved.
+ *
+ * Total by construction, so no renderer has to decide what an absent `form` means — the same
+ * reason `patternAnchor` and `heightFor` exist.
+ */
+export function scatterForm(
+  pattern: Extract<MaterialPattern, { patternType: 'scatter' }>,
+): 'blob' | 'tufted' | 'clipped-mass' {
+  return pattern.form ?? 'blob';
 }

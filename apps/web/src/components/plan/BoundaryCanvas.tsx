@@ -34,6 +34,7 @@ import { EdgeHitLines } from './EdgeHitLines';
 import { EditableVertices } from './EditableVertices';
 import { HouseOpenings } from './HouseOpenings';
 import { HouseShape } from './HouseShape';
+import { ShadowLayer } from './ShadowLayer';
 import {
   AlignmentLines,
   Label,
@@ -470,6 +471,23 @@ export function BoundaryCanvas() {
                   listening={false}
                 />
               ))}
+
+              {/*
+                Shadows, above the plot and its zone tints and below everything drawn on top.
+
+                There is no layout on step 1, so the only occluder is the house — which is exactly
+                the useful thing at this stage: it shows which part of the garden the building
+                shades. It is also what makes the location control in the tools panel demonstrate
+                itself. Set a location and the answer appears on the same screen, rather than three
+                steps later where nothing would connect it to what was just typed.
+              */}
+              <ShadowLayer
+                elements={[]}
+                house={draft.house}
+                boundary={polygon}
+                site={draft}
+                transform={transform}
+              />
 
               <EdgeHitLines
                 edges={edges}

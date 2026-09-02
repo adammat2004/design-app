@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      # Pinned to the SAME tag as docker-compose.yml, deliberately and not incidentally.
+      # `ST_GeneratePoints` is deterministic per PostGIS version but NOT across versions, and
+      # 22 concept-generation tests assert on seeded output. A floating tag would break them
+      # in a way that looks exactly like a code bug.
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: garden
+          POSTGRES_PASSWORD: garden
+          POSTGRES_DB: garden_studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U garden -d garden_studio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://garden:garden@localhost:5432/garden_studio
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # corepack reads `packageManager` from the ROOT package.json, which is why the pin lives
+      # there and not in apps/web where it did nothing.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The point of running the real script rather than repeating its steps: if setup breaks,
+      # this goes red. A README is an untested script, and that is how two of its six documented
+      # commands came to be broken without anyone noticing.
+      - name: Setup (the same script a human runs)
+        run: ./script/setup --skip-tests
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
+
+      # Runs schema, web and api. The api suite talks to real PostGIS rather than a mock,
+      # because a mock would assert on fake rows and prove nothing about the geometry checks.
+      - name: Test
+        run: pnpm test
+
+      # Not a test — it renders the material contact sheets. It exists here because it is the
+      # tuning loop for the visual work, and it was silently broken for weeks. If it stops
+      # running, that should be a red build rather than a discovery three months later.
+      - name: Render material previews
+        run: pnpm render:material
+
+      - name: Upload material previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-previews
+          path: apps/web/.material-preview/
+          retention-days: 14
+          if-no-files-found: error
