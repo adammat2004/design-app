@@ -6,6 +6,8 @@ import { BoundaryCanvasLoader } from './BoundaryCanvasLoader';
 import { BoundaryToolsPanel } from './BoundaryToolsPanel';
 import { CanvasToolbar } from './CanvasToolbar';
 import { DesignAreasPanel } from './DesignAreasPanel';
+import { AccessPanel } from './AccessPanel';
+import { BoundaryStylePanel } from './BoundaryStylePanel';
 import { HouseToolsPanel } from './HouseToolsPanel';
 import { SunPanel } from './SunPanel';
 import { LegendPanel } from './LegendPanel';
@@ -74,6 +76,16 @@ export function MapScreen() {
           {/* The tools follow whichever sub-step is in hand. */}
           {mode === 'house' ? (
             <HouseToolsPanel />
+          ) : mode === 'access' ? (
+            <>
+              <AccessPanel />
+              {/*
+                With access rather than with the outline tools. What a side is made of is the same
+                *kind* of question as which fence the gate is in — a fact about the site the user
+                states, not a measurement they draw — and it reads against the same plan.
+              */}
+              <BoundaryStylePanel />
+            </>
           ) : (
             <>
               {/* The shape picker, or the dimension fields once the outline matches a preset. */}

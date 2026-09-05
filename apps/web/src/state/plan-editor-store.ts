@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { SYMBOLS, type SymbolId } from '@garden-studio/schema';
 import type { LayoutSection, Point, ProposedChange } from '@garden-studio/schema';
 import { draftPolygon, polygonCentroid } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
@@ -101,6 +102,8 @@ interface PlanEditorState {
   mode: PlanEditorMode;
   selectedId: string | null;
   placingCategory: ElementCategory | null;
+  /** With `placingCategory`: the thing being placed, when it is a piece of furniture. */
+  placingSymbol: SymbolId | null;
   snapEnabled: boolean;
   /** Graph paper on or off. A view preference, so it never enters the undo history. */
   gridVisible: boolean;
@@ -112,6 +115,19 @@ interface PlanEditorState {
    * saved plan. Labels are on by default because a plan you cannot read is a picture.
    */
   labelsVisible: boolean;
+  /**
+   * Zone tints and dimension guides, both view preferences beside `gridVisible`.
+   *
+   * Zones are **off** by default on this screen and that is deliberate rather than an oversight:
+   * they are scaffolding for "which parts do you want designed", and once that is answered writing
+   * "Back garden ≈ 18 m²" across a finished design is a note about the tool rather than about the
+   * garden. The toggle exists because a user checking their own answer should be able to see them
+   * again — which they could not before, on any screen.
+   *
+   * Dimensions are **on**: a plan without them is a picture.
+   */
+  zonesVisible: boolean;
+  dimensionsVisible: boolean;
   alignments: AlignmentGuide[];
   measurement: { from: Point; to: Point | null } | null;
   clash: string | null;
@@ -144,8 +160,12 @@ interface PlanEditorState {
   toggleSnap: () => void;
   toggleGrid: () => void;
   toggleLabels: () => void;
+  toggleZones: () => void;
+  toggleDimensions: () => void;
+  /** Metres tall. Read by the shadow model, and until now invisible to the user who owns it. */
+  setHeight: (id: string, metres: number) => void;
   setMode: (mode: PlanEditorMode) => void;
-  setPlacing: (category: ElementCategory | null) => void;
+  setPlacing: (category: ElementCategory | null, symbol?: SymbolId | null) => void;
   addMeasurePoint: (point: Point) => void;
   trackMeasurePointer: (point: Point) => void;
   clearMeasurement: () => void;
@@ -183,6 +203,7 @@ const NEW_ELEMENT_SIZE: Record<ElementCategory, { width: number; depth: number }
   'gravel-mulch': { width: 2.5, depth: 2.5 },
   structure: { width: 2.5, depth: 2 },
   'water-feature': { width: 1.5, depth: 1.5 },
+  furniture: { width: 2.4, depth: 2.4 },
   'existing-feature': { width: 2, depth: 2 },
 };
 
@@ -344,9 +365,12 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     mode: 'select',
     selectedId: null,
     placingCategory: null,
+    placingSymbol: null,
     snapEnabled: true,
     gridVisible: true,
     labelsVisible: true,
+    zonesVisible: false,
+    dimensionsVisible: true,
     alignments: [],
     measurement: null,
     clash: null,
@@ -376,6 +400,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         pristine: elements,
         selectedId: null,
         placingCategory: null,
+        placingSymbol: null,
         alignments: [],
         measurement: null,
         clash: null,
@@ -388,14 +413,18 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     addElement: (category, at) => {
       const centre = snapped(at);
-      const size = NEW_ELEMENT_SIZE[category];
-      const shape: PlanGeometry = {
-        kind: 'rect',
-        centre,
-        width: size.width,
-        depth: size.depth,
-        rotation: 0,
-      };
+      const symbol = get().placingSymbol;
+
+      /*
+       * A symbol brings its own footprint — a lounger is 0.7 × 1.9 m whatever category it is —
+       * and a round one is placed as a point, the way the generator places a fire pit bowl.
+       */
+      const footprint = symbol ? SYMBOLS[symbol].footprint : null;
+      const size = footprint?.kind === 'rect' ? footprint : NEW_ELEMENT_SIZE[category];
+      const shape: PlanGeometry =
+        footprint?.kind === 'point'
+          ? { kind: 'point', at: centre, radius: footprint.radius }
+          : { kind: 'rect', centre, width: size.width, depth: size.depth, rotation: 0 };
 
       const refusal = refusalFor(shape);
       if (refusal) {
@@ -414,16 +443,17 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
             id,
             category,
             role: 'feature',
-            name: defaultName(category, draft.elements),
+            name: symbol ? SYMBOLS[symbol].label : defaultName(category, draft.elements),
             shape,
             zone: zoneAt(centre, zones)?.id ?? 'back',
             material: defaultMaterial(category),
             elevation: 0,
+            ...(symbol ? { symbol, height: SYMBOLS[symbol].height } : {}),
           },
         ],
       }));
 
-      set({ selectedId: id, placingCategory: null });
+      set({ selectedId: id, placingCategory: null, placingSymbol: null });
     },
 
     moveElementLive: (id, anchor) => {
@@ -493,6 +523,17 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     setElevation: (id, metres) =>
       commitElement(id, (element) => ({ ...element, elevation: metres }), {
+        checkGeometry: false,
+      }),
+
+    /*
+     * Height changes no geometry — a taller pergola occupies the same footprint — so it skips the
+     * check like material and zone do. What it *does* change is the shadow the thing throws, which
+     * is the whole reason it is worth exposing: the value has driven `heightFor` since the sun
+     * model landed and there has never been anywhere to see or correct it.
+     */
+    setHeight: (id, metres) =>
+      commitElement(id, (element) => ({ ...element, height: Math.max(0, metres) }), {
         checkGeometry: false,
       }),
 
@@ -616,9 +657,15 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     toggleLabels: () => set((state) => ({ labelsVisible: !state.labelsVisible })),
 
-    setMode: (mode) => set({ mode, placingCategory: null, measurement: null, clash: null }),
+    toggleZones: () => set((state) => ({ zonesVisible: !state.zonesVisible })),
 
-    setPlacing: (category) => set({ placingCategory: category, mode: 'select', clash: null }),
+    toggleDimensions: () => set((state) => ({ dimensionsVisible: !state.dimensionsVisible })),
+
+    setMode: (mode) =>
+      set({ mode, placingCategory: null, placingSymbol: null, measurement: null, clash: null }),
+
+    setPlacing: (category, symbol = null) =>
+      set({ placingCategory: category, placingSymbol: symbol, mode: 'select', clash: null }),
 
     addMeasurePoint: (point) =>
       set((state) => {
@@ -792,9 +839,12 @@ function ephemeralState() {
     mode: 'select' as PlanEditorMode,
     selectedId: null as string | null,
     placingCategory: null as ElementCategory | null,
+    placingSymbol: null as SymbolId | null,
     snapEnabled: true,
     gridVisible: true,
     labelsVisible: true,
+    zonesVisible: false,
+    dimensionsVisible: true,
     alignments: [] as AlignmentGuide[],
     measurement: null,
     clash: null as string | null,

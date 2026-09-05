@@ -1,25 +1,20 @@
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCanvas } from '@napi-rs/canvas';
+import { boundingBox, type MaterialId, type Point } from '@garden-studio/schema';
+import { nodeAssetLoader } from '../src/lib/materials/assets/node-loader';
 import {
-  boundingBox,
-  DesignElementSchema,
-  housePolygon,
-  rectangleHouse,
-  shadowCast,
-  shadowOccluders,
-  SiteSectionSchema,
-  type MaterialId,
-  type Point,
-} from '@garden-studio/schema';
+  assetVersion,
+  getAssetVariants,
+  preloadAssets,
+} from '../src/lib/materials/assets/registry';
 import { resolvePattern } from '../src/lib/materials/palette';
 import {
   drawSurfacePattern,
   type PatternContext,
 } from '../src/lib/materials/render-surface-pattern';
-import { drawShadowLayer } from '../src/lib/materials/render-shadow-layer';
-import { SHADOW_OPACITY } from '../src/lib/materials/light';
+import { preparePreviewDir } from './preview-dir';
 
 /**
  * Renders the material patterns to PNGs so they can be looked at.
@@ -38,6 +33,7 @@ import { SHADOW_OPACITY } from '../src/lib/materials/light';
  */
 
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '.material-preview');
+const PUBLIC_ASSETS = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets');
 
 /** Pixels per metre. 64 is twice the editor's default zoom — close enough to read the detail. */
 const DEFAULT_PX_PER_METRE = 64;
@@ -121,32 +117,11 @@ const rightOfSeam: Point[] = [
 
 const PLAN_ORIGIN: Point = { x: 0, y: 0 };
 
-function main(): void {
-  /*
-   * Keep the last run before wiping, so a change can be judged against what it replaced.
-   *
-   * Clearing the directory every time is deliberate and stays — a renamed case must not leave a
-   * stale image behind to be mistaken for current output. But visual tuning is entirely a
-   * comparison exercise: you cannot tell whether a tone is better by looking only at the after.
-   * One generation deep, so it cannot grow without bound, and `before/` is inside the gitignored
-   * directory so neither is ever committed.
-   */
-  const beforeDir = join(OUT_DIR, 'before');
+async function main(): Promise<void> {
+  await preloadAssets(nodeAssetLoader(PUBLIC_ASSETS));
+  console.log(`Assets ${assetVersion()}`);
 
-  if (existsSync(OUT_DIR)) {
-    const carried = join(dirname(OUT_DIR), '.material-preview-carry');
-    rmSync(carried, { recursive: true, force: true });
-    cpSync(OUT_DIR, carried, { recursive: true });
-    // Drop the previous run's own `before/`, or each run would nest one inside the last.
-    rmSync(join(carried, 'before'), { recursive: true, force: true });
-
-    rmSync(OUT_DIR, { recursive: true, force: true });
-    mkdirSync(OUT_DIR, { recursive: true });
-    cpSync(carried, beforeDir, { recursive: true });
-    rmSync(carried, { recursive: true, force: true });
-  } else {
-    mkdirSync(OUT_DIR, { recursive: true });
-  }
+  const beforeDir = preparePreviewDir(OUT_DIR);
 
   const written: string[] = [];
 
@@ -226,20 +201,7 @@ function main(): void {
   writeFileSync(join(OUT_DIR, '09-together.png'), neighbours());
   written.push('09-together');
 
-  /*
-   * A whole garden, at four times of one day.
-   *
-   * The most informative sheet here, and it was found by accident: a throwaway script written to
-   * check the shadow layer turned out to say far more than any single frame. The noon ratio is
-   * visibly 1/tan(60 degrees) for this latitude, and the evening frame is the one where the house
-   * throws a diagonal across the garden — which is the whole argument for the sun model. Four
-   * frames also catch the thing a single frame cannot: whether the shadows and the surface
-   * shading agree about where the light is as it moves.
-   */
-  writeFileSync(join(OUT_DIR, '10-shadow-hours.png'), shadowHours());
-  written.push('09-together');
-
-  written.push('10-shadow-hours');
+  // The whole-garden sheets, including the four-times-of-day one, live in `render:plan`.
 
   console.log(`Wrote ${written.length} PNGs to ${OUT_DIR}`);
   if (existsSync(beforeDir)) console.log(`Previous run kept in ${beforeDir} for comparison`);
@@ -294,7 +256,7 @@ function contactSheet(pxPerMetre: number): Buffer {
       material,
       { origin: PLAN_ORIGIN, rotation: 0 },
       id,
-      { pxPerMetre },
+      { pxPerMetre, assets: getAssetVariants },
       { x: 0, y: 0 },
     );
 
@@ -351,7 +313,7 @@ function neighbours(): Buffer {
       material,
       { origin: PLAN_ORIGIN, rotation: 0 },
       band.id,
-      { pxPerMetre },
+      { pxPerMetre, assets: getAssetVariants },
       { x: 0, y: 0 },
     );
   }
@@ -414,7 +376,7 @@ function compose(outlines: Outline[], pxPerMetre: number): Buffer {
       MATERIAL!,
       { origin: PLAN_ORIGIN, rotation: entry.rotation ?? 0 },
       entry.seed,
-      { pxPerMetre },
+      { pxPerMetre, assets: getAssetVariants },
       rasterOrigin,
     );
   }
@@ -422,176 +384,7 @@ function compose(outlines: Outline[], pxPerMetre: number): Buffer {
   return canvas.toBuffer('image/png');
 }
 
-main();
-
-/* ---------------------------------------------------------------- whole plan */
-
-/** A garden with a house, a tree and a hedge in it, drawn at four times of one day. */
-function shadowHours(): Buffer {
-  const px = 26;
-  const plotW = 22;
-  const plotH = 15;
-  const cols = 2;
-  const rows = 2;
-  const pad = 10;
-
-  const plot: Point[] = [
-    { x: 0, y: 0 },
-    { x: plotW, y: 0 },
-    { x: plotW, y: plotH },
-    { x: 0, y: plotH },
-  ];
-
-  const house = rectangleHouse({ x: 11, y: 2.5 }, 9, 5);
-
-  const element = (over: Record<string, unknown>) =>
-    DesignElementSchema.parse({
-      id: String(over.id),
-      category: 'planting-bed',
-      role: 'feature',
-      zone: 'back',
-      ...over,
-    });
-
-  const elements = [
-    element({
-      id: 'lawn',
-      category: 'lawn',
-      role: 'fill',
-      material: 'standard-turf',
-      shape: { kind: 'rect', centre: { x: 11, y: 9.5 }, width: 20, depth: 8, rotation: 0 },
-    }),
-    element({
-      id: 'patio',
-      category: 'paved-area',
-      role: 'fill',
-      material: 'stone-pavers',
-      shape: { kind: 'rect', centre: { x: 5, y: 7 }, width: 7, depth: 3.5, rotation: 0 },
-    }),
-    element({
-      id: 'border',
-      material: 'mixed-border',
-      shape: { kind: 'rect', centre: { x: 11, y: 13.6 }, width: 20, depth: 2, rotation: 0 },
-    }),
-    element({
-      id: 'hedge',
-      material: 'hedging',
-      shape: { kind: 'rect', centre: { x: 18.5, y: 9 }, width: 1, depth: 7, rotation: 0 },
-    }),
-    element({
-      id: 'tree',
-      shape: { kind: 'point', at: { x: 5, y: 11.5 }, radius: 1.6 },
-      height: 5.5,
-    }),
-  ];
-
-  const width = cols * plotW * px + (cols + 1) * pad;
-  const height = rows * plotH * px + (rows + 1) * pad + rows * 18;
-
-  const canvas = createCanvas(width, height);
-  const context = canvas.getContext('2d');
-  context.fillStyle = '#f4f2ed';
-  context.fillRect(0, 0, width, height);
-
-  const hours: [string, number][] = [
-    ['09:00', 540],
-    ['12:00', 720],
-    ['16:00', 960],
-    ['19:00', 1140],
-  ];
-
-  hours.forEach(([label, minutes], index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const ox = pad + col * (plotW * px + pad);
-    const oy = pad + row * (plotH * px + pad + 18) + 18;
-
-    const site = SiteSectionSchema.parse({
-      // Manchester, so the solstice noon altitude is 90 - 53.4 + 23.44 and the ratios are checkable.
-      location: { latitude: 53.4, longitude: -2.98 },
-      sun: { dayOfYear: 172, minutes },
-      house,
-    });
-
-    const cast = shadowCast(site);
-    const light = cast ? { x: -cast.direction.x, y: -cast.direction.y } : undefined;
-
-    context.save();
-    context.translate(ox, oy);
-
-    context.fillStyle = '#e9ece4';
-    context.fillRect(0, 0, plotW * px, plotH * px);
-
-    for (const item of elements) {
-      const material = resolvePattern(item.material);
-      if (!material) continue;
-
-      const outline = item.shape.kind === 'rect' ? rectOutline(item.shape) : [];
-      if (outline.length < 3) continue;
-
-      drawSurfacePattern(
-        context as unknown as PatternContext,
-        outline,
-        material,
-        { origin: PLAN_ORIGIN, rotation: 0 },
-        item.id,
-        { pxPerMetre: px, light },
-        { x: 0, y: 0 },
-      );
-    }
-
-    /*
-     * The house, drawn before the shadows it casts. Without it the sheet shows a large shadow with
-     * nothing visibly casting it, which is the one thing that makes these frames hard to read.
-     */
-    context.fillStyle = '#d9d2c4';
-    context.beginPath();
-    housePolygon(house).forEach((point, index) =>
-      index === 0
-        ? context.moveTo(point.x * px, point.y * px)
-        : context.lineTo(point.x * px, point.y * px),
-    );
-    context.closePath();
-    context.fill();
-
-    if (cast) {
-      const shade = createCanvas(plotW * px, plotH * px);
-      drawShadowLayer(
-        shade.getContext('2d') as unknown as PatternContext,
-        shadowOccluders(elements, house),
-        cast,
-        plot,
-        { pxPerMetre: px },
-        { x: 0, y: 0 },
-      );
-
-      context.globalAlpha = SHADOW_OPACITY;
-      context.drawImage(shade, 0, 0);
-      context.globalAlpha = 1;
-    }
-
-    context.restore();
-
-    context.fillStyle = '#1a231c';
-    context.font = 'bold 13px sans-serif';
-    context.fillText(
-      `${label}  ·  shadow ${cast ? `${cast.lengthPerMetre.toFixed(2)}x height` : 'none (sun down)'}`,
-      ox,
-      oy - 6,
-    );
-  });
-
-  return canvas.toBuffer('image/png');
-}
-
-function rectOutline(shape: { centre: Point; width: number; depth: number }): Point[] {
-  const hw = shape.width / 2;
-  const hd = shape.depth / 2;
-
-  return [
-    { x: shape.centre.x - hw, y: shape.centre.y - hd },
-    { x: shape.centre.x + hw, y: shape.centre.y - hd },
-    { x: shape.centre.x + hw, y: shape.centre.y + hd },
-    { x: shape.centre.x - hw, y: shape.centre.y + hd },
-  ];
-}
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});

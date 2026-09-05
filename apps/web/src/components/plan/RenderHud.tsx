@@ -55,7 +55,14 @@ function Row({
   stats,
 }: {
   label: string;
-  stats: { size: number; hits: number; misses: number; capacity: number };
+  stats: {
+    size: number;
+    hits: number;
+    misses: number;
+    capacity: number;
+    bytes: number;
+    byteCapacity: number | null;
+  };
 }) {
   const total = stats.hits + stats.misses;
   /*
@@ -75,6 +82,19 @@ function Row({
       <span>{hitRate}</span>
       <span className="text-white/60">miss</span>
       <span>{stats.misses}</span>
+      {/*
+        Which cap is actually binding. Since rasters are allocated at the display's pixel ratio the
+        byte total is usually the one that evicts first, and it is the number that was invisible.
+      */}
+      <span className="text-white/60">mem</span>
+      <span>
+        {megabytes(stats.bytes)}
+        {stats.byteCapacity === null ? '' : `/${megabytes(stats.byteCapacity)}`}
+      </span>
     </div>
   );
+}
+
+function megabytes(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))}M`;
 }

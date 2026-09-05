@@ -233,6 +233,10 @@ describe('PlanDocumentSchema', () => {
       location: null,
       // About 21 June at 15:00 — the longest day, at the hour a garden is judged.
       sun: { dayOfYear: 172, minutes: 900 },
+      // No gate and no street until the user says: nothing is inferred into the document.
+      gates: [],
+      streetEdgeVertexId: null,
+      boundaryStyles: [],
     });
     expect(document.features).toEqual({ features: [], skipped: false });
     expect(document.brief.budget).toBeNull();

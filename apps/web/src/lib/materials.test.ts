@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CATEGORY_COLOURS, CATEGORY_ORDER } from './concept-colours';
 import type { DesignElement, ElementCategory } from './concepts';
+import { cssToRgb } from './materials/light';
 import {
   cheaperAlternative,
   defaultMaterial,
@@ -10,6 +11,7 @@ import {
   materialLabel,
   materialsFor,
 } from './materials';
+import { roofTones } from './materials/symbols/draw-symbol';
 
 function element(category: ElementCategory, material?: string): DesignElement {
   return {
@@ -79,6 +81,18 @@ describe('materialFill', () => {
     expect(materialFill(element('existing-feature', 'existing'))).toBe(
       CATEGORY_COLOURS['existing-feature'].fill,
     );
+  });
+
+  /**
+   * A kept feature's fill is the translucent keep-status green. Shading a roof from it used
+   * `hexToRgb`, which threw, and that throw escaped through Konva and took the concept canvas
+   * down. `cssToRgb` is the conversion that fill is allowed to go through.
+   */
+  it('is a colour a roof can shade from, even when it is not a hex', () => {
+    const fill = materialFill(element('existing-feature', 'existing'));
+    expect(fill.startsWith('#')).toBe(false);
+    expect(cssToRgb(fill)).toEqual({ r: 120, g: 168, b: 116 });
+    expect(() => roofTones(element('existing-feature', 'existing'))).not.toThrow();
   });
 
   it('falls back to the category colour when no material is set at all', () => {

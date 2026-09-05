@@ -79,6 +79,26 @@ export function tierFor(pattern: MaterialPattern, pxPerMetre: number): DetailTie
       return shadesAt(smallest) ? 'detail' : 'units';
     }
 
+    /*
+     * A pad is a module by every measure that matters here — a discrete unit of a stated size — so
+     * it takes the module floor rather than the scatter one. Only its *layout* differs.
+     */
+    case 'pads': {
+      const smallest = (Math.min(pattern.padSize.w, pattern.padSize.h) / MM_PER_METRE) * pxPerMetre;
+      if (smallest < MIN_DRAWN_MODULE_PX) return 'mass';
+      return shadesAt(smallest) ? 'detail' : 'units';
+    }
+
+    /*
+     * A hedge is judged on its crown, which is a unit of a stated size — so it takes the module
+     * floor. Never a mass, though: a hedge is a *boundary* as much as a surface, and a garden that
+     * loses its internal divisions when you zoom out has lost its structure, not just its detail.
+     */
+    case 'hedge': {
+      const crown = (pattern.crownSize / MM_PER_METRE) * pxPerMetre;
+      return shadesAt(crown) ? 'detail' : 'units';
+    }
+
     case 'scatter': {
       const largest = (pattern.sizeRange.max / MM_PER_METRE) * pxPerMetre;
       if (largest < MIN_DRAWN_UNIT_PX) return 'mass';
@@ -100,6 +120,28 @@ export function tierFor(pattern: MaterialPattern, pxPerMetre: number): DetailTie
       return 'detail';
   }
 }
+
+/**
+ * Below this many pixels a texture tile is not drawn and the flat tone stands in.
+ *
+ * A photograph of gravel resampled to six pixels is a grey smear with a visible repeat, where the
+ * palette's mean is at least the right colour. Textures are metres across, so this only bites
+ * zoomed right out — the same region where modules have already given way to a mass.
+ */
+export const MIN_TEXTURED_TILE_PX = 8;
+
+/**
+ * The thinnest a cut edge is drawn, in pixels.
+ *
+ * A 30 mm spade cut round a bed is under a pixel at the zoom a whole plan is read at. Drawn at its
+ * true width it vanishes there — which is backwards, because the line that says "this is a bed and
+ * not a patch of the lawn" is needed most at the scale where you are reading the garden as a whole,
+ * and least when you are zoomed in far enough to see the planting itself.
+ *
+ * Slightly under one so it lands as a hairline rather than as a hard rule. What keeps it from
+ * becoming clutter is that a surface which has fallen to the `mass` tier draws no edge at all.
+ */
+export const MIN_CUT_EDGE_PX = 0.9;
 
 /** Whether something this many pixels across is worth lighting. */
 export function shadesAt(sizePx: number): boolean {

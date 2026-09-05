@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   Grid3x3,
   Hand,
+  LayoutGrid,
   Info,
   Magnet,
   MousePointer2,
@@ -17,6 +18,7 @@ import {
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { ADDABLE_CATEGORIES } from '@/lib/element-groups';
 import { usePlanEditorStore, type PlanEditorMode } from '@/state/plan-editor-store';
+import { DownloadPlanButton } from '../DownloadPlanButton';
 import { ToolbarButton, ToolbarGroup } from '../ToolbarButton';
 import { EditorIcon } from './EditorIcon';
 
@@ -32,10 +34,18 @@ import { EditorIcon } from './EditorIcon';
  * dragged.
  */
 
-const VIEWS: { id: string; label: string; available: boolean }[] = [
-  { id: 'plan', label: 'Plan', available: true },
-  { id: '3d', label: '3D', available: false },
-  { id: 'visualise', label: 'Visualise', available: false },
+/**
+ * The two views this editor has.
+ *
+ * **3D is gone rather than disabled.** It sat here greyed out on the argument that omitting it
+ * would be more confusing than showing it — which was reasonable while both extra tabs were
+ * roadmap. It is not any more: Visualise now does something, and a permanently dead tab beside a
+ * live one reads as a broken feature rather than a planned one. React Three Fiber stays installed;
+ * when there is a 3D view worth having, the tab comes back.
+ */
+const VIEWS: { id: 'plan' | 'visualise'; label: string }[] = [
+  { id: 'plan', label: 'Plan' },
+  { id: 'visualise', label: 'Visualise' },
 ];
 
 const TOOLS: { id: PlanEditorMode; label: string; icon: React.ReactNode; title: string }[] = [
@@ -59,7 +69,13 @@ const TOOLS: { id: PlanEditorMode; label: string; icon: React.ReactNode; title: 
   },
 ];
 
-export function EditorToolbar() {
+export function EditorToolbar({
+  view,
+  setView,
+}: {
+  view: 'plan' | 'visualise';
+  setView: (view: 'plan' | 'visualise') => void;
+}) {
   const mode = usePlanEditorStore((state) => state.mode);
   const setMode = usePlanEditorStore((state) => state.setMode);
   const snapEnabled = usePlanEditorStore((state) => state.snapEnabled);
@@ -68,6 +84,10 @@ export function EditorToolbar() {
   const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
   const toggleLabels = usePlanEditorStore((state) => state.toggleLabels);
   const toggleGrid = usePlanEditorStore((state) => state.toggleGrid);
+  const zonesVisible = usePlanEditorStore((state) => state.zonesVisible);
+  const toggleZones = usePlanEditorStore((state) => state.toggleZones);
+  const dimensionsVisible = usePlanEditorStore((state) => state.dimensionsVisible);
+  const toggleDimensions = usePlanEditorStore((state) => state.toggleDimensions);
   const canUndo = usePlanEditorStore((state) => state.past.length > 0);
   const canRedo = usePlanEditorStore((state) => state.future.length > 0);
   const hasPristine = usePlanEditorStore((state) => state.pristine !== null);
@@ -80,18 +100,75 @@ export function EditorToolbar() {
   const [addOpen, setAddOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  const TOGGLES = [
+    {
+      id: 'snap',
+      label: 'Snap',
+      title: 'Snap placement to the grid and to alignment guides',
+      icon: <Magnet aria-hidden className="h-4 w-4" />,
+      on: snapEnabled,
+      onClick: toggleSnap,
+    },
+    {
+      id: 'grid',
+      label: 'Grid',
+      title: 'Show the measuring grid',
+      icon: <Grid3x3 aria-hidden className="h-4 w-4" />,
+      on: gridVisible,
+      onClick: toggleGrid,
+    },
+    /*
+     * Zones, off by default and deliberately so. They are scaffolding for "which parts do you want
+     * designed", and once that is answered writing "Back garden ~ 18 m2" across a finished design
+     * is a note about the tool rather than about the garden. The toggle exists because a user
+     * checking their own answer had no way to see them again on any screen.
+     */
+    {
+      id: 'zones',
+      label: 'Zones',
+      title: 'Tint the front, back and side gardens',
+      icon: <LayoutGrid aria-hidden className="h-4 w-4" />,
+      on: zonesVisible,
+      onClick: toggleZones,
+    },
+    {
+      id: 'dimensions',
+      label: 'Dimensions',
+      title: 'Measure the plot along each side',
+      icon: <Ruler aria-hidden className="h-4 w-4" />,
+      on: dimensionsVisible,
+      onClick: toggleDimensions,
+    },
+    /*
+     * Labels off is for judging how the garden looks; labels on is for reading it as a document.
+     * A viewing preference like the grid, so it is not saved with the plan.
+     */
+    {
+      id: 'labels',
+      label: 'Labels',
+      title: 'Name the things on the plan',
+      icon: <Tag aria-hidden className="h-4 w-4" />,
+      on: labelsVisible,
+      onClick: toggleLabels,
+    },
+  ];
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <ToolbarGroup>
-        {VIEWS.map((view) => (
+        {VIEWS.map((item) => (
           <ToolbarButton
-            key={view.id}
-            testId={`view-${view.id}`}
-            label={view.label}
+            key={item.id}
+            testId={`view-${item.id}`}
+            label={item.label}
             icon={null}
-            pressed={view.available}
-            disabled={!view.available}
-            title={view.available ? 'Plan view' : `${view.label} view is coming soon`}
+            pressed={view === item.id}
+            title={
+              item.id === 'plan'
+                ? 'The accurate, editable plan'
+                : 'A large clean render of the same plan'
+            }
+            onClick={() => setView(item.id)}
           />
         ))}
       </ToolbarGroup>
@@ -133,6 +210,7 @@ export function EditorToolbar() {
           title="Back to the concept as generated, discarding your edits"
           onClick={resetToConcept}
         />
+        <DownloadPlanButton />
       </ToolbarGroup>
 
       {/* Add feature — the palette's twin, for when the left column is scrolled away. */}
@@ -159,7 +237,8 @@ export function EditorToolbar() {
             data-testid="add-feature-menu"
             className="absolute top-full left-0 z-10 mt-1 w-48 space-y-0.5 rounded-xl border border-garden-line bg-white p-1 shadow-lg"
           >
-            {ADDABLE_CATEGORIES.map((category) => (
+            {/* Furniture is placed by symbol from the palette, not as a bare category. */}
+            {ADDABLE_CATEGORIES.filter((category) => category !== 'furniture').map((category) => (
               <li key={category}>
                 <button
                   type="button"
@@ -179,87 +258,24 @@ export function EditorToolbar() {
         ) : null}
       </div>
 
-      <button
-        type="button"
-        data-testid="editor-snap"
-        aria-pressed={snapEnabled}
-        title="Snap placement to the grid and to alignment guides"
-        onClick={toggleSnap}
-        className={[
-          'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium shadow-sm transition-colors',
-          'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
-          snapEnabled
-            ? 'border-garden-forest bg-garden-forest text-white'
-            : 'border-garden-line bg-white text-garden-muted hover:border-garden-green',
-        ].join(' ')}
-      >
-        <Magnet aria-hidden className="h-4 w-4" />
-        Snap
-        <span
-          className={[
-            'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-            snapEnabled ? 'bg-white/20 text-white' : 'bg-garden-line text-garden-muted',
-          ].join(' ')}
-        >
-          {snapEnabled ? 'ON' : 'OFF'}
-        </span>
-      </button>
-
-      <button
-        type="button"
-        data-testid="editor-grid"
-        aria-pressed={gridVisible}
-        title="Show the measuring grid"
-        onClick={toggleGrid}
-        className={[
-          'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium shadow-sm transition-colors',
-          'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
-          gridVisible
-            ? 'border-garden-forest bg-garden-forest text-white'
-            : 'border-garden-line bg-white text-garden-muted hover:border-garden-green',
-        ].join(' ')}
-      >
-        <Grid3x3 aria-hidden className="h-4 w-4" />
-        Grid
-        <span
-          className={[
-            'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-            gridVisible ? 'bg-white/20 text-white' : 'bg-garden-line text-garden-muted',
-          ].join(' ')}
-        >
-          {gridVisible ? 'ON' : 'OFF'}
-        </span>
-      </button>
-
       {/*
-        Labels off is for judging how the garden looks; labels on is for reading it as a document.
-        A viewing preference like the grid, so it lives beside it and is not saved with the plan.
+        The view switches, all four of the same shape.
+        
+        They were four verbatim copies of a twenty-five-line button, which is fine at two and a
+        liability at four: the next one to be added is the one whose active-state class gets
+        mistyped. One component, one list.
       */}
-      <button
-        type="button"
-        data-testid="editor-labels"
-        aria-pressed={labelsVisible}
-        title="Name the things on the plan"
-        onClick={toggleLabels}
-        className={[
-          'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium shadow-sm transition-colors',
-          'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
-          labelsVisible
-            ? 'border-garden-forest bg-garden-forest text-white'
-            : 'border-garden-line bg-white text-garden-muted hover:border-garden-green',
-        ].join(' ')}
-      >
-        <Tag aria-hidden className="h-4 w-4" />
-        Labels
-        <span
-          className={[
-            'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-            labelsVisible ? 'bg-white/20 text-white' : 'bg-garden-line text-garden-muted',
-          ].join(' ')}
-        >
-          {labelsVisible ? 'ON' : 'OFF'}
-        </span>
-      </button>
+      {TOGGLES.map((toggle) => (
+        <ViewToggle
+          key={toggle.id}
+          testId={`editor-${toggle.id}`}
+          label={toggle.label}
+          title={toggle.title}
+          icon={toggle.icon}
+          on={toggle.on}
+          onClick={toggle.onClick}
+        />
+      ))}
 
       <div className="relative ml-auto">
         <button
@@ -291,5 +307,57 @@ export function EditorToolbar() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+
+/**
+ * One view switch: an icon, a name and an ON/OFF pill.
+ *
+ * Extracted when the fourth was added. `ToolbarButton` is deliberately not reused — that one is a
+ * *mode* button, where pressing it changes what a click on the canvas does, and these change only
+ * what is drawn. Reading the same in both places would say the two are the same kind of control.
+ */
+function ViewToggle({
+  testId,
+  label,
+  title,
+  icon,
+  on,
+  onClick,
+}: {
+  testId: string;
+  label: string;
+  title: string;
+  icon: React.ReactNode;
+  on: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-pressed={on}
+      title={title}
+      onClick={onClick}
+      className={[
+        'flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium shadow-sm transition-colors',
+        'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
+        on
+          ? 'border-garden-forest bg-garden-forest text-white'
+          : 'border-garden-line bg-white text-garden-muted hover:border-garden-green',
+      ].join(' ')}
+    >
+      {icon}
+      {label}
+      <span
+        className={[
+          'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+          on ? 'bg-white/20 text-white' : 'bg-garden-line text-garden-muted',
+        ].join(' ')}
+      >
+        {on ? 'ON' : 'OFF'}
+      </span>
+    </button>
   );
 }

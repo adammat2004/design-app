@@ -14,6 +14,9 @@ import {
   materialPattern,
   modulePitchMetres,
   scatterForm,
+  bondFor,
+  bondOffset,
+  waterSurface,
 } from './material-patterns.js';
 
 const element = (overrides: Partial<DesignElement> = {}): DesignElement =>
@@ -119,11 +122,12 @@ describe('backwards compatibility', () => {
 });
 
 describe('the pattern manifest', () => {
-  it('describes 600 × 600 slab paving', () => {
+  it('describes 600 × 600 slab paving, laid random coursed', () => {
     expect(materialPattern('stone-pavers')).toEqual({
       patternType: 'grid',
       moduleSize: { w: 600, h: 600 },
       jointWidth: 10,
+      bond: 'random',
     });
   });
 
@@ -229,14 +233,114 @@ describe('the forms the catalogue actually uses', () => {
     expect(scatterForm(pattern as never)).toBe('tufted');
   });
 
-  it('draws a hedge as a continuous clipped mass', () => {
+  /**
+   * A hedge is no longer a scatter at all, and that is the fix rather than a regression.
+   *
+   * `form: 'clipped-mass'` was the best a scatter could do: blobs on a grid, merged into one path.
+   * It has no notion of which way the hedge runs, and every property that reads as a hedge is
+   * directional — a stated width, capped ends, and one lit long edge. Without them it drew as
+   * camouflage with pale holes, which is what a row of shrubs looks like from above and is exactly
+   * what a clipped hedge is not.
+   */
+  it('draws a hedge as a run along its own line, not as a scatter', () => {
     const pattern = materialPattern('hedging')!;
-    expect(scatterForm(pattern as never)).toBe('clipped-mass');
+
+    expect(pattern.patternType).toBe('hedge');
+    if (pattern.patternType !== 'hedge') throw new Error('unreachable');
+
+    // The crowns must overlap, or the hedge reads as a row of separate bushes.
+    expect(pattern.pitch).toBeLessThan(pattern.crownSize);
   });
 
   it('leaves the aggregates as blobs, because a gravel chip is a blob', () => {
     for (const id of ['bark-mulch', 'decorative-gravel', 'play-bark', 'slate-chippings'] as const) {
       expect(scatterForm(materialPattern(id) as never)).toBe('blob');
     }
+  });
+});
+
+describe('the bond', () => {
+  /**
+   * A resolver rather than a Zod default, because `MATERIAL_PATTERNS` is hand-written literals
+   * that never go through `.parse()` — the trap `scatterForm` and `patternAnchor` exist to avoid.
+   * These pin that the two defaults are what each pattern drew before the field existed.
+   */
+  it('defaults a grid to stack and a board to running, so nothing changed on landing', () => {
+    expect(bondFor({ patternType: 'grid', moduleSize: { w: 600, h: 600 }, jointWidth: 10 })).toBe(
+      'stack',
+    );
+    expect(bondFor({ patternType: 'board', moduleSize: { w: 3600, h: 145 }, jointWidth: 6 })).toBe(
+      'running',
+    );
+  });
+
+  it('takes the stated bond when there is one', () => {
+    expect(
+      bondFor({ patternType: 'grid', moduleSize: { w: 600, h: 600 }, jointWidth: 10, bond: 'third' }),
+    ).toBe('third');
+  });
+
+  const never = () => {
+    throw new Error('a deterministic bond must not draw from the course generator');
+  };
+
+  it('lines every course up on a stack bond', () => {
+    expect([0, 1, 2, 3].map((row) => bondOffset('stack', row, never))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('alternates a running bond by half a module', () => {
+    expect([0, 1, 2, 3].map((row) => bondOffset('running', row, never))).toEqual([0, 0.5, 0, 0.5]);
+  });
+
+  it('repeats a third bond every three courses', () => {
+    expect([0, 1, 2, 3].map((row) => bondOffset('third', row, never))).toEqual([0, 1 / 3, 2 / 3, 0]);
+  });
+
+  /**
+   * Negative rows are not hypothetical: `gridRange` indexes from the *pattern origin*, which is the
+   * plan origin, so any surface above or left of it has them. `%` on a negative number is negative
+   * in JavaScript, and an offset of −⅓ shifts a course the wrong way.
+   */
+  it('handles a course above the pattern origin', () => {
+    expect(bondOffset('third', -1, never)).toBeCloseTo(2 / 3, 10);
+    expect(bondOffset('running', -1, never)).toBe(0.5);
+  });
+
+  /**
+   * Quantised to eighths. A continuous offset leaves slivers at the clip edge that read as badly
+   * cut stone, and a mason setting out random coursed work is working to a module anyway.
+   */
+  it('quantises a random bond to eighths', () => {
+    for (const value of [0, 0.13, 0.5, 0.99]) {
+      const offset = bondOffset('random', 3, () => value);
+      expect(offset * 8).toBeCloseTo(Math.round(offset * 8), 10);
+      expect(offset).toBeGreaterThanOrEqual(0);
+      expect(offset).toBeLessThan(1);
+    }
+  });
+});
+
+describe('the water surface', () => {
+  /**
+   * The axis that finally separated the four water materials. `rippleSpacing` alone could not: a
+   * formal pool and a water bowl are both perfectly still, so they resolved to the same two
+   * numbers and drew the same picture.
+   */
+  it('tells all four apart', () => {
+    const surfaces = (['naturalistic-pond', 'formal-pool', 'rill', 'water-bowl'] as const).map(
+      (id) => {
+        const pattern = materialPattern(id);
+        if (!pattern || pattern.patternType !== 'water') throw new Error(`${id} must be water`);
+        return waterSurface(pattern);
+      },
+    );
+
+    expect(new Set(surfaces).size).toBe(4);
+  });
+
+  /** A material that states no surface draws what its ripple spacing already implied. */
+  it('falls back to what the ripple spacing meant', () => {
+    expect(waterSurface({ patternType: 'water', rippleSpacing: 0 })).toBe('reflective');
+    expect(waterSurface({ patternType: 'water', rippleSpacing: 200 })).toBe('planted');
   });
 });

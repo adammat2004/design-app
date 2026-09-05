@@ -17,6 +17,10 @@ export const COLOUR = {
   houseFill: '#e9ecef',
   houseStroke: '#5b6560',
   houseInk: '#33413a',
+  /** The wall itself, drawn as a band of real thickness — see `WALL_THICKNESS`. */
+  houseWall: '#4d565d',
+  /** The fence's shade, at the alpha `FENCE_SHADE_OPACITY` gives it. */
+  fenceShade: '#4a5a63',
   /** The boundary drawn as an enclosure rather than an outline: rail and posts. */
   fenceRail: '#9a8460',
   fencePost: '#7a6747',

@@ -29,7 +29,12 @@ export interface TestDatabase {
  * instead of failing with a connection error.
  */
 export async function connectTestDatabase(): Promise<TestDatabase | null> {
-  const client = postgres(CONNECTION_STRING, { max: 1, onnotice: () => {} });
+  // `jit: 'off'` for the reason `db.module.ts` gives: the fill queries are compiled otherwise.
+  const client = postgres(CONNECTION_STRING, {
+    max: 1,
+    onnotice: () => {},
+    connection: { jit: 'off' },
+  });
 
   try {
     await client`select postgis_version()`;

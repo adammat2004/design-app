@@ -13,7 +13,7 @@ const CATEGORY_BY_ID: Record<string, ElementCategory> = Object.fromEntries(
     list.map((material) => [material.id, category as ElementCategory]),
   ),
 );
-import { hexToRgb, rgbToCss, shiftBrightness } from './light';
+import { cssToRgb, hexToRgb, rgbToCss, shiftBrightness } from './light';
 
 describe('resolvePattern', () => {
   it('returns the full manifest for a material that has one', () => {
@@ -152,6 +152,15 @@ describe('colour maths', () => {
   it('rejects anything that is not a colour', () => {
     expect(() => hexToRgb('rebeccapurple')).toThrow();
     expect(() => hexToRgb('#12345')).toThrow();
+    // `materialFill` for a kept feature is this string. Palette entries must not be.
+    expect(() => hexToRgb('rgba(120, 168, 116, 0.18)')).toThrow();
+  });
+
+  it('reads the css fills the canvas already paints', () => {
+    expect(cssToRgb('#dcdcd5')).toEqual({ r: 220, g: 220, b: 213 });
+    expect(cssToRgb('rgb(120, 168, 116)')).toEqual({ r: 120, g: 168, b: 116 });
+    expect(cssToRgb('rgba(120, 168, 116, 0.18)')).toEqual({ r: 120, g: 168, b: 116 });
+    expect(() => cssToRgb('rebeccapurple')).toThrow();
   });
 
   it('shifts brightness proportionally and clamps at the ends', () => {

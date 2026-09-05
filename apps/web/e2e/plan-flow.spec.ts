@@ -196,3 +196,34 @@ test('a saved plan can be found again from the front door', async ({ page }) => 
   await expect(page.getByTestId('close-shape')).toHaveCount(0);
   expect(page.url()).toBe(planUrl);
 });
+
+test('a side gate and the street edge survive a reload', async ({ page }) => {
+  await page.goto('/plan');
+  const planUrl = page.url();
+
+  await page.getByTestId('plot-preset-rectangle').click();
+  await page.getByTestId('plot-shape-continue').click();
+
+  // In house mode a plain click drops the default footprint where it lands.
+  await clickPlan(page, 300, 200);
+
+  await page.getByTestId('sub-step-access').click();
+  await expect(page.getByTestId('gates-count')).toHaveText('No gate');
+
+  // Offered, not applied: the chips place nothing until they are taken.
+  await page.getByTestId('suggest-street-edge').click();
+  await page.getByTestId('suggest-side-gate').click();
+
+  await expect(page.getByTestId('gates-count')).toHaveText('1 gate');
+  await expect(page.getByTestId('street-status')).toHaveText('Street side chosen');
+
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+
+  await page.goto('about:blank');
+  await page.goto(planUrl);
+
+  // Back on the plan, the fence the gate names still exists, so it still resolves.
+  await page.getByTestId('sub-step-access').click();
+  await expect(page.getByTestId('gates-count')).toHaveText('1 gate');
+  await expect(page.getByTestId('street-status')).toHaveText('Street side chosen');
+});

@@ -278,29 +278,66 @@ export function firstFreeOffset(
  * wall facing the garden is where the glazing goes.
  */
 export function suggestedDoorWall(house: HouseFootprint): string | null {
-  const back = directionFromDegrees(270 + house.rotation);
+  return suggestedWallFacing(house, 270, 'patio-door');
+}
+
+/** The wall facing the street, for the front door: bearing 90 before rotation, as `computeZones`. */
+export function suggestedFrontDoorWall(house: HouseFootprint): string | null {
+  return suggestedWallFacing(house, 90, 'front-door');
+}
+
+/** The outward normal of a wall, from a throwaway opening at its midpoint. */
+export function wallNormal(house: HouseFootprint, wallId: string): Point | null {
+  const length = wallLength(house, wallId);
+  if (length === null) return null;
+
+  return openingNormal(house, {
+    id: '',
+    wallId,
+    offsetAlongEdge: length / 2,
+    width: Math.min(length, MIN_WALL_LENGTH * 2),
+    type: 'patio-door',
+    sillHeight: 0,
+    floorLevel: 0,
+    swing: 'none',
+  });
+}
+
+/**
+ * The wall whose outward normal best matches a bearing (before rotation), among the walls that
+ * can hold an opening of this type. Length breaks a tie, because the widest wall facing that way
+ * is where the glazing goes.
+ */
+export function suggestedWallFacing(
+  house: HouseFootprint,
+  bearingOffset: number,
+  type: OpeningType,
+): string | null {
+  return suggestedWallTowards(house, directionFromDegrees(bearingOffset + house.rotation), type);
+}
+
+/**
+ * The same, towards a direction given outright — the way *away from the street* once the user
+ * has said which fence the street is, which beats any assumption about how the house was drawn.
+ */
+export function suggestedWallTowards(
+  house: HouseFootprint,
+  facing: Point,
+  type: OpeningType,
+): string | null {
   let best: { id: string; alignment: number; length: number } | null = null;
 
   for (const wall of houseWalls(house)) {
-    if (!canWallHold(wall.kind, 'patio-door')) continue;
+    if (!canWallHold(wall.kind, type)) continue;
 
     const segment = wallSegment(house, wall.id);
     if (!segment) continue;
 
     const length = edgeLength(segment[0], segment[1]);
-    const normal = openingNormal(house, {
-      id: '',
-      wallId: wall.id,
-      offsetAlongEdge: length / 2,
-      width: Math.min(length, MIN_WALL_LENGTH * 2),
-      type: 'patio-door',
-      sillHeight: 0,
-      floorLevel: 0,
-      swing: 'none',
-    });
+    const normal = wallNormal(house, wall.id);
     if (!normal) continue;
 
-    const alignment = normal.x * back.x + normal.y * back.y;
+    const alignment = normal.x * facing.x + normal.y * facing.y;
     const better =
       !best ||
       alignment > best.alignment + 1e-9 ||
@@ -310,6 +347,58 @@ export function suggestedDoorWall(house: HouseFootprint): string | null {
   }
 
   return best?.id ?? null;
+}
+
+/** The garden doors that open roughly in a given direction (before rotation). */
+export function doorsFacing(house: HouseFootprint | null, bearingOffset: number): Opening[] {
+  if (!house) return [];
+  return doorsTowards(house, directionFromDegrees(bearingOffset + house.rotation));
+}
+
+/** The garden doors whose outward normal points roughly along `facing`. */
+export function doorsTowards(house: HouseFootprint | null, facing: Point): Opening[] {
+  if (!house) return [];
+
+  return gardenDoors(house).filter((door) => {
+    const normal = openingNormal(house, door);
+    return normal !== null && normal.x * facing.x + normal.y * facing.y > 0.5;
+  });
+}
+
+/**
+ * The door the terrace belongs in front of: the widest patio door facing this way, else the widest
+ * garden door facing this way. `primaryDoor` would happily hand back a *front* door as the door
+ * the back garden is designed round, which is why the generator asks this instead.
+ */
+export function primaryDoorFacing(
+  house: HouseFootprint | null,
+  bearingOffset: number,
+): Opening | null {
+  if (!house) return null;
+  return primaryDoorTowards(house, directionFromDegrees(bearingOffset + house.rotation));
+}
+
+/** The terrace's door, towards a direction given outright. */
+export function primaryDoorTowards(house: HouseFootprint | null, facing: Point): Opening | null {
+  const doors = doorsTowards(house, facing);
+  if (doors.length === 0) return null;
+
+  const patio = doors.filter((door) => door.type === 'patio-door');
+  const candidates = patio.length > 0 ? patio : doors;
+
+  return candidates.reduce((widest, door) => (door.width > widest.width ? door : widest));
+}
+
+/**
+ * The front door: one typed as such, else any garden door facing the street — the direction
+ * given, or the house's own front by convention when the street is not known. Pass the street
+ * whenever it is: a house whose patio doors face the conventional front has its terrace door
+ * taken for its front door otherwise, and the front path drawn up to the patio.
+ */
+export function frontDoor(house: HouseFootprint | null, towardsStreet?: Point): Opening | null {
+  const typed = gardenDoors(house).find((door) => door.type === 'front-door');
+  if (typed) return typed;
+  return towardsStreet ? primaryDoorTowards(house, towardsStreet) : primaryDoorFacing(house, 90);
 }
 
 /* ---------------------------------------------------------------- collections */

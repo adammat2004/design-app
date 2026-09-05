@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { polygonArea } from './primitives.js';
-import { circleRing, polylineStrip, rectToPolygon, roundPolygon } from './shapes.js';
+import { circleRing, insetPolygon, polylineStrip, rectToPolygon, roundPolygon } from './shapes.js';
 
 describe('rectToPolygon', () => {
   it('returns the four corners about the centre when unrotated', () => {
@@ -113,5 +113,56 @@ describe('polylineStrip', () => {
 
   it('returns nothing for a single point', () => {
     expect(polylineStrip([{ x: 0, y: 0 }], 1)).toEqual([]);
+  });
+});
+
+describe('insetPolygon', () => {
+  const square: Point[] = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 4, y: 4 },
+    { x: 0, y: 4 },
+  ];
+
+  it('moves every edge of a rectangle inward and keeps it a rectangle', () => {
+    expect(insetPolygon(square, 0.5)).toEqual([
+      { x: 0.5, y: 0.5 },
+      { x: 3.5, y: 0.5 },
+      { x: 3.5, y: 3.5 },
+      { x: 0.5, y: 3.5 },
+    ]);
+  });
+
+  it('insets an anticlockwise outline the same way', () => {
+    const reversed = [...square].reverse();
+    const inset = insetPolygon(reversed, 0.5)!;
+    expect(polygonArea(inset)).toBeCloseTo(9);
+    for (const point of inset) {
+      expect(point.x).toBeGreaterThanOrEqual(0.5 - 1e-9);
+      expect(point.x).toBeLessThanOrEqual(3.5 + 1e-9);
+    }
+  });
+
+  it('keeps an L an L', () => {
+    const l: Point[] = [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 3 },
+      { x: 3, y: 3 },
+      { x: 3, y: 6 },
+      { x: 0, y: 6 },
+    ];
+    const inset = insetPolygon(l, 0.3)!;
+    expect(inset).toHaveLength(6);
+    // The reflex corner moves into the notch's own quadrant: the wall is inside the shape.
+    expect(inset[3]!.x).toBeCloseTo(2.7);
+    expect(inset[3]!.y).toBeCloseTo(2.7);
+    expect(polygonArea(inset)).toBeLessThan(polygonArea(l));
+  });
+
+  it('refuses an outline too small for the distance rather than folding it', () => {
+    // A 4 m square inset by 2.5 m a side would cross itself.
+    expect(insetPolygon(square, 2.5)).toBeNull();
+    expect(insetPolygon(square, 0)).toBeNull();
   });
 });

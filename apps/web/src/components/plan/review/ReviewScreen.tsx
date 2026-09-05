@@ -13,6 +13,7 @@ import { useBoundaryStore } from '@/state/boundary-store';
 import { useBriefStore } from '@/state/brief-store';
 import { chosenConcept, useConceptsStore } from '@/state/concepts-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
+import { DownloadPlanButton } from '../DownloadPlanButton';
 import { PlanTopBar } from '../PlanTopBar';
 import { usePlanHref } from '../ProjectContext';
 import { ScheduleTable } from './ScheduleTable';
@@ -57,6 +58,9 @@ export function ReviewScreen() {
               {concept ? `Based on ${concept.name}. ` : ''}
               Everything below is measured off the plan itself.
             </p>
+          </div>
+          <div className="ml-auto shrink-0">
+            <DownloadPlanButton variant="primary" />
           </div>
         </header>
 

@@ -9,6 +9,8 @@ import {
   type Point,
 } from '../geometry/primitives.js';
 import { rectangleOutline } from '../geometry/shapes.js';
+import { BoundaryEdgeStyleSchema } from './boundary-style.js';
+import { GateSchema } from './gate.js';
 import { OpeningSchema } from './opening.js';
 import { ZoneIdSchema } from './zone-id.js';
 
@@ -143,8 +145,51 @@ export const SiteSectionSchema = z.object({
    */
   location: SiteLocationSchema.nullable().default(null),
   sun: SiteSunSchema.default({ dayOfYear: 172, minutes: 900 }),
+  /**
+   * Gates in the fence, keyed on the boundary edge they are in. See `gate.ts` for why a gate is
+   * this rather than a step-2 feature. Empty is the ordinary state; nothing is inferred into it.
+   */
+  gates: z.array(GateSchema).default([]),
+  /**
+   * The boundary edge that faces the street, as the id of the vertex it starts at, or `null`
+   * until the user says. The front garden's path runs to this fence and the hedge along it.
+   */
+  streetEdgeVertexId: z.string().nullable().default(null),
+  /**
+   * What each side of the property is made of — a fence, a wall, a hedge, railings, or nothing.
+   * See `boundary-style.ts`; the resolvers are in `boundary-styles.ts`, split for the same cycle
+   * reason `opening.ts` and `gate.ts` are.
+   *
+   * An addition with a default, so every stored plan parses unchanged and **no
+   * `PLAN_DOCUMENT_VERSION` bump is needed**: an empty array means every side is the close-boarded
+   * fence the renderer was already drawing round every plot. Sparse on purpose — only the sides
+   * the user has actually described appear, and `setBoundaryStyle` removes an entry rather than
+   * writing the default back, so a plan that says nothing and a plan that says "fence everywhere"
+   * cannot drift apart.
+   */
+  boundaryStyles: z.array(BoundaryEdgeStyleSchema).default([]),
 });
 export type SiteSection = z.infer<typeof SiteSectionSchema>;
+
+/**
+ * The boundary edge that starts at this vertex and runs to the next one in outline order.
+ *
+ * Keyed on the *start* vertex's id rather than on an index, for the reason openings key on a wall
+ * id: inserting a corner elsewhere renumbers every edge after it, and a gate recorded by index
+ * would silently move to a different fence. `null` when the vertex is gone.
+ */
+export function boundaryEdgeByVertexId(
+  site: Pick<SiteSection, 'vertices'>,
+  vertexId: string,
+): { index: number; start: Point; end: Point } | null {
+  const index = site.vertices.findIndex((vertex) => vertex.id === vertexId);
+  if (index < 0 || site.vertices.length < 2) return null;
+
+  const start = site.vertices[index]!;
+  const end = site.vertices[(index + 1) % site.vertices.length]!;
+
+  return { index, start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } };
+}
 
 /**
  * Whether this plan can make a claim about where the sun is.

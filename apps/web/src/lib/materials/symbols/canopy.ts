@@ -65,6 +65,85 @@ export function canopyCrown(centre: Point, radius: number, seed: string, lobes =
 }
 
 /**
+ * How big to draw a canopy sprite so that its foliage stays inside the tree's radius.
+ *
+ * `opaqueRadiusRatio` is the catalogue's measurement of how far the sprite's opaque pixels reach
+ * from its centre, as a fraction of its half-width. Drawing the sprite with a half-width of
+ * `radius / ratio` puts the furthest leaf exactly on the circle the geometry uses — the same rule
+ * `canopyRing` follows, for the same reason: the placer erodes by exactly this radius and the
+ * validator tessellates the same circle, so a leaf past it is the drawing disagreeing with the
+ * model. A sprite that stops short of its own frame is scaled *up* to reach the circle, which is
+ * what keeps a tree the size the plan says it is.
+ *
+ * Which variant, and which way it is turned, come from the same seeded generator as the ring, so
+ * a tree keeps its crown across every redraw.
+ */
+export function canopySpriteBox(
+  centre: Point,
+  radius: number,
+  seed: string,
+  variants: number,
+  opaqueRadiusRatio: (variant: number) => number,
+): { variant: number; rotation: number; halfWidth: number } {
+  const random = moduleRandom(seed, Math.round(centre.x * 100), Math.round(centre.y * 100));
+  const variant = Math.min(variants - 1, Math.floor(random() * variants));
+  const rotation = random() * Math.PI * 2;
+
+  // A ratio under a half would mean the model drew a dot in a big frame; treat that as the frame.
+  const ratio = Math.max(0.5, opaqueRadiusRatio(variant));
+
+  return { variant, rotation, halfWidth: radius / ratio };
+}
+
+/**
+ * How far a canopy is nudged off its trunk, as a fraction of its radius, and how big the trunk is.
+ *
+ * The two marks that make a tree stand up.
+ *
+ * A canopy drawn concentric with its own point is a green disc lying on the ground — there is
+ * nothing in the drawing to say the leaves are six metres above the grass. Offsetting the canopy a
+ * little *away* from the light and leaving a small dark trunk mark showing on the lit side is the
+ * whole trick, and it is the oldest one in landscape drawing: the eye reads the offset as parallax
+ * and the trunk as the thing holding the canopy up.
+ *
+ * Deliberately **not** scaled by the tree's height. It is a drawing convention in the
+ * contact-shadow class, not a projection — a real parallax offset would need a camera, and a plan
+ * does not have one. The cast-shadow layer is where actual solar geometry lives.
+ */
+/*
+ * The offset has to exceed the trunk's own radius, or the canopy covers the trunk completely and
+ * the whole cue does nothing — which is exactly what the first numbers did: 0.08 of the radius of
+ * offset against a trunk 0.10 of the radius wide, so the mark was drawn, covered, and invisible.
+ * At 0.16 against 0.085 about half the trunk shows on the lit side, which is what reads.
+ */
+export const CANOPY_OFFSET_RATIO = 0.16;
+export const TRUNK_RADIUS_RATIO = 0.085;
+
+/** The smallest canopy, in pixels, worth drawing a trunk under. Below this it is one dark pixel. */
+export const MIN_TRUNK_PX = 10;
+
+/**
+ * Where the canopy sits and where its trunk is, in pixels.
+ *
+ * The trunk stays on the element's own point — that is the geometry of record, the thing the placer
+ * positioned and the validator checked — and the *canopy* is what moves. Getting this the wrong way
+ * round would put the tree's recorded position somewhere the drawing does not show it.
+ */
+export function trunkAndCanopy(
+  centre: Point,
+  radiusPx: number,
+  light: Point,
+): { trunk: Point; canopy: Point; trunkRadius: number } {
+  const offset = radiusPx * CANOPY_OFFSET_RATIO;
+
+  return {
+    trunk: centre,
+    canopy: { x: centre.x - light.x * offset, y: centre.y - light.y * offset },
+    trunkRadius: Math.max(1, radiusPx * TRUNK_RADIUS_RATIO),
+  };
+}
+
+/**
  * A fire pit: the bowl's rim and a small flame.
  *
  * Returned as two rings so the caller can fill them separately. The flame is deliberately not a

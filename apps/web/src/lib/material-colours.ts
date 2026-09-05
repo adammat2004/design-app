@@ -48,6 +48,10 @@ export const MATERIAL_FILLS: Record<MaterialId, string | null> = {
   'formal-pool': '#9dc3dc',
   rill: '#b0d2e5',
   'water-bowl': '#bcd8e8',
+  // furniture — a sprite where there is one; these are the flat stand-in and the chip colour
+  'teak-furniture': '#c9a06c',
+  'rattan-furniture': '#a99a86',
+  'steel-furniture': '#8d9195',
   // existing-feature
   existing: null,
 };

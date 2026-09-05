@@ -18,7 +18,17 @@ import type { MakeCanvas } from './render-surface-pattern';
  */
 const MAX_ENTRIES = 4;
 
-const cache = new RasterLru<ShadowRaster>(MAX_ENTRIES);
+/**
+ * And a byte ceiling as well, for the reason the surface cache has one: these are the biggest
+ * images the app produces, and at a pixel ratio of 2 four of them at the clamp is a quarter of a
+ * gigabyte. Four plot-sized rasters is the working set; 96 MB is what it is allowed to cost.
+ */
+const MAX_BYTES = 96 * 1024 * 1024;
+
+const cache = new RasterLru<ShadowRaster>(MAX_ENTRIES, {
+  maxBytes: MAX_BYTES,
+  sizeOf: (raster) => raster.widthPx * raster.heightPx * 4,
+});
 
 export interface ShadowRequest {
   occluders: ShadowOccluder[];
@@ -26,6 +36,8 @@ export interface ShadowRequest {
   /** World metres, already tessellated. The layer is clipped to this. */
   boundary: Point[];
   pxPerMetre: number;
+  /** Device pixels per CSS pixel — see `PatternRequest.pixelRatio`, same rule and same reason. */
+  pixelRatio?: number;
 }
 
 /**
@@ -57,6 +69,7 @@ export function shadowLayerKey(request: ShadowRequest): string {
     hashString(ring(request.boundary)).toString(36),
     sun,
     zoomBucket(request.pxPerMetre),
+    request.pixelRatio ?? 1,
   ].join(':');
 }
 
@@ -74,8 +87,9 @@ export function getShadowLayer(
   const raster = renderShadowLayer(request.occluders, request.cast, request.boundary, {
     // The bucket's scale, never the raw zoom — the same substitution the surface cache makes,
     // and for the same reason: `use-canvas-viewport` eases zoom through requestAnimationFrame,
-    // so the raw value changes on every frame of a wheel gesture.
-    pxPerMetre: bucketScale(bucket),
+    // so the raw value changes on every frame of a wheel gesture. Times the pixel ratio, so the
+    // shade is as sharp as the things casting it; `useShadowLayer` divides it back out.
+    pxPerMetre: bucketScale(bucket) * (request.pixelRatio ?? 1),
     makeCanvas,
   });
 

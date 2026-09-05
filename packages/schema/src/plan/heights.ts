@@ -1,5 +1,6 @@
 import type { ElementCategory } from './concepts.js';
 import type { MaterialId } from './materials.js';
+import { resolveSymbol, SYMBOLS } from './symbols.js';
 
 /**
  * How tall the things in a garden are.
@@ -37,6 +38,8 @@ export const CATEGORY_HEIGHTS: Record<ElementCategory, number> = {
   'water-feature': 0,
   'planting-bed': 0.9,
   structure: 2.2,
+  /** Table height. A symbol nearly always says more — see `SYMBOLS` — and wins when it does. */
+  furniture: 0.75,
   /** Unknown by definition — it is whatever was already there. A conservative middle. */
   'existing-feature': 1,
 };
@@ -73,8 +76,17 @@ export function heightFor(element: {
   category: ElementCategory;
   material?: string | undefined;
   height?: number | undefined;
+  symbol?: string | undefined;
 }): number {
   if (element.height !== undefined) return element.height;
+
+  /*
+   * The symbol sits between the explicit height and the material: a pergola and a raised bed are
+   * both softwood structures at 2.4 m and 0.45 m, and the material cannot tell them apart where
+   * the symbol can. Still below an explicit height, which the placer sets when it knows better.
+   */
+  const symbol = resolveSymbol(element);
+  if (symbol) return SYMBOLS[symbol].height;
 
   const byMaterial = element.material
     ? MATERIAL_HEIGHTS[element.material as MaterialId]

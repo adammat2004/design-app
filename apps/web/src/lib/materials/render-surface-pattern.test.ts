@@ -73,6 +73,10 @@ interface RenderOptions {
   /** Unit vector towards the light. Omitted means the conventional drawing light. */
   light?: Point;
   size?: { width: number; height: number };
+  /** A ceiling on the detail drawn, whatever the zoom warrants. Used during a live gesture. */
+  maxTier?: 'mass' | 'units' | 'detail';
+  /** The line a pad run marches along. Only a polyline element has one. */
+  centreline?: Point[];
 }
 
 /** Draws one or more surfaces into a single frame, at their true relative positions. */
@@ -95,7 +99,7 @@ function renderAll(
       options.material ?? shipped,
       { origin: options.origin ?? ORIGIN, rotation: options.rotation ?? 0 },
       surface.seed ?? options.seed ?? 'surface-a',
-      { pxPerMetre, light: options.light },
+      { pxPerMetre, light: options.light, maxTier: options.maxTier, centreline: options.centreline },
       rasterOrigin,
     );
   }
@@ -371,8 +375,22 @@ describe('the other pattern types', () => {
    * seeded from its iteration order rather than its cell would pass a "does it draw" test and fail
    * every one of these.
    */
+  /*
+   * `bark-mulch` rather than `mixed-border` for the scatter case, and the swap is not a dodge.
+   *
+   * A planting bed is no longer drawn on an even grid: `resolveLayers` turns it into a scheme, and
+   * the scheme's layers are placed by `samplePlanting`, which grades each layer towards *its own
+   * bed's* edge. So two adjacent beds legitimately differ near the edge they share — each is a bed
+   * with a front, and that grading is the feature. Asserting they match there would be asserting
+   * the planting engine away.
+   *
+   * What this case exists to protect is narrower and still true of every grid scatter: units are
+   * laid out from the **pattern origin**, so two abutting surfaces of an aggregate line up rather
+   * than each restarting at its own corner. `bark-mulch` is exactly that and still takes the grid.
+   * A planting bed's own world-anchoring is covered directly in `planting/sample.test.ts`.
+   */
   const each = [
-    { id: 'mixed-border', label: 'scatter' },
+    { id: 'bark-mulch', label: 'scatter' },
     { id: 'standard-turf', label: 'stripe' },
     { id: 'timber-decking', label: 'board' },
   ] as const;
@@ -389,11 +407,17 @@ describe('the other pattern types', () => {
         expect(first.buffer.equals(second.buffer)).toBe(true);
       });
 
-      it('differs between two surfaces', () => {
+      it('differs between two surfaces, except a lawn', () => {
+        /*
+         * Stripes are the exception, and deliberately: they used to jitter per surface, and two
+         * zones' base fills met at a step in tone — invisible on flat pale turf, a plain seam
+         * across a photograph of grass. A lawn is one ground the zones merely cut up, so its
+         * bands are seeded from the material and two surfaces draw the same lawn.
+         */
         const a = render(rectangle, { material, seed: 'surface-a' });
         const b = render(rectangle, { material, seed: 'surface-b' });
 
-        expect(a.buffer.equals(b.buffer)).toBe(false);
+        expect(a.buffer.equals(b.buffer)).toBe(material.pattern.patternType === 'stripe');
       });
 
       it('lines up across a shared edge', () => {
@@ -644,5 +668,207 @@ describe('the cut edge', () => {
     const twice = render(rectangle, { material: resolvePattern('shrubs')!, pxPerMetre: 8 });
 
     expect(zoomedOut.buffer.equals(twice.buffer)).toBe(true);
+  });
+});
+
+describe('the detail ceiling', () => {
+  /**
+   * A live drag or resize caps the tier at `mass`, because a moving outline misses the raster
+   * cache on every frame. The guarantee is that the cap produces exactly what a zoom far enough
+   * out would have produced anyway — one averaged tone — rather than some third rendering nobody
+   * has looked at.
+   */
+  it('draws the same as a zoom that is genuinely too far out', () => {
+    const capped = renderAll([{ outline: rectangle }], { pxPerMetre: 40, maxTier: 'mass' });
+
+    // Far enough out that a 600 mm slab is under `MIN_DRAWN_MODULE_PX`, drawn into a frame of the
+    // same pixel size so the two buffers are comparable.
+    const genuine = renderAll([{ outline: rectangle }], { pxPerMetre: 40 });
+
+    expect(capped.width).toBe(genuine.width);
+    // The capped render must be strictly flatter: no joints, so far fewer distinct colours.
+    expect(distinctColours(capped)).toBeLessThan(distinctColours(genuine));
+  });
+
+  it('changes nothing when the ceiling is the tier already in force', () => {
+    const uncapped = renderAll([{ outline: rectangle }], { pxPerMetre: 40 });
+    const capped = renderAll([{ outline: rectangle }], { pxPerMetre: 40, maxTier: 'detail' });
+
+    expect(capped.buffer.equals(uncapped.buffer)).toBe(true);
+  });
+});
+
+/** How many distinct RGB triples the frame holds — a coarse "how much detail is in here". */
+function distinctColours({ pixels }: Rendered): number {
+  const seen = new Set<number>();
+  for (let i = 0; i < pixels.length; i += 4) {
+    seen.add((pixels[i]! << 16) | (pixels[i + 1]! << 8) | pixels[i + 2]!);
+  }
+  return seen.size;
+}
+
+describe('the bond', () => {
+  /** The high-contrast fixture at a bond, so course positions can actually be measured. */
+  const bonded = (bond: 'stack' | 'running' | 'third' | 'random'): MaterialManifestEntry => ({
+    ...HIGH_CONTRAST,
+    pattern: { ...CONTRAST, bond },
+  });
+
+  /** Where the joints fall along one scan line: the x of every joint-to-module transition. */
+  function jointEdges(rendered: Rendered, y: number): number[] {
+    const edges: number[] = [];
+    for (let x = 1; x < rendered.width; x += 1) {
+      if (isJoint(rendered, x - 1, y) && isModule(rendered, x, y)) edges.push(x);
+    }
+    return edges;
+  }
+
+  const pxPerMetre = 40;
+  const rowY = (row: number) =>
+    Math.round((row * CONTRAST_PITCH + CONTRAST_PITCH / 2) * pxPerMetre);
+
+  /**
+   * The defect this whole field exists to fix: every grid material was laid stack bond, with its
+   * joints running continuously in both directions. That is the visual signature of a tiled wall,
+   * and it is why a patio here read as a bathroom floor.
+   */
+  it('lines every course up on a stack bond', () => {
+    const rendered = render(rectangle, { material: bonded('stack'), pxPerMetre });
+
+    expect(jointEdges(rendered, rowY(1))).toEqual(jointEdges(rendered, rowY(2)));
+  });
+
+  it('offsets alternate courses by half a module on a running bond', () => {
+    const rendered = render(rectangle, { material: bonded('running'), pxPerMetre });
+
+    const even = jointEdges(rendered, rowY(2));
+    const odd = jointEdges(rendered, rowY(3));
+
+    expect(even.length).toBeGreaterThan(1);
+    expect(odd).not.toEqual(even);
+
+    // Every odd-course joint sits half a pitch from an even-course one.
+    const halfPitch = (CONTRAST_PITCH / 2) * pxPerMetre;
+    const nearest = Math.min(...even.map((edge) => Math.abs(odd[1]! - edge)));
+    expect(nearest).toBeGreaterThan(halfPitch - 3);
+    expect(nearest).toBeLessThan(halfPitch + 3);
+  });
+
+  it('brings a third bond back into line every three courses', () => {
+    const rendered = render(rectangle, { material: bonded('third'), pxPerMetre });
+
+    expect(jointEdges(rendered, rowY(1))).toEqual(jointEdges(rendered, rowY(4)));
+    expect(jointEdges(rendered, rowY(1))).not.toEqual(jointEdges(rendered, rowY(2)));
+  });
+
+  /**
+   * The property that makes a random bond safe to ship. Its offset is seeded from the *row index*,
+   * which comes from the shared pattern origin — so a vertex drag cannot reshuffle the courses, and
+   * two abutting patios take the same offset on the same row and their courses run through.
+   *
+   * The shipped `stone-pavers` is random coursed, so the shared-edge test above already exercises
+   * this against the real manifest; this pins the redraw-stability half of it.
+   */
+  it('draws the same random bond twice for the same seed', () => {
+    const first = render(rectangle, { material: bonded('random'), pxPerMetre });
+    const second = render(rectangle, { material: bonded('random'), pxPerMetre });
+
+    expect(first.buffer.equals(second.buffer)).toBe(true);
+  });
+});
+
+describe('pads along a path', () => {
+  /**
+   * The defect this pattern type replaced: stepping stones were a `grid` whose joint was most of
+   * it, so on a path a metre and a half wide the grid laid *two* columns of stones with grass down
+   * the middle, and every path the generator drew read as a ladder. A grid lines its units up in
+   * both directions; a path needs them lined up in one.
+   */
+  const pads: MaterialManifestEntry = {
+    ...shipped,
+    id: 'stepping-stones',
+    pattern: { patternType: 'pads', padSize: { w: 450, h: 450 }, gap: 380 },
+    palette: ['#ffffff'],
+    jointColour: '#000000',
+  };
+
+  /** A 1.5 m wide strip running down the page from (2, 1) to (2, 9) — a path the old grid split. */
+  const strip: Point[] = [
+    { x: 1.25, y: 1 },
+    { x: 2.75, y: 1 },
+    { x: 2.75, y: 9 },
+    { x: 1.25, y: 9 },
+  ];
+  const centreline: Point[] = [
+    { x: 2, y: 1 },
+    { x: 2, y: 9 },
+  ];
+
+  function padRuns(rendered: Rendered, y: number): number {
+    let runs = 0;
+    let inPad = false;
+    for (let x = 0; x < rendered.width; x += 1) {
+      const on = isModule(rendered, x, y);
+      if (on && !inPad) runs += 1;
+      inPad = on;
+    }
+    return runs;
+  }
+
+  it('lays one pad abreast on a path wide enough for two', () => {
+    const pxPerMetre = 40;
+    const rendered = renderAll([{ outline: strip }], {
+      material: pads,
+      pxPerMetre,
+      centreline,
+      size: { width: 200, height: 420 },
+    });
+
+    // Every scan line that crosses a pad must cross exactly one.
+    const crossings = [];
+    for (let y = 60; y < 360; y += 4) {
+      const runs = padRuns(rendered, y);
+      if (runs > 0) crossings.push(runs);
+    }
+
+    expect(crossings.length).toBeGreaterThan(4);
+    expect(Math.max(...crossings)).toBe(1);
+  });
+
+  it('spaces the pads a stride apart down the path', () => {
+    const pxPerMetre = 40;
+    const rendered = renderAll([{ outline: strip }], {
+      material: pads,
+      pxPerMetre,
+      centreline,
+      size: { width: 200, height: 420 },
+    });
+
+    // Walk the path's centre column and count the pads it passes through.
+    const x = Math.round(2 * pxPerMetre);
+    let pads_ = 0;
+    let inPad = false;
+    for (let y = 0; y < rendered.height; y += 1) {
+      const on = isModule(rendered, x, y);
+      if (on && !inPad) pads_ += 1;
+      inPad = on;
+    }
+
+    // 8 m of path on a 0.83 m stride, give or take one at each end.
+    expect(pads_).toBeGreaterThanOrEqual(8);
+    expect(pads_).toBeLessThanOrEqual(11);
+  });
+
+  /**
+   * Distance along the path is the spatial hash, measured from the path's *start* — so extending
+   * the far end leaves every pad before it exactly where it was, the same stability `gridRange`
+   * gives a surface.
+   */
+  it('is deterministic for the same path and seed', () => {
+    const options = { material: pads, pxPerMetre: 40, centreline, size: { width: 200, height: 420 } };
+    const first = renderAll([{ outline: strip }], options);
+    const second = renderAll([{ outline: strip }], options);
+
+    expect(first.buffer.equals(second.buffer)).toBe(true);
   });
 });

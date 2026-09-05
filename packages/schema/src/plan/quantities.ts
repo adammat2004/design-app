@@ -88,13 +88,22 @@ export function planSchedule(elements: DesignElement[]): ScheduleLine[] {
       unitLabel: null,
     };
 
-    line.areaSqm += elementArea(element);
+    /*
+     * Furniture is counted, not measured. A dining set has a footprint for placing and selecting
+     * it, but "2.4 m² of teak" is not a quantity anyone orders — the honest line is "1 item".
+     */
+    if (element.category !== 'furniture') line.areaSqm += elementArea(element);
     line.elementCount += 1;
 
     lines.set(material.id, line);
   }
 
   for (const line of lines.values()) {
+    if (line.category === 'furniture') {
+      line.units = line.elementCount;
+      line.unitLabel = line.elementCount === 1 ? 'item' : 'items';
+      continue;
+    }
     const counted = countUnits(line.materialId, line.areaSqm);
     line.units = counted?.units ?? null;
     line.unitLabel = counted?.label ?? null;
@@ -173,6 +182,8 @@ export function materialCostIndex(elements: DesignElement[]): number {
     const size = elementArea(element);
     // Point features have no area; a tree should not weigh the same as a terrace.
     if (size <= 0) continue;
+    // Furniture is not laid by area, so its cost band is not an area-weighted one. See above.
+    if (element.category === 'furniture') continue;
 
     const material = findMaterial(element.material) ?? MATERIALS[element.category][0];
     if (!material) continue;

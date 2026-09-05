@@ -34,6 +34,7 @@ import { zoneFill } from '@/lib/zone-colours';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { NUDGE, selectedFeatures, useFeaturesStore } from '@/state/features-store';
 import { CanvasChrome } from '../CanvasChrome';
+import { GateMarks } from '../GateMarks';
 import { EdgeHitLines } from '../EdgeHitLines';
 import { HouseShape } from '../HouseShape';
 import { EditableVertices } from '../EditableVertices';
@@ -75,6 +76,7 @@ export function FeaturesCanvas() {
     handlePointerUp,
     armPan,
     handleStageDragStart,
+    handleStageDragEnd,
     consumePan,
     registerTap,
     isDoubleTap,
@@ -83,7 +85,6 @@ export function FeaturesCanvas() {
     stageCentre,
     fitToShape,
     zoomAbout,
-    foldStageOffset,
     handleWheel,
     pointerInMetres,
   } = useCanvasViewport({
@@ -376,7 +377,7 @@ export function FeaturesCanvas() {
             onMouseDown={handleStageMouseDown}
             onMouseMove={handleStageMouseMove}
             onMouseUp={handleStageMouseUp}
-            onDragEnd={(event) => foldStageOffset(event.target as Konva.Stage)}
+            onDragEnd={handleStageDragEnd}
             onWheel={handleWheel}
           >
             <Layer listening={false}>
@@ -400,6 +401,7 @@ export function FeaturesCanvas() {
                   lineJoin="round"
                 />
               ) : null}
+              <GateMarks site={boundaryDraft} transform={transform} />
 
               {zones.map((zone) => (
                 <Line

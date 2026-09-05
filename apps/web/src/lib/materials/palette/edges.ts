@@ -56,6 +56,8 @@ export const CATEGORY_EDGES: Record<ElementCategory, EdgeSpec | null> = {
   lawn: null,
   'paved-area': null,
   structure: null,
+  /** A sprite with its own edges. */
+  furniture: null,
   'existing-feature': null,
 };
 

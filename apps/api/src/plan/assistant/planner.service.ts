@@ -413,9 +413,16 @@ export class PlannerService {
       return result;
     }
 
-    // Everything already on the plan is an obstacle, plus the house.
+    /*
+     * Everything already on the plan is an obstacle, plus the house — except, for furniture, the
+     * surfaces it is allowed to stand on. A dining set placed with every patio treated as an
+     * obstacle can only ever land on the lawn beside the patio, which is the one place nobody
+     * wants it.
+     */
+    const standsOn = new Set(['paved-area', 'gravel-mulch', 'structure', 'lawn']);
     const obstacles = context.document.layout.elements
       .filter((element) => !element.hidden && !isLocked(element))
+      .filter((element) => intent.category !== 'furniture' || !standsOn.has(element.category))
       .map((element) => geometryOutline(element.shape));
     if (context.house) obstacles.push(context.house);
 

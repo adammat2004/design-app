@@ -2,13 +2,17 @@
 
 import { useMemo } from 'react';
 import {
+  elementCentreline,
   elementOutline,
   patternAnchor,
   type DesignElement,
   type Point,
 } from '@garden-studio/schema';
+import { getAssetVariants } from './assets/registry';
+import { useAssetVersion } from './assets/use-assets';
 import { getSurfacePattern } from './pattern-cache';
 import { resolvePattern } from './palette';
+import { useDevicePixelRatio } from './use-device-pixel-ratio';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
 
 /**
@@ -59,9 +63,8 @@ const makeBrowserCanvas: MakeCanvas = (width, height) => {
 /**
  * The raster for one element at one zoom, or `null` when it should be drawn as a flat fill.
  *
- * `null` is the ordinary answer rather than a failure: 26 of the 27 materials have no pattern in
- * this pass, and a point or a polyline has no meaningful one at all — a polyline passes its colour
- * to Konva as a *stroke*, which has no pattern equivalent.
+ * `null` is the ordinary answer rather than a failure: a material with no pattern, or a polyline —
+ * which passes its colour to Konva as a *stroke*, and a stroke has no pattern equivalent.
  *
  * `scale` is `CanvasTransform.scale`, which is pixels per metre.
  */
@@ -70,10 +73,26 @@ export function useSurfacePattern(
   scale: number,
   /** Unit vector towards the light. Omitted means the conventional top-left drawing light. */
   light?: Point,
+  /**
+   * Whether this element is mid-drag or mid-resize. Passed in rather than read from the store, for
+   * the reason `light` is: everything below this hook is a pure function of its arguments, and
+   * reaching into state here would end that.
+   */
+  interacting = false,
 ): SurfacePattern | null {
   const material = resolvePattern(element.material);
   const kind = element.shape.kind;
-  const patternable = material !== null && (kind === 'polygon' || kind === 'rect');
+  /*
+   * Every kind is patternable now: a point as the circle `circleRing` tessellates it to (a water
+   * bowl is a disc of water, a fire pit a disc of bark), and a polyline as the strip
+   * `polylineStrip` cuts for it — so a stepping-stone path is stones set in grass rather than the
+   * grey stroke it used to be handed to Konva as. Trees are points too, but draw as a canopy.
+   */
+  const patternable = material !== null && kind !== undefined;
+  // Changes exactly once, when the textures arrive; every raster redraws with them at that moment.
+  const assetVersion = useAssetVersion();
+  // Ordinarily constant for a session, and changes only if the window moves to another display.
+  const pixelRatio = useDevicePixelRatio();
 
   return useMemo(() => {
     // No document during SSR, and Konva is client-only here anyway.
@@ -93,6 +112,13 @@ export function useSurfacePattern(
         rotation,
         pxPerMetre: scale,
         light,
+        assetVersion,
+        assets: getAssetVariants,
+        pixelRatio,
+        interacting,
+        centreline: elementCentreline(element) ?? undefined,
+        plantingStyle: element.plantingStyle,
+        element,
       },
       makeBrowserCanvas,
     );
@@ -102,7 +128,12 @@ export function useSurfacePattern(
     return {
       image: raster.canvas,
       originMetres: raster.originMetres,
+      /*
+       * The live CSS zoom over the density the raster was actually drawn at — which now carries the
+       * pixel ratio, so this comes out proportionally smaller and the image is drawn at the same
+       * world size as before, just with more pixels in it. Nothing at the call site changes.
+       */
       scale: scale / raster.pxPerMetre,
     };
-  }, [material, patternable, element, scale, light]);
+  }, [material, patternable, element, scale, light, assetVersion, pixelRatio, interacting]);
 }

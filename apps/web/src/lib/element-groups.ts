@@ -18,6 +18,7 @@ export const GROUP_OF: Record<ElementCategory, ElementGroup> = {
   lawn: 'softscape',
   'planting-bed': 'softscape',
   'water-feature': 'feature',
+  furniture: 'feature',
   'existing-feature': 'feature',
 };
 
@@ -43,6 +44,7 @@ export const ADDABLE_CATEGORIES: ElementCategory[] = [
   'structure',
   'gravel-mulch',
   'water-feature',
+  'furniture',
 ];
 
 export function groupOf(element: DesignElement): ElementGroup {

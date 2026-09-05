@@ -1,6 +1,15 @@
 'use client';
 
-import { Columns3, Droplets, Grid2x2, Sprout, Square, Trees, type LucideIcon } from 'lucide-react';
+import {
+  Armchair,
+  Columns3,
+  Droplets,
+  Grid2x2,
+  Sprout,
+  Square,
+  Trees,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ElementCategory } from '@/lib/concepts';
 
 /**
@@ -18,6 +27,7 @@ const ICONS: Record<ElementCategory, LucideIcon> = {
   'gravel-mulch': Columns3,
   structure: Trees,
   'water-feature': Droplets,
+  furniture: Armchair,
   'existing-feature': Trees,
 };
 

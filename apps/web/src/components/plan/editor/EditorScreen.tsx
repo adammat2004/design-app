@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, PenLine, Sparkles } from 'lucide-react';
 import { chosenConcept, useConceptsStore } from '@/state/concepts-store';
@@ -14,6 +14,7 @@ import { AssistantPanel } from './AssistantPanel';
 import { ConceptSummaryCard } from './ConceptSummaryCard';
 import { EditorCanvasLoader } from './EditorCanvasLoader';
 import { EditorToolbar } from './EditorToolbar';
+import { VisualisePanel } from './VisualisePanel';
 import { PlacedElementsList } from './PlacedElementsList';
 import { SelectedElementPanel } from './SelectedElementPanel';
 
@@ -22,6 +23,7 @@ export function EditorScreen() {
   const concept = useConceptsStore(chosenConcept);
   const seededFrom = usePlanEditorStore((state) => state.seededFrom);
   const seedFrom = usePlanEditorStore((state) => state.seedFrom);
+  const [view, setView] = useState<'plan' | 'visualise'>('plan');
 
   /*
    * Load the chosen concept, and reload it if the user goes back and chooses a different one.
@@ -63,9 +65,18 @@ export function EditorScreen() {
         <main className="flex min-h-[480px] min-w-0 flex-1 flex-col gap-3 xl:min-h-0">
           {concept ? (
             <>
-              <EditorToolbar />
+              <EditorToolbar view={view} setView={setView} />
               <div className="min-h-[420px] flex-1 xl:min-h-0">
-                <EditorCanvasLoader />
+                {/*
+                  Both mounted, one hidden. The canvas measures itself on mount and eases its zoom
+                  to fit, so unmounting it on every tab switch would throw that away and re-fit —
+                  and the user would lose wherever they had panned to. `hidden` keeps the stage
+                  alive and its viewport where they left it.
+                */}
+                <div className={view === 'plan' ? 'h-full' : 'hidden'}>
+                  <EditorCanvasLoader />
+                </div>
+                {view === 'visualise' ? <VisualisePanel /> : null}
               </div>
             </>
           ) : (

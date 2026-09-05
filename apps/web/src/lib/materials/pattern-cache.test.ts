@@ -198,11 +198,11 @@ describe('the pattern cache', () => {
 });
 
 describe('patternKey', () => {
-  it('names the element, the material and the bucket', () => {
+  it('names the element, the material, the bucket and the pixel ratio', () => {
     const key = patternKey(request());
 
     expect(key.startsWith('element-1:stone-pavers:')).toBe(true);
-    expect(key.endsWith(`:${zoomBucket(32)}`)).toBe(true);
+    expect(key.endsWith(`:${zoomBucket(32)}:1:`)).toBe(true);
   });
 });
 
@@ -233,5 +233,143 @@ describe('the light in the key', () => {
     const b = request({ light: { x: 0.70710678118654, y: -0.70710678118654 } });
 
     expect(patternKey(a)).toBe(patternKey(b));
+  });
+});
+
+describe('the asset version in the key', () => {
+  /**
+   * Same argument as the light. A surface drawn before its texture arrived and the same surface
+   * drawn after are different pixels; without the version in the key the plan would texture in
+   * patches as rasters happened to fall out of the cache.
+   */
+  it('changes when the assets arrive', () => {
+    expect(patternKey(request({ assetVersion: 'none' }))).not.toBe(
+      patternKey(request({ assetVersion: 'abc123' })),
+    );
+  });
+
+  it('treats an absent version as "none"', () => {
+    expect(patternKey(request())).toBe(patternKey(request({ assetVersion: 'none' })));
+  });
+
+  it('redraws exactly once when the version flips, then hits again', () => {
+    const before = request({ assetVersion: 'none' });
+    const after = request({ assetVersion: 'abc123' });
+
+    getSurfacePattern(before, makeCanvas);
+    expect(patternCacheHas(before)).toBe(true);
+    expect(patternCacheHas(after)).toBe(false);
+
+    getSurfacePattern(after, makeCanvas);
+    expect(patternCacheHas(after)).toBe(true);
+    expect(patternCacheSize()).toBe(2);
+  });
+});
+
+describe('the pixel ratio', () => {
+  /**
+   * Konva renders its stage at `devicePixelRatio`, so every stroke it draws is at that density.
+   * Before this, the surface rasters were allocated from CSS pixels per metre and then upscaled by
+   * the stage — half the density of the lines drawn on top of them. These pin the fix.
+   */
+  it('draws twice the linear pixels at ratio 2', () => {
+    const one = getSurfacePattern(request({ pixelRatio: 1 }), makeCanvas);
+    const two = getSurfacePattern(request({ pixelRatio: 2 }), makeCanvas);
+
+    expect(one).not.toBeNull();
+    expect(two).not.toBeNull();
+    expect(two!.widthPx).toBe(one!.widthPx * 2);
+    expect(two!.heightPx).toBe(one!.heightPx * 2);
+  });
+
+  /**
+   * The compensation that keeps a metre a metre. `useSurfacePattern` divides the live CSS zoom by
+   * the density the raster reports, so a denser raster must report a proportionally higher one —
+   * otherwise the texture would be drawn at half size on a Retina display.
+   */
+  it('reports the density it actually drew at, so the drawn world size is unchanged', () => {
+    const scale = 32;
+    const one = getSurfacePattern(request({ pxPerMetre: scale, pixelRatio: 1 }), makeCanvas)!;
+    const two = getSurfacePattern(request({ pxPerMetre: scale, pixelRatio: 2 }), makeCanvas)!;
+
+    expect(two.pxPerMetre).toBe(one.pxPerMetre * 2);
+
+    // What `useSurfacePattern` hands Konva: the image is half the scale but twice the pixels, so
+    // it covers exactly the same metres.
+    expect(two.widthPx * (scale / two.pxPerMetre)).toBeCloseTo(
+      one.widthPx * (scale / one.pxPerMetre),
+      6,
+    );
+  });
+
+  /** In the key, because it changes the pixels — the same rule as `light` and `assetVersion`. */
+  it('is in the cache key', () => {
+    expect(patternKey(request({ pixelRatio: 1 }))).not.toBe(
+      patternKey(request({ pixelRatio: 2 })),
+    );
+  });
+
+  it('treats an absent ratio as 1', () => {
+    expect(patternKey(request())).toBe(patternKey(request({ pixelRatio: 1 })));
+  });
+
+  /**
+   * The bucket must stay quantised on CSS pixels per metre. Bucketing device pixels instead would
+   * move the boundaries with the display, so the same plan at the same zoom would be a different
+   * entry on a laptop and on the monitor beside it — and the zoom-sweep sheet that shows where the
+   * level-of-detail floors bite would mean something different on each machine.
+   */
+  it('does not shift the zoom buckets', () => {
+    const at = (pixelRatio: number) => patternKey(request({ pxPerMetre: 32, pixelRatio }));
+    // Third from the end now: the tail is bucket, pixel ratio, planting style.
+    const bucketOf = (key: string) => key.split(':').at(-3);
+
+    expect(bucketOf(at(1))).toBe(bucketOf(at(2)));
+    expect(bucketOf(at(1))).toBe(String(zoomBucket(32)));
+  });
+});
+
+describe('a live drag or resize', () => {
+  /**
+   * The outline changes on every frame of a gesture, so the key changes on every frame: the
+   * surface is fully repainted each time *and* the entries it leaves behind are dead before they
+   * are ever read. Sixty of those a second evict the static surfaces still on screen, which is how
+   * dragging one bed ends up making the rest of the plan slow.
+   */
+  it('does not keep the rasters a gesture produces', () => {
+    const moving = request({ elementId: 'dragged', interacting: true });
+
+    expect(getSurfacePattern(moving, makeCanvas)).not.toBeNull();
+    expect(patternCacheSize()).toBe(0);
+  });
+
+  it('leaves the entry the surface already had untouched', () => {
+    const still = request({ elementId: 'dragged' });
+    getSurfacePattern(still, makeCanvas);
+    expect(patternCacheSize()).toBe(1);
+
+    // A frame of the gesture, at a different outline.
+    getSurfacePattern(
+      request({
+        elementId: 'dragged',
+        interacting: true,
+        outline: outline.map((point) => ({ x: point.x + 0.5, y: point.y })),
+      }),
+      makeCanvas,
+    );
+
+    expect(patternCacheSize()).toBe(1);
+    expect(patternCacheHas(still)).toBe(true);
+  });
+
+  /**
+   * Not in the key. It is a property of the moment rather than of the pixels, and keying on it
+   * would hold a coarse copy of every surface forever for a state that lasts as long as a mouse
+   * button is held.
+   */
+  it('is not part of the cache key', () => {
+    expect(patternKey(request({ interacting: true }))).toBe(
+      patternKey(request({ interacting: false })),
+    );
   });
 });

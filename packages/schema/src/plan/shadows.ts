@@ -1,4 +1,5 @@
 import type { Point } from '../geometry/primitives.js';
+import type { BoundaryRun } from './boundary-styles.js';
 import { elementOutline, type DesignElement } from './concepts.js';
 import { castsShadow, heightFor, HOUSE_HEIGHT, MIN_SHADOW_HEIGHT } from './heights.js';
 import { housePolygon, type HouseFootprint } from './site.js';
@@ -118,12 +119,52 @@ export function shadowRings(geometry: ShadowGeometry): Point[][] {
 export function shadowOccluders(
   elements: DesignElement[],
   house: HouseFootprint | null,
+  /**
+   * The property's own sides, from `boundaryRuns(site)`.
+   *
+   * Optional, so every existing caller is unchanged. Given, each side casts a shadow of its own
+   * real height — which matters more than any single element, because a boundary is the one thing
+   * that runs the whole length of the garden: a 1.8 m wall on the south side shades a strip of
+   * everything, and drawing that strip is most of what "will this bed get any sun" means.
+   *
+   * An `open` boundary resolves to a height of zero and is filtered here rather than special-cased
+   * downstream — nothing is built there, so nothing casts.
+   */
+  boundaries: BoundaryRun[] = [],
 ): ShadowOccluder[] {
   const occluders: ShadowOccluder[] = [];
 
   if (house) {
     const outline = housePolygon(house);
     if (outline.length >= 3) occluders.push({ outline, height: HOUSE_HEIGHT });
+  }
+
+  for (const run of boundaries) {
+    if (run.height < MIN_SHADOW_HEIGHT || run.thickness <= 0) continue;
+
+    /*
+     * A thin quad along the run rather than the polygon's edge, because `projectShadow` sweeps a
+     * footprint and an edge has no area to sweep. The inward direction does not matter here: the
+     * band is only a few centimetres deep and the shadow is metres long, so which side of the
+     * line it is grown from is invisible in the result.
+     */
+    const dx = run.end.x - run.start.x;
+    const dy = run.end.y - run.start.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1e-6) continue;
+
+    const nx = (-dy / length) * run.thickness;
+    const ny = (dx / length) * run.thickness;
+
+    occluders.push({
+      outline: [
+        run.start,
+        run.end,
+        { x: run.end.x + nx, y: run.end.y + ny },
+        { x: run.start.x + nx, y: run.start.y + ny },
+      ],
+      height: run.height,
+    });
   }
 
   for (const element of elements) {

@@ -1,0 +1,168 @@
+import {
+  behindTerrace,
+  borderDepth,
+  clamp,
+  isCourtyard,
+  rectCentre,
+  rectSize,
+  roomBehind,
+  terraceDepth,
+  terraceWidth,
+  type LayoutSketch,
+  type LocalPoint,
+  type LocalRect,
+  type Room,
+  type SketchRequest,
+  type Slot,
+} from '../sketch.js';
+
+/** The paved line down the middle, in metres. A path two people can walk abreast. */
+const AXIS_WIDTH = 1.2;
+
+/**
+ * "Formal axis" — the symmetric plan.
+ *
+ * Everything mirrors about the line out from the door: a centred terrace, a rectangular lawn
+ * panel with a paved path down its middle, a focal point at the end of the axis — the water, or
+ * the pergola, or a bench — and the utility pieces in the two far corners. The mirror line is the
+ * door's own normal, so a door off-centre on its wall still gets a plan that is symmetric about
+ * the view from it, which is what formal means.
+ */
+export function formal(request: SketchRequest, room: Room): LayoutSketch {
+  const s = request.scale;
+  const D = room.uMax;
+  const b = borderDepth(s);
+
+  // Symmetry needs equal room either side of the axis; use the narrower side for both.
+  const hw = Math.min(-room.vMin, room.vMax);
+  const symmetric: Room = { uMin: room.uMin, uMax: room.uMax, vMin: -hw, vMax: hw };
+
+  const depth = terraceDepth(s, D);
+  const width = Math.min(terraceWidth(request, symmetric), 2 * hw - 0.8);
+  const doorHalf = (request.doorWidth ?? 0) / 2;
+  const half = Math.max(width / 2, doorHalf);
+  const terrace: LocalRect = {
+    u0: Math.max(room.uMin, 0),
+    u1: Math.max(room.uMin, 0) + depth,
+    v0: -half,
+    v1: half,
+  };
+  const T = terrace.u1;
+
+  const courtyard = isCourtyard(s, D);
+  // Behind the terrace the room may be narrower (an L-plot): the lawn and the far slots mirror
+  // about the axis within *that* width.
+  const deep = roomBehind(symmetric, T + 0.4);
+  const dw = Math.max(0.5, Math.min(-deep.vMin, deep.vMax));
+  // The focal room at the end of the axis takes a share of what is free behind the terrace, so a
+  // shallow garden keeps a lawn in front of it rather than a pool with no lawn at all.
+  const lawnStart = T + 0.6 * s;
+  const axisEnd = Math.min(clamp(3.4 * s, 2.4, 5), Math.max(1.2, (D - b - lawnStart) * 0.45));
+
+  const lawn: LayoutSketch['lawn'] = courtyard
+    ? null
+    : {
+        kind: 'rect',
+        rect: { u0: lawnStart, u1: D - b - axisEnd, v0: -(dw - b), v1: dw - b },
+        cornerRadius: 0,
+      };
+
+  const utility = behindTerrace(T, D - b, 2.4 * s);
+  const lawnRoom = behindTerrace(lawnStart, lawn ? lawn.rect.u1 : D - b, 3.6 * s);
+
+  const slots: Slot[] = [
+    { id: 'terrace', kind: 'terrace', anchor: rectCentre(terrace), maxSize: rectSize(terrace) },
+    {
+      id: 'beside-terrace',
+      kind: 'beside-terrace',
+      anchor: { u: 0.8 * s, v: terrace.v1 + 1.7 * s },
+      maxSize: { width: 3.2 * s, depth: 1.5 * s },
+      turn: true,
+    },
+  ];
+
+  if (!courtyard) {
+    slots.push(
+      {
+        id: 'axis-end',
+        kind: 'axis-end',
+        anchor: { u: D - b - axisEnd / 2, v: 0 },
+        maxSize: { width: Math.min(3.6 * s, 2 * dw - 2 * b - 0.4), depth: axisEnd - 0.4 },
+      },
+      {
+        id: 'utility',
+        kind: 'utility',
+        anchor: { u: utility.u, v: -(dw - b - 1.6 * s) },
+        maxSize: { width: 2.8 * s, depth: utility.depth },
+        turn: true,
+      },
+      {
+        id: 'utility-2',
+        kind: 'utility-2',
+        anchor: { u: utility.u, v: dw - b - 1.6 * s },
+        maxSize: { width: 2.8 * s, depth: utility.depth },
+        turn: true,
+      },
+      {
+        id: 'far-room',
+        kind: 'far-room',
+        anchor: { u: lawnRoom.u, v: dw - b - 2.1 * s },
+        maxSize: { width: 3.6 * s, depth: lawnRoom.depth },
+      },
+      {
+        id: 'lawn-far',
+        kind: 'lawn-far',
+        anchor: { u: lawnRoom.u, v: -(dw - b - 2.1 * s) },
+        maxSize: { width: 3.6 * s, depth: lawnRoom.depth },
+      },
+      {
+        id: 'terrace-end',
+        kind: 'terrace-end',
+        anchor: { u: T / 2, v: terrace.v0 - 1.9 * s },
+        maxSize: { width: 3.6 * s, depth: Math.max(2.4, T) },
+      },
+    );
+  } else {
+    slots.push({
+      id: 'axis-end',
+      kind: 'axis-end',
+      anchor: { u: (T + D) / 2, v: 0 },
+      maxSize: { width: 2 * hw - 0.8, depth: Math.max(1.5, D - T - 0.6) },
+    });
+  }
+
+  const axisPath: LocalRect | null =
+    courtyard || !lawn
+      ? null
+      : { u0: T, u1: lawn.rect.u1, v0: -AXIS_WIDTH / 2, v1: AXIS_WIDTH / 2 };
+
+  const paths = courtyard
+    ? []
+    : [
+        { from: { terrace: true as const }, to: { slot: 'utility' }, name: 'Path to the shed' },
+        {
+          from: { u: 0, v: hw * 2 * (request.gateSide === 'left' ? -1 : 1) },
+          to: { gate: true as const },
+          name: 'Side path',
+        },
+      ];
+
+  const trees: LocalPoint[] = [
+    { u: D - 1.9, v: -(dw - 1.9) },
+    { u: D - 1.9, v: dw - 1.9 },
+    { u: D * 0.5, v: -(dw - 1.9) },
+    { u: D * 0.5, v: dw - 1.9 },
+  ];
+
+  return {
+    template: 'formal',
+    terrace,
+    lawn,
+    lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',
+    slots,
+    paths,
+    trees,
+    axisPath,
+    courtyard,
+  };
+}

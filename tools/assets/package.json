@@ -1,0 +1,17 @@
+{
+  "name": "@garden-studio/asset-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generates the plan renderer's textures and sprites into apps/web/public/assets. Dev-time only; the app never imports this package.",
+  "scripts": {
+    "generate": "tsx src/generate.ts"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.8",
+    "@types/node": "^20",
+    "sharp": "^0.35.3",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  }
+}

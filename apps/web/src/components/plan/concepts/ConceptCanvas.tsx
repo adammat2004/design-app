@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo } from 'react';
 import { Group, Layer, Line, Stage } from 'react-konva';
-import type Konva from 'konva';
 import { lightDirection, type Point } from '@garden-studio/schema';
 import { boundaryEdges, draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
@@ -14,6 +13,8 @@ import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { CanvasChrome } from '../CanvasChrome';
 import { ElementDrawing } from '../ElementDrawing';
 import { ShadowLayer } from '../ShadowLayer';
+import { GateMarks } from '../GateMarks';
+import { HouseOpenings } from '../HouseOpenings';
 import { HouseShape } from '../HouseShape';
 import { Label, SquareGrid } from '../canvas-primitives';
 import { useCanvasViewport } from '../use-canvas-viewport';
@@ -49,12 +50,12 @@ export function ConceptCanvas({
     panning,
     setPanning,
     handleStageDragStart,
+    handleStageDragEnd,
     detailed,
     canRender,
     stageCentre,
     fitToShape,
     zoomAbout,
-    foldStageOffset,
     handleWheel,
   } = useCanvasViewport({
     getPolygon: () => draftPolygon(useBoundaryStore.getState().present),
@@ -118,7 +119,7 @@ export function ConceptCanvas({
             height={size.height}
             draggable
             onDragStart={handleStageDragStart}
-            onDragEnd={(event) => foldStageOffset(event.target as Konva.Stage)}
+            onDragEnd={handleStageDragEnd}
             onWheel={handleWheel}
           >
             <Layer listening={false}>
@@ -185,15 +186,23 @@ export function ConceptCanvas({
             {/* The house sits above the planting so a bed can run right up to the wall. */}
             <Layer listening={false}>
               {houseOutline && boundaryDraft.house ? (
-                <HouseShape
-                  outline={houseOutline}
-                  centre={boundaryDraft.house.centre}
-                  rotation={boundaryDraft.house.rotation}
-                  size={houseSize(boundaryDraft.house)}
-                  unit={unit}
-                  transform={transform}
-                />
+                <>
+                  <HouseShape
+                    outline={houseOutline}
+                    centre={boundaryDraft.house.centre}
+                    rotation={boundaryDraft.house.rotation}
+                    size={houseSize(boundaryDraft.house)}
+                    unit={unit}
+                    transform={transform}
+                    light={light}
+                  />
+                  {/* The doors the generator routed its path to. Inert here: step 1 edits them. */}
+                  <HouseOpenings house={boundaryDraft.house} transform={transform} />
+                </>
               ) : null}
+
+              {/* Gates in the fence and the street, so a side path visibly goes somewhere. */}
+              <GateMarks site={boundaryDraft} transform={transform} />
 
               {/* Overall dimensions along each fence, as in the mockup. */}
               {!isPane && detailed

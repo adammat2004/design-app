@@ -34,6 +34,15 @@ export const ElementCategorySchema = z.enum([
   'gravel-mulch',
   'structure',
   'water-feature',
+  /**
+   * Things that stand *on* a surface rather than being one: a dining set, a lounger, a swing.
+   *
+   * Added when the plan started drawing sprites, because a garden with nowhere to sit is not a
+   * garden design, and "put the table under the pergola" was the first edit everyone tried and
+   * the one the assistant could not express. Furniture has an outline for placement and
+   * selection, but no area anyone would schedule and no material anyone would lay.
+   */
+  'furniture',
   'existing-feature',
 ]);
 export type ElementCategory = z.infer<typeof ElementCategorySchema>;
@@ -111,6 +120,27 @@ export const DesignElementSchema = z.object({
    * be able to read it.
    */
   height: z.number().nonnegative().optional(),
+  /**
+   * What this element is, when its category cannot say: `pergola` or `shed` for a structure, a
+   * `dining-set-4` for furniture. A `SymbolId` from `symbols.ts`, carried as a plain string for the
+   * reason `material` is, and resolved by `resolveSymbol` at the point of use.
+   */
+  symbol: z.string().optional(),
+  /**
+   * How a planting bed is planted — see `planting.ts`.
+   *
+   * A plain string, like `material` and `symbol`, and for the same reason: the catalogue of styles
+   * will be edited, and a stored plan must never become unparseable because one was renamed.
+   * `schemeFor` resolves an unknown value to the fallback rather than refusing it.
+   *
+   * Optional, so this is an addition with a default and **no `PLAN_DOCUMENT_VERSION` bump**: a bed
+   * that says nothing gets the fallback scheme, which is what every bed drew before schemes
+   * existed — a mixture — rather than nothing.
+   *
+   * Only meaningful on `planting-bed`. Storing it per element rather than per concept is what lets
+   * the editor eventually change one bed's style without touching its neighbours.
+   */
+  plantingStyle: z.string().optional(),
   /** Hidden from the plan and from the area summary, without being deleted. */
   hidden: z.boolean().optional(),
 });
@@ -194,6 +224,21 @@ export function isLocked(element: DesignElement): boolean {
 
 export function elementOutline(element: DesignElement): Point[] {
   return geometryOutline(element.shape);
+}
+
+/**
+ * The line a pad run marches along, when this element has one.
+ *
+ * Only a polyline does — a path, a rill, a run of stepping stones — and for everything else this is
+ * `null` and the pad painter falls back to laying its pads over the shape's bounding box.
+ *
+ * The centreline is the polyline's own points, not something recovered from the tessellated strip.
+ * `polylineStrip` builds the ribbon by offsetting these along their normals, so going back the
+ * other way would be re-deriving from a derivation — and would quietly break the moment the strip
+ * gained a mitre limit or a cap. The geometry of record is the points; ask them.
+ */
+export function elementCentreline(element: DesignElement): Point[] | null {
+  return element.shape.kind === 'polyline' ? element.shape.points : null;
 }
 
 export function elementAnchor(element: DesignElement): Point {

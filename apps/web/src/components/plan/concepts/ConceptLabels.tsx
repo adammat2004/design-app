@@ -128,8 +128,15 @@ export function layOutConceptLabels(
     full: true,
   }));
 
+  /*
+   * Furniture gets no chip. It sits inside the feature that already has one, so "Dining set for
+   * six · 3.2 × 2.4 m" would land on top of "Dining pergola · 3.6 × 3.6 m" — and the pergola is
+   * the thing the user asked for. The sprite says what it is.
+   */
   const elementLabels: LabelEntry[] = elements
-    .filter((element) => element.role === 'feature' && element.name)
+    .filter(
+      (element) => element.role === 'feature' && element.name && element.category !== 'furniture',
+    )
     .map((element) => ({
       kind: 'element' as const,
       element,

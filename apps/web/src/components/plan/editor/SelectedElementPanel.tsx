@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Lock, MousePointer2, Palette, Trash2 } from 'lucide-react';
+import { heightFor } from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { elementArea, isLocked, type DesignElement } from '@/lib/concepts';
 import { materialsFor } from '@/lib/materials';
@@ -195,6 +196,62 @@ function ElementDetails({
             </option>
           ))}
         </select>
+      </Field>
+
+      {/*
+        Rotation, for the shapes that have one.
+
+        `PlanGeometry.rect.rotation` has existed since the geometry union was written and the canvas
+        has always had a handle for it — but a handle is a coarse instrument, and "turn the pergola
+        to exactly 30 degrees" was not expressible anywhere. A slider is, and it costs one control.
+      */}
+      {rect ? (
+        <Field label="Rotation">
+          <div className="flex w-full min-w-0 items-center gap-2">
+            <input
+              type="range"
+              data-testid="element-rotation"
+              aria-label="Element rotation"
+              min={0}
+              max={359}
+              step={1}
+              value={Math.round(rect.rotation) % 360}
+              onChange={(event) =>
+                store.getState().rotateElementLive(element.id, Number(event.target.value))
+              }
+              /*
+               * One undo entry for the whole drag, not one per frame — the same bracket the canvas
+               * handles use. Pointer and key events rather than change, because a range input fires
+               * change continuously and gives no other signal for "done".
+               */
+              onPointerDown={() => store.getState().beginGesture()}
+              onPointerUp={() => store.getState().endGesture()}
+              onKeyDown={() => store.getState().beginGesture()}
+              onKeyUp={() => store.getState().endGesture()}
+              className="min-w-0 flex-1 accent-garden-green"
+            />
+            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-garden-ink">
+              {Math.round(rect.rotation) % 360}&deg;
+            </span>
+          </div>
+        </Field>
+      ) : null}
+
+      {/*
+        Height, which has driven the shadow model since the sun landed and has never been visible.
+
+        A user whose pergola throws a two-metre shadow could not see why, or correct it. `heightFor`
+        resolves a default from the symbol, then the material, then the category — so the field
+        shows what is actually being used rather than a blank, and typing over it is the override.
+      */}
+      <Field label="Height">
+        <LengthInput
+          testId="element-height"
+          label="Element height"
+          metres={heightFor(element)}
+          unit={unit}
+          onCommit={(metres) => store.getState().setHeight(element.id, metres)}
+        />
       </Field>
 
       <Field label="Elevation">

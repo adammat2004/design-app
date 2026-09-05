@@ -1,6 +1,7 @@
 'use client';
 
 import { Check } from 'lucide-react';
+import { gardenDoors, streetEdge } from '@garden-studio/schema';
 import { draftPolygon, polygonArea } from '@/lib/boundary-geometry';
 import { formatArea } from '@/lib/units';
 import { useBoundaryStore } from '@/state/boundary-store';
@@ -17,6 +18,12 @@ export function SubStepChecklist() {
 
   const totalArea = polygonArea(draftPolygon(draft));
   const houseDone = draft.house !== null;
+
+  // Done when the two things the generator cannot guess are stated: a way out, and the street.
+  // A gate is optional — not every garden has one, and no gate is a true answer.
+  const hasGardenDoor = gardenDoors(draft.house).length > 0;
+  const hasStreet = streetEdge(draft) !== null;
+  const accessDone = hasGardenDoor && hasStreet;
 
   return (
     <ol data-testid="sub-steps" className="space-y-2">
@@ -46,6 +53,22 @@ export function SubStepChecklist() {
         active={mode === 'house'}
         disabled={!draft.closed}
         onClick={() => setMode('house')}
+      />
+      <SubStep
+        number={3}
+        testId="sub-step-access"
+        title="Access"
+        detail={
+          accessDone
+            ? `Doors and street set${draft.gates.length > 0 ? ' · gate placed' : ''}`
+            : !hasGardenDoor
+              ? 'Add the door you step out of, the side gate and the street'
+              : 'Which fence faces the street?'
+        }
+        done={accessDone}
+        active={mode === 'access'}
+        disabled={!houseDone}
+        onClick={() => setMode('access')}
       />
     </ol>
   );

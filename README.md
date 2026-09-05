@@ -8,9 +8,13 @@ never AI-generated images, so areas, quantities and costs can be derived from th
 The structured data is always the source of truth; any 2D plan or 3D preview is rendered
 from it, never the other way around.
 
-> **Status:** the six-step plan wizard works end to end — draw the plot, record what is already
-> there, fill in a brief, generate concepts, edit one on the canvas or by asking for a change in
-> plain English, and it is all still there tomorrow. Costing and the 3D preview are not built yet.
+> **Status:** the six-step plan wizard works end to end — draw the plot, say where the doors, the
+> side gate and the street are, record what is already there, fill in a brief, generate three
+> composed concepts, edit one on the canvas or by asking for a change in plain English, and it is
+> all still there tomorrow. Each concept is a layout template — a terrace across the garden doors,
+> one lawn panel, planting round it, the shed by the gate, paths between them and a front path to
+> the kerb — rather than a scatter of legally placed features. Costing and the 3D preview are not
+> built yet.
 
 ## Stack
 
@@ -81,13 +85,33 @@ Run from the repository root:
 
 Per package:
 
-| Script                                         | Does                            |
-| ---------------------------------------------- | ------------------------------- |
-| `pnpm --filter @garden-studio/schema dev`      | Rebuilds shared types on change |
-| `pnpm --filter @garden-studio/api db:generate` | Generates a Drizzle migration   |
-| `pnpm --filter @garden-studio/api db:migrate`  | Applies migrations              |
-| `pnpm --filter @garden-studio/api db:studio`   | Drizzle Studio                  |
-| `pnpm --filter @garden-studio/web test:e2e`    | Playwright end-to-end tests     |
+| Script                                              | Does                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm --filter @garden-studio/schema dev`           | Rebuilds shared types on change                                                    |
+| `pnpm --filter @garden-studio/api db:generate`      | Generates a Drizzle migration                                                      |
+| `pnpm --filter @garden-studio/api db:migrate`       | Applies migrations                                                                 |
+| `pnpm --filter @garden-studio/api db:studio`        | Drizzle Studio                                                                     |
+| `pnpm --filter @garden-studio/web test:e2e`         | Playwright end-to-end tests                                                        |
+| `pnpm render:material`                              | Contact sheets of every material, to `apps/web/.material-preview/`                 |
+| `pnpm render:plan`                                  | Whole-plan judging sheets from the captured fixtures, to `apps/web/.plan-preview/` |
+| `pnpm --filter @garden-studio/web capture:fixtures` | Regenerates those fixtures from the real generator (API up)                        |
+| `pnpm --filter @garden-studio/asset-tool generate`  | Regenerates the textures and sprites with an image model (needs a key — see below) |
+
+## How the plan is drawn
+
+Everything on the plan is real geometry; the pictures are how it is painted. Surfaces are drawn by
+a procedural painter that lays out slabs, boards, mown stripes and scattered planting from the
+product dimensions in `packages/schema`, and since the asset pipeline landed it paints those with
+photographs: a face per slab or board, a seamless tile of gravel, turf, bark or water, and a
+top-down sprite for every plant, tree canopy and piece of furniture. The images live in
+`apps/web/public/assets/` and are **checked in** — the app never calls an image model, and a
+missing image just means the procedural pattern draws instead.
+
+To regenerate them, put an OpenAI key in `apps/api/.env` as `OPEN_AI_API_KEY` and run the asset
+tool. It reads `apps/web/src/lib/materials/assets/asset-spec.ts` (the prompts are the specification
+of each asset), asks `gpt-image-1` for each variant, post-processes with `sharp` and writes the files
+plus `catalogue.json`. Roughly eighty pictures at medium quality cost a few pounds; the
+images-per-minute limit is low, so a full run takes ten to fifteen minutes.
 
 ## Testing
 

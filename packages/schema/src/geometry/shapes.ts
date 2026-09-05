@@ -1,4 +1,4 @@
-import { edgeLength, polygonArea, rotatePoint, type Point } from './primitives.js';
+import { edgeLength, polygonArea, polygonIsSimple, rotatePoint, type Point } from './primitives.js';
 
 /**
  * Tessellations. Every shape the app draws is reduced to a plain point ring here, and both the
@@ -125,6 +125,89 @@ export function roundPolygon(
   }
 
   return rounded;
+}
+
+/**
+ * The same polygon, every edge moved inward by `distance`.
+ *
+ * Each edge is offset along its inward normal and adjacent offset edges are intersected to find
+ * the new corner, which keeps a rectangle a rectangle and an L an L. Drawing only: this is how a
+ * wall of real thickness is shown inside the house's outline. The outline itself — the geometry
+ * of record — is never replaced by this.
+ *
+ * `null` rather than a guess when the result would not be a simple polygon: an outline too small
+ * for the distance folds through itself, and a wall drawn from that would be a bow tie inside the
+ * house. Callers fall back to the flat fill. Works for either winding.
+ */
+export function insetPolygon(points: Point[], distance: number): Point[] | null {
+  if (points.length < 3 || distance <= 0) return null;
+
+  // Signed area decides which side is inside, so a hand-drawn anticlockwise outline insets too.
+  const clockwise = signedArea(points) > 0;
+  const sign = clockwise ? 1 : -1;
+
+  const offsetEdges = points.map((start, index) => {
+    const end = points[(index + 1) % points.length]!;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (length === 0) return null;
+
+    // Left-hand normal for a clockwise ring in this y-down frame points inward.
+    const normal = { x: (-dy / length) * sign, y: (dx / length) * sign };
+    return {
+      start: { x: start.x + normal.x * distance, y: start.y + normal.y * distance },
+      end: { x: end.x + normal.x * distance, y: end.y + normal.y * distance },
+    };
+  });
+
+  if (offsetEdges.some((edge) => edge === null)) return null;
+
+  const inset: Point[] = [];
+  for (let i = 0; i < offsetEdges.length; i += 1) {
+    const previous = offsetEdges[(i - 1 + offsetEdges.length) % offsetEdges.length]!;
+    const current = offsetEdges[i]!;
+    const corner = lineIntersection(previous.start, previous.end, current.start, current.end);
+    if (!corner) return null;
+    inset.push(corner);
+  }
+
+  if (!polygonIsSimple(inset)) return null;
+
+  /*
+   * Every inset edge must still run the way its original does. Past the point where opposite
+   * walls meet, the offset lines cross and reassemble into a smaller polygon whose edges all run
+   * backwards — which the winding and the simplicity checks both miss, because it is a perfectly
+   * good polygon, just not this one's inside.
+   */
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    const c = inset[i]!;
+    const d = inset[(i + 1) % inset.length]!;
+    if ((b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y) <= 0) return null;
+  }
+
+  return inset;
+}
+
+function signedArea(points: Point[]): number {
+  let twice = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    twice += a.x * b.y - b.x * a.y;
+  }
+  return twice / 2;
+}
+
+/** Where two infinite lines meet, or `null` when they are parallel. */
+function lineIntersection(a1: Point, a2: Point, b1: Point, b2: Point): Point | null {
+  const d = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
+  if (Math.abs(d) < 1e-12) return null;
+
+  const t = ((a1.x - b1.x) * (b1.y - b2.y) - (a1.y - b1.y) * (b1.x - b2.x)) / d;
+  return { x: a1.x + t * (a2.x - a1.x), y: a1.y + t * (a2.y - a1.y) };
 }
 
 /**

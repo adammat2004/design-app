@@ -105,3 +105,66 @@ describe('stats', () => {
     expect(lru.stats.hits).toBe(0);
   });
 });
+
+describe('the byte budget', () => {
+  /**
+   * Counting entries prices a 3 m² bed and a 300 m² base fill the same, and a raster's cost is the
+   * square of the density it was drawn at — so the same entry count is four times the memory once
+   * rasters are allocated at a Retina display's pixel ratio. These pin the second cap.
+   */
+  const sized = (bytes: number) => ({ bytes });
+  const options = { maxBytes: 100, sizeOf: (value: { bytes: number }) => value.bytes };
+
+  it('evicts on bytes even when the entry count is nowhere near the cap', () => {
+    const lru = new RasterLru(50, options);
+    lru.set('a', sized(60));
+    lru.set('b', sized(60));
+
+    expect(lru.size).toBe(1);
+    expect(lru.has('a')).toBe(false);
+    expect(lru.has('b')).toBe(true);
+  });
+
+  it('discounts a replaced key rather than letting the total drift up', () => {
+    const lru = new RasterLru(50, options);
+    lru.set('a', sized(40));
+    lru.set('a', sized(40));
+
+    expect(lru.size).toBe(1);
+    expect(lru.byteSize).toBe(40);
+  });
+
+  it('keeps the total honest as entries are evicted', () => {
+    const lru = new RasterLru(50, options);
+    lru.set('a', sized(50));
+    lru.set('b', sized(50));
+    expect(lru.byteSize).toBe(100);
+
+    lru.set('c', sized(50));
+    expect(lru.byteSize).toBe(100);
+    expect(lru.has('a')).toBe(false);
+  });
+
+  /**
+   * A single raster larger than the whole budget has to be kept. Evicting it the instant it is
+   * inserted gives a surface that can never be cached and is therefore redrawn on every frame,
+   * which is far worse than briefly exceeding the ceiling.
+   */
+  it('keeps one entry that is bigger than the whole budget', () => {
+    const lru = new RasterLru(50, options);
+    lru.set('huge', sized(500));
+
+    expect(lru.has('huge')).toBe(true);
+    expect(lru.size).toBe(1);
+  });
+
+  it('leaves the entry count as the only cap when no budget is given', () => {
+    const lru = new RasterLru<string>(2);
+    lru.set('a', '1');
+    lru.set('b', '2');
+
+    expect(lru.byteSize).toBe(0);
+    expect(lru.stats.byteCapacity).toBeNull();
+    expect(lru.size).toBe(2);
+  });
+});

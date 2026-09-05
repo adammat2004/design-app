@@ -18,6 +18,44 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
       cut edges, water, one light everywhere, dev HUD, `before/` history, three diagrams.
 - [ ] **Phase 3 — deliverable.** In progress. - [x] T18 error boundaries; API-down told apart from 404 (verified in the browser) - [x] T22 label truncation - [x] T17 project list, landing copy corrected, e2e flow added - [ ] T14 plan view with labels, legend and a quantity schedule - [ ] T15 print at true scale, chunked with progress - [ ] T21 correct the stale CLAUDE.md claims and record the decisions
 
+## In flight — drafted.ai-level plans (plan: `~/.claude/plans/i-am-making-a-steady-wadler.md`)
+
+- [x] **P0 composer + `render:plan`.** `drawPlan`, three captured fixtures, judging sheets.
+- [x] **P1 asset pipeline.** `tools/assets`, 82 files, catalogue, registry, preload, cache key.
+- [x] **P2 textured surfaces.** Faces per module, tiled textures, water, stripes over turf.
+- [x] **P3 planting and trees.** Sprites per scatter unit, canopies inscribed, contact shadows.
+      The paving kerb was tried and reverted (it drew a line down every shared edge).
+- [x] **P4 furniture and structures.** `furniture` category, `symbol`, `furnish`, palette.
+- [x] **P5 house, fence, labels.** Wall + floor, doors on steps 4/5, fence shade, no chip on furniture.
+- [x] **P6 concept cards and PNG export.** Raster cards over the SVG; Download on steps 5 and 6.
+- [x] **P7 generator composition, most of it.** Accent corners by style (`styleCornerRadius`),
+      a different planting per run of border, `routeTo` paths to the gathering place and every
+      far-from-house feature (and the finding that no path had ever been placed — see CLAUDE.md),
+      specimen shrubs in beds, paths painted as stepping stones.
+- [x] **P7 remainder, by another route — the layout grammar (run 2).** Planting drifts, formal
+      symmetry and door-relative routing all fell out of composing the plan instead of sampling it.
+      Step 1 captures access (gates on boundary edges, the street edge, front and patio doors,
+      `AccessPanel`); the generator designs in a `DesignFrame` off the garden door, in a room that
+      is the plot behind that wall; three layout templates (rectilinear, curved, formal) replace
+      three archetypes as the axis the concepts differ on; features are fitted to slots before the
+      sampler is asked; borders are `FillService.remainderPieces` (the annulus cut into runs) and
+      each run gets its own planting; paths run terrace → far room, terrace → shed, gate → terrace,
+      and front door → street. Not done: wedge-split drifts _within_ a run.
+
+- [ ] **Layout grammar, next.** The deep limb of an L-plot beyond the door wall is left as border
+      planting because the room is a half-plane: a second room per limb would design it. Slot
+      preferences are a fixed table rather than anything the brief's _purpose_ text touches. The
+      curved template's kidney is one wave shape at one phase. Effort: M each.
+- [ ] **P8 optional AI hero render.** Segmentation map + plan PNG → image model, stored in a
+      `plan_renders` table keyed on `revision`, gated on `RENDER_API_KEY` exactly like the assistant,
+      labelled "AI impression — not the plan". Effort: M.
+- [ ] **Product catalogue and estimate** (deferred by decision: designs first). `symbol` and the
+      furniture materials are what it keys on.
+- [ ] **Small:** every furniture palette button shares the armchair icon; the PNG download click
+      has no e2e test (the drawing does); the sun-lit/unlit shed pitches deserve a felt texture;
+      the lawn's zone base fills still repeat the same tile phase across the seam (correct, but a
+      keen eye can find it).
+
 - [x] **Nobody has clicked any of this.** Done: the app was driven with Playwright. Shadows
       appear once a location is set, the time slider moves them correctly, the sun panel is
       reachable from step 1, a missing plan and a stopped API now show different screens, and a

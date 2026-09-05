@@ -3,6 +3,8 @@
 import type { PlanProject } from '@garden-studio/schema';
 import { Sprout } from 'lucide-react';
 import { useEffect } from 'react';
+import { assetsForElements } from '@/lib/materials/assets/material-assets';
+import { useAssetPreload } from '@/lib/materials/assets/use-assets';
 import { startProjectSync, useSyncStore } from '@/state/project-sync';
 import { ProjectIdProvider } from './ProjectContext';
 
@@ -31,6 +33,17 @@ export function ProjectHydrator({
   const loaded = useSyncStore((state) => state.hydratedProjectId === project.id);
 
   useEffect(() => startProjectSync(project), [project]);
+
+  /*
+   * The textures and sprites every canvas draws with, fetched once for the whole wizard.
+   * Idempotent, and the canvases draw their procedural fallback until it settles, so nothing
+   * waits on it.
+   *
+   * The plan's *own* assets go first. `project.document` is the stored plan, available here before
+   * the stores are filled, so the wave can be named at the moment the load starts rather than after
+   * the first render — which is the only moment at which naming it is worth anything.
+   */
+  useAssetPreload(assetsForElements(project.document.layout.elements));
 
   if (!loaded) return <LoadingPlan name={project.name} />;
 

@@ -4,6 +4,8 @@ import {
   type GardenBrief,
   type MaintenanceLevel,
   type MaterialId,
+  type PlantingStyle,
+  type SymbolId,
 } from '@garden-studio/schema';
 import type { Archetype } from './archetypes.js';
 
@@ -88,6 +90,18 @@ export interface DesignConstraints {
   style: GardenBrief['style'];
   wantsPlay: boolean;
   scale: PlotScale;
+  /**
+   * How every bed this concept places is planted — see `planting.ts` in the shared package.
+   *
+   * Resolved here rather than at the point of use, for the reason everything else in this record
+   * is: the badge and the palette drifted apart once because two call sites each read the brief for
+   * themselves, and the planting style is the same kind of decision. One answer, read by everyone.
+   *
+   * It follows the **capped** maintenance rather than the brief's own style where the two conflict,
+   * because a low-upkeep concept cannot be planted as a cottage border however the brief was
+   * worded — the whole point of a cottage border is that somebody cuts it back twice a year.
+   */
+  plantingStyle: PlantingStyle;
 }
 
 /** Ascending upkeep, so "no more than the brief asked for" is a comparison. */
@@ -160,6 +174,7 @@ export function resolveConstraints(
      */
     forbiddenMaterials: lowUpkeep ? ['mixed-border', 'wildflower'] : [],
     style: brief.style,
+    plantingStyle: resolvePlantingStyle(brief.style, maintenance),
     wantsPlay: brief.desiredFeatures.includes('play'),
     scale: resolvePlotScale(designedArea),
   };
@@ -187,4 +202,94 @@ export function featureAttempts(
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
+}
+
+/**
+ * The planting style for a concept.
+ *
+ * Upkeep wins over taste where they disagree, and that ordering is the point: a bed planted as a
+ * cottage border needs cutting back, staking and dividing, so promising one to somebody who asked
+ * for low maintenance is a design that fails in its second year. `low-maintenance` is what a capped
+ * low concept gets whatever the brief's style said — the same "a stated maintenance level is a
+ * ceiling" rule `cappedMaintenance` applies to the badge.
+ *
+ * Everything else maps taste to planting: modern gardens are planted in repeated blocks, formal
+ * ones on structure and clipped form, cottage gardens densely and mixed. An unstated style gets
+ * `naturalistic`, because drifts read as deliberate whatever the garden turns out to be, where a
+ * wrong strong style reads as a mistake.
+ */
+export function resolvePlantingStyle(
+  style: GardenBrief['style'],
+  maintenance: MaintenanceLevel,
+): PlantingStyle {
+  if (maintenance === 'low') return 'low-maintenance';
+
+  switch (style) {
+    case 'modern':
+      return 'contemporary';
+    case 'cottage':
+      return 'cottage';
+    case 'formal':
+      return 'architectural';
+    case 'lowMaintenance':
+      return 'low-maintenance';
+    default:
+      return 'naturalistic';
+  }
+}
+
+/**
+ * Which trees a garden of this style is planted with, in the order they are placed.
+ *
+ * A list rather than one species, because a garden with five identical trees is as unconvincing as
+ * one with five random ones. Cycling a short ordered list gives a garden two or three kinds of tree
+ * that go together — which is what a designer would specify — and keeps it deterministic, so the
+ * same brief and seed draw the same garden.
+ *
+ * The lists are claims about the style. A formal garden leans on evergreen structure; a cottage
+ * garden on blossom and fruit; a modern one on a few clean deciduous canopies. `naturalistic` is
+ * the fallback and mixes native-feeling broadleaf with multi-stem, which reads as a garden that
+ * grew rather than one that was bought.
+ */
+const TREE_PALETTES: Record<string, SymbolId[]> = {
+  modern: ['tree-deciduous', 'tree-multistem', 'tree-evergreen'],
+  cottage: ['tree-fruit', 'tree-ornamental', 'tree-deciduous'],
+  formal: ['tree-evergreen', 'tree-ornamental'],
+  lowMaintenance: ['tree-evergreen', 'tree-deciduous'],
+};
+
+const DEFAULT_TREE_PALETTE: SymbolId[] = ['tree-deciduous', 'tree-multistem', 'tree-ornamental'];
+
+/**
+ * The species for the nth tree in a concept.
+ *
+ * Indexed rather than sampled, so a plan regenerated from the same seed plants the same trees — and
+ * so the first tree, which is usually the specimen in the middle of the lawn, is the same one every
+ * time rather than whatever the RNG happened to reach.
+ */
+export function treeSpeciesFor(style: GardenBrief['style'], index: number): SymbolId {
+  const palette = (style && TREE_PALETTES[style]) || DEFAULT_TREE_PALETTE;
+  return palette[index % palette.length]!;
+}
+
+/**
+ * How rounded an accent bed's corners are, by style.
+ *
+ * A cottage garden has sinuous beds and a lawn that curves round them; a modern or formal one has
+ * crisp edges; a low-maintenance one sits between, because a gentle curve is easier to mow round
+ * than a tight one and easier to edge than a straight run against paving. Real geometry, not a
+ * drawing choice: `roundPolygon` tessellates the radius for the canvas and the validator alike.
+ */
+export function styleCornerRadius(style: GardenBrief['style']): number {
+  switch (style) {
+    case 'cottage':
+      return 1.2;
+    case 'lowMaintenance':
+      return 0.5;
+    case 'modern':
+    case 'formal':
+      return 0;
+    default:
+      return 0.5;
+  }
 }

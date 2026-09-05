@@ -71,8 +71,32 @@ house by `computeZones`, so storing them could only create something stale.
   the geometry at read time; nothing is stored.
 - **a way back to a saved plan**: `/projects` lists them, and the landing page links to it.
 
-**Not built yet:** printing at true scale, and the 3D preview. React Three Fiber is installed but
-unused. There is also **no evaluation of any kind** — no benchmark over the generator, no user
+- **the plan draws with photographs and sprites**: slab and board faces, seamless tiles of gravel,
+  turf, bark and water, top-down plant and tree-canopy sprites, and furniture sprites, all generated
+  once by `tools/assets` with an image model and checked in under `apps/web/public/assets/` (82
+  files, ~9 MB). The app never calls an image model; a missing file means the procedural pattern
+  draws instead, so everything works with no key. See "Rendering with assets" below.
+- **furniture is a category**, `symbol` is a field, and the generator furnishes what it places: a
+  lounge set on the seating patio, a dining set under the pergola, a barbecue in the outdoor
+  kitchen, a bowl in the fire pit, a swing on the play area; a store is a `shed`, a veg patch a
+  `raised-bed`, a pergola a `pergola`. The editor's palette offers twelve pieces of furniture.
+- **the house is drawn as a building**: a wall of real thickness round a floor, doors shown on
+  steps 4 and 5 as well as step 1.
+- **concept cards show the real render**, drawn by the same composer as everything else, and the
+  editor and the review screen can **download the plan as a PNG** with its feature chips.
+- **`pnpm render:plan`** writes whole-plan judging sheets from three captured generator fixtures
+  (`apps/web/scripts/fixtures/`, refreshed by `pnpm capture:fixtures` with the API up).
+
+- **step 1 captures how you get in and out**: patio and front doors, a side gate on a boundary
+  edge, and which fence faces the street, all in an Access sub-step whose every inference is a
+  one-tap chip. The generator reads all four.
+- **the concepts are composed, not sampled**: a terrace across the garden doors, one lawn panel
+  behind it, planting round the panel in runs, the shed in the corner nearest the gate, paths
+  between them, and a front garden with a paved path to the kerb. The three concepts are three
+  layout templates — "Terrace and lawn", "Sweeping lawn", "Formal axis" — and the brief's style
+  picks the recommended one. See "The layout grammar" below.
+
+**Not built yet:** printing at true scale, the 3D preview, and the optional AI photo-render. React Three Fiber is installed but unused. There is also **no evaluation of any kind** — no benchmark over the generator, no user
 study, no measured numbers beyond the generation timings quoted above. That is the largest
 outstanding gap in the project and it is not a feature.
 
@@ -197,11 +221,26 @@ the plot, and none of them move it.
 **`openingCounter` is re-seeded in `hydrateBoundaryStore`,** alongside `vertexCounter`. Miss it and
 the first opening added after a reload takes an id already in use.
 
-**A side gate is a `FeatureKind`, not an `Opening`.** An opening is keyed on a _wall id_ and the
-boundary has vertices, not walls; reusing it would make `wallId` mean a house wall in one place and
-a boundary edge in another — the ambiguity `ZoneId` got its own module to avoid. As a feature it is
-placed on step 2 with everything else physical and the existing placement and validation machinery
-handles it unchanged.
+**A side gate is a `Gate` on a boundary edge — _this reverses_ "a side gate is a `FeatureKind`".**
+The old reasoning was sound about `wallId` and about `ZoneId`'s ambiguity, and it is answered by
+giving the gate its own key: `edgeVertexId` plus `offsetAlongEdge`, in `plan/gate.ts` and
+`plan/gates.ts`, which are the boundary-edge twins of `opening.ts` and `openings.ts` and follow
+both of their rules (resolve through `boundaryPolygon`, return `null` rather than guess). What
+forced the reversal is that the layout grammar keys on the gate: the shed, the bins and the side
+path go where you can actually carry something in from the street, and a 0.45 m point dropped
+inside the plot cannot say which fence it is in — or that it is in one at all. The `FeatureKind`
+stays in the enum so stored plans parse; it is gone from step 2's palette.
+
+**`site.streetEdgeVertexId` is the other half, and `gardenDirection` is why it matters.** Which
+fence faces the street decides where the front garden is, and therefore which way the _back_ is.
+`gardenDirection(site)` is "away from the street" when the street is known, and otherwise the
+house wall with the most plot beyond it — never the rotation convention alone, which called a
+1 m strip the back garden on the first fixture it met. `streetDirection` is its opposite. Both
+return `null` without a house, and nothing is inferred into the document: `suggestedAccess` is
+what a chip applies, and what a fixture or the capture script calls deliberately.
+
+**`gateCounter` is re-seeded in `hydrateBoundaryStore`**, exactly as `openingCounter` is, and for
+the same reason: miss it and the first gate added after a reload takes an id already in use.
 
 **`site.orientation` is read by the sun model.** Degrees clockwise from screen-up to true
 north, defaulting to 0. The compass was a _drawing_ for most of this project's life — it pointed up
@@ -725,7 +764,215 @@ with `whitespace-nowrap`, so a long one grows in both directions and runs off th
 the exact rendered pixel in whatever font actually loaded, where a character count is wrong for
 "Wildflower meadow" and "IIIIIIIIII" in opposite directions. The full name goes on `title`.
 
+## The layout grammar
+
+**A plan is composed in a frame, not sampled in a zone.** `DesignFrame`
+(`apps/api/src/plan/generation/layout/frame.ts`) puts the origin at the garden door, `u` running
+out of the house and `v` along the wall, positive to the right when looking out. Every template
+works in those coordinates and `toWorld` is the only place they turn back into plan metres —
+which is also where a placed rectangle's rotation comes from (`frame.wallBearing`, never
+`house.rotation`, so a custom outline and a rotated house both work). Nothing is stored: the
+frame is derived every generation, like zones.
+
+**The room is not a zone, and it could not be.** `computeZones` fences the back band to the
+house's width and gives the corners to the sides, so a lawn drawn in the back _zone_ is three
+strips with their own ground rather than a garden. `gardenRoom` is the plot clipped to the
+half-plane beyond the door wall, trimmed by the zones' own cross fences only for a side that is
+**not** in scope. Zones are untouched — every element still takes its `zone` from where its
+centroid lands, and every zone still gets its base fill.
+
+**Three concepts are three templates.** `TEMPLATES` in `layout/templates/` is the axis the
+concepts differ on now; the archetype is what is left over. `recommendedIndex` maps the brief's
+style to one — cottage to curved, formal to formal, everything else to rectilinear — and that slot
+gets the balanced archetype. Two concepts that differ only in badge and material were the thing
+users could see through.
+
+**Slots first, sampler second.** `assignSlots` matches a requested feature to a slot by an ordered
+preference table (seating to the terrace, storage to the utility corner, play to the far end of
+the lawn), and `fitInSlot` tries the anchor, then nudges of 0.25 m along each axis, then shrinks to
+0.6×. No sampling and no SQL. What will not fit falls through to the old `PlacementService`
+sampler, which is also the whole placer when there is no room to sketch in — a plot with no house,
+or one whose garden is out of scope.
+
+**A far slot is measured from the terrace, not from the back fence.** `behindTerrace` centres a
+slot in the strip that is actually free and shrinks it to fit. Anchored from the fence alone —
+"2.3 m in from the border" — a nine-metre garden with a four-metre terrace put the play area's
+anchor _inside_ the terrace, where no nudge could rescue it, and every plan that size lost its
+feature to the sampler and its path with it.
+
+**The terrace is a third of the room at most, and grows with `√scale`.** A terrace is a room for a
+table, not most of the garden; at `4 × sizeFactor` it took 5.7 m of a 16 m plot and left the lawn
+three metres deep behind it.
+
+**`roomBehind` measures the width half a metre past the cut.** An L-plot's inner corner sits _on_
+the line the terrace ends at, so clipping at exactly that `u` keeps a zero-depth edge running the
+full width of the plot and reports the shallow limb as room the lawn can use. The probe is the
+whole of the fix and it changes nothing on a rectangle.
+
+**The shed notches the lawn rather than taking a band across it.** A utility bay spanning the back
+of the garden cost the lawn four metres of depth on every plan that asked for a shed; the notch
+costs it one corner, and `styleCorners` lets the notched polygon still take the style's corner
+radius.
+
+**Borders are `FillService.remainderPieces`, cut into runs.** Subtracting the lawn and the
+features from a zone leaves an annulus and `PlanGeometry.polygon` cannot hold a hole, so the
+remainder is split by two cut lines through the lawn's centre. A feature standing wholly inside a
+run still leaves a hole, and that one `exteriorRing` flattens as it always has — safe **only
+because the caller pushes the pieces before the lawn and the features**, so the thing that made
+the hole is drawn over it. Keep that ordering. Each run takes its own planting material, which is
+the variety the old fixed 1.5 m annulus could not have.
+
+**Paths run between things, and `routeBetween` is one function.** Terrace to the far room, terrace
+edge to the shed, gate to the terrace, front door to the street, plus the formal axis path.
+`routeTo` is now a thin wrapper on it for the sampler's destinations.
+
+**Ignored rings are matched by value, not by reference.** `geometryOutline` tessellates afresh on
+every call, so the terrace outline a path is told to ignore is never the same array as the one in
+`obstacles`. Matched by reference — which is what the first version did — every path was refused
+for crossing the terrace it started on, and no plan the grammar drew had a single path on it. The
+same trap is live in `fit.ts`, where `ignore` holds the very arrays `obstacles` holds and
+reference equality is correct.
+
+**Play bark belongs to the play area, not to the palette.** `FeatureSpec.material` pins a
+material a feature always has. It used to come from `materialFor('gravel-mulch')` whenever the
+brief mentioned play, which laid bark as the front garden's ground and as a low-maintenance
+concept's gravel panel.
+
+**The lawn panel is turf whatever the style.** A cottage garden used to draw its one mown panel as
+`wildflower`; the meadow belongs in the borders, and the planting branch offers it there.
+
+## Rendering with assets
+
+**Assets are generated offline, checked in, and never required.** `tools/assets` asks an image model
+(OpenAI `gpt-image-1`, over plain `fetch`, no SDK) for every family in
+`apps/web/src/lib/materials/assets/asset-spec.ts`, post-processes with `sharp`, writes WebP files
+under `apps/web/public/assets/` and a `catalogue.json` beside the code with what the renderer reads
+(size, mean colour, a sprite's opaque reach, a texture's seam score). The **spec is the
+specification**: the prompt is the sentence that says what `plant-shrub` is, and regenerating with a
+better model is re-running the tool. The raw PNGs are kept in `tools/assets/raw/` (gitignored) so
+`--reprocess` can redo the post-processing without paying for the pictures again. The key is read
+from `OPEN_AI_API_KEY` in `apps/api/.env` (or `OPENAI_API_KEY`); no key prints what would be
+generated and exits 0. Note the images-per-minute limit is 5: the provider retries 429s with
+backoff, and `--concurrency 2` is about the most that does not just wait.
+
+**The painters keep their geometry and change their paint.** `drawModule` still lays the tone and
+the bevel a slab always had, then draws a face photograph into the same rectangle, cropped to the
+module's aspect and tinted a third of the way to the palette tone; a board shows a strip of grain
+from a seeded height. Joints, stagger, `gridRange` and therefore slab counts are untouched. Textures
+are tiled in pattern space from the plan origin by the same `gridRange`, which is what keeps two
+abutting patios continuous. A scatter unit becomes a sprite chosen and turned by two further draws
+from the _same_ per-cell generator, after the four the blob path makes — so a bed with no sprites
+draws exactly what it always did. **With no assets loaded the output is byte-identical to before**,
+and there is a test for it.
+
+**`textureIsMass` is decided by the manifest, not by what has loaded.** Gravel _is_ its texture and
+the unit loop returns; a bed's texture is the soil its plants sit on and the loop continues. The
+first version keyed this on "no sprites loaded" and every bed of grasses drew as bare soil while the
+sprites were on their way.
+
+**The asset version is in the raster cache key**, for the reason the light is: a surface drawn before
+its texture arrived and after are different pixels, and without it the plan textures in patches.
+`assetVersion()` is `'none'` until the preload settles and the catalogue's hash after, which puts
+exactly one redraw between the two states. `useAssetPreload` runs once in `ProjectHydrator`.
+
+**A contact shadow is a drawing convention, not a solar claim.** Every sprite and symbol stands on a
+soft disc, proportional to the thing, pushed a little way away from `DrawPass.light`, never scaled
+by height. It says "this stands up off the ground", which a plan symbol needs to say whether or not
+the plan knows where on Earth it is. The cast-shadow layer — the one that says where the shade falls
+at four o'clock — stays gated on `site.location`. The fence's shade strip is the same class.
+`SHADOW_OPACITY` went from 0.26 to 0.36 when the lawn became a photograph.
+
+**A canopy sprite is inscribed in the tree's radius by `canopySpriteBox`.** The catalogue records
+how far a sprite's opaque pixels reach; the half-width is `radius / ratio`, so the furthest leaf
+lands exactly on the circle the placer eroded by and the validator tessellates. Same rule as
+`canopyRing`, same reason.
+
+**Symbols are drawn where sprites cannot be.** A pergola, shed, gazebo or raised bed is whatever
+rectangle the placer gave it, which no photograph stretches into, so `symbols/structures.ts` gives
+posts, ridges, hips and rails as pure geometry and both the Konva canvas and the composer draw from
+it. `SYMBOL_SPRITES` maps the rest to sprite families. A sprite is always fitted _inside_ the
+element's rect or radius (`spriteBox`): the geometry of record is never the sprite's natural size.
+
+**`furniture` is the eighth `ElementCategory`, and `DesignElement.symbol` a plain string.** Adding
+the category was a compile error in nine records until each was answered — that is the point of
+them being total. Furniture has an outline for placing and selecting but is _counted, not measured_:
+the schedule gives it items rather than square metres and `materialCostIndex` skips it. The
+concept test's pairwise-disjoint rule excludes it and a second test demands each piece sit wholly
+inside exactly one host, drawn after it. The assistant's `add` excludes the surfaces furniture may
+stand on from its obstacles, or a dining set could only ever land on the lawn beside the patio.
+
+**`furnish` is pure and centred.** An item is placed in the middle of its host with a 0.3 m margin,
+inherits the host's rotation, may be turned a quarter to fit, and is verified by `geometryIsLegal`
+like everything else. `FURNISHINGS` lists choices per feature and `furnish` walks the list until
+one fits, so a small pergola gets the four-seater rather than nothing; the play area rolls, the
+rest are indexed by the concept so the three concepts differ on purpose.
+
+**`drawPlan` is the one composer** (`render-plan.ts`): concept thumbnails, the PNG export, the
+judging sheets and a future hero-render input all draw through it, in the canvases' stacking order.
+The thumbnails keep their SVG for SSR and jsdom and overlay the raster a frame after mount.
+
+**Fills have no outline, and stripes are seeded from the material.** Both were invisible on flat
+pale turf and became seams across a photograph of grass cut into zones. A lawn is one ground the
+zones merely cut up.
+
+**The cut edge was displaced by the pattern origin for as long as it existed.** It was stroked
+after the context had been moved into pattern space, using raster coordinates — off the raster
+entirely for any surface away from the plan origin, so nobody saw it, and a metre inside the
+outline when the composer drew a plan with a margin, where it showed as a stray arc in every fire
+pit. It is drawn in raster space now, with the clip still in force.
+
+**The paving kerb was tried and reverted.** A 40 mm edging course in the joint colour round every
+`paved-area` reads well on one patio and draws a line down the seam between two abutting ones —
+exactly the continuity the shared-edge tests exist to protect. Paving stays `null` in
+`CATEGORY_EDGES`.
+
+**The seam score is a ratio, not an absolute.** Edge mismatch over the tile's own interior grain: a
+seamless tile scores about 1 whatever its texture. An absolute measure called every lawn a bad seam
+and passed a smooth pool with a real one. The tool blends (offset by half, fade the original back
+over the middle) anything over 1.5; the test allows 1.6.
+
+**The house's wall is `insetPolygon`, derived every render.** It refuses an outline too small for
+the wall (edges that would run backwards after offsetting) and the caller draws the flat fill. The
+door gap is cut half a wall _inside_ the outline, one wall thick, because the drawn wall is a band
+inside the line the opening sits on.
+
+**A path ends at the feature's edge, and that is why paths exist at all.** `servicePath` ran to
+the patio's centroid, the patio was in `obstacles`, so the strip always entered an obstacle and was
+refused — on every plan that ever asked for one. `routeTo` ends at the point on the destination's
+outline nearest the house, pulled back 50 mm, ignores the house and the destination in the
+obstacle check, and tries straight then the two L-shaped routes. Every far-from-house rect feature
+is a destination as well as the first gathering place; a path under 1.5 m is refused as too short
+to read as one, which is why a patio a stride from the house gets none. A path is _painted_, too:
+polylines used to be handed to Konva as a stroke and never reached the surface painter, so
+stepping stones drew as a grey lozenge. Both renderers now paint the strip `elementOutline`
+tessellates.
+
+**Accent corners follow the style, border pieces vary their planting, and beds get specimens.**
+`styleCornerRadius` gives a cottage garden 1.2 m corners and a modern or formal one none — real
+geometry, tessellated by `roundPolygon` for canvas and validator alike; border bands stay square
+because they meet the fence. Each run of border takes `materialFor(..., index + order)` so the
+planting changes where the border turns a corner. Two to four `specimen` shrubs stand inside
+accent beds, placed by `candidates` with no obstacles and the shrub's own radius — which is
+exactly "somewhere fully inside this bed". Not done from P7: planting drifts by wedge-splitting a
+band in PostGIS, and formal symmetry.
+
 ## Traps already hit
+
+**`render:material` clears the whole of `.material-preview/`.** The plan sheets lived in a subfolder
+of it for an afternoon and vanished on the next material run. They are in `.plan-preview/` now, and
+`scripts/preview-dir.ts` is the one place the before/after carry-over lives.
+
+**Postgres JIT must be off, and this cost an afternoon.** `remainderPieces` folds a lot of
+geometry into constants, which Postgres then JIT-compiles: 1.4 s a query against 114 ms with
+`SET jit = off`, so every generator test timed out while `EXPLAIN` reported 30 ms of execution.
+Both clients pass `connection: { jit: 'off' }` — `db.module.ts` and `src/test/db.ts`.
+
+**The API test suite deletes the fixture projects too.** `capture:fixtures` creates real projects and
+`pnpm test` truncates the table, so a plan you were about to screenshot in the browser is gone the
+moment the API tests run. The fixture _files_ survive; re-run the capture to get projects back.
+
+**A zsh `--include=*.ts` glob in a Bash tool call fails with "no matches found".** Quote it or use
+`grep -r --include='*.ts'`; the shell expands the glob before grep sees it.
 
 **Konva must be client-only.** Konva's Node build `require`s the native `canvas` package,
 which breaks `next build` during SSR. Every canvas is behind a `*CanvasLoader.tsx` using
@@ -837,7 +1084,8 @@ a script.
 
 - `apps/api/.env` — `DATABASE_URL`, `PORT`, `WEB_ORIGIN` (CORS origin for the frontend), plus the
   assistant's `ANTHROPIC_API_KEY` (blank is fine — see above), `ANTHROPIC_MODEL`,
-  `ASSISTANT_TIMEOUT_MS` (**milliseconds** in the TypeScript SDK) and `ASSISTANT_ENABLED`
+  `ASSISTANT_TIMEOUT_MS` (**milliseconds** in the TypeScript SDK) and `ASSISTANT_ENABLED`; and
+  `OPEN_AI_API_KEY`, read only by `tools/assets` at development time — the running app never uses it
 - `apps/web/.env.local` — `NEXT_PUBLIC_API_URL`
 
 Both have committed `.env.example` files. `.env` is gitignored and the example ships with the key

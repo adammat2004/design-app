@@ -24,6 +24,8 @@ export const CATEGORY_COLOURS: Record<ElementCategory, CategoryStyle> = {
   'gravel-mulch': { fill: '#e6e2d6', stroke: '#c4bda8', label: 'Gravel / mulch' },
   structure: { fill: '#c8b394', stroke: '#95795a', label: 'Structure' },
   'water-feature': { fill: '#a8cadf', stroke: '#5f93b5', label: 'Water feature' },
+  /** A warm neutral: furniture is drawn as a sprite, and this is its selection outline and its chip. */
+  furniture: { fill: '#e2d3bd', stroke: '#9c8460', label: 'Furniture' },
   /*
    * Carried over from step 2 rather than given a colour of its own. A feature the user chose
    * to keep should look on the concept exactly as it looked when they kept it — a second
@@ -44,5 +46,6 @@ export const CATEGORY_ORDER: ElementCategory[] = [
   'gravel-mulch',
   'structure',
   'water-feature',
+  'furniture',
   'existing-feature',
 ];

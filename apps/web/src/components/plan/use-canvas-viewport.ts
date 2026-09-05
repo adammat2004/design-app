@@ -42,6 +42,15 @@ const ZOOM_EASE = 0.25;
 const ZOOM_SETTLED = 0.05;
 
 /**
+ * Konva fires dragend with bubbling, so a feature's dragend reaches the Stage with
+ * `event.target` still the Group. Folding that Group's pixel position into the viewport
+ * is what slides the whole plan when you let go of a shed.
+ */
+export function isStageDrag(event: { target: { getStage(): unknown } }): boolean {
+  return event.target === event.target.getStage();
+}
+
+/**
  * Everything about *looking* at the plan, as opposed to editing it: how big the stage is, how
  * many pixels a metre is worth, where the origin sits, and whether dragging pans or draws.
  *
@@ -324,7 +333,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
   }, []);
 
   const handleStageDragStart = useCallback((event: Konva.KonvaEventObject<DragEvent>) => {
-    if (event.target !== event.target.getStage()) return;
+    if (!isStageDrag(event)) return;
 
     if (!allowPan.current) {
       event.target.stopDrag();
@@ -333,6 +342,19 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
 
     didPan.current = true;
   }, []);
+
+  /*
+   * Konva bubbles dragend, so a feature Group's release lands here with the Group as
+   * `event.target`. Folding that into the viewport is what used to slide the whole plan
+   * sideways when you let go of a shed. Same guard as dragstart: only a Stage pan folds.
+   */
+  const handleStageDragEnd = useCallback(
+    (event: Konva.KonvaEventObject<DragEvent>) => {
+      if (!isStageDrag(event)) return;
+      foldStageOffset(event.target as Konva.Stage);
+    },
+    [foldStageOffset],
+  );
 
   /**
    * True for the click that ends a pan, so the caller can swallow it — otherwise letting go of a
@@ -382,6 +404,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
     handlePointerUp,
     armPan,
     handleStageDragStart,
+    handleStageDragEnd,
     consumePan,
     registerTap,
     isDoubleTap,

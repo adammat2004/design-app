@@ -3,14 +3,24 @@
 import { create } from 'zustand';
 import {
   canWallHold,
+  clampOffsetToEdge,
   clampOffsetToWall,
   firstFreeOffset,
+  fitsOnEdge,
   fitsOnWall,
+  GATE_DEFAULT_WIDTH,
   houseWalls,
+  suggestedGateEdge,
+  kindForEdge,
+  type BoundaryKind,
+  pruneBoundaryStyles,
+  setBoundaryStyle,
+  suggestedStreetEdge,
   OPENING_DEFAULTS,
   SiteLocationSchema,
   SiteSectionSchema,
   SiteSunSchema,
+  type Gate,
   type Opening,
   type SiteLocation,
   type SiteSun,
@@ -52,7 +62,10 @@ import { highestId } from '@/lib/hydration';
 import type { Unit } from '@/lib/units';
 
 /** Boundary mode draws the plot; House mode places the building inside it. */
-export type EditorMode = 'boundary' | 'house' | 'select' | 'measure';
+export type EditorMode = 'boundary' | 'house' | 'access' | 'select' | 'measure';
+
+/** What the next click on the fence does while in access mode. `null` means nothing. */
+export type AccessTool = 'gate' | 'street' | null;
 export type BoundaryTool = 'draw' | 'add-point' | 'move' | 'delete';
 export type HouseTool = 'rectangle' | 'custom' | 'move' | 'rotate';
 
@@ -77,6 +90,12 @@ let openingCounter = 0;
 function nextOpeningId(): string {
   openingCounter += 1;
   return `o${openingCounter}`;
+}
+
+let gateCounter = 0;
+function nextGateId(): string {
+  gateCounter += 1;
+  return `g${gateCounter}`;
 }
 
 /**
@@ -193,6 +212,22 @@ interface BoundaryState {
   setOpeningWidth: (openingId: string, width: number) => void;
   setOpeningSill: (openingId: string, sillHeight: number) => void;
   removeOpening: (openingId: string) => void;
+
+  /* ---- access: gates in the fence and the street edge, both site facts ---- */
+
+  /** Armed tool in access mode. Ephemeral: which button was pressed is not a fact about the plot. */
+  accessTool: AccessTool;
+  setAccessTool: (tool: AccessTool) => void;
+  /** Places a gate on this boundary edge at the point clicked, measured from the edge's start. */
+  addGateOnEdge: (edgeIndex: number, point: Point) => void;
+  /** Takes the inferred side gate. Offered, not applied — see `suggestedGateEdge`. */
+  addSuggestedGate: () => void;
+  removeGate: (gateId: string) => void;
+  /** Which boundary edge faces the street, by index; `null` clears it. */
+  setStreetEdge: (edgeIndex: number | null) => void;
+  /** What one side of the property is made of. Setting it back to a fence removes the entry. */
+  setBoundaryKind: (edgeVertexId: string, kind: BoundaryKind) => void;
+  setSuggestedStreetEdge: () => void;
   /** Degrees clockwise from screen-up to true north. */
   setOrientation: (degrees: number) => void;
   /**
@@ -308,6 +343,7 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
     reflowEdgeIndex: null,
     sizeAnchorVisible: true,
     selectedWallId: null,
+    accessTool: null,
     measurement: null,
     lastSavedAt: Date.now(),
     gestureSnapshot: null,
@@ -377,9 +413,28 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
     insertVertexOnEdge: (edgeIndex, point) =>
       commit((draft) => {
         const vertices = [...draft.vertices];
-        vertices.splice(edgeIndex + 1, 0, { id: nextVertexId(), x: point.x, y: point.y });
-        // Labels are positional, so everything after the insert reletters for free.
-        return { ...draft, vertices };
+        const start = draft.vertices[edgeIndex];
+        const inserted = { id: nextVertexId(), x: point.x, y: point.y };
+        vertices.splice(edgeIndex + 1, 0, inserted);
+
+        /*
+         * A gate on the split edge keeps its place in the fence: one beyond the new corner is
+         * re-homed onto the new edge with its offset shortened by the first half's length. The
+         * street edge stays on the first half. Labels are positional, so everything after the
+         * insert reletters for free.
+         */
+        const firstHalf = start ? edgeLength(start, point) : 0;
+        const gates = draft.gates.map((gate) =>
+          start && gate.edgeVertexId === start.id && gate.offsetAlongEdge > firstHalf
+            ? {
+                ...gate,
+                edgeVertexId: inserted.id,
+                offsetAlongEdge: gate.offsetAlongEdge - firstHalf,
+              }
+            : gate,
+        );
+
+        return { ...draft, vertices, gates };
       }),
 
     deleteVertex: (id) => {
@@ -388,7 +443,22 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         if (index === -1) return null;
         if (draft.closed && draft.vertices.length <= MIN_VERTICES) return null;
 
-        return { ...draft, vertices: draft.vertices.filter((vertex) => vertex.id !== id) };
+        return {
+          ...draft,
+          vertices: draft.vertices.filter((vertex) => vertex.id !== id),
+          // The edge that started at this corner is gone, and so is anything hung on it.
+          gates: draft.gates.filter((gate) => gate.edgeVertexId !== id),
+          streetEdgeVertexId: draft.streetEdgeVertexId === id ? null : draft.streetEdgeVertexId,
+          /*
+           * Including what that side was made of. Left behind, the entry would describe an edge
+           * that no longer exists — and because vertex ids come from a counter, it could later be
+           * claimed by a corner added somewhere else entirely.
+           */
+          boundaryStyles: pruneBoundaryStyles(
+            draft.boundaryStyles,
+            draft.vertices.filter((vertex) => vertex.id !== id),
+          ),
+        };
       });
 
       const { selection } = get();
@@ -648,6 +718,79 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
           : null,
       ),
 
+    setAccessTool: (tool) => set({ accessTool: tool }),
+
+    addGateOnEdge: (edgeIndex, point) => {
+      commit((draft) => {
+        const start = draft.vertices[edgeIndex];
+        const end = draft.vertices[(edgeIndex + 1) % draft.vertices.length];
+        if (!start || !end || !draft.closed) return null;
+
+        const desired = edgeLength(start, point);
+        const offset = clampOffsetToEdge(draft, start.id, GATE_DEFAULT_WIDTH, desired);
+        if (offset === null) return null;
+
+        const gate: Gate = {
+          id: nextGateId(),
+          edgeVertexId: start.id,
+          offsetAlongEdge: offset,
+          width: GATE_DEFAULT_WIDTH,
+        };
+        // Through another gate is refused outright rather than nudged: two gates a metre apart
+        // is a mistake the user should see, not one the store should quietly resolve.
+        if (!fitsOnEdge(draft, gate)) return null;
+
+        return { ...draft, gates: [...draft.gates, gate] };
+      });
+      set({ accessTool: null });
+    },
+
+    addSuggestedGate: () =>
+      commit((draft) => {
+        const suggestion = suggestedGateEdge(draft);
+        if (!suggestion) return null;
+
+        const gate: Gate = { id: nextGateId(), ...suggestion, width: GATE_DEFAULT_WIDTH };
+        if (!fitsOnEdge(draft, gate)) return null;
+
+        return { ...draft, gates: [...draft.gates, gate] };
+      }),
+
+    removeGate: (gateId) =>
+      commit((draft) => {
+        if (!draft.gates.some((gate) => gate.id === gateId)) return null;
+        return { ...draft, gates: draft.gates.filter((gate) => gate.id !== gateId) };
+      }),
+
+    setStreetEdge: (edgeIndex) => {
+      commit((draft) => {
+        const next = edgeIndex === null ? null : (draft.vertices[edgeIndex]?.id ?? null);
+        if (edgeIndex !== null && next === null) return null;
+        if (next === draft.streetEdgeVertexId) return null;
+        return { ...draft, streetEdgeVertexId: next };
+      });
+      set({ accessTool: null });
+    },
+
+    setBoundaryKind: (edgeVertexId, kind) =>
+      commit((draft) => {
+        if (!draft.vertices.some((vertex) => vertex.id === edgeVertexId)) return null;
+
+        const next = setBoundaryStyle(draft.boundaryStyles, edgeVertexId, kind);
+        // `commit` treats null as "nothing changed", which keeps a no-op tap off the undo stack.
+        if (next.length === draft.boundaryStyles.length && kindForEdge(draft, edgeVertexId) === kind)
+          return null;
+
+        return { ...draft, boundaryStyles: next };
+      }),
+
+    setSuggestedStreetEdge: () =>
+      commit((draft) => {
+        const next = suggestedStreetEdge(draft);
+        if (!next || next === draft.streetEdgeVertexId) return null;
+        return { ...draft, streetEdgeVertexId: next };
+      }),
+
     setOrientation: (degrees) =>
       commit((draft) =>
         Number.isFinite(degrees) ? { ...draft, orientation: normaliseDegrees(degrees) } : null,
@@ -808,11 +951,12 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
 
     setMode: (mode) =>
       set((state) => {
-        // Nothing to put a house inside of until the plot is enclosed.
-        if (mode === 'house' && !state.present.closed) return state;
+        // Nothing to put a house inside of — or a gate in the fence of — until the plot is enclosed.
+        if ((mode === 'house' || mode === 'access') && !state.present.closed) return state;
 
         return {
           mode,
+          accessTool: null,
           housePoints: [],
           // Leaving measure mode throws the tape away — it was never meant to persist.
           measurement: null,
@@ -867,6 +1011,7 @@ function ephemeralState() {
     reflowEdgeIndex: null as number | null,
     sizeAnchorVisible: true,
     selectedWallId: null as string | null,
+    accessTool: null as AccessTool,
     measurement: null,
     gestureSnapshot: null as BoundaryDraft | null,
   };
@@ -876,6 +1021,7 @@ function ephemeralState() {
 export function resetBoundaryStoreForTests(): void {
   vertexCounter = 0;
   openingCounter = 0;
+  gateCounter = 0;
 
   useBoundaryStore.setState({
     ...ephemeralState(),
@@ -912,6 +1058,11 @@ export function hydrateBoundaryStore(
   openingCounter = highestId(
     (site.house?.openings ?? []).map((opening) => opening.id),
     /^o(\d+)$/,
+  );
+
+  gateCounter = highestId(
+    site.gates.map((gate) => gate.id),
+    /^g(\d+)$/,
   );
 
   useBoundaryStore.setState({

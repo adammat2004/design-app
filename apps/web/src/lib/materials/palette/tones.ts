@@ -112,44 +112,97 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
    *
    * Every tone here is foliage. An earth-brown entry was tried and had to go — drawn as a plant
    * it read as a bare patch, which is exactly the thing the soil colour is already saying.
+   *
+   * ## The value ladder, and why these numbers moved
+   *
+   * These palettes were all written to be "a nice green", and the result was that they were all
+   * the *same* nice green: turf, ground cover, mixed border and ornamental grasses sat inside one
+   * narrow band of lightness, and shrubs and hedging sat inside another that overlapped it. Six
+   * materials, two clusters, no hierarchy — which is why a generated plan read as one carpet of
+   * vegetation with a lawn cut out of it rather than as a garden with layers.
+   *
+   * They are now a deliberate ladder, light to dark:
+   *
+   * ```
+   *   lighter │ ornamental-grasses   buff, and separated by HUE as well as value —
+   *           │                      a grass really is straw-coloured, and hue is the
+   *           │                      one axis nothing else in the garden is using
+   *           │ standard-turf        light, cool, flat, almost no spread
+   *           │ wildflower           light ground, strong flower accents
+   *           │ ground-cover         clearly below the lawn it abuts
+   *           │ mixed-border         mid, warm, the WIDEST spread on purpose
+   *           │ shrubs               darker, denser, tighter spread
+   *   darker  │ hedging              darkest, tightest — a clipped mass is one body
+   * ```
+   *
+   * The gaps matter more than the absolute values: adjacent rows are far enough apart to survive
+   * being tinted into a photograph at `SPRITE_TINT`, which is where these tones actually reach the
+   * pixels. Before that tint existed, retuning this file could not have fixed any of it — the
+   * sprite path ignored the palette entirely.
    */
   'mixed-border': {
-    palette: ['#7fa86a', '#93b87c', '#6d9a5c', '#95849f', '#a8bd83'],
+    palette: ['#6f9c58', '#87b06d', '#5c8a48', '#8d7a99', '#9cb474'],
     jointColour: '#8a7963',
   },
   shrubs: {
-    palette: ['#6f9a5f', '#7ea86c', '#628a54', '#86ad73'],
+    palette: ['#547e46', '#628f52', '#48703c', '#6d9a5c'],
     jointColour: '#8a7963',
   },
+  /*
+   * The one planting that leaves green. Ornamental grasses read as pale straw from above, and
+   * saying so in hue rather than in value is what finally separated them from turf — they had been
+   * *lighter* than the lawn and still the same colour, which made a bed of grasses look like a
+   * patch of unusually bright lawn rather than like a different plant.
+   */
   'ornamental-grasses': {
-    palette: ['#a9c48f', '#b6cd9c', '#9bb882', '#c2cfa4'],
+    palette: ['#c3c495', '#cfcda4', '#b5b684', '#d8d4b2'],
     jointColour: '#8a7963',
   },
   hedging: {
-    palette: ['#5f8a52', '#6b9a5c', '#557d49', '#739f63'],
-    jointColour: '#55764a',
+    palette: ['#3f6437', '#4a7340', '#365a30', '#537e47'],
+    jointColour: '#2f4a2a',
   },
   'ground-cover': {
-    palette: ['#8fb37f', '#9cbe8b', '#82a672', '#a6c795'],
+    palette: ['#7ba169', '#88ad76', '#6d9459', '#93b881'],
     jointColour: '#7d8f6c',
   },
 
   /* ---- gravel-mulch: background from the middle of the palette, as above ---- */
+  /*
+   * ## Why these spreads widened
+   *
+   * Every aggregate was written as four tones inside about a ±8% band, which is roughly true of a
+   * *single* chipping and quite wrong about a barrow of them. The visible cost was at plan zoom:
+   * once the units are drawn flat rather than lit, a tight palette makes a bark bed and a slate bed
+   * two flat rectangles of colour, and the thing that says "this is loose material" — that no two
+   * pieces are the same — never appears at the scale the garden is actually read at.
+   *
+   * Roughly ±18% now. Still inside one family, because that is the rule these palettes were
+   * written under and it is right: an aggregate's ground is drawn from the middle of its *own*
+   * tones, so a contrasting ground would read as gravel scattered on mud rather than as a body of
+   * gravel. `palette.test.ts` pins that.
+   */
   'bark-mulch': {
-    palette: ['#a8845c', '#b89268', '#977452', '#af8b61'],
+    palette: ['#8f6c46', '#a8845c', '#c19a6f', '#7d5d3c', '#b28f66'],
     jointColour: '#9d7c56',
   },
   'decorative-gravel': {
-    palette: ['#ddd8ca', '#e4e0d3', '#d1ccbc', '#d8d2c2'],
+    palette: ['#cbc5b3', '#ddd8ca', '#eeeade', '#bdb7a4', '#d8d2c2'],
     jointColour: '#d5d0c0',
   },
   'play-bark': {
-    palette: ['#c09a6c', '#cba777', '#b28d60', '#c5a070'],
+    palette: ['#a87f52', '#c09a6c', '#d6b287', '#986f45', '#c9a577'],
     jointColour: '#b59063',
   },
+  /*
+   * Darker and greyer than they were. At the old blue-grey a bed of slate chippings read as a
+   * pool of water on the plan — which is a real confusion between two materials that are both
+   * flat, cool and mid-toned, and the more so once every water material got its own surface
+   * treatment and slate did not.
+   */
   'slate-chippings': {
-    palette: ['#7f8489', '#8d9298', '#71767b', '#868b91'],
-    jointColour: '#7b8085',
+    palette: ['#55585d', '#666a6f', '#787c82', '#474a4e', '#6f7278'],
+    jointColour: '#5f6367',
   },
 
   /* ---- structure ---- */

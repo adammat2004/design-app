@@ -38,7 +38,7 @@ import { LengthInput } from './SideLengthsPanel';
  */
 
 /** The types worth offering. Upstairs windows are recorded but not part of the common case. */
-const OFFERED: OpeningType[] = ['patio-door', 'back-door', 'window', 'garage-door'];
+const OFFERED: OpeningType[] = ['patio-door', 'back-door', 'front-door', 'window', 'garage-door'];
 
 /** Sliding snaps to this, in metres — fine enough to be exact, coarse enough to be steady. */
 const SLIDE_STEP = 0.05;

@@ -1054,3 +1054,104 @@ describe('undo, redo and reset', () => {
     expect(store().present.house).not.toBeNull();
   });
 });
+
+describe('access: gates and the street', () => {
+  beforeEach(() => {
+    drawPlot();
+    placeHouse();
+    store().setMode('access');
+  });
+
+  it('needs a closed plot before it can be entered', () => {
+    resetBoundaryStoreForTests();
+    store().addVertexAt({ x: 0, y: 0 });
+    store().setMode('access');
+    expect(store().mode).toBe('boundary');
+  });
+
+  it('places a gate on the edge clicked, measured from the edge start', () => {
+    // Edge 1 runs v2 (20,0) → v3 (20,16); a click 6 m down it.
+    store().setAccessTool('gate');
+    store().addGateOnEdge(1, { x: 20.2, y: 6 });
+
+    const [gate] = store().present.gates;
+    expect(gate?.edgeVertexId).toBe(store().present.vertices[1]!.id);
+    expect(gate?.offsetAlongEdge).toBeCloseTo(6);
+    expect(gate?.width).toBeCloseTo(0.9);
+    // Placing one disarms the tool, so the next click on the fence does nothing surprising.
+    expect(store().accessTool).toBeNull();
+  });
+
+  it('refuses a gate through another gate, and keeps the history clean', () => {
+    store().addGateOnEdge(1, { x: 20, y: 6 });
+    const before = store().past.length;
+    store().addGateOnEdge(1, { x: 20, y: 6.3 });
+
+    expect(store().present.gates).toHaveLength(1);
+    expect(store().past.length).toBe(before);
+  });
+
+  it('takes the suggested gate on the wider return, behind the back wall', () => {
+    store().addSuggestedGate();
+    const [gate] = store().present.gates;
+    expect(gate).toBeDefined();
+    // House 8 wide at x 10: both returns are 6 m; a tie goes to the first side fence found.
+    expect(['v2', 'v4']).toContain(gate!.edgeVertexId);
+  });
+
+  it('removes a gate, and undo brings it back', () => {
+    store().addGateOnEdge(1, { x: 20, y: 6 });
+    const [gate] = store().present.gates;
+    store().removeGate(gate!.id);
+    expect(store().present.gates).toHaveLength(0);
+    store().undo();
+    expect(store().present.gates).toHaveLength(1);
+  });
+
+  it('re-homes a gate when a corner is inserted before it on its edge', () => {
+    store().addGateOnEdge(1, { x: 20, y: 10 });
+    store().insertVertexOnEdge(1, { x: 20, y: 4 });
+
+    const [gate] = store().present.gates;
+    const inserted = store().present.vertices[2]!;
+    expect(gate?.edgeVertexId).toBe(inserted.id);
+    expect(gate?.offsetAlongEdge).toBeCloseTo(6);
+  });
+
+  it('drops a gate whose edge is deleted with its corner', () => {
+    store().insertVertexOnEdge(1, { x: 20, y: 8 });
+    store().addGateOnEdge(2, { x: 20, y: 12 });
+    const corner = store().present.vertices[2]!;
+    expect(store().present.gates[0]?.edgeVertexId).toBe(corner.id);
+
+    store().deleteVertex(corner.id);
+    expect(store().present.gates).toHaveLength(0);
+  });
+
+  it('sets and clears the street edge, and takes the suggestion', () => {
+    store().setStreetEdge(2);
+    expect(store().present.streetEdgeVertexId).toBe(store().present.vertices[2]!.id);
+    store().setStreetEdge(null);
+    expect(store().present.streetEdgeVertexId).toBeNull();
+
+    store().setSuggestedStreetEdge();
+    // The house faces +y, so the street is the bottom fence, v3 → v4.
+    expect(store().present.streetEdgeVertexId).toBe(store().present.vertices[2]!.id);
+  });
+
+  it('forgets a street edge whose corner is deleted', () => {
+    store().insertVertexOnEdge(2, { x: 10, y: 16 });
+    const corner = store().present.vertices[3]!;
+    store().setStreetEdge(3);
+    store().deleteVertex(corner.id);
+    expect(store().present.streetEdgeVertexId).toBeNull();
+  });
+
+  it('keeps the armed tool out of the undo history', () => {
+    const before = store().past.length;
+    store().setAccessTool('street');
+    expect(store().past.length).toBe(before);
+    store().setMode('boundary');
+    expect(store().accessTool).toBeNull();
+  });
+});

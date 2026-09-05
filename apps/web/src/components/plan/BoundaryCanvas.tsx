@@ -31,6 +31,7 @@ import { formatArea, formatLength, type Unit } from '@/lib/units';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { CanvasChrome } from './CanvasChrome';
 import { EdgeHitLines } from './EdgeHitLines';
+import { GateMarks } from './GateMarks';
 import { EditableVertices } from './EditableVertices';
 import { HouseOpenings } from './HouseOpenings';
 import { HouseShape } from './HouseShape';
@@ -54,6 +55,7 @@ export function BoundaryCanvas() {
   const mode = useBoundaryStore((state) => state.mode);
   const boundaryTool = useBoundaryStore((state) => state.boundaryTool);
   const houseTool = useBoundaryStore((state) => state.houseTool);
+  const accessTool = useBoundaryStore((state) => state.accessTool);
   const unit = useBoundaryStore((state) => state.unit);
   const selection = useBoundaryStore((state) => state.selection);
   const hoveredEdgeIndex = useBoundaryStore((state) => state.hoveredEdgeIndex);
@@ -77,6 +79,7 @@ export function BoundaryCanvas() {
     handlePointerUp,
     armPan,
     handleStageDragStart,
+    handleStageDragEnd,
     consumePan,
     registerTap,
     isDoubleTap,
@@ -84,7 +87,6 @@ export function BoundaryCanvas() {
     stageCentre,
     fitToShape,
     zoomAbout,
-    foldStageOffset,
     handleWheel,
     pointerInMetres,
   } = useCanvasViewport({
@@ -287,12 +289,23 @@ export function BoundaryCanvas() {
     const at = pointerInMetres();
     if (!at) return;
 
-    const { insertVertexOnEdge, setBoundaryTool, select } = useBoundaryStore.getState();
+    const { insertVertexOnEdge, setBoundaryTool, select, addGateOnEdge, setStreetEdge } =
+      useBoundaryStore.getState();
     const edge = edges[edgeIndex];
 
     if (mode === 'boundary' && boundaryTool === 'add-point') {
       insertVertexOnEdge(edgeIndex, closestPointOnSegment(at, edge.start, edge.end));
       setBoundaryTool('move');
+      return;
+    }
+
+    // Access mode: the fence is the thing being clicked, for a gate or for the street.
+    if (mode === 'access' && accessTool === 'gate') {
+      addGateOnEdge(edgeIndex, closestPointOnSegment(at, edge.start, edge.end));
+      return;
+    }
+    if (mode === 'access' && accessTool === 'street') {
+      setStreetEdge(edgeIndex);
       return;
     }
 
@@ -387,7 +400,7 @@ export function BoundaryCanvas() {
         style={{
           cursor: panActive
             ? 'grabbing'
-            : drawingCursor(mode, boundaryTool, houseTool, draft.closed),
+            : drawingCursor(mode, boundaryTool, houseTool, draft.closed, accessTool !== null),
         }}
       >
         {canRender ? (
@@ -402,7 +415,7 @@ export function BoundaryCanvas() {
             onMouseDown={handleStageMouseDown}
             onMouseMove={handleStageMouseMove}
             onMouseUp={handleStageMouseUp}
-            onDragEnd={(event) => foldStageOffset(event.target as Konva.Stage)}
+            onDragEnd={handleStageDragEnd}
             onWheel={handleWheel}
           >
             <Layer listening={false}>
@@ -492,8 +505,12 @@ export function BoundaryCanvas() {
               <EdgeHitLines
                 edges={edges}
                 transform={transform}
-                hoveredIndex={mode === 'boundary' ? hoveredEdgeIndex : null}
-                listening={!panActive && mode === 'boundary'}
+                hoveredIndex={
+                  mode === 'boundary' || (mode === 'access' && accessTool) ? hoveredEdgeIndex : null
+                }
+                listening={
+                  !panActive && (mode === 'boundary' || (mode === 'access' && !!accessTool))
+                }
                 onEdgeClick={handleEdgeClick}
                 onHoverChange={(index) => useBoundaryStore.getState().hoverEdge(index)}
                 testIdPrefix="boundary-edge"
@@ -602,6 +619,9 @@ export function BoundaryCanvas() {
                   }
                 />
               ) : null}
+
+              {/* Gates in the fence and the street beyond it, wherever the plan is drawn. */}
+              {draft.closed ? <GateMarks site={draft} transform={transform} /> : null}
 
               {rubberBand ? (
                 <Rect
@@ -834,8 +854,10 @@ function drawingCursor(
   boundaryTool: string,
   houseTool: string,
   closed: boolean,
+  accessArmed = false,
 ): string {
   if (mode === 'measure') return 'crosshair';
+  if (mode === 'access' && accessArmed) return 'crosshair';
   if (mode === 'boundary' && boundaryTool === 'draw' && !closed) return 'crosshair';
   if (mode === 'house' && (houseTool === 'rectangle' || houseTool === 'custom')) return 'crosshair';
   return 'default';

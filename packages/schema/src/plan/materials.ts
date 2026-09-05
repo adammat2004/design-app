@@ -48,6 +48,10 @@ export const MaterialIdSchema = z.enum([
   'formal-pool',
   'rill',
   'water-bowl',
+  // furniture
+  'teak-furniture',
+  'rattan-furniture',
+  'steel-furniture',
   // existing-feature
   'existing',
 ]);
@@ -97,6 +101,16 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'painted-timber', label: 'Painted timber', cost: 2 },
     { id: 'hardwood', label: 'Hardwood', cost: 4 },
     { id: 'powder-coated-steel', label: 'Powder-coated steel', cost: 4 },
+  ],
+  /*
+   * What furniture is made of. Never laid by area, so these never reach the schedule's unit counts
+   * or the cost index — see `quantities.ts`. They exist so the dropdown has an answer and so a
+   * product catalogue, when there is one, has something to key on.
+   */
+  furniture: [
+    { id: 'teak-furniture', label: 'Teak', cost: 3 },
+    { id: 'rattan-furniture', label: 'Rattan', cost: 2 },
+    { id: 'steel-furniture', label: 'Powder-coated steel', cost: 3 },
   ],
   'water-feature': [
     { id: 'naturalistic-pond', label: 'Naturalistic pond', cost: 2 },

@@ -30,6 +30,25 @@ export const MODULE_SHADOW = 0.1;
  */
 export const MODULE_BEVEL_RATIO = 0.035;
 
+/* ---------------------------------------------------------------- contact shadows */
+
+/**
+ * The soft disc a sprite stands on, in units of the sprite.
+ *
+ * A drawing convention, in the same class as the module bevel: it is written in proportions of the
+ * thing it decorates, it never reads the site, and it never scales with height. Its one tie to
+ * the world is direction — it is pushed away from `DrawPass.light`, so under a real sun it agrees
+ * with the cast shadows and under the conventional light it agrees with the bevels. What it must
+ * never become is a claim about where the shade is at a time of day; that layer stays gated on a
+ * location the user has actually stated.
+ */
+export const CONTACT_SHADOW_OFFSET_RATIO = 0.12;
+export const CONTACT_SHADOW_SCALE = 1.15;
+export const CONTACT_SHADOW_ALPHA = 0.28;
+
+/** The strip of shade along the fence panels the sun is behind. Same class of convention. */
+export const FENCE_SHADE_OPACITY = 0.14;
+
 /* ---------------------------------------------------------------- cast shadows */
 
 /**
@@ -52,8 +71,11 @@ export const SHADOW_TONE = '#4a5a63';
  * Low enough that the material underneath still reads — the point of a shadow here is to say
  * "this corner is shaded", not to hide what is in it. A plan where you cannot tell paving from
  * planting in the shade has traded information for atmosphere.
+ *
+ * Raised from 0.26 when the lawn became a photograph: a blue-grey at a quarter opacity over pale
+ * procedural turf was plain, and over real mid-green grass it all but vanished.
  */
-export const SHADOW_OPACITY = 0.26;
+export const SHADOW_OPACITY = 0.36;
 
 /* ---------------------------------------------------------------- colour maths */
 
@@ -82,6 +104,26 @@ export function hexToRgb(hex: string): Rgb {
   const value = Number.parseInt(expanded, 16);
 
   return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+}
+
+/**
+ * A CSS colour the canvas already paints — hex, `rgb()`, or `rgba()` — to channels.
+ *
+ * `hexToRgb` stays strict: a palette entry that is not a hex is a typo. `materialFill` is the
+ * other kind of colour, a fill a canvas can use as-is, and a kept existing feature's is the
+ * translucent keep-status green rather than a hex. Shading a roof from that fill has to read
+ * the channels without claiming the string was a palette hex.
+ *
+ * Alpha is dropped. A roof overlay has its own opacity; folding 0.18 into the channels would
+ * shade from nearly black.
+ */
+export function cssToRgb(colour: string): Rgb {
+  if (colour.startsWith('#')) return hexToRgb(colour);
+
+  const match = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(colour);
+  if (!match) throw new Error(`Not a colour: ${colour}`);
+
+  return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
 }
 
 export function rgbToCss({ r, g, b }: Rgb): string {

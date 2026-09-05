@@ -136,6 +136,84 @@ describe.skipIf(connection === null)('FillService', () => {
     expect(first.x === last.x && first.y === last.y).toBe(false);
   });
 
+  describe('remainderPieces', () => {
+    /** A 6 x 4 m lawn in the middle of the zone: what is left is an annulus. */
+    const lawn = rect(3, 3, 6, 4);
+    const centre = { x: 6, y: 5 };
+    const cuts: [Point, Point][] = [
+      [centre, { x: centre.x + 1, y: centre.y }],
+      [centre, { x: centre.x, y: centre.y + 1 }],
+    ];
+
+    it('cuts the annulus round a room into runs with no holes', async () => {
+      const pieces = await service.remainderPieces({ zone, rooms: [lawn], cuts });
+
+      expect(pieces.length).toBeGreaterThanOrEqual(2);
+      const total = pieces.reduce((sum, piece) => sum + polygonArea(piece), 0);
+      // Roughly the zone less the lawn (120 - 24), allowing for the sliver trim.
+      expect(total).toBeGreaterThan(80);
+      expect(total).toBeLessThanOrEqual(96.01);
+      for (const piece of pieces) {
+        // Nothing crosses the room: no vertex of a piece lies strictly inside the lawn.
+        for (const point of piece) {
+          const insideLawn =
+            point.x > 3 + 1e-6 && point.x < 9 - 1e-6 && point.y > 3 + 1e-6 && point.y < 7 - 1e-6;
+          expect(insideLawn).toBe(false);
+          expect(point.x).toBeGreaterThanOrEqual(-1e-6);
+          expect(point.x).toBeLessThanOrEqual(12 + 1e-6);
+        }
+        // And the lawn's centre is in none of them, which is what "no hole" means here.
+        expect(pointInPolygon(centre, piece)).toBe(false);
+      }
+    });
+
+    it('flattens a feature standing wholly inside a run, for the caller to draw over it', async () => {
+      const shed = rect(0.5, 0.5, 1.6, 1.6);
+      const pieces = await service.remainderPieces({ zone, rooms: [lawn, shed], cuts });
+
+      // The corner run still comes back as one ring rather than being refused.
+      const corner = pieces.find((piece) => pointInPolygon({ x: 0.2, y: 2.5 }, piece));
+      expect(corner).toBeDefined();
+    });
+
+    it('respects the limit, largest first', async () => {
+      const all = await service.remainderPieces({ zone, rooms: [lawn], cuts });
+      const two = await service.remainderPieces({ zone, rooms: [lawn], cuts, limit: 2 });
+
+      expect(two).toHaveLength(2);
+      expect(polygonArea(two[0]!)).toBeGreaterThanOrEqual(polygonArea(two[1]!));
+      expect(polygonArea(two[0]!)).toBeCloseTo(polygonArea(all[0]!), 6);
+    });
+
+    it('returns nothing for an empty zone or no budget', async () => {
+      expect(await service.remainderPieces({ zone: [], rooms: [lawn], cuts })).toEqual([]);
+      expect(await service.remainderPieces({ zone, rooms: [lawn], cuts, limit: 0 })).toEqual([]);
+    });
+  });
+
+  describe('clipToRoom', () => {
+    it('keeps the part of a shape that lies in the room', async () => {
+      const shape = rect(8, 2, 8, 4); // Runs 4 m past the zone's right edge.
+      const clipped = await service.clipToRoom(shape, zone);
+
+      expect(clipped).not.toBeNull();
+      expect(polygonArea(clipped!)).toBeCloseTo(16, 3);
+      for (const point of clipped!) expect(point.x).toBeLessThanOrEqual(12 + 1e-6);
+    });
+
+    it('insets the result when asked', async () => {
+      const shape = rect(2, 2, 6, 4);
+      const inset = await service.clipToRoom(shape, zone, 0.5);
+
+      expect(inset).not.toBeNull();
+      expect(polygonArea(inset!)).toBeCloseTo(15, 3);
+    });
+
+    it('is null when the shape misses the room', async () => {
+      expect(await service.clipToRoom(rect(20, 20, 2, 2), zone)).toBeNull();
+    });
+  });
+
   describe('borderRegions', () => {
     /*
      * A half-plane slab, which is what `computeZones` actually produces — never the whole plot.

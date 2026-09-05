@@ -12,9 +12,12 @@ import {
   type MaterialId,
   type Point,
   type PlanGeometry,
+  type SymbolId,
   type ZoneId,
 } from '@garden-studio/schema';
 import type { DesignConstraints } from './constraints.js';
+import { TEMPLATE_NAMES } from './layout/templates/index.js';
+import type { TemplateId } from './layout/sketch.js';
 
 /**
  * Generator *policy*: what the brief's answers become on the ground, and how the three concepts
@@ -33,6 +36,13 @@ export interface FeatureSpec {
   affinity: 'near-house' | 'far-from-house' | 'any';
   /** Overrides the brief label on the plan, where the catalogue wording is too long. */
   planName?: string;
+  /**
+   * A material the feature always has, whatever the palette says. Play bark is the ground of a
+   * play area and nothing else: it used to come from `materialFor('gravel-mulch')` whenever the
+   * brief asked for play, which made it the base of the front garden and the gravel panel of a
+   * low-maintenance concept too.
+   */
+  material?: MaterialId;
 }
 
 /**
@@ -54,6 +64,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     prefer: ['back', 'left', 'right'],
     affinity: 'far-from-house',
     planName: 'Play area',
+    material: 'play-bark',
   },
   vegPatch: {
     category: 'planting-bed',
@@ -113,7 +124,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
  * is a judgement about gardens rather than about geometry, which is why it is a list here beside
  * the other opinions rather than a rule derived from the footprint.
  */
-export const REPEATABLE_FEATURES: DesiredFeature[] = ['seating', 'vegPatch', 'water', 'firePit'];
+export const REPEATABLE_FEATURES: DesiredFeature[] = ['seating', 'vegPatch', 'water'];
 
 /** The footprint's shortest half-extent — how far a centre must sit from the free region's edge. */
 export function inradius(spec: FeatureSpec): number {
@@ -191,6 +202,50 @@ export const ARCHETYPES: Archetype[] = [
 export const CONCEPTS_PER_SET = ARCHETYPES.length;
 
 /**
+ * Which archetype a concept slot carries, given which slot is the recommendation.
+ *
+ * The three slots are the three layout templates, in a fixed order. The recommended slot takes
+ * the balanced archetype — it answers the brief as written — and the other two take the
+ * entertaining and retreat positions in slot order, so a cottage brief's recommendation is still
+ * budget-neutral and the alternatives still lean one way each.
+ */
+export function archetypeFor(index: number, recommendedIndex: number): Archetype {
+  if (index === recommendedIndex) return ARCHETYPES[0]!;
+  const others = [0, 1, 2].filter((slot) => slot !== recommendedIndex);
+  const position = Math.max(0, others.indexOf(index % 3));
+  return ARCHETYPES[1 + position] ?? ARCHETYPES[1]!;
+}
+
+/* ---------------------------------------------------------------- furnishing */
+
+/**
+ * What a requested feature *is*, when its category cannot say. A store is a shed; a pergola is a
+ * pergola. Set on the host element itself, so the drawing knows to give it a roof or posts.
+ */
+export const HOST_SYMBOLS: Partial<Record<DesiredFeature, SymbolId>> = {
+  pergola: 'pergola',
+  storage: 'shed',
+  vegPatch: 'raised-bed',
+};
+
+/**
+ * What goes *inside* a requested feature: the table under the pergola, the sofa on the patio.
+ *
+ * This is the single biggest difference between a plan that reads as designed and one that reads
+ * as zoned. A patio with nothing on it is a rectangle; a patio with a lounge set on it is a place.
+ * One list per feature, indexed by the concept — the balanced concept gets the sofa, the
+ * entertaining one the long table, the retreat a lounger — and `furnish` walks the list until
+ * something fits, so a small pergola gets the four-seater rather than nothing.
+ */
+export const FURNISHINGS: Partial<Record<DesiredFeature, SymbolId[]>> = {
+  pergola: ['dining-set-6', 'dining-set-4'],
+  seating: ['sofa-set', 'dining-set-6', 'lounger'],
+  outdoorKitchen: ['bbq'],
+  firePit: ['fire-pit'],
+  play: ['swing', 'trampoline', 'slide'],
+};
+
+/**
  * The default surface a concept falls back to, and what it accents with.
  *
  * One rule per concept, applied to every region in it — not a roll per element. A plan whose
@@ -214,6 +269,7 @@ export function fillPalette(
     'paved-area': ['lawn', 'planting-bed'],
     structure: ['lawn', 'planting-bed'],
     'water-feature': ['lawn', 'planting-bed'],
+    furniture: ['lawn', 'planting-bed'],
     'existing-feature': ['lawn', 'planting-bed'],
   };
 
@@ -260,9 +316,13 @@ export function materialFor(
 
   const chosen = ((): MaterialId => {
     switch (category) {
+      /*
+       * The lawn is the mown panel, so it is turf whatever the style. A cottage garden used to get
+       * `wildflower` here, which drew the one panel meant to be walked on as a meadow; the meadow
+       * belongs in the borders, where the cottage planting branch below offers it.
+       */
       case 'lawn':
         if (lowUpkeep && constraints.wantsPlay) return 'artificial-turf';
-        if (constraints.style === 'cottage') return 'wildflower';
         return constraints.wantsPlay ? 'hardwearing-turf' : 'standard-turf';
 
       case 'paved-area':
@@ -279,10 +339,11 @@ export function materialFor(
         if (formal) return (['shrubs', 'mixed-border', 'hedging'] as const)[index % 3]!;
         if (lowUpkeep)
           return (['shrubs', 'ground-cover', 'ornamental-grasses'] as const)[index % 3]!;
+        if (constraints.style === 'cottage')
+          return (['mixed-border', 'wildflower', 'shrubs'] as const)[index % 3]!;
         return (['mixed-border', 'ornamental-grasses', 'shrubs'] as const)[index % 3]!;
 
       case 'gravel-mulch':
-        if (constraints.wantsPlay) return 'play-bark';
         return formal
           ? 'slate-chippings'
           : (['decorative-gravel', 'bark-mulch'] as const)[index % 2]!;
@@ -292,6 +353,10 @@ export function materialFor(
 
       case 'water-feature':
         return formal ? 'formal-pool' : 'naturalistic-pond';
+
+      case 'furniture':
+        if (dear) return 'teak-furniture';
+        return formal ? 'steel-furniture' : 'rattan-furniture';
 
       case 'existing-feature':
         return 'existing';
@@ -349,46 +414,14 @@ export function featureLabel(feature: DesiredFeature, brief: GardenBrief): strin
   return DESIRED_FEATURE_LABELS[feature];
 }
 
-/** "Family", "Entertainer's" — read off what was actually ticked, not hardcoded. */
-function character(brief: GardenBrief): string {
-  if (brief.desiredFeatures.includes('play')) return 'Family';
-  if (
-    brief.desiredFeatures.includes('outdoorKitchen') ||
-    brief.desiredFeatures.includes('firePit')
-  ) {
-    return "Entertainer's";
-  }
-  if (brief.desiredFeatures.includes('vegPatch')) return 'Kitchen';
-  return 'Everyday';
-}
-
 export function describeConcept(
-  index: number,
+  template: TemplateId,
   brief: GardenBrief,
 ): { name: string; summary: string; style: string } {
-  const style = styleLabel(brief);
-
-  switch (index) {
-    case 0:
-      return {
-        name: `Balanced ${character(brief)} Garden`,
-        summary:
-          'Answers the brief as written, with space given evenly to the things you asked for and planting between them.',
-        style: `${style} / Natural`,
-      };
-    case 1:
-      return {
-        name: 'Entertaining Focus',
-        summary:
-          'Weighted towards gathering — larger hard surfaces near the house, with planting pushed to the edges.',
-        style: `${style} / Social`,
-      };
-    default:
-      return {
-        name: 'Low-Maintenance Retreat',
-        summary:
-          'Fewer built elements and more ground cover, for a calmer garden that asks less of you each season.',
-        style: `${style} / Easy-care`,
-      };
-  }
+  const names = TEMPLATE_NAMES[template];
+  return {
+    name: names.name,
+    summary: names.summary,
+    style: `${styleLabel(brief)} / ${names.tone}`,
+  };
 }

@@ -36,6 +36,10 @@ RULES OF THE GARDEN
   is made of instead.
 - A material must belong to its element's category — the inventory lists which are allowed. There is
   no such thing as a gravel lawn.
+- Furniture — dining sets, sofas, loungers, benches, barbecues, fire pit bowls, play equipment — is
+  the category "furniture". It stands on a patio, deck, pergola or lawn; when adding some, name the
+  surface it belongs on in the reply and give it a realistic footprint (a dining set is about
+  2.4 × 2.4 m, a lounger 0.7 × 1.9 m).
 - "Cheaper" is a reduce-cost intent, not a list of material changes. The engine knows the prices.
 - Sizes are in the units named at the top of the inventory.
 

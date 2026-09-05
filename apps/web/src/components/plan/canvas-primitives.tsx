@@ -1,11 +1,29 @@
 'use client';
 
-import { Group, Line, Rect, Shape, Text } from 'react-konva';
-import type { Point } from '@garden-studio/schema';
+import { Circle, Group, Line, Rect, Shape, Text } from 'react-konva';
+import {
+  BOUNDARY_HEIGHTS,
+  BOUNDARY_THICKNESS,
+  DEFAULT_BOUNDARY_KIND,
+  type BoundaryRun,
+  type Point,
+} from '@garden-studio/schema';
 import { COLOUR } from '@/lib/canvas-colours';
 import { metresToPx, pxToMetres, type CanvasTransform } from '@/lib/canvas-transform';
 import { gridSteps, niceStep } from '@/lib/grid';
 import { SIZE_ANCHOR_CAR, type AlignmentGuide, type DimensionGuide } from '@/lib/guides';
+import { FENCE_SHADE_OPACITY } from '@/lib/materials/light';
+import {
+  boundaryBand,
+  BOUNDARY_PALETTE,
+  crownInset,
+  inGap,
+  inwardNormal,
+  MIN_BAND_PX,
+  ringIsClockwise,
+  runPosts,
+} from '@/lib/materials/symbols/boundary';
+import { fenceShadeBands } from '@/lib/materials/symbols/property';
 import { formatLength, fromDisplay, type Unit } from '@/lib/units';
 
 /**
@@ -189,70 +207,202 @@ export function MeasurementGuides({
 }
 
 /**
- * The property boundary drawn as a fence: a rail with posts at intervals.
+ * The property boundary, drawn as whatever each side is actually made of.
  *
  * Purely presentation — the geometry is the same boundary polygon everything else measures and
  * validates against, and nothing here is fed back into it. It exists because a garden is an
- * enclosed thing: a 2 px green outline reads as the edge of a diagram, where a rail with posts
+ * enclosed thing: a 2 px green outline reads as the edge of a diagram, where a wall or a hedge
  * reads as the end of the garden, which is what the plan is actually depicting.
  *
- * Posts are spaced in metres, not pixels, so they stay a real distance apart as the user zooms —
- * the same rule the paving joints follow. Below a couple of pixels apart they are dropped: a solid
- * line of posts is noise, and at that zoom the rail alone says everything.
+ * **Per run, not per polygon.** This used to draw one close-boarded fence round every plot,
+ * because that was the only thing it could draw. `boundaryRuns` resolves each side to its own
+ * kind — the stored style if the user has described that side, a fence if not — so a plot with a
+ * brick wall on one side and an open frontage on another looks like that plot and not like every
+ * other one.
+ *
+ * Bands are metres and posts are spaced in metres, so both stay a real size as the user zooms —
+ * the same rule the paving joints follow. Below `MIN_POST_SPACING_PX` apart the posts are dropped:
+ * a solid line of them is noise, and at that zoom the band alone says everything.
  */
 export function FenceLine({
   polygon,
+  runs,
   transform,
-  spacingMetres = 1.8,
+  light,
+  gaps,
 }: {
   polygon: Point[];
+  /**
+   * One entry per side, from `boundaryRuns(site)`. Omitted draws the whole polygon as the default
+   * fence, which is what the thumbnails and any caller without a site want.
+   */
+  runs?: BoundaryRun[];
   transform: CanvasTransform;
-  spacingMetres?: number;
+  /**
+   * Unit vector towards the light. Given, the panels the sun is behind throw a strip of shade
+   * into the garden — the contact-shadow convention, not the cast layer, so it appears whether
+   * or not the plan knows where it is. Omitted draws no shade, which is what step 1 and 2 want.
+   */
+  light?: Point;
+  /** Gates: the run is broken and no post stands in the gap. From `gateGaps`. */
+  gaps?: [Point, Point][];
 }) {
   if (polygon.length < 3) return null;
 
-  const spacingPx = spacingMetres * transform.scale;
-  const postRadius = Math.max(1.2, Math.min(3.2, transform.scale * 0.05));
-  const showPosts = spacingPx >= 9;
+  const shade = light ? fenceShadeBands(polygon, light) : [];
+  const gapList = gaps ?? [];
+  const clockwise = ringIsClockwise(polygon);
+  const resolved = runs ?? defaultRuns(polygon);
 
-  const points = polygon.flatMap((point) => {
-    const at = metresToPx(point, transform);
+  const toPx = (point: Point) => metresToPx(point, transform);
+  const flat = (points: Point[]) => points.flatMap((point) => {
+    const at = toPx(point);
     return [at.x, at.y];
   });
 
-  const posts: Point[] = [];
-
-  if (showPosts) {
-    for (let i = 0; i < polygon.length; i += 1) {
-      const start = metresToPx(polygon[i]!, transform);
-      const end = metresToPx(polygon[(i + 1) % polygon.length]!, transform);
-      const run = Math.hypot(end.x - start.x, end.y - start.y);
-      const count = Math.max(1, Math.round(run / spacingPx));
-
-      // Half-open, so a corner post is not drawn twice by the two edges that meet there.
-      for (let step = 0; step < count; step += 1) {
-        const t = step / count;
-        posts.push({ x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t });
-      }
-    }
-  }
+  const gapPx = gapList.map(([a, b]) => {
+    const from = toPx(a);
+    const to = toPx(b);
+    return [from.x, from.y, to.x, to.y];
+  });
 
   return (
     <Group listening={false}>
-      <Line points={points} closed stroke={COLOUR.fenceRail} strokeWidth={3} lineJoin="round" />
-      {posts.map((post, index) => (
-        <Rect
-          key={index}
-          x={post.x - postRadius}
-          y={post.y - postRadius}
-          width={postRadius * 2}
-          height={postRadius * 2}
-          fill={COLOUR.fencePost}
-          cornerRadius={0.5}
+      {shade.map((band, index) => (
+        <Line
+          key={`shade-${index}`}
+          points={flat(band)}
+          closed
+          fill={COLOUR.fenceShade}
+          opacity={FENCE_SHADE_OPACITY}
+        />
+      ))}
+
+      {resolved.map((run) => {
+        const palette = BOUNDARY_PALETTE[run.kind];
+        const inward = inwardNormal(run, clockwise);
+        const band = boundaryBand(run, inward);
+        const bandPx = run.thickness * transform.scale;
+
+        /*
+         * Thin enough that a filled band would be a wash of anti-aliasing, or a kind with no body
+         * at all: stroked as a line instead. The threshold is on the drawn width rather than on
+         * the kind, so a railing becomes a line before a wall does — which is correct, because it
+         * genuinely is thinner.
+         */
+        const asLine = palette.dashed || bandPx < MIN_BAND_PX;
+
+        const postRadius = Math.max(1.2, Math.min(3.2, transform.scale * 0.05));
+        const posts = palette.detail
+          ? runPosts(
+              run,
+              transform.scale,
+              { x: (inward.x * run.thickness) / 2, y: (inward.y * run.thickness) / 2 },
+              crownInset(run),
+            ).filter((post) => !inGap(post, gapList))
+          : [];
+
+        return (
+          <Group key={run.edgeVertexId}>
+            {asLine ? (
+              <Line
+                points={flat([run.start, run.end])}
+                stroke={palette.body}
+                strokeWidth={palette.dashed ? 1.5 : 2.5}
+                dash={palette.dashed ? [6, 5] : undefined}
+                lineCap="round"
+              />
+            ) : (
+              <Line points={flat(band)} closed fill={palette.body} />
+            )}
+
+            {/* A wall's coping: the light line along the top that says masonry rather than timber. */}
+            {palette.cap && !asLine ? (
+              <Line
+                points={flat([
+                  { x: run.start.x + inward.x * run.thickness, y: run.start.y + inward.y * run.thickness },
+                  { x: run.end.x + inward.x * run.thickness, y: run.end.y + inward.y * run.thickness },
+                ])}
+                stroke={palette.cap}
+                strokeWidth={Math.max(1, bandPx * 0.3)}
+              />
+            ) : null}
+
+            {posts.map((post, index) => {
+              const at = toPx(post);
+              /* A hedge's "posts" are its crowns, so they are round and overlap into a mass. */
+              const isHedge = run.kind === 'hedge';
+              const radius = isHedge
+                ? Math.max(postRadius, (run.thickness * transform.scale) / 2)
+                : postRadius;
+
+              return isHedge ? (
+                <Circle
+                  key={index}
+                  x={at.x}
+                  y={at.y}
+                  radius={radius}
+                  fill={palette.detail ?? undefined}
+                  opacity={0.75}
+                />
+              ) : (
+                <Rect
+                  key={index}
+                  x={at.x - postRadius}
+                  y={at.y - postRadius}
+                  width={postRadius * 2}
+                  height={postRadius * 2}
+                  fill={palette.detail ?? undefined}
+                  cornerRadius={0.5}
+                />
+              );
+            })}
+          </Group>
+        );
+      })}
+
+      {/* The gaps: the run painted out for the width of each gate. */}
+      {gapPx.map((segment, index) => (
+        <Line
+          key={`gap-${index}`}
+          points={segment}
+          stroke="#ffffff"
+          strokeWidth={5}
+          lineCap="butt"
         />
       ))}
     </Group>
   );
+}
+
+/**
+ * Every side as the default fence, for a caller with a polygon but no site.
+ *
+ * Thumbnails and the brief screen's property sketch draw a boundary without ever loading the
+ * styles; giving them the default here means they get the drawing they always had rather than a
+ * special case, and means `runs` can stay optional.
+ */
+function defaultRuns(polygon: Point[]): BoundaryRun[] {
+  const runs: BoundaryRun[] = [];
+
+  for (let i = 0; i < polygon.length; i += 1) {
+    const start = polygon[i]!;
+    const end = polygon[(i + 1) % polygon.length]!;
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (length < 1e-6) continue;
+
+    runs.push({
+      edgeVertexId: `edge-${i}`,
+      start,
+      end,
+      kind: DEFAULT_BOUNDARY_KIND,
+      height: BOUNDARY_HEIGHTS[DEFAULT_BOUNDARY_KIND],
+      thickness: BOUNDARY_THICKNESS[DEFAULT_BOUNDARY_KIND],
+      length,
+    });
+  }
+
+  return runs;
 }
 
 /**

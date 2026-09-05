@@ -13,6 +13,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @garden-studio/web test:e2e",
     "render:material": "pnpm --filter @garden-studio/web render:material",
+    "render:plan": "pnpm --filter @garden-studio/web render:plan",
     "db:migrate": "pnpm --filter @garden-studio/api db:migrate",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

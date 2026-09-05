@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import {
+  boundaryRuns,
   shadowCast,
   shadowOccluders,
   type DesignElement,
@@ -11,6 +12,7 @@ import {
 } from '@garden-studio/schema';
 import { getShadowLayer } from './shadow-cache';
 import type { PatternCanvas, MakeCanvas } from './render-surface-pattern';
+import { useDevicePixelRatio } from './use-device-pixel-ratio';
 
 /**
  * The plan's cast shadows, as an image to draw.
@@ -46,6 +48,8 @@ export function useShadowLayer(
   site: SiteSection,
   scale: number,
 ): ShadowLayer | null {
+  const pixelRatio = useDevicePixelRatio();
+
   return useMemo(() => {
     if (typeof document === 'undefined') return null;
 
@@ -60,11 +64,11 @@ export function useShadowLayer(
 
     if (boundary.length < 3) return null;
 
-    const occluders = shadowOccluders(elements, house);
+    const occluders = shadowOccluders(elements, house, boundaryRuns(site));
     if (occluders.length === 0) return null;
 
     const raster = getShadowLayer(
-      { occluders, cast, boundary, pxPerMetre: scale },
+      { occluders, cast, boundary, pxPerMetre: scale, pixelRatio },
       makeBrowserCanvas,
     );
 
@@ -75,5 +79,5 @@ export function useShadowLayer(
       originMetres: raster.originMetres,
       scale: scale / raster.pxPerMetre,
     };
-  }, [elements, house, boundary, site, scale]);
+  }, [elements, house, boundary, site, scale, pixelRatio]);
 }

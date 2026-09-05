@@ -45,3 +45,5 @@ graphify-out/
 # means someone ran the wrong install and will get a tree that does not match pnpm-lock.yaml.
 package-lock.json
 yarn.lock
+# Image-model originals kept by tools/assets so post-processing can be re-run without regenerating
+tools/assets/raw/

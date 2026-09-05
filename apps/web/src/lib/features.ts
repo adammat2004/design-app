@@ -62,7 +62,9 @@ export const FEATURE_KINDS: FeatureKind[] = [
   'patio',
   'path',
   'fence',
-  'gate',
+  // 'gate' is deliberately absent: a gate is placed on step 1 as part of the fence (see
+  // `gate.ts`), where the generator can read which fence it opens through. The kind stays in the
+  // schema so a plan that placed one here before still parses.
   'water',
   'steps',
   'planting',

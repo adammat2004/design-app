@@ -14,6 +14,7 @@ import {
 } from '@garden-studio/schema';
 import { COLOUR } from '@/lib/canvas-colours';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
+import { WALL_THICKNESS } from '@/lib/materials/symbols/property';
 
 /**
  * The openings, drawn where the design happens.
@@ -104,6 +105,18 @@ function OpeningMark({
   const from = metresToPx(start, transform);
   const to = metresToPx(end, transform);
 
+  /*
+   * The gap is cut through the drawn wall, which is a band of `WALL_THICKNESS` *inside* the
+   * outline. So the cut runs half a wall in from the line the opening sits on, and is exactly one
+   * wall thick — a stroke centred on the outline would cut half of it into the garden.
+   */
+  const half = WALL_THICKNESS / 2;
+  const gapFrom = metresToPx(
+    { x: start.x - normal.x * half, y: start.y - normal.y * half },
+    transform,
+  );
+  const gapTo = metresToPx({ x: end.x - normal.x * half, y: end.y - normal.y * half }, transform);
+
   // Upstairs openings are drawn faintly: they are real, but nothing walks out of one.
   const upstairs = opening.floorLevel > 0;
 
@@ -115,9 +128,9 @@ function OpeningMark({
       */}
       <Line
         data-testid={`opening-mark-${opening.id}`}
-        points={[from.x, from.y, to.x, to.y]}
+        points={[gapFrom.x, gapFrom.y, gapTo.x, gapTo.y]}
         stroke={COLOUR.houseFill}
-        strokeWidth={5}
+        strokeWidth={Math.max(3, WALL_THICKNESS * transform.scale + 1)}
         lineCap="butt"
       />
       <Line
@@ -148,18 +161,24 @@ function OpeningMark({
  * the arc sits well inside the 1.8 m threshold rectangle that already keeps beds out of the way, so
  * counting it twice would shrink the garden for no gain.
  */
-function SwingArc({
+/**
+ * A door leaf standing open and the quarter arc it swings through. Exported for `GateMarks`,
+ * which draws a gate in the fence the same way: same convention, different hinge.
+ */
+export function SwingArc({
   hinge,
   closedTowards,
   normal,
   inward,
   transform,
+  stroke = COLOUR.houseStroke,
 }: {
   hinge: Point;
   closedTowards: Point;
   normal: Point;
   inward: boolean;
   transform: CanvasTransform;
+  stroke?: string;
 }) {
   const dx = closedTowards.x - hinge.x;
   const dy = closedTowards.y - hinge.y;
@@ -187,17 +206,11 @@ function SwingArc({
 
   return (
     <>
-      <Line
-        points={points}
-        stroke={COLOUR.houseStroke}
-        strokeWidth={1}
-        dash={[3, 3]}
-        opacity={0.7}
-      />
+      <Line points={points} stroke={stroke} strokeWidth={1} dash={[3, 3]} opacity={0.7} />
       {/* The leaf itself, standing open. */}
       <Line
         points={[hingePx.x, hingePx.y, openPx.x, openPx.y]}
-        stroke={COLOUR.houseStroke}
+        stroke={stroke}
         strokeWidth={1.5}
         opacity={0.8}
       />

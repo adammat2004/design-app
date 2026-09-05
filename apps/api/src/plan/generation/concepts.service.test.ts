@@ -1,14 +1,22 @@
 import {
   PlanDocumentSchema,
+  THRESHOLD_DEPTH,
   computeZones,
   distanceToSegment,
   elementArea,
   geometryOutline,
   housePolygon,
+  openingCentre,
   polygonContainsPolygon,
   polygonEdges,
   polygonsIntersect,
+  resolvedGates,
+  streetEdge,
+  suggestedAccess,
+  thresholdRect,
+  wallSegment,
   type GardenBrief,
+  type GeneratedConcept,
   type PlanDocument,
 } from '@garden-studio/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -30,33 +38,40 @@ const brief: GardenBrief = {
   styleOther: '',
 };
 
-/** A 20 m x 16 m plot with an 8 m x 6 m house near the top, both gardens in scope. */
+/**
+ * A 20 m x 19 m plot with an 8 m x 6 m house near the top, both gardens in scope. The house faces
+ * the top fence (rotation 180: its front is towards -y), so the street is along the top, the
+ * front garden is the 4 m strip there and the back garden the 9 m below the house — and
+ * `suggestedAccess` gives it patio doors, a front door, a side gate and the street edge, the way a
+ * real site reaches the generator.
+ */
 function plan(overrides: Partial<PlanDocument> = {}): PlanDocument {
-  return PlanDocumentSchema.parse({
-    version: 1,
-    site: {
-      vertices: [
-        { id: 'v1', x: 0, y: 0 },
-        { id: 'v2', x: 20, y: 0 },
-        { id: 'v3', x: 20, y: 16 },
-        { id: 'v4', x: 0, y: 16 },
+  const site = siteWithAccess({
+    vertices: [
+      { id: 'v1', x: 0, y: 0 },
+      { id: 'v2', x: 20, y: 0 },
+      { id: 'v3', x: 20, y: 19 },
+      { id: 'v4', x: 0, y: 19 },
+    ],
+    closed: true,
+    house: {
+      outline: [
+        { id: 'h0', x: -4, y: -3 },
+        { id: 'h1', x: 4, y: -3 },
+        { id: 'h2', x: 4, y: 3 },
+        { id: 'h3', x: -4, y: 3 },
       ],
-      closed: true,
-      house: {
-        outline: [
-          { id: 'h0', x: -4, y: -3 },
-          { id: 'h1', x: 4, y: -3 },
-          { id: 'h2', x: 4, y: 3 },
-          { id: 'h3', x: -4, y: 3 },
-        ],
-        centre: { x: 10, y: 4 },
-        rotation: 0,
-      },
-      selectedZoneIds: ['front', 'back', 'left', 'right'],
+      centre: { x: 10, y: 7 },
+      rotation: 180,
     },
-    brief,
-    ...overrides,
+    selectedZoneIds: ['front', 'back', 'left', 'right'],
   });
+  return PlanDocumentSchema.parse({ version: 1, site, brief, ...overrides });
+}
+
+/** Parses a raw site, then fills in the doors, the gate and the street edge. */
+function siteWithAccess(raw: unknown) {
+  return suggestedAccess(PlanDocumentSchema.shape.site.parse(raw));
 }
 
 /**
@@ -66,7 +81,7 @@ function plan(overrides: Partial<PlanDocument> = {}): PlanDocument {
 function largePlan(): PlanDocument {
   return PlanDocumentSchema.parse({
     version: 1,
-    site: {
+    site: siteWithAccess({
       vertices: [
         { id: 'v1', x: 0, y: 0 },
         { id: 'v2', x: 100, y: 0 },
@@ -82,10 +97,10 @@ function largePlan(): PlanDocument {
           { id: 'h3', x: -4, y: 3 },
         ],
         centre: { x: 50, y: 20 },
-        rotation: 0,
+        rotation: 180,
       },
       selectedZoneIds: ['front', 'back', 'left', 'right'],
-    },
+    }),
     brief,
   });
 }
@@ -94,7 +109,7 @@ function largePlan(): PlanDocument {
 function lShapedPlan(): PlanDocument {
   return PlanDocumentSchema.parse({
     version: 1,
-    site: {
+    site: siteWithAccess({
       vertices: [
         { id: 'v1', x: 0, y: 0 },
         { id: 'v2', x: 20, y: 0 },
@@ -112,10 +127,38 @@ function lShapedPlan(): PlanDocument {
           { id: 'h3', x: -3, y: 2.5 },
         ],
         centre: { x: 5, y: 3 },
-        rotation: 0,
+        rotation: 180,
       },
       selectedZoneIds: ['front', 'back', 'left', 'right'],
-    },
+    }),
+    brief,
+  });
+}
+
+/** The suburban plot turned a quarter: the house faces the left fence, the garden lies to the right. */
+function rotatedPlan(): PlanDocument {
+  return PlanDocumentSchema.parse({
+    version: 1,
+    site: siteWithAccess({
+      vertices: [
+        { id: 'v1', x: 0, y: 0 },
+        { id: 'v2', x: 19, y: 0 },
+        { id: 'v3', x: 19, y: 20 },
+        { id: 'v4', x: 0, y: 20 },
+      ],
+      closed: true,
+      house: {
+        outline: [
+          { id: 'h0', x: -4, y: -3 },
+          { id: 'h1', x: 4, y: -3 },
+          { id: 'h2', x: 4, y: 3 },
+          { id: 'h3', x: -4, y: 3 },
+        ],
+        centre: { x: 7, y: 10 },
+        rotation: 90,
+      },
+      selectedZoneIds: ['front', 'back', 'left', 'right'],
+    }),
     brief,
   });
 }
@@ -276,13 +319,359 @@ describe.skipIf(connection === null)('ConceptsService', () => {
 
   /* ---------------------------------------------------------------- placement quality */
 
+  /* ---------------------------------------------------------------- composition */
+
+  it('rounds accent beds for a cottage garden and keeps them crisp for a modern one', async () => {
+    const cottage = await service.generate(plan({ brief: { ...brief, style: 'cottage' } }), 11);
+    const modern = await service.generate(plan({ brief: { ...brief, style: 'modern' } }), 11);
+
+    const radii = (concepts: GeneratedConcept[]) =>
+      concepts
+        .flatMap((concept) => concept.elements)
+        .filter((element) => element.role === 'fill' && element.fillKind === 'accent')
+        .filter((element) => element.category !== 'planting-bed' || element.name === undefined)
+        .map((element) => (element.shape.kind === 'polygon' ? element.shape.cornerRadius : 0));
+
+    // Border bands stay square (they meet the fence); the beds inside are what the style shapes.
+    expect(radii(cottage).some((radius) => radius >= 1)).toBe(true);
+    expect(radii(modern).every((radius) => radius === 0)).toBe(true);
+  });
+
+  it('runs paths that stay on the plot and end at the feature they serve', async () => {
+    const concepts = await service.generate(plan(), 11);
+    const boundary = plan().site.vertices.map((v) => ({ x: v.x, y: v.y }));
+
+    for (const concept of concepts) {
+      const paths = concept.elements.filter((element) => element.shape.kind === 'polyline');
+
+      // The gate has a path to the terrace and the front door a path to the street, every time.
+      expect(paths.map((path) => path.name)).toContain('Side path');
+      expect(paths.map((path) => path.name)).toContain('Front path');
+
+      const features = concept.elements.filter(
+        (element) =>
+          element.role === 'feature' &&
+          element.category !== 'furniture' &&
+          element.shape.kind !== 'polyline' &&
+          element.shape.kind !== 'point',
+      );
+
+      for (const path of paths) {
+        // Garden paths are stepping stones; the front path is walked in the rain, so it is paved.
+        if (path.name === 'Front path' || path.name === 'Axis path') {
+          expect(path.material).not.toBe('stepping-stones');
+        } else {
+          expect(path.material).toBe('stepping-stones');
+        }
+        expect(polygonContainsPolygon(boundary, geometryOutline(path.shape))).toBe(true);
+        if (path.shape.kind !== 'polyline' || !path.name?.startsWith('Path to')) continue;
+
+        // A path to something ends at its edge, not in the middle of it.
+        const end = path.shape.points[path.shape.points.length - 1]!;
+        const gap = Math.min(
+          ...features.flatMap((feature) =>
+            polygonEdges(geometryOutline(feature.shape)).map((edge) =>
+              distanceToSegment(end, edge.start, edge.end),
+            ),
+          ),
+        );
+        expect(gap).toBeLessThan(0.2);
+      }
+    }
+  });
+
+  /*
+   * ---- the layout grammar ----
+   *
+   * What separates a designed garden from a scatter of legal features: the terrace is across the
+   * doors, the lawn is one panel, the shed is by the gate, the formal plan mirrors, the front
+   * garden reaches the street. Every one of these was false of the sampled layout.
+   */
+
+  it('recommends the template the style asks for, and the three concepts differ', async () => {
+    const modern = await service.generate(plan({ brief: { ...brief, style: 'modern' } }), 2);
+    const cottage = await service.generate(plan({ brief: { ...brief, style: 'cottage' } }), 2);
+    const formal = await service.generate(plan({ brief: { ...brief, style: 'formal' } }), 2);
+
+    expect(modern.find((concept) => concept.recommended)!.name).toBe('Terrace and lawn');
+    expect(cottage.find((concept) => concept.recommended)!.name).toBe('Sweeping lawn');
+    expect(formal.find((concept) => concept.recommended)!.name).toBe('Formal axis');
+
+    for (const set of [modern, cottage, formal]) {
+      expect(new Set(set.map((concept) => concept.name)).size).toBe(3);
+      // Different templates, not the same layout with a different badge: the main panel differs.
+      const panels = set.map((concept) =>
+        JSON.stringify(
+          concept.elements.find(
+            (element) =>
+              element.fillKind === 'accent' &&
+              (element.category === 'lawn' || element.category === 'gravel-mulch'),
+          )?.shape,
+        ),
+      );
+      expect(new Set(panels).size).toBe(3);
+    }
+  });
+
+  it('sets the terrace across the patio doors, on the wall, with the threshold inside it', async () => {
+    const document = plan();
+    const house = document.site.house!;
+    const door = house.openings.find((opening) => opening.type === 'patio-door')!;
+    const threshold = geometryOutline(thresholdRect(house, door, THRESHOLD_DEPTH)!);
+    const wall = wallSegment(house, door.wallId)!;
+
+    for (const concept of await service.generate(document, 11)) {
+      const terrace = concept.elements.find((element) => element.name === 'Seating patio')!;
+      const outline = geometryOutline(terrace.shape);
+
+      expect(polygonContainsPolygon(outline, threshold)).toBe(true);
+      // One edge of the terrace lies on the door's wall.
+      const onWall = outline.filter((point) => distanceToSegment(point, wall[0], wall[1]) < 0.05);
+      expect(onWall.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('lays one lawn panel, inside the back garden, behind the terrace', async () => {
+    const document = plan();
+    const house = housePolygon(document.site.house!);
+
+    for (const concept of await service.generate(document, 11)) {
+      if (concept.maintenance === 'low') continue;
+      // The front garden's base may be turf too; the *panel* is the one accent lawn.
+      const lawns = concept.elements.filter(
+        (element) => element.category === 'lawn' && element.fillKind === 'accent',
+      );
+      expect(lawns).toHaveLength(1);
+
+      const outline = geometryOutline(lawns[0]!.shape);
+      const terrace = geometryOutline(
+        concept.elements.find((element) => element.name === 'Seating patio')!.shape,
+      );
+      expect(polygonsIntersect(outline, house)).toBe(false);
+      expect(polygonsIntersect(outline, terrace)).toBe(false);
+      // Behind the terrace: every lawn vertex is further down the garden than the terrace's far edge.
+      const terraceFar = Math.max(...terrace.map((point) => point.y));
+      expect(Math.min(...outline.map((point) => point.y))).toBeGreaterThan(terraceFar - 1e-6);
+      // And drawn after the border pieces it sits on.
+      const lastBed = concept.elements.findLastIndex(
+        (element) =>
+          element.fillKind === 'accent' &&
+          element.category === 'planting-bed' &&
+          element.zone !== 'front',
+      );
+      expect(concept.elements.indexOf(lawns[0]!)).toBeGreaterThan(lastBed);
+    }
+  });
+
+  it('puts the shed in the corner nearest the gate', async () => {
+    const document = plan();
+    const gate = resolvedGates(document.site)[0]!;
+    const boundary = document.site.vertices.map((v) => ({ x: v.x, y: v.y }));
+    const farCorner = boundary.reduce((far, point) =>
+      Math.hypot(point.x - gate.centre.x, point.y - gate.centre.y) >
+      Math.hypot(far.x - gate.centre.x, far.y - gate.centre.y)
+        ? point
+        : far,
+    );
+
+    for (const concept of await service.generate(document, 11)) {
+      const store = concept.elements.find((element) => element.name === 'Garden store');
+      if (!store || store.shape.kind !== 'rect') continue;
+      const toGate = Math.hypot(
+        store.shape.centre.x - gate.centre.x,
+        store.shape.centre.y - gate.centre.y,
+      );
+      const toFar = Math.hypot(
+        store.shape.centre.x - farCorner.x,
+        store.shape.centre.y - farCorner.y,
+      );
+      // On the gate's side of the garden: nearer the gate than the opposite corner.
+      expect(toGate).toBeLessThan(toFar);
+      expect(store.shape.centre.x).toBeGreaterThan(10);
+    }
+  });
+
+  it('mirrors the formal plan about the door axis', async () => {
+    const concepts = await service.generate(plan({ brief: { ...brief, style: 'formal' } }), 11);
+    const formal = concepts.find((concept) => concept.name === 'Formal axis')!;
+    const axisX = 10; // The door is centred on the back wall of a house centred at x = 10.
+
+    const terrace = formal.elements.find((element) => element.name === 'Seating patio')!;
+    const lawn = formal.elements.find(
+      (element) =>
+        element.category === 'lawn' ||
+        (element.category === 'gravel-mulch' && element.fillKind === 'accent'),
+    );
+    for (const element of [terrace, lawn]) {
+      if (!element) continue;
+      const outline = geometryOutline(element.shape);
+      const left = Math.min(...outline.map((point) => point.x));
+      const right = Math.max(...outline.map((point) => point.x));
+      expect(Math.abs(axisX - left - (right - axisX))).toBeLessThan(0.05);
+    }
+
+    const axis = formal.elements.find((element) => element.name === 'Axis path');
+    expect(axis).toBeDefined();
+    if (axis?.shape.kind === 'polyline') {
+      for (const point of axis.shape.points) expect(Math.abs(point.x - axisX)).toBeLessThan(0.05);
+    }
+  });
+
+  it('gives the front garden a paved path from the front door to the street', async () => {
+    const document = plan();
+    const house = document.site.house!;
+    const door = house.openings.find((opening) => opening.type === 'front-door')!;
+    const street = streetEdge(document.site)!;
+
+    for (const concept of await service.generate(document, 11)) {
+      const path = concept.elements.find((element) => element.name === 'Front path')!;
+      expect(path.shape.kind).toBe('polyline');
+      if (path.shape.kind !== 'polyline') continue;
+      const [start, end] = [path.shape.points[0]!, path.shape.points.at(-1)!];
+      const doorCentre = openingCentre(house, door)!;
+      expect(Math.hypot(start.x - doorCentre.x, start.y - doorCentre.y)).toBeLessThan(0.6);
+      expect(distanceToSegment(end, street[0], street[1])).toBeLessThan(0.3);
+      expect(path.material).not.toBe('stepping-stones');
+      // The front garden is planted rather than left as the palette's ground.
+      expect(
+        concept.elements.some((e) => e.zone === 'front' && e.category === 'planting-bed'),
+      ).toBe(true);
+    }
+  });
+
+  it('never lays play bark as a ground cover', async () => {
+    for (const concept of await service.generate(
+      plan({ brief: { ...brief, style: 'formal' } }),
+      11,
+    )) {
+      const bark = concept.elements.filter((element) => element.material === 'play-bark');
+      for (const element of bark) expect(element.name).toBe('Play area');
+    }
+  });
+
+  it('designs a rotated house from its doors, not from the screen', async () => {
+    const document = rotatedPlan();
+    const house = document.site.house!;
+    const door = house.openings.find((opening) => opening.type === 'patio-door')!;
+    const threshold = geometryOutline(thresholdRect(house, door, THRESHOLD_DEPTH)!);
+
+    for (const concept of await service.generate(document, 11)) {
+      const terrace = concept.elements.find((element) => element.name === 'Seating patio')!;
+      expect(polygonContainsPolygon(geometryOutline(terrace.shape), threshold)).toBe(true);
+      // Aligned to the wall, which is turned: never a screen-aligned rectangle.
+      expect(terrace.shape.kind === 'rect' && Math.abs(terrace.shape.rotation % 180)).toBeCloseTo(
+        90,
+        5,
+      );
+      const layout = { elements: concept.elements, seededFrom: concept.id, pristine: null };
+      expect((await validation.validate({ ...document, layout })).violations).toEqual([]);
+    }
+  });
+
+  it('still generates when the house has no doors, gate or street', async () => {
+    const bare = PlanDocumentSchema.parse({
+      version: 1,
+      site: {
+        ...plan().site,
+        house: { ...plan().site.house!, openings: [] },
+        gates: [],
+        streetEdgeVertexId: null,
+      },
+      brief,
+    });
+
+    const concepts = await service.generate(bare, 11);
+    expect(concepts).toHaveLength(3);
+    for (const concept of concepts) {
+      expect(concept.elements.some((element) => element.name === 'Seating patio')).toBe(true);
+      expect(concept.elements.some((element) => element.name === 'Side path')).toBe(false);
+      const layout = { elements: concept.elements, seededFrom: concept.id, pristine: null };
+      expect((await validation.validate({ ...bare, layout })).violations).toEqual([]);
+    }
+  });
+
+  it('stands specimen shrubs inside the beds', async () => {
+    const [concept] = await service.generate(plan(), 11);
+    const specimens = concept!.elements.filter((element) => element.symbol === 'specimen');
+    const beds = concept!.elements.filter(
+      (element) =>
+        element.role === 'fill' &&
+        element.fillKind === 'accent' &&
+        element.category === 'planting-bed',
+    );
+
+    expect(specimens.length).toBeGreaterThan(0);
+    for (const specimen of specimens) {
+      const outline = geometryOutline(specimen.shape);
+      expect(beds.some((bed) => polygonContainsPolygon(geometryOutline(bed.shape), outline))).toBe(
+        true,
+      );
+      // Drawn after the bed it stands in.
+      const bed = beds.find((b) => polygonContainsPolygon(geometryOutline(b.shape), outline))!;
+      expect(concept!.elements.indexOf(specimen)).toBeGreaterThan(concept!.elements.indexOf(bed));
+    }
+  });
+
+  it('puts furniture inside the feature it belongs to, and nowhere else', async () => {
+    /*
+     * The one deliberate exception to the disjointness rule below: a dining set is *supposed* to
+     * overlap the pergola it sits under. So it must overlap exactly one built footprint, and lie
+     * wholly inside it with the margin `furnish` keeps.
+     */
+    const document = plan();
+    const concepts = await service.generate(document, 11);
+
+    let seen = 0;
+    for (const concept of concepts) {
+      const furniture = concept.elements.filter((element) => element.category === 'furniture');
+      const hosts = concept.elements.filter(
+        (element) =>
+          element.role === 'feature' &&
+          element.category !== 'furniture' &&
+          element.category !== 'existing-feature' &&
+          element.shape.kind !== 'polyline',
+      );
+
+      for (const item of furniture) {
+        seen += 1;
+        expect(item.symbol).toBeDefined();
+        expect(item.height).toBeGreaterThan(0);
+
+        const outline = geometryOutline(item.shape);
+        const inside = hosts.filter((host) =>
+          polygonContainsPolygon(geometryOutline(host.shape), outline),
+        );
+        expect(inside, `${item.name} sits inside exactly one feature`).toHaveLength(1);
+
+        // Stacking: the item is drawn after its host.
+        const hostIndex = concept.elements.indexOf(inside[0]!);
+        expect(concept.elements.indexOf(item)).toBeGreaterThan(hostIndex);
+      }
+    }
+
+    // The fixture asks for seating and a pergola, so at least one concept furnished something.
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('marks a store with what it is, so the drawing can give it a roof', async () => {
+    const document = plan();
+    const [concept] = await service.generate(document, 11);
+
+    const store = concept!.elements.find((element) => element.name === 'Garden store');
+    expect(store?.symbol).toBe('shed');
+  });
+
   it('keeps placed features off the house and out of each other', async () => {
     const document = plan();
     const house = housePolygon(document.site.house!);
     const [concept] = await service.generate(document, 11);
 
+    // Furniture is excluded here because it stands *on* its host by design — see the test above.
     const placed = concept!.elements.filter(
-      (element) => element.role === 'feature' && element.category !== 'existing-feature',
+      (element) =>
+        element.role === 'feature' &&
+        element.category !== 'existing-feature' &&
+        element.category !== 'furniture',
     );
 
     for (const element of placed) {

@@ -1,0 +1,1175 @@
+{
+  "version": "76f88de54850",
+  "generatedAt": "2026-09-05T18:10:42.268Z",
+  "assets": [
+    {
+      "id": "face-concrete-slab",
+      "variant": 1,
+      "file": "textures/face-concrete-slab-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#aaa59e"
+    },
+    {
+      "id": "face-concrete-slab",
+      "variant": 2,
+      "file": "textures/face-concrete-slab-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#b2aea8"
+    },
+    {
+      "id": "face-concrete-slab",
+      "variant": 3,
+      "file": "textures/face-concrete-slab-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#cfcecf"
+    },
+    {
+      "id": "face-decking-wood",
+      "variant": 1,
+      "file": "textures/face-decking-wood-1.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#a96b34"
+    },
+    {
+      "id": "face-decking-wood",
+      "variant": 2,
+      "file": "textures/face-decking-wood-2.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#a76129"
+    },
+    {
+      "id": "face-hardwood",
+      "variant": 1,
+      "file": "textures/face-hardwood-1.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#754120"
+    },
+    {
+      "id": "face-painted-timber",
+      "variant": 1,
+      "file": "textures/face-painted-timber-1.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#b0bba8"
+    },
+    {
+      "id": "face-porcelain-tile",
+      "variant": 1,
+      "file": "textures/face-porcelain-tile-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#d7d2c8"
+    },
+    {
+      "id": "face-porcelain-tile",
+      "variant": 2,
+      "file": "textures/face-porcelain-tile-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#c7c3bc"
+    },
+    {
+      "id": "face-softwood",
+      "variant": 1,
+      "file": "textures/face-softwood-1.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#c7bcaa"
+    },
+    {
+      "id": "face-stepping-stone",
+      "variant": 1,
+      "file": "textures/face-stepping-stone-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#a39885"
+    },
+    {
+      "id": "face-stepping-stone",
+      "variant": 2,
+      "file": "textures/face-stepping-stone-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#a19583"
+    },
+    {
+      "id": "face-stepping-stone",
+      "variant": 3,
+      "file": "textures/face-stepping-stone-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#b7a890"
+    },
+    {
+      "id": "face-stone-paver",
+      "variant": 1,
+      "file": "textures/face-stone-paver-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#bab1a0"
+    },
+    {
+      "id": "face-stone-paver",
+      "variant": 2,
+      "file": "textures/face-stone-paver-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#bdb6a9"
+    },
+    {
+      "id": "face-stone-paver",
+      "variant": 3,
+      "file": "textures/face-stone-paver-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#cabfac"
+    },
+    {
+      "id": "face-stone-paver",
+      "variant": 4,
+      "file": "textures/face-stone-paver-4.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#c4bdb2"
+    },
+    {
+      "id": "furniture-bbq",
+      "variant": 1,
+      "file": "sprites/furniture-bbq-1.webp",
+      "widthPx": 512,
+      "heightPx": 256,
+      "meanColour": "#a8a6a2",
+      "opaqueRadiusRatio": 2.102
+    },
+    {
+      "id": "furniture-bench",
+      "variant": 1,
+      "file": "sprites/furniture-bench-1.webp",
+      "widthPx": 512,
+      "heightPx": 192,
+      "meanColour": "#ab713b",
+      "opaqueRadiusRatio": 2.324
+    },
+    {
+      "id": "furniture-dining-4",
+      "variant": 1,
+      "file": "sprites/furniture-dining-4-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#aa7c4c",
+      "opaqueRadiusRatio": 1.044
+    },
+    {
+      "id": "furniture-dining-4",
+      "variant": 2,
+      "file": "sprites/furniture-dining-4-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#707170",
+      "opaqueRadiusRatio": 1.051
+    },
+    {
+      "id": "furniture-dining-6",
+      "variant": 1,
+      "file": "sprites/furniture-dining-6-1.webp",
+      "widthPx": 512,
+      "heightPx": 384,
+      "meanColour": "#c2894b",
+      "opaqueRadiusRatio": 1.341
+    },
+    {
+      "id": "furniture-fire-pit",
+      "variant": 1,
+      "file": "sprites/furniture-fire-pit-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#2e1b17",
+      "opaqueRadiusRatio": 1
+    },
+    {
+      "id": "furniture-lounger",
+      "variant": 1,
+      "file": "sprites/furniture-lounger-1.webp",
+      "widthPx": 256,
+      "heightPx": 512,
+      "meanColour": "#e8ddcd",
+      "opaqueRadiusRatio": 2.11
+    },
+    {
+      "id": "furniture-lounger",
+      "variant": 2,
+      "file": "sprites/furniture-lounger-2.webp",
+      "widthPx": 256,
+      "heightPx": 512,
+      "meanColour": "#8a7d6f",
+      "opaqueRadiusRatio": 2.103
+    },
+    {
+      "id": "furniture-parasol",
+      "variant": 1,
+      "file": "sprites/furniture-parasol-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#e1d8cb",
+      "opaqueRadiusRatio": 1.014
+    },
+    {
+      "id": "furniture-planter",
+      "variant": 1,
+      "file": "sprites/furniture-planter-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#54501e",
+      "opaqueRadiusRatio": 1.398
+    },
+    {
+      "id": "furniture-planter",
+      "variant": 2,
+      "file": "sprites/furniture-planter-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#7f836f",
+      "opaqueRadiusRatio": 1.282
+    },
+    {
+      "id": "furniture-sofa-set",
+      "variant": 1,
+      "file": "sprites/furniture-sofa-set-1.webp",
+      "widthPx": 512,
+      "heightPx": 410,
+      "meanColour": "#8b8580",
+      "opaqueRadiusRatio": 1.545
+    },
+    {
+      "id": "furniture-sofa-set",
+      "variant": 2,
+      "file": "sprites/furniture-sofa-set-2.webp",
+      "widthPx": 512,
+      "heightPx": 410,
+      "meanColour": "#af957c",
+      "opaqueRadiusRatio": 1.467
+    },
+    {
+      "id": "fx-soft-shadow",
+      "variant": 1,
+      "file": "sprites/fx-soft-shadow-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#000000",
+      "opaqueRadiusRatio": 0.805
+    },
+    {
+      "id": "hedge-crown-beech",
+      "variant": 1,
+      "file": "sprites/hedge-crown-beech-1.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#536a2a",
+      "opaqueRadiusRatio": 1.216,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:09:41.426Z",
+        "promptHash": "46f31254310b"
+      }
+    },
+    {
+      "id": "hedge-crown-beech",
+      "variant": 2,
+      "file": "sprites/hedge-crown-beech-2.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#4d652a",
+      "opaqueRadiusRatio": 1.238,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:09:53.430Z",
+        "promptHash": "ee103aa0c319"
+      }
+    },
+    {
+      "id": "hedge-crown-yew",
+      "variant": 1,
+      "file": "sprites/hedge-crown-yew-1.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#36472d",
+      "opaqueRadiusRatio": 1.245,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:10:27.927Z",
+        "promptHash": "1192e357024b"
+      }
+    },
+    {
+      "id": "hedge-crown-yew",
+      "variant": 2,
+      "file": "sprites/hedge-crown-yew-2.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#304226",
+      "opaqueRadiusRatio": 1.267,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:10:42.253Z",
+        "promptHash": "edfac0a2d331"
+      }
+    },
+    {
+      "id": "plant-flower",
+      "variant": 1,
+      "file": "sprites/plant-flower-1.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#9faa79",
+      "opaqueRadiusRatio": 1.038
+    },
+    {
+      "id": "plant-flower",
+      "variant": 2,
+      "file": "sprites/plant-flower-2.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#919a29",
+      "opaqueRadiusRatio": 1.066
+    },
+    {
+      "id": "plant-flower",
+      "variant": 3,
+      "file": "sprites/plant-flower-3.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#6b605b",
+      "opaqueRadiusRatio": 1.025
+    },
+    {
+      "id": "plant-flower",
+      "variant": 4,
+      "file": "sprites/plant-flower-4.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#92481d",
+      "opaqueRadiusRatio": 1.02
+    },
+    {
+      "id": "plant-grass",
+      "variant": 1,
+      "file": "sprites/plant-grass-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#c9c79b",
+      "opaqueRadiusRatio": 1
+    },
+    {
+      "id": "plant-grass",
+      "variant": 2,
+      "file": "sprites/plant-grass-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#afb18e",
+      "opaqueRadiusRatio": 1.062
+    },
+    {
+      "id": "plant-grass",
+      "variant": 3,
+      "file": "sprites/plant-grass-3.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#cbcaa0",
+      "opaqueRadiusRatio": 1.057
+    },
+    {
+      "id": "plant-grass",
+      "variant": 4,
+      "file": "sprites/plant-grass-4.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#a9b181",
+      "opaqueRadiusRatio": 1.033
+    },
+    {
+      "id": "plant-grass",
+      "variant": 5,
+      "file": "sprites/plant-grass-5.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#adaf7f",
+      "opaqueRadiusRatio": 1.017
+    },
+    {
+      "id": "plant-grass-tall",
+      "variant": 1,
+      "file": "sprites/plant-grass-tall-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#7a7952",
+      "opaqueRadiusRatio": 1.073,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.675Z",
+        "promptHash": "ed995d0d4e62"
+      }
+    },
+    {
+      "id": "plant-grass-tall",
+      "variant": 2,
+      "file": "sprites/plant-grass-tall-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#757653",
+      "opaqueRadiusRatio": 1.115,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.874Z",
+        "promptHash": "95bcfd4ea075"
+      }
+    },
+    {
+      "id": "plant-grass-tall",
+      "variant": 3,
+      "file": "sprites/plant-grass-tall-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#6c7453",
+      "opaqueRadiusRatio": 1.042,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.887Z",
+        "promptHash": "f1d944e5c512"
+      }
+    },
+    {
+      "id": "plant-ground-cover",
+      "variant": 1,
+      "file": "sprites/plant-ground-cover-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#517f32",
+      "opaqueRadiusRatio": 1.05
+    },
+    {
+      "id": "plant-ground-cover",
+      "variant": 2,
+      "file": "sprites/plant-ground-cover-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#51603b",
+      "opaqueRadiusRatio": 1.05
+    },
+    {
+      "id": "plant-ground-cover",
+      "variant": 3,
+      "file": "sprites/plant-ground-cover-3.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#53812f",
+      "opaqueRadiusRatio": 1.068
+    },
+    {
+      "id": "plant-ground-cover",
+      "variant": 4,
+      "file": "sprites/plant-ground-cover-4.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#46672f",
+      "opaqueRadiusRatio": 1.021
+    },
+    {
+      "id": "plant-ground-cover-spreading",
+      "variant": 1,
+      "file": "sprites/plant-ground-cover-spreading-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5d6e40",
+      "opaqueRadiusRatio": 1.124,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.916Z",
+        "promptHash": "77cc3cbdb906"
+      }
+    },
+    {
+      "id": "plant-ground-cover-spreading",
+      "variant": 2,
+      "file": "sprites/plant-ground-cover-spreading-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#676f4b",
+      "opaqueRadiusRatio": 1.111,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.918Z",
+        "promptHash": "3e804670b307"
+      }
+    },
+    {
+      "id": "plant-ground-cover-spreading",
+      "variant": 3,
+      "file": "sprites/plant-ground-cover-spreading-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#6a7655",
+      "opaqueRadiusRatio": 1.15,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:03.073Z",
+        "promptHash": "391418a80731"
+      }
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 1,
+      "file": "sprites/plant-perennial-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#70696a",
+      "opaqueRadiusRatio": 1.034
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 2,
+      "file": "sprites/plant-perennial-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#54604c",
+      "opaqueRadiusRatio": 1.011
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 3,
+      "file": "sprites/plant-perennial-3.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#718050",
+      "opaqueRadiusRatio": 1.011
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 4,
+      "file": "sprites/plant-perennial-4.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#7d7756",
+      "opaqueRadiusRatio": 1.026
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 5,
+      "file": "sprites/plant-perennial-5.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#647562",
+      "opaqueRadiusRatio": 0.868
+    },
+    {
+      "id": "plant-perennial",
+      "variant": 6,
+      "file": "sprites/plant-perennial-6.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#698531",
+      "opaqueRadiusRatio": 1.015
+    },
+    {
+      "id": "plant-perennial-ferny",
+      "variant": 1,
+      "file": "sprites/plant-perennial-ferny-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5b7141",
+      "opaqueRadiusRatio": 1.142,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.215Z",
+        "promptHash": "6ee874831365"
+      }
+    },
+    {
+      "id": "plant-perennial-ferny",
+      "variant": 2,
+      "file": "sprites/plant-perennial-ferny-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#757b53",
+      "opaqueRadiusRatio": 1.067,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.219Z",
+        "promptHash": "233c81ebd457"
+      }
+    },
+    {
+      "id": "plant-perennial-ferny",
+      "variant": 3,
+      "file": "sprites/plant-perennial-ferny-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#657951",
+      "opaqueRadiusRatio": 1.066,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.404Z",
+        "promptHash": "04a16b4f4797"
+      }
+    },
+    {
+      "id": "plant-perennial-spire",
+      "variant": 1,
+      "file": "sprites/plant-perennial-spire-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5c6f49",
+      "opaqueRadiusRatio": 1.108,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.007Z",
+        "promptHash": "93fa5b0899c8"
+      }
+    },
+    {
+      "id": "plant-perennial-spire",
+      "variant": 2,
+      "file": "sprites/plant-perennial-spire-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5c7651",
+      "opaqueRadiusRatio": 1.029,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.201Z",
+        "promptHash": "4698772fb246"
+      }
+    },
+    {
+      "id": "plant-perennial-spire",
+      "variant": 3,
+      "file": "sprites/plant-perennial-spire-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5b7157",
+      "opaqueRadiusRatio": 1.117,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.203Z",
+        "promptHash": "b9f1fa3332a8"
+      }
+    },
+    {
+      "id": "plant-perennial-upright",
+      "variant": 1,
+      "file": "sprites/plant-perennial-upright-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#536a48",
+      "opaqueRadiusRatio": 1.068,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.004Z",
+        "promptHash": "dd9bb2be9656"
+      }
+    },
+    {
+      "id": "plant-perennial-upright",
+      "variant": 2,
+      "file": "sprites/plant-perennial-upright-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5d6b4f",
+      "opaqueRadiusRatio": 1.093,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.010Z",
+        "promptHash": "b9bf21cd0b90"
+      }
+    },
+    {
+      "id": "plant-perennial-upright",
+      "variant": 3,
+      "file": "sprites/plant-perennial-upright-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#646941",
+      "opaqueRadiusRatio": 1.081,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.012Z",
+        "promptHash": "962712fc326f"
+      }
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 1,
+      "file": "sprites/plant-shrub-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#63923a",
+      "opaqueRadiusRatio": 1.001
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 2,
+      "file": "sprites/plant-shrub-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#5c7d39",
+      "opaqueRadiusRatio": 1.017
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 3,
+      "file": "sprites/plant-shrub-3.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#557a35",
+      "opaqueRadiusRatio": 1.028
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 4,
+      "file": "sprites/plant-shrub-4.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#5b792f",
+      "opaqueRadiusRatio": 1.031
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 5,
+      "file": "sprites/plant-shrub-5.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#64882c",
+      "opaqueRadiusRatio": 1.005
+    },
+    {
+      "id": "plant-shrub",
+      "variant": 6,
+      "file": "sprites/plant-shrub-6.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#578131",
+      "opaqueRadiusRatio": 1.02
+    },
+    {
+      "id": "plant-shrub-architectural",
+      "variant": 1,
+      "file": "sprites/plant-shrub-architectural-1.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#5a6f54",
+      "opaqueRadiusRatio": 1.062,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.455Z",
+        "promptHash": "e2bf616e0084"
+      }
+    },
+    {
+      "id": "plant-shrub-architectural",
+      "variant": 2,
+      "file": "sprites/plant-shrub-architectural-2.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#6c6c58",
+      "opaqueRadiusRatio": 1.052,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.463Z",
+        "promptHash": "6c19acb8b6dc"
+      }
+    },
+    {
+      "id": "plant-shrub-architectural",
+      "variant": 3,
+      "file": "sprites/plant-shrub-architectural-3.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#6f8264",
+      "opaqueRadiusRatio": 1.081,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.465Z",
+        "promptHash": "2bceb2a79bf3"
+      }
+    },
+    {
+      "id": "plant-shrub-deciduous",
+      "variant": 1,
+      "file": "sprites/plant-shrub-deciduous-1.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#667446",
+      "opaqueRadiusRatio": 1.125,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.667Z",
+        "promptHash": "46595275d310"
+      }
+    },
+    {
+      "id": "plant-shrub-deciduous",
+      "variant": 2,
+      "file": "sprites/plant-shrub-deciduous-2.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#65683e",
+      "opaqueRadiusRatio": 1.144,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.718Z",
+        "promptHash": "690843d40270"
+      }
+    },
+    {
+      "id": "plant-shrub-deciduous",
+      "variant": 3,
+      "file": "sprites/plant-shrub-deciduous-3.webp",
+      "widthPx": 640,
+      "heightPx": 640,
+      "meanColour": "#5f7250",
+      "opaqueRadiusRatio": 1.032,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:02.727Z",
+        "promptHash": "9f4fb0cf1bad"
+      }
+    },
+    {
+      "id": "play-raised-bed",
+      "variant": 1,
+      "file": "sprites/play-raised-bed-1.webp",
+      "widthPx": 512,
+      "heightPx": 256,
+      "meanColour": "#4f4f18",
+      "opaqueRadiusRatio": 2.04
+    },
+    {
+      "id": "play-slide",
+      "variant": 1,
+      "file": "sprites/play-slide-1.webp",
+      "widthPx": 256,
+      "heightPx": 555,
+      "meanColour": "#767d3d",
+      "opaqueRadiusRatio": 2.292
+    },
+    {
+      "id": "play-swing",
+      "variant": 1,
+      "file": "sprites/play-swing-1.webp",
+      "widthPx": 512,
+      "heightPx": 342,
+      "meanColour": "#8a6b4e",
+      "opaqueRadiusRatio": 1.654
+    },
+    {
+      "id": "play-trampoline",
+      "variant": 1,
+      "file": "sprites/play-trampoline-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#394b5e",
+      "opaqueRadiusRatio": 0.812
+    },
+    {
+      "id": "tex-artificial-turf",
+      "variant": 1,
+      "file": "textures/tex-artificial-turf-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#457a14",
+      "seamScore": 1.433
+    },
+    {
+      "id": "tex-bark-mulch",
+      "variant": 1,
+      "file": "textures/tex-bark-mulch-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#693d27",
+      "seamScore": 1.04
+    },
+    {
+      "id": "tex-decorative-gravel",
+      "variant": 1,
+      "file": "textures/tex-decorative-gravel-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#cac7bd",
+      "seamScore": 0.811
+    },
+    {
+      "id": "tex-gravel-paving",
+      "variant": 1,
+      "file": "textures/tex-gravel-paving-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#a39988",
+      "seamScore": 1.184
+    },
+    {
+      "id": "tex-hardwearing-turf",
+      "variant": 1,
+      "file": "textures/tex-hardwearing-turf-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#3a5518",
+      "seamScore": 1.223
+    },
+    {
+      "id": "tex-hedge-top",
+      "variant": 1,
+      "file": "textures/tex-hedge-top-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#20311d",
+      "seamScore": 0.995
+    },
+    {
+      "id": "tex-house-floor",
+      "variant": 1,
+      "file": "textures/tex-house-floor-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#d5be9d",
+      "seamScore": 0.23
+    },
+    {
+      "id": "tex-meadow-grass",
+      "variant": 1,
+      "file": "textures/tex-meadow-grass-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#617a22",
+      "seamScore": 1.365
+    },
+    {
+      "id": "tex-play-bark",
+      "variant": 1,
+      "file": "textures/tex-play-bark-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#ab773e",
+      "seamScore": 1.406
+    },
+    {
+      "id": "tex-pond-water",
+      "variant": 1,
+      "file": "textures/tex-pond-water-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#40635c",
+      "seamScore": 1.054
+    },
+    {
+      "id": "tex-pool-water",
+      "variant": 1,
+      "file": "textures/tex-pool-water-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#446d7d",
+      "seamScore": 1.021
+    },
+    {
+      "id": "tex-slate-chippings",
+      "variant": 1,
+      "file": "textures/tex-slate-chippings-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5a6b7c",
+      "seamScore": 1.172
+    },
+    {
+      "id": "tex-soil",
+      "variant": 1,
+      "file": "textures/tex-soil-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#2c251f",
+      "seamScore": 1.126
+    },
+    {
+      "id": "tex-standard-turf",
+      "variant": 1,
+      "file": "textures/tex-standard-turf-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#436d1e",
+      "seamScore": 1.166
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 1,
+      "file": "sprites/tree-canopy-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#7d9d3e",
+      "opaqueRadiusRatio": 1.021
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 2,
+      "file": "sprites/tree-canopy-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#528116",
+      "opaqueRadiusRatio": 0.861
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 3,
+      "file": "sprites/tree-canopy-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#74882e",
+      "opaqueRadiusRatio": 1.012
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 4,
+      "file": "sprites/tree-canopy-4.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#688e25",
+      "opaqueRadiusRatio": 1.014
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 5,
+      "file": "sprites/tree-canopy-5.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#658e33",
+      "opaqueRadiusRatio": 1.034
+    },
+    {
+      "id": "tree-canopy",
+      "variant": 6,
+      "file": "sprites/tree-canopy-6.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#5c762a",
+      "opaqueRadiusRatio": 0.999
+    },
+    {
+      "id": "tree-conifer",
+      "variant": 1,
+      "file": "sprites/tree-conifer-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#28391e",
+      "opaqueRadiusRatio": 1.007
+    },
+    {
+      "id": "tree-conifer",
+      "variant": 2,
+      "file": "sprites/tree-conifer-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#21321a",
+      "opaqueRadiusRatio": 0.998
+    },
+    {
+      "id": "tree-fruit",
+      "variant": 1,
+      "file": "sprites/tree-fruit-1.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#5a6240",
+      "opaqueRadiusRatio": 1.04,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:08:56.911Z",
+        "promptHash": "6a6a2bc56231"
+      }
+    },
+    {
+      "id": "tree-fruit",
+      "variant": 2,
+      "file": "sprites/tree-fruit-2.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#545f36",
+      "opaqueRadiusRatio": 1.074,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:09:07.634Z",
+        "promptHash": "4444e57b0ad6"
+      }
+    },
+    {
+      "id": "tree-multistem",
+      "variant": 1,
+      "file": "sprites/tree-multistem-1.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#626d44",
+      "opaqueRadiusRatio": 1.115,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:08:18.036Z",
+        "promptHash": "34c7f65c7c41"
+      }
+    },
+    {
+      "id": "tree-multistem",
+      "variant": 2,
+      "file": "sprites/tree-multistem-2.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#617248",
+      "opaqueRadiusRatio": 1.113,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:08:10.351Z",
+        "promptHash": "19a6a7fdcebe"
+      }
+    },
+    {
+      "id": "tree-ornamental",
+      "variant": 1,
+      "file": "sprites/tree-ornamental-1.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#8c795f",
+      "opaqueRadiusRatio": 1.045,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:03.221Z",
+        "promptHash": "582399d97253"
+      }
+    },
+    {
+      "id": "tree-ornamental",
+      "variant": 2,
+      "file": "sprites/tree-ornamental-2.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#726d40",
+      "opaqueRadiusRatio": 1.053,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:03.268Z",
+        "promptHash": "1ae6da60c27e"
+      }
+    },
+    {
+      "id": "tree-ornamental",
+      "variant": 3,
+      "file": "sprites/tree-ornamental-3.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#767c53",
+      "opaqueRadiusRatio": 1.042,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-05T18:07:03.265Z",
+        "promptHash": "27526a4ea326"
+      }
+    }
+  ]
+}

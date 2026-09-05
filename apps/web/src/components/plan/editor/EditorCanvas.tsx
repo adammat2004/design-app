@@ -2,9 +2,14 @@
 
 import { useEffect, useMemo } from 'react';
 import { Circle, Group, Layer, Line, Stage } from 'react-konva';
-import type Konva from 'konva';
 import { CircleAlert } from 'lucide-react';
-import { lightDirection, type Point } from '@garden-studio/schema';
+import {
+  boundaryRuns,
+  computeZones,
+  lightDirection,
+  SYMBOLS,
+  type Point,
+} from '@garden-studio/schema';
 import { draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
 import {
@@ -32,6 +37,8 @@ import {
   usePlanEditorStore,
 } from '@/state/plan-editor-store';
 import { CanvasChrome } from '../CanvasChrome';
+import { GateMarks, gateGaps } from '../GateMarks';
+import { HouseOpenings } from '../HouseOpenings';
 import { HouseShape } from '../HouseShape';
 import { ShapeHandles } from '../ShapeHandles';
 import { ElementDrawing } from '../ElementDrawing';
@@ -95,7 +102,10 @@ export function EditorCanvas() {
   const mode = usePlanEditorStore((state) => state.mode);
   const gridVisible = usePlanEditorStore((state) => state.gridVisible);
   const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
+  const zonesVisible = usePlanEditorStore((state) => state.zonesVisible);
+  const dimensionsVisible = usePlanEditorStore((state) => state.dimensionsVisible);
   const placingCategory = usePlanEditorStore((state) => state.placingCategory);
+  const placingSymbol = usePlanEditorStore((state) => state.placingSymbol);
   const alignments = usePlanEditorStore((state) => state.alignments);
   const measurement = usePlanEditorStore((state) => state.measurement);
   const clash = usePlanEditorStore((state) => state.clash);
@@ -109,13 +119,13 @@ export function EditorCanvas() {
     panActive,
     setPanning,
     handleStageDragStart,
+    handleStageDragEnd,
     consumePan,
     detailed,
     canRender,
     stageCentre,
     fitToShape,
     zoomAbout,
-    foldStageOffset,
     handleWheel,
     pointerInMetres,
   } = useCanvasViewport({
@@ -132,6 +142,12 @@ export function EditorCanvas() {
   }, [mode, setPanning]);
 
   const polygon = useMemo(() => draftPolygon(boundaryDraft), [boundaryDraft]);
+  // Derived, never stored — the same rule everywhere zones appear.
+  const zones = useMemo(
+    () => (boundaryDraft.house ? computeZones(polygon, boundaryDraft.house) : []),
+    [polygon, boundaryDraft.house],
+  );
+
   const houseOutline = useMemo(
     () => (boundaryDraft.house ? housePolygon(boundaryDraft.house) : null),
     [boundaryDraft.house],
@@ -240,7 +256,7 @@ export function EditorCanvas() {
             onClick={handleStageClick}
             onDragStart={handleStageDragStart}
             onMouseMove={handleStageMouseMove}
-            onDragEnd={(event) => foldStageOffset(event.target as Konva.Stage)}
+            onDragEnd={handleStageDragEnd}
             onWheel={handleWheel}
           >
             {/*
@@ -337,20 +353,34 @@ export function EditorCanvas() {
               concept — so the garden would lose its edge exactly where it needs one.
             */}
             <Layer listening={false}>
-              <FenceLine polygon={polygon} transform={transform} />
+              <FenceLine
+                polygon={polygon}
+                runs={boundaryRuns(boundaryDraft)}
+                transform={transform}
+                light={light}
+                gaps={gateGaps(boundaryDraft)}
+              />
             </Layer>
 
             <Layer>
               {houseOutline && boundaryDraft.house ? (
-                <HouseShape
-                  outline={houseOutline}
-                  centre={boundaryDraft.house.centre}
-                  rotation={boundaryDraft.house.rotation}
-                  size={houseSize(boundaryDraft.house)}
-                  unit={unit}
-                  transform={transform}
-                />
+                <>
+                  <HouseShape
+                    outline={houseOutline}
+                    centre={boundaryDraft.house.centre}
+                    rotation={boundaryDraft.house.rotation}
+                    size={houseSize(boundaryDraft.house)}
+                    unit={unit}
+                    transform={transform}
+                    light={light}
+                  />
+                  {/* The doors the generator routed its path to. Inert here: step 1 edits them. */}
+                  <HouseOpenings house={boundaryDraft.house} transform={transform} />
+                </>
               ) : null}
+
+              {/* Gates in the fence and the street, so a side path visibly goes somewhere. */}
+              <GateMarks site={boundaryDraft} transform={transform} />
 
               <AlignmentLines
                 guides={alignments}
@@ -409,11 +439,13 @@ export function EditorCanvas() {
                 one guide per edge is the same set of numbers, so keeping both put two copies of
                 "20.0 m" a few pixels apart on every side.
               */}
-              <MeasurementGuides
-                guides={plotDimensionGuides(polygon, PLOT_DIMENSION_OFFSET)}
-                transform={transform}
-                unit={unit}
-              />
+              {dimensionsVisible ? (
+                <MeasurementGuides
+                  guides={plotDimensionGuides(polygon, PLOT_DIMENSION_OFFSET)}
+                  transform={transform}
+                  unit={unit}
+                />
+              ) : null}
 
               {/* The measuring tape. */}
               {measurement ? (
@@ -457,7 +489,12 @@ export function EditorCanvas() {
 
       {/* Chrome in HTML, so it uses the same tokens and icons as the rest of the screen. */}
       <div className="pointer-events-none absolute inset-0">
-        {/* No `zones` passed: step 5 draws feature chips only — see the prop's own note for why. */}
+        {/*
+          Zones are off by default here — they are scaffolding for "which parts do you want
+          designed", and writing "Back garden ~ 18 m2" across a finished design is a note about the
+          tool rather than the garden. The toggle exists because a user checking their own answer
+          had no way to see them again on any screen; it is off, not absent.
+        */}
         {canRender && labelsVisible ? (
           <ConceptLabels
             elements={elements}
@@ -465,6 +502,7 @@ export function EditorCanvas() {
             transform={transform}
             size={size}
             unit={unit}
+            zones={zonesVisible ? zones : undefined}
           />
         ) : null}
 
@@ -481,7 +519,10 @@ export function EditorCanvas() {
 
         {placingCategory ? (
           <p className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-garden-forest px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
-            Click the plan to place {CATEGORY_COLOURS[placingCategory].label.toLowerCase()}
+            Click the plan to place{' '}
+            {placingSymbol
+              ? SYMBOLS[placingSymbol].label.toLowerCase()
+              : CATEGORY_COLOURS[placingCategory].label.toLowerCase()}
           </p>
         ) : null}
 
@@ -571,6 +612,17 @@ function ElementShape({
   /** Unit vector towards the light, resolved once per canvas so every element shares one sun. */
   light?: Point;
 }) {
+  /*
+   * The one element whose outline is changing this frame.
+   *
+   * `gestureSnapshot` is non-null exactly between `beginGesture` and `endGesture`, which brackets
+   * both a drag and a handle resize; and the dragged element is always the selected one, because
+   * `onDragStart` selects it. Everything else on the plan keeps its outline, so it keeps its cache
+   * key and costs nothing — this flag must stay narrow, or a drag would flatten the whole garden.
+   */
+  const gesturing = usePlanEditorStore((state) => state.gestureSnapshot !== null);
+  const interacting = selected && gesturing;
+
   const anchor = metresToPx(elementAnchor(element), transform);
   const relative = (points: Point[]): number[] =>
     points.flatMap((point) => {
@@ -615,7 +667,13 @@ function ElementShape({
         if (current) event.target.position(metresToPx(elementAnchor(current), transform));
       }}
     >
-      <ElementDrawing element={element} transform={transform} offsetPx={anchor} light={light} />
+      <ElementDrawing
+        element={element}
+        transform={transform}
+        offsetPx={anchor}
+        light={light}
+        interacting={interacting}
+      />
 
       {/*
         Selection is drawn *over* the element rather than by restyling it.

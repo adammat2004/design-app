@@ -222,6 +222,162 @@ export class FillService {
       .map((row) => exteriorRing(row.ring))
       .filter((ring): ring is Point[] => ring !== null && ring.length >= 3);
   }
+
+  /**
+   * What is left of `zone` once the rooms are taken out, cut into pieces that have no holes.
+   *
+   * This is the layout grammar's border: everything round the terrace, the lawn and the placed
+   * features, hugging the fence on one side and the lawn's edge on the other. Subtracting the
+   * rooms leaves an annulus, and `PlanGeometry.polygon` cannot hold a hole — so the remainder is
+   * split by the `cuts` (two lines through the lawn's centre) into runs, each a plain ring open
+   * on the lawn's side. A feature standing wholly inside a run still leaves a hole, and that one
+   * `exteriorRing` flattens as it always has: the caller lays these pieces *under* the lawn and
+   * the features, so a flattened hole is covered by the thing that made it. Keep that ordering.
+   *
+   * `inset` is zero by default: a border meets the lawn's edge, it does not float 40 cm off it.
+   */
+  async remainderPieces(request: {
+    zone: Point[];
+    rooms: Point[][];
+    cuts: [Point, Point][];
+    inset?: number;
+    limit?: number;
+  }): Promise<Point[][]> {
+    const { zone, cuts } = request;
+    const rooms = request.rooms.filter((ring) => ring.length >= 3);
+    const inset = request.inset ?? 0;
+    const limit = request.limit ?? 64;
+    if (zone.length < 3 || limit <= 0) return [];
+
+    const roomUnion: SQL =
+      rooms.length === 0
+        ? sql`'POLYGON EMPTY'::geometry`
+        : sql`ST_UnaryUnion(ST_Collect(ARRAY[${sql.join(
+            rooms.map((ring) => sql`ST_MakeValid(ST_GeomFromText(${polygonToWkt(ring)}::text))`),
+            sql`, `,
+          )}]))`;
+
+    const blade: SQL =
+      cuts.length === 0
+        ? sql`'LINESTRING EMPTY'::geometry`
+        : sql`ST_Collect(ARRAY[${sql.join(
+            cuts.map((cut) => sql`ST_GeomFromText(${lineWkt(cut)}::text)`),
+            sql`, `,
+          )}])`;
+
+    /*
+     * Every CTE is MATERIALIZED, and that is the whole difference between 1.4 s and 30 ms. Left to
+     * itself the planner inlines a single-reference CTE into its consumer and then constant-folds
+     * the geometry expressions at plan time — the union of every room, several times over. A
+     * query whose nodes report 25 ms of execution was spending a second in the planner.
+     */
+    const rows = await this.db.execute<PartRow>(sql`
+      WITH zone AS MATERIALIZED (
+        SELECT ST_MakeValid(ST_GeomFromText(${polygonToWkt(zone)}::text)) AS geom
+      ),
+      rooms AS MATERIALIZED (
+        SELECT ${roomUnion} AS geom
+      ),
+      remainder AS MATERIALIZED (
+        SELECT ST_Difference(zone.geom, rooms.geom) AS geom FROM zone, rooms
+      ),
+      blade AS MATERIALIZED (
+        SELECT ${blade} AS geom
+      ),
+      pieces AS MATERIALIZED (
+        SELECT (ST_Dump(ST_Split(remainder.geom, blade.geom))).geom AS geom FROM remainder, blade
+      ),
+      parts AS MATERIALIZED (
+        SELECT (ST_Dump(pieces.geom)).geom AS geom FROM pieces
+      ),
+      sized AS MATERIALIZED (
+        SELECT parts.geom
+        FROM parts
+        WHERE ST_GeometryType(parts.geom) = 'ST_Polygon'
+          AND ST_Area(parts.geom) >= ${MIN_FILL_AREA}::float8
+          AND NOT ST_IsEmpty(
+            ST_Buffer(parts.geom, ${-MIN_FILL_SIDE / 2}::float8, ${BUFFER_QUAD_SEGMENTS}::int)
+          )
+      ),
+      kept AS MATERIALIZED (
+        SELECT
+          ST_Intersection(
+            ST_SimplifyPreserveTopology(
+              ${inset > 0 ? sql`ST_Buffer(sized.geom, ${-inset}::float8, ${BUFFER_QUAD_SEGMENTS}::int)` : sql`sized.geom`},
+              ${SIMPLIFY_TOLERANCE}::float8
+            ),
+            zone.geom
+          ) AS geom
+        FROM sized, zone
+      )
+      SELECT
+        ST_AsGeoJSON(kept.geom)::text AS ring,
+        ST_Area(kept.geom)::float8 AS area
+      FROM kept
+      WHERE NOT ST_IsEmpty(kept.geom)
+        AND ST_GeometryType(kept.geom) = 'ST_Polygon'
+        AND ST_Area(kept.geom) >= ${MIN_FILL_AREA}::float8
+      ORDER BY area DESC
+      LIMIT ${limit}::int
+    `);
+
+    return rows
+      .map((row) => exteriorRing(row.ring))
+      .filter((ring): ring is Point[] => ring !== null);
+  }
+
+  /**
+   * A shape clipped to a room, as one ring, or `null` if nothing usable survives.
+   *
+   * The curved template's lawn is sketched as a clean curve and then has to live inside an
+   * L-shaped or irregular room; a TypeScript containment check says whether it does, and this
+   * is what happens when it does not. Pulled in by `inset` so it clears the room's edge.
+   */
+  async clipToRoom(shape: Point[], room: Point[], inset = 0): Promise<Point[] | null> {
+    if (shape.length < 3 || room.length < 3) return null;
+
+    const rows = await this.db.execute<PartRow>(sql`
+      WITH clipped AS MATERIALIZED (
+        SELECT (ST_Dump(
+          ST_Intersection(
+            ST_MakeValid(ST_GeomFromText(${polygonToWkt(shape)}::text)),
+            ST_MakeValid(ST_GeomFromText(${polygonToWkt(room)}::text))
+          )
+        )).geom AS geom
+      ),
+      inset AS MATERIALIZED (
+        SELECT ST_SimplifyPreserveTopology(
+          ${inset > 0 ? sql`ST_Buffer(clipped.geom, ${-inset}::float8, ${BUFFER_QUAD_SEGMENTS}::int)` : sql`clipped.geom`},
+          ${SIMPLIFY_TOLERANCE}::float8
+        ) AS geom
+        FROM clipped
+        WHERE ST_GeometryType(clipped.geom) = 'ST_Polygon'
+      )
+      SELECT ST_AsGeoJSON(inset.geom)::text AS ring, ST_Area(inset.geom)::float8 AS area
+      FROM inset
+      WHERE NOT ST_IsEmpty(inset.geom)
+        AND ST_GeometryType(inset.geom) = 'ST_Polygon'
+        AND ST_NumInteriorRings(inset.geom) = 0
+        AND ST_Area(inset.geom) >= ${MIN_FILL_AREA}::float8
+      ORDER BY area DESC
+      LIMIT 1
+    `);
+
+    const first = rows[0];
+    return first ? exteriorRing(first.ring) : null;
+  }
+}
+
+/** A cut line, extended well past any plot so `ST_Split` always crosses the whole remainder. */
+const CUT_REACH = 500;
+
+function lineWkt([a, b]: [Point, Point]): string {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = (dx / length) * CUT_REACH;
+  const uy = (dy / length) * CUT_REACH;
+  return `LINESTRING(${a.x - ux} ${a.y - uy}, ${a.x + ux} ${a.y + uy})`;
 }
 
 /**
