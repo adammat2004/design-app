@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import {
+  isPlantSymbol,
   elementCentreline,
   elementOutline,
   patternAnchor,
@@ -79,6 +80,7 @@ export function useSurfacePattern(
    * reaching into state here would end that.
    */
   interacting = false,
+  exclusions?: Point[][],
 ): SurfacePattern | null {
   const material = resolvePattern(element.material);
   const kind = element.shape.kind;
@@ -88,7 +90,14 @@ export function useSurfacePattern(
    * `polylineStrip` cuts for it — so a stepping-stone path is stones set in grass rather than the
    * grey stroke it used to be handed to Konva as. Trees are points too, but draw as a canopy.
    */
-  const patternable = material !== null && kind !== undefined;
+  /*
+   * A plant drawn as a sprite needs no surface raster, and asking for one is not free: the cache is
+   * keyed per element against `MAX_ENTRIES`, so thirty shrubs are thirty entries competing with the
+   * patios and beds that actually use theirs. The sprite path in `ElementDrawing` returns before it
+   * would ever read this, so the raster was allocated, cached, and never drawn.
+   */
+  const drawnAsSprite = kind === 'point' && isPlantSymbol(element.symbol);
+  const patternable = material !== null && kind !== undefined && !drawnAsSprite;
   // Changes exactly once, when the textures arrive; every raster redraws with them at that moment.
   const assetVersion = useAssetVersion();
   // Ordinarily constant for a session, and changes only if the window moves to another display.
@@ -119,6 +128,7 @@ export function useSurfacePattern(
         centreline: elementCentreline(element) ?? undefined,
         plantingStyle: element.plantingStyle,
         element,
+        exclusions,
       },
       makeBrowserCanvas,
     );
@@ -135,5 +145,15 @@ export function useSurfacePattern(
        */
       scale: scale / raster.pxPerMetre,
     };
-  }, [material, patternable, element, scale, light, assetVersion, pixelRatio, interacting]);
+  }, [
+    material,
+    patternable,
+    element,
+    scale,
+    light,
+    assetVersion,
+    pixelRatio,
+    interacting,
+    exclusions,
+  ]);
 }

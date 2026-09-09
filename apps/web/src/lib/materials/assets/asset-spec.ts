@@ -46,13 +46,7 @@ export type AssetKind = 'texture' | 'face' | 'sprite';
  * plant needs no enum edit; `tags` are what a query narrows on.
  */
 export type AssetGroup =
-  | 'vegetation'
-  | 'structure'
-  | 'furniture'
-  | 'feature'
-  | 'architectural'
-  | 'surface'
-  | 'effect';
+  'vegetation' | 'structure' | 'furniture' | 'feature' | 'architectural' | 'surface' | 'effect';
 
 export interface AssetTaxon {
   group: AssetGroup;
@@ -555,7 +549,6 @@ export const ASSET_FAMILIES = {
     prompt: `${SPRITE} A rectangular timber raised vegetable bed running left to right, filled with rows of leafy vegetables, seen from directly above.`,
   },
 
-
   /* ================================================================ Phase D additions
    *
    * **Appended, never inserted.** A material's sprites are resolved by query and returned in
@@ -699,6 +692,16 @@ export const ASSET_FAMILIES = {
     variants: 2,
     transparent: true,
     prompt: `${SPRITE} A short length of clipped yew hedge seen from directly above, a very dense dark mass of fine needles filling a rounded square, with a crisp clipped edge.${TINTABLE}`,
+  },
+
+  'tree-japanese-maple': {
+    kind: 'sprite',
+    taxon: { group: 'vegetation', type: 'tree-deciduous', tags: ['acer', 'red-leaf'] },
+    metres: { w: 4, h: 4 },
+    sizePx: { w: 768, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${SPRITE} A red Japanese maple (Acer palmatum) crown, detailed palmate burgundy and crimson leaves with layered branches, subtle warm tips and leaf-scale ambient shading.`,
   },
 
   /* ---- drawn by the tool, not by a model ---- */

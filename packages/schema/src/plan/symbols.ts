@@ -40,6 +40,21 @@ export const SymbolIdSchema = z.enum([
   /* ---- planting ---- */
   'specimen',
   /*
+   * Shrubs by kind, and the reason they are symbols rather than texture.
+   *
+   * A planting bed draws its infill as a painted scatter — mass, mid, edge — and that is right: a
+   * border is specified as a quantity per square metre, not as two hundred placed objects. But the
+   * *structure* of a bed is placed. A designer positions the trees and the key shrubs and lets the
+   * infill fill in around them, and a plan where none of that can be moved is a picture rather than
+   * a design.
+   *
+   * So `backdrop` and `specimen` — the two structural roles in `PlantingRole` — are lifted out of
+   * the painted stack and become these. Everything else stays a texture.
+   */
+  'shrub-evergreen',
+  'shrub-flowering',
+  'shrub-architectural',
+  /*
    * Trees by kind.
    *
    * Every tree in every plan was one canopy — one deciduous sprite family, chosen by seed, so a
@@ -184,6 +199,31 @@ export const SYMBOLS: Record<SymbolId, SymbolSpec> = {
     height: 1.2,
   },
   /*
+   * Shrubs, sized as the structural planting in a border: big enough to read as individual objects
+   * on the plan, which is what separates them from the infill drawn around them.
+   */
+  'shrub-evergreen': {
+    category: 'planting-bed',
+    label: 'Evergreen shrub',
+    footprint: { kind: 'point', radius: 0.6 },
+    height: 1.3,
+    spread: 1.5,
+  },
+  'shrub-flowering': {
+    category: 'planting-bed',
+    label: 'Flowering shrub',
+    footprint: { kind: 'point', radius: 0.7 },
+    height: 1.5,
+    spread: 1.8,
+  },
+  'shrub-architectural': {
+    category: 'planting-bed',
+    label: 'Architectural shrub',
+    footprint: { kind: 'point', radius: 0.65 },
+    height: 1.4,
+    spread: 1.4,
+  },
+  /*
    * Radii are the canopy at the size a garden tree is *planted and kept*, not at forest maturity —
    * the placer erodes by exactly this and the validator tessellates the same circle, so a generous
    * number here is a tree the plan says fits when it does not.
@@ -230,6 +270,29 @@ export const SYMBOLS: Record<SymbolId, SymbolSpec> = {
   },
 };
 
+/**
+ * Every plant that is placed rather than painted.
+ *
+ * The membership test the renderer, the label rule and the shadow model all key on — a plant is the
+ * one kind of feature that stands *on* another element rather than beside it, and each of those
+ * three has to treat it differently because of that.
+ */
+export const PLANT_SYMBOLS: SymbolId[] = [
+  'specimen',
+  'shrub-evergreen',
+  'shrub-flowering',
+  'shrub-architectural',
+  'tree-deciduous',
+  'tree-ornamental',
+  'tree-evergreen',
+  'tree-multistem',
+  'tree-fruit',
+];
+
+export function isPlantSymbol(id: string | undefined): boolean {
+  return id !== undefined && (PLANT_SYMBOLS as string[]).includes(id);
+}
+
 /** Every tree symbol, in the order a picker should offer them. */
 export const TREE_SYMBOLS: SymbolId[] = [
   'tree-deciduous',
@@ -257,6 +320,18 @@ export function symbolLabel(id: SymbolId): string {
 
 /** The symbols a user may add from the editor, in the order the palette lists them. */
 export const ADDABLE_SYMBOLS: SymbolId[] = [
+  /*
+   * Plants first, because they are what a user reaches for most and the palette had none at all —
+   * a garden design tool in which you cannot place a tree.
+   */
+  'tree-deciduous',
+  'tree-ornamental',
+  'tree-evergreen',
+  'tree-multistem',
+  'tree-fruit',
+  'shrub-evergreen',
+  'shrub-flowering',
+  'shrub-architectural',
   'dining-set-4',
   'dining-set-6',
   'sofa-set',

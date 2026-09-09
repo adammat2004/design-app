@@ -445,12 +445,11 @@ describe.skipIf(connection === null)('PlannerService', () => {
     const { changes } = await planner.plan(document, intents);
 
     const boundary = document.site.vertices.map((vertex) => ({ x: vertex.x, y: vertex.y }));
-    const { geometryIsLegal, housePolygon } = await import('@garden-studio/schema');
-    const house = housePolygon(document.site.house!);
+    const { geometryIsLegal } = await import('@garden-studio/schema');
 
     for (const entry of changes) {
       if (entry.kind === 'remove' || entry.kind === 'material') continue;
-      expect(geometryIsLegal(entry.next.shape, house, boundary)).toBe(true);
+      expect(geometryIsLegal(entry.next.shape, boundary)).toBe(true);
     }
   });
 });

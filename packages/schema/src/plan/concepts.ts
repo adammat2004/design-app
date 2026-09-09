@@ -126,6 +126,12 @@ export const DesignElementSchema = z.object({
    * reason `material` is, and resolved by `resolveSymbol` at the point of use.
    */
   symbol: z.string().optional(),
+  /** Catalogue identity, distinct from the broad drawing symbol. */
+  plantId: z.string().optional(),
+  /** Bed containing the plant centre; updated when it is moved. */
+  bedId: z.string().optional(),
+  /** Planning intent; omitted means a new proposed element. */
+  status: z.enum(['keep', 'remove', 'replace']).optional(),
   /**
    * How a planting bed is planted — see `planting.ts`.
    *

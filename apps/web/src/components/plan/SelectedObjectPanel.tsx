@@ -31,12 +31,19 @@ export function SelectedObjectPanel() {
             <p className="text-xs font-semibold text-garden-ink">House footprint</p>
           </div>
 
+          {/*
+            `readMetres` is what makes the clamp honest. A house may be the full width of its
+            plot but no wider, so a typed width is met as far as it goes — and without reading
+            the accepted value back, the box would sit there showing a number the house never
+            took. `metres` alone cannot do it: it has not changed, so the effect does not fire.
+          */}
           <Field label="Width">
             <LengthInput
               testId="house-width"
               label="House width"
               metres={houseSize(draft.house).width}
               unit={unit}
+              readMetres={() => houseSizeNow().width}
               onCommit={(width) => setHouseSize({ width })}
             />
           </Field>
@@ -47,6 +54,7 @@ export function SelectedObjectPanel() {
               label="House depth"
               metres={houseSize(draft.house).depth}
               unit={unit}
+              readMetres={() => houseSizeNow().depth}
               onCommit={(depth) => setHouseSize({ depth })}
             />
           </Field>
@@ -78,6 +86,12 @@ export function SelectedObjectPanel() {
       )}
     </section>
   );
+}
+
+/** The house's size after a commit, read outside React so the input can settle on the truth. */
+function houseSizeNow(): { width: number; depth: number } {
+  const house = useBoundaryStore.getState().present.house;
+  return house ? houseSize(house) : { width: 0, depth: 0 };
 }
 
 function VertexFields({ id }: { id: string }) {

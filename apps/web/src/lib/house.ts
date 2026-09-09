@@ -6,6 +6,7 @@ import {
   identifyOutline,
   normaliseDegrees,
   polygonCentroid,
+  scaleHouseAbout,
   type HouseFootprint,
   type HouseSize,
   type Point,
@@ -113,4 +114,81 @@ export function clampHouseInside(
     x: house.centre.x + (target.x - house.centre.x) * low,
     y: house.centre.y + (target.y - house.centre.y) * low,
   });
+}
+
+/**
+ * The house shrunk about its own centre until it fits, or null when no size would do.
+ *
+ * For *placing* a preset: the palette offers an 8 × 6 m rectangle and a small plot is a real
+ * thing, so refusing outright placed nothing at all and said nothing about why. Null is kept for
+ * the one case shrinking cannot rescue — a centre that is not inside the plot, or a house that
+ * would have to come out below `MIN_HOUSE_SIDE` — because those are not "too big", they are
+ * "not there".
+ */
+export function shrinkHouseToFit(boundary: Point[], house: HouseFootprint): HouseFootprint | null {
+  if (houseFitsInside(boundary, house)) return house;
+
+  let low = 0;
+  let high = 1;
+
+  for (let i = 0; i < 16; i += 1) {
+    const mid = (low + high) / 2;
+    if (houseFitsInside(boundary, scaleHouseAbout(house, house.centre, mid))) low = mid;
+    else high = mid;
+  }
+
+  if (low === 0) return null;
+
+  const fitted = scaleHouseAbout(house, house.centre, low);
+  const size = houseSize(fitted);
+
+  return Math.min(size.width, size.depth) < MIN_HOUSE_SIDE ? null : fitted;
+}
+
+/**
+ * The house resized as far towards `size` as it can go while staying inside the plot.
+ *
+ * The sibling of `clampHouseInside`, and it exists for a sharper reason than symmetry: a house
+ * really can be the full width of its plot — a terrace, or a bungalow between two side fences —
+ * and typing that width into the panel used to be *refused outright and in silence*, leaving the
+ * rejected number sitting in the box beside a house that had not moved. Clamping answers with
+ * the largest house that fits, which is the honest reading of "make it this wide".
+ *
+ * Same binary search over the fraction between the current size and the requested one, so it
+ * needs no special-casing for the shape of the plot or for which wall meets a fence first. Note
+ * `resizeHouse` scales about the footprint's own centre, so an off-centre house stops when its
+ * nearest wall lands on the fence — recentring would move a building the user placed deliberately.
+ */
+export function clampHouseSize(
+  boundary: Point[],
+  house: HouseFootprint,
+  size: Partial<HouseSize>,
+): HouseFootprint {
+  const resized = resizeHouse(house, size);
+  if (houseFitsInside(boundary, resized)) return resized;
+
+  // If it was not legal to begin with there is no safe fraction to fall back to.
+  if (!houseFitsInside(boundary, house)) return house;
+
+  const current = houseSize(house);
+  const target = {
+    width: size.width ?? current.width,
+    depth: size.depth ?? current.depth,
+  };
+  const at = (fraction: number) =>
+    resizeHouse(house, {
+      width: current.width + (target.width - current.width) * fraction,
+      depth: current.depth + (target.depth - current.depth) * fraction,
+    });
+
+  let low = 0;
+  let high = 1;
+
+  for (let i = 0; i < 16; i += 1) {
+    const mid = (low + high) / 2;
+    if (houseFitsInside(boundary, at(mid))) low = mid;
+    else high = mid;
+  }
+
+  return at(low);
 }

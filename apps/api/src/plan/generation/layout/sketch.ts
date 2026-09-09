@@ -68,6 +68,7 @@ export interface SketchPath {
 }
 
 export interface LayoutSketch {
+  beds: { name: string; shape: LocalShape }[];
   template: TemplateId;
   terrace: LocalRect | null;
   lawn: LocalShape | null;

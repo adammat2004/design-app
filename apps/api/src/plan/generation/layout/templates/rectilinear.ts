@@ -1,3 +1,4 @@
+import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
   borderDepth,
@@ -124,14 +125,27 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
     });
   }
 
-  // Deeper planting on the far side, a mowing strip's worth on the gate side.
+  /*
+   * The lawn's border, **per side and deliberately lopsided**.
+   *
+   * It used to be `b` on every side but one, which is a decision that looks modest and is not: a
+   * shape inset by a constant leaves an annulus by construction, so the leftover was a continuous
+   * ring of planting round the whole garden however wide `b` was. Every plan came out as a lawn
+   * marooned in a thicket, and no amount of designing beds could show through it.
+   *
+   * A designed garden is not bordered evenly. It has a deep bed on one or two sides and the lawn
+   * running to the fence on the others — which is what makes the beds read as *places* rather than
+   * as the space left over. So: the back gets a deep border (2×), the far side a normal one, and
+   * the gate side only a mowing strip, because that is the side you walk down.
+   */
+  const mowingStrip = 0.35;
   const lawnRect = {
     u0: T + 0.6 * s,
-    u1: D - b,
-    v0: gate === 'right' ? deep.vMin + 1.4 * b : deep.vMin + b,
-    v1: gate === 'right' ? deep.vMax - b : deep.vMax - 1.4 * b,
+    u1: D - Math.min(2 * b, Math.max(0.4, D - (T + 0.6 * s) - 1.6)),
+    v0: gate === 'right' ? deep.vMin + b : deep.vMin + mowingStrip,
+    v1: gate === 'right' ? deep.vMax - mowingStrip : deep.vMax - b,
   };
-  const notched = notchV > lawnRect.u0 && notchU > lawnRect.u0 + 1.5 && notchU < lawnRect.u1;
+  const notched = notchV > 0 && notchU > lawnRect.u0 + 1.5 && notchU < lawnRect.u1;
   const lawn: LayoutSketch['lawn'] = courtyard
     ? null
     : notched
@@ -182,6 +196,7 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
 
   return {
     template: 'rectilinear',
+    beds: designedBeds(request, room, terrace, 'rectilinear'),
     terrace,
     lawn,
     lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',

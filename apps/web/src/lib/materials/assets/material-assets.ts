@@ -146,7 +146,8 @@ export const TREE_CANOPY_QUERIES: Record<string, TaxonQuery> = {
  * Total by construction: a tree whose symbol names no query — an old plan, or a point element with
  * no symbol at all — still gets a canopy, which is what every tree got before species existed.
  */
-export function canopiesForSymbol(symbol: string | undefined): AssetId[] {
+export function canopiesForSymbol(symbol: string | undefined, plantId?: string): AssetId[] {
+  if (plantId === 'acer-palmatum-red') return ['tree-japanese-maple'];
   const query = symbol ? TREE_CANOPY_QUERIES[symbol] : undefined;
   const found = query ? assetsMatching(query) : [];
   return found.length > 0 ? found : CANOPY_SPRITES;
@@ -174,6 +175,15 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
   trampoline: 'play-trampoline',
   'raised-bed': 'play-raised-bed',
   specimen: 'plant-shrub',
+  /*
+   * The three structural shrubs, mapped to the families Phase D generated for them. Architectural
+   * gets its own; the other two share the general shrub families, which is honest — a photograph of
+   * an evergreen mound and one of a flowering shrub in leaf are not reliably different from above,
+   * and the palette's tint is what carries the distinction.
+   */
+  'shrub-evergreen': 'plant-shrub',
+  'shrub-flowering': 'plant-shrub-deciduous',
+  'shrub-architectural': 'plant-shrub-architectural',
 };
 
 /** The disc every sprite stands on. */

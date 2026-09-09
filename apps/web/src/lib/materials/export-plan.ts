@@ -7,6 +7,7 @@ import {
   type Point,
 } from '@garden-studio/schema';
 import type { Unit } from '../units';
+import type { Maturity, SceneView } from '../render/scene';
 import { getAssetVariants } from './assets/registry';
 import { drawPlan, type PlanContext, type PlanScene } from './render-plan';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
@@ -25,6 +26,36 @@ const EXPORT_WIDTH_PX = 2400;
 const MARGIN_METRES = 1;
 const PAPER = '#f4f2ed';
 
+/**
+ * How far above the delivered size the plan is drawn before being resampled down.
+ *
+ * Everything in this renderer has a size floor — `lod.ts` stops drawing a slab under three pixels
+ * and a scatter unit under one and a half — so detail does not fade out gracefully at small
+ * scales, it stops. Drawing at twice the width puts every one of those floors twice as far away,
+ * so the units keep being drawn, and then the downsample averages them into the pixels they
+ * should have occupied. That is a genuinely different picture from drawing at the final size: it
+ * is the difference between a bed of plants too small to draw and a bed of plants.
+ *
+ * Two, not four. The cost is the square: a 2400 px plan at 2x is a 4800 px canvas, about 92 MB of
+ * RGBA, which a browser will allocate. At 4x it is 368 MB and Safari refuses the canvas outright
+ * — and the visible gain over 2x is very small, because the remaining detail is below the floors
+ * again.
+ */
+const SUPERSAMPLE = 2;
+
+/**
+ * The finishing pass: a small contrast lift and a little saturation.
+ *
+ * Restrained on purpose and applied last, over the whole sheet. Compositing a garden out of
+ * dozens of independently tinted photographs tends to converge on the average of them, which is a
+ * slightly flat mid-tone; this puts back the separation that averaging took out. It is not a
+ * filter and must not become one — the output should still read as an architectural
+ * visualisation, so the numbers are barely above 1 and there is no colour grading, no vignette
+ * and no warmth.
+ */
+const FINISH_CONTRAST = 1.06;
+const FINISH_SATURATION = 1.08;
+
 const makeBrowserCanvas: MakeCanvas = (width, height) => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -36,23 +67,38 @@ export interface ExportOptions {
   unit: Unit;
   /** Feature chips on or off — the editor's own labels toggle. */
   labels: boolean;
+  /**
+   * Which view to draw. Defaults to the plan, which is what the 2D tab and the review screen want.
+   *
+   * Visualise exports what Visualise shows: instanced planting at the chosen maturity, and a roof
+   * on the house. A download that did not match the view it was taken from would be the same
+   * class of contradiction as step 4 disagreeing with step 5.
+   */
+  view?: SceneView;
+  maturity?: Maturity;
 }
 
 /** Draws the scene into a fresh canvas and resolves to its PNG. */
 export async function exportPlanPng(scene: PlanScene, options: ExportOptions): Promise<Blob> {
   const box = boundingBox(scene.boundary);
-  const pxPerMetre = EXPORT_WIDTH_PX / (box.width + MARGIN_METRES * 2);
-  const width = Math.ceil((box.width + MARGIN_METRES * 2) * pxPerMetre);
-  const height = Math.ceil((box.length + MARGIN_METRES * 2) * pxPerMetre);
+  const width = Math.ceil(EXPORT_WIDTH_PX);
+  const height = Math.ceil(
+    ((box.length + MARGIN_METRES * 2) / (box.width + MARGIN_METRES * 2)) * width,
+  );
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
+  /* Drawn large, delivered small. See `SUPERSAMPLE`. */
+  const pxPerMetre = (width * SUPERSAMPLE) / (box.width + MARGIN_METRES * 2);
+  const bigWidth = width * SUPERSAMPLE;
+  const bigHeight = height * SUPERSAMPLE;
+
+  const big = document.createElement('canvas');
+  big.width = bigWidth;
+  big.height = bigHeight;
+  const context = big.getContext('2d');
   if (!context) throw new Error('The browser gave no 2D context to draw the plan into.');
 
   context.fillStyle = PAPER;
-  context.fillRect(0, 0, width, height);
+  context.fillRect(0, 0, bigWidth, bigHeight);
 
   const rasterOrigin = { x: box.minX - MARGIN_METRES, y: box.minY - MARGIN_METRES };
 
@@ -66,11 +112,28 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
       assets: getAssetVariants,
     },
     rasterOrigin,
+    { view: options.view ?? 'plan', ...(options.maturity ? { maturity: options.maturity } : {}) },
   );
 
   if (options.labels) {
     drawLabels(context, scene.elements, options.unit, pxPerMetre, rasterOrigin);
   }
+
+  /*
+   * The downsample. One `drawImage` with smoothing on, which is the browser's own resampler and
+   * is both better and far faster than anything worth writing here.
+   */
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const out = canvas.getContext('2d');
+  if (!out) throw new Error('The browser gave no 2D context to resample the plan into.');
+
+  out.imageSmoothingEnabled = true;
+  out.imageSmoothingQuality = 'high';
+  out.drawImage(big, 0, 0, width, height);
+
+  finish(out, width, height);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -78,6 +141,37 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
       'image/png',
     );
   });
+}
+
+/**
+ * The finishing pass, in place on the delivered canvas.
+ *
+ * Deliberately arithmetic on the pixels rather than a `filter` string: `context.filter` is not
+ * supported everywhere and fails silently where it is not, which would make the export quietly
+ * differ between browsers. Luminance-preserving saturation, so nothing shifts hue.
+ */
+function finish(context: CanvasRenderingContext2D, width: number, height: number): void {
+  const image = context.getImageData(0, 0, width, height);
+  const { data } = image;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+
+    // Rec. 709 luma, which is what keeps a saturation lift from also changing brightness.
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    data[i] = clamp255((luma + (r - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
+    data[i + 1] = clamp255((luma + (g - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
+    data[i + 2] = clamp255((luma + (b - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
+  }
+
+  context.putImageData(image, 0, 0);
+}
+
+function clamp255(value: number): number {
+  return value < 0 ? 0 : value > 255 ? 255 : value;
 }
 
 /**

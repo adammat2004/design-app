@@ -1,215 +1,163 @@
 'use client';
 
 import { useState } from 'react';
-
-import { ADDABLE_SYMBOLS, SYMBOLS, type SymbolId } from '@garden-studio/schema';
+import { Search } from 'lucide-react';
+import { ADDABLE_SYMBOLS, PLANT_CATALOGUE, SYMBOLS, type SymbolId } from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import type { ElementCategory } from '@/lib/concepts';
 import { ADDABLE_CATEGORIES } from '@/lib/element-groups';
+import { defaultMaterial } from '@/lib/materials';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
-import { EditorIcon } from './EditorIcon';
+import { CatalogueThumbnail } from './CatalogueThumbnail';
 
-/**
- * The palette that adds a new surface or a piece of furniture to the plan.
- *
- * Same shape as step 2's `FeatureTypePalette`: pick a type, then click the canvas. Clicking the
- * active type again cancels, so there is no way to get stuck in placing mode without a visible
- * way out.
- *
- * Surfaces are offered by category; furniture by *symbol*, because "furniture" is not a thing
- * anyone places — a dining set or a lounger is, and each brings its own footprint.
- *
- * `existing-feature` is deliberately not offered — that category means "carried over from step 2",
- * and letting the user create one here would make the word a lie.
- */
-/**
- * The groups the filter offers, and what falls in each.
- *
- * Coarser than `ElementCategory` on purpose. A user looking for somewhere to sit does not think
- * "furniture, category of eight"; they think "seating". These are the words on the tabs in the
- * design the palette is being brought towards, and they map onto categories rather than replacing
- * them — the thing placed is still an `ElementCategory` and a `SymbolId`.
- */
-const GROUPS = [
-  { id: 'all', label: 'All' },
-  { id: 'structures', label: 'Structures' },
-  { id: 'planting', label: 'Planting' },
-  { id: 'surfaces', label: 'Surfaces' },
-  { id: 'furniture', label: 'Furniture' },
-] as const;
-
-type GroupId = (typeof GROUPS)[number]['id'];
-
-const CATEGORY_GROUP: Partial<Record<ElementCategory, GroupId>> = {
-  structure: 'structures',
-  'planting-bed': 'planting',
-  lawn: 'planting',
-  'paved-area': 'surfaces',
-  'gravel-mulch': 'surfaces',
-  'water-feature': 'surfaces',
-  furniture: 'furniture',
+const GROUPS = ['all', 'structures', 'surfaces', 'planting', 'furniture', 'features'] as const;
+type GroupId = (typeof GROUPS)[number];
+const GROUP_LABELS: Record<GroupId, string> = {
+  all: 'All',
+  structures: 'Structures',
+  surfaces: 'Surfaces',
+  planting: 'Planting',
+  furniture: 'Furniture',
+  features: 'Features',
 };
-
-/** Case- and punctuation-insensitive, so "firepit" finds "Fire pit". */
-function matchesSearch(label: string, search: string): boolean {
-  const tidy = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return tidy(label).includes(tidy(search));
-}
+const groupFor = (category: ElementCategory, symbol?: SymbolId): GroupId => {
+  if (
+    symbol &&
+    ['fire-pit', 'planter', 'swing', 'slide', 'trampoline', 'raised-bed'].includes(symbol)
+  )
+    return 'features';
+  if (category === 'structure') return 'structures';
+  if (category === 'planting-bed' || category === 'lawn') return 'planting';
+  if (category === 'furniture') return 'furniture';
+  if (category === 'water-feature') return 'features';
+  return 'surfaces';
+};
+const tidy = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export function AddFeaturePalette() {
   const placingCategory = usePlanEditorStore((state) => state.placingCategory);
+  const placingPlantId = usePlanEditorStore((state) => state.placingPlantId);
   const placingSymbol = usePlanEditorStore((state) => state.placingSymbol);
   const setPlacing = usePlanEditorStore((state) => state.setPlacing);
-
   const [search, setSearch] = useState('');
   const [group, setGroup] = useState<GroupId>('all');
-
-  const inGroup = (category: ElementCategory) =>
-    group === 'all' || CATEGORY_GROUP[category] === group;
-
-  const surfaces = ADDABLE_CATEGORIES.filter(
-    (category) =>
-      category !== 'furniture' &&
-      inGroup(category) &&
-      matchesSearch(CATEGORY_COLOURS[category].label, search),
+  const entries: {
+    id: string;
+    label: string;
+    category: ElementCategory;
+    symbol?: SymbolId;
+    plantId?: string;
+  }[] = [
+    ...ADDABLE_CATEGORIES.filter((category) => category !== 'furniture').map((category) => ({
+      id: category,
+      label: CATEGORY_COLOURS[category].label,
+      category,
+    })),
+    ...ADDABLE_SYMBOLS.map((symbol) => ({
+      id: symbol,
+      label: SYMBOLS[symbol].label,
+      category: SYMBOLS[symbol].category,
+      symbol,
+    })),
+    ...Object.entries(PLANT_CATALOGUE).map(([plantId, plant]) => ({
+      id: plantId,
+      plantId,
+      label: plant.name,
+      category: 'planting-bed' as const,
+      symbol: plant.symbol,
+    })),
+  ];
+  const shown = entries.filter(
+    (entry) =>
+      (group === 'all' || groupFor(entry.category, entry.symbol) === group) &&
+      tidy(entry.label).includes(tidy(search)),
   );
-
-  const furniture = ADDABLE_SYMBOLS.filter(
-    (symbol) => inGroup(SYMBOLS[symbol].category) && matchesSearch(SYMBOLS[symbol].label, search),
-  );
-
-  const nothing = surfaces.length === 0 && furniture.length === 0;
-
   return (
-    <section>
-      <h2 className="text-xs font-semibold text-garden-ink">Add features</h2>
-      <p className="mt-1 text-[11px] leading-relaxed text-garden-muted">
-        Choose a surface, then click the plan to place it.
-      </p>
-
-      {/*
-        Search and a group filter.
-
-        The palette is twenty things today and heading for many more as the asset library grows —
-        which is the point of the Phase D taxonomy. A grid you have to scan is fine at twenty and
-        useless at eighty, and the cheapest time to add the control is before it is needed.
-      */}
-      <label className="mt-3 block">
-        <span className="sr-only">Search features</span>
+    <section aria-label="Add features to the garden">
+      <label className="relative block">
+        <Search aria-hidden className="absolute top-3 left-3 h-4 w-4 text-garden-muted" />
         <input
           type="search"
+          aria-label="Search features"
           data-testid="palette-search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search features…"
-          className="w-full rounded-lg border border-garden-line bg-white px-2.5 py-1.5 text-xs text-garden-ink placeholder:text-garden-muted focus-visible:border-garden-green focus-visible:outline-none"
+          className="w-full rounded-lg border border-garden-line bg-white py-2.5 pr-3 pl-9 text-xs focus-visible:outline-2 focus-visible:outline-garden-green"
         />
       </label>
-
-      <ul className="mt-2 flex flex-wrap gap-1">
+      <div className="mt-3 flex flex-wrap gap-1.5">
         {GROUPS.map((option) => (
-          <li key={option.id}>
-            <button
-              type="button"
-              data-testid={`palette-group-${option.id}`}
-              aria-pressed={group === option.id}
-              onClick={() => setGroup(option.id)}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
-                group === option.id
-                  ? 'bg-garden-forest text-white'
-                  : 'bg-garden-sage text-garden-forest hover:bg-garden-green hover:text-white'
-              }`}
-            >
-              {option.label}
-            </button>
-          </li>
+          <button
+            key={option}
+            type="button"
+            data-testid={`palette-group-${option}`}
+            aria-pressed={option === group}
+            onClick={() => setGroup(option)}
+            className={`rounded-md border px-3 py-2 text-[11px] ${group === option ? 'border-garden-forest bg-garden-forest text-white' : 'border-garden-line bg-[#f5f6f8] text-garden-ink hover:bg-garden-sage'}`}
+          >
+            {GROUP_LABELS[option]}
+          </button>
         ))}
-      </ul>
-
-      {nothing ? (
-        <p data-testid="palette-empty" className="mt-3 text-[11px] text-garden-muted">
+      </div>
+      {shown.length === 0 ? (
+        <p data-testid="palette-empty" className="py-6 text-xs text-garden-muted">
           Nothing matches “{search}”.
         </p>
       ) : null}
-
-      <ul data-testid="editor-palette" className="mt-3 grid grid-cols-3 gap-2">
-        {surfaces.map((category) => (
-          <li key={category}>
-            <PaletteButton
-              testId={`palette-${category}`}
-              category={category}
-              label={CATEGORY_COLOURS[category].label}
-              active={placingCategory === category && placingSymbol === null}
-              onClick={() =>
-                setPlacing(placingCategory === category && placingSymbol === null ? null : category)
-              }
-            />
-          </li>
-        ))}
-      </ul>
-
-      {furniture.length > 0 ? (
-        <>
-          <h3 className="mt-4 text-xs font-semibold text-garden-ink">Furniture</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-garden-muted">
-            Stands on a patio, deck or lawn. Sized as the real thing.
-          </p>
-        </>
-      ) : null}
-
-      <ul data-testid="editor-furniture-palette" className="mt-3 grid grid-cols-3 gap-2">
-        {furniture.map((symbol) => (
-          <li key={symbol}>
-            <PaletteButton
-              testId={`palette-${symbol}`}
-              category={SYMBOLS[symbol].category}
-              label={SYMBOLS[symbol].label}
-              active={placingSymbol === symbol}
-              onClick={() =>
-                placingSymbol === symbol
-                  ? setPlacing(null)
-                  : setPlacing(SYMBOLS[symbol].category, symbol)
-              }
-            />
-          </li>
-        ))}
-      </ul>
+      <div data-testid="editor-palette" className="space-y-6 py-5">
+        {GROUPS.filter((section) => section !== 'all').map((section) => {
+          const items = shown.filter((entry) => groupFor(entry.category, entry.symbol) === section);
+          if (!items.length) return null;
+          return (
+            <div key={section}>
+              <h3 className="mb-2 text-sm font-semibold text-garden-ink">
+                {GROUP_LABELS[section]}
+              </h3>
+              <ul className="grid grid-cols-3 gap-2">
+                {items.map((entry) => {
+                  const active = entry.plantId
+                    ? placingPlantId === entry.plantId
+                    : entry.symbol
+                      ? !placingPlantId && placingSymbol === entry.symbol
+                      : placingCategory === entry.category && placingSymbol === null;
+                  return (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        data-testid={`palette-${entry.id}`}
+                        aria-pressed={active}
+                        title="Choose, then click the plan to place"
+                        onClick={() =>
+                          setPlacing(
+                            active ? null : entry.category,
+                            active ? null : entry.symbol,
+                            active ? null : entry.plantId,
+                          )
+                        }
+                        className={`flex h-full min-h-24 w-full flex-col items-center rounded-lg border p-1.5 transition hover:border-garden-green focus-visible:outline-2 focus-visible:outline-garden-green ${active ? 'border-garden-green bg-garden-sage' : 'border-garden-line bg-white'}`}
+                      >
+                        <span className="block h-16 w-full rounded bg-[#fafbf9] p-1">
+                          <CatalogueThumbnail
+                            element={{ ...entry, material: defaultMaterial(entry.category) }}
+                          />
+                        </span>
+                        <span className="mt-1.5 text-[10px] leading-4 text-garden-ink">
+                          {entry.label}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] leading-5 text-garden-muted">
+        Choose a feature, then click the plan to place it.
+      </p>
     </section>
   );
 }
-
-function PaletteButton({
-  testId,
-  category,
-  label,
-  active,
-  onClick,
-}: {
-  testId: string;
-  category: ElementCategory;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      aria-pressed={active}
-      title="Click the plan to place it"
-      onClick={onClick}
-      className={[
-        'flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center transition-colors',
-        'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
-        active
-          ? 'border-garden-green bg-garden-sage text-garden-forest'
-          : 'border-garden-line bg-white text-garden-ink hover:border-garden-green hover:bg-garden-sage/50',
-      ].join(' ')}
-    >
-      <EditorIcon category={category} className="h-5 w-5" />
-      <span className="text-[10px] leading-tight font-medium">{label}</span>
-    </button>
-  );
-}
-
 export type { SymbolId };

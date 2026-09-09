@@ -285,7 +285,7 @@ export class FillService {
         SELECT ${blade} AS geom
       ),
       pieces AS MATERIALIZED (
-        SELECT (ST_Dump(ST_Split(remainder.geom, blade.geom))).geom AS geom FROM remainder, blade
+        SELECT (ST_Dump(${cuts.length === 0 ? sql`remainder.geom` : sql`ST_Split(remainder.geom, blade.geom)`})).geom AS geom FROM remainder, blade
       ),
       parts AS MATERIALIZED (
         SELECT (ST_Dump(pieces.geom)).geom AS geom FROM pieces

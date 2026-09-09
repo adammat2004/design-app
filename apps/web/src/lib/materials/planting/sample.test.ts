@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { schemeFor, type PlantingLayer, type Point } from '@garden-studio/schema';
 import {
   cellSize,
   distanceToEdge,
   driftNoise,
   pointInPolygon,
   samplePlanting,
-} from './sample';
+  schemeFor,
+  type PlantingLayer,
+  type Point,
+} from '@garden-studio/schema';
 
 /** A 10 × 6 m bed with its corner at (2, 1), so nothing sits at the world origin by accident. */
 const bed: Point[] = [
@@ -47,7 +49,16 @@ describe('samplePlanting', () => {
   });
 
   it('returns nothing for an outline that is not a polygon', () => {
-    expect(samplePlanting([{ x: 0, y: 0 }, { x: 1, y: 1 }], layer(), 'bed-1')).toEqual([]);
+    expect(
+      samplePlanting(
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        layer(),
+        'bed-1',
+      ),
+    ).toEqual([]);
   });
 
   /* -------------------------------------------------------------- determinism */
@@ -227,9 +238,16 @@ describe('distanceToEdge', () => {
 
 describe('the schemes', () => {
   it('gives every style layers that differ from every other', () => {
-    const shapes = (['contemporary', 'cottage', 'naturalistic', 'low-maintenance', 'architectural', 'pollinator'] as const).map(
-      (style) => JSON.stringify(schemeFor(style).layers),
-    );
+    const shapes = (
+      [
+        'contemporary',
+        'cottage',
+        'naturalistic',
+        'low-maintenance',
+        'architectural',
+        'pollinator',
+      ] as const
+    ).map((style) => JSON.stringify(schemeFor(style).layers));
 
     expect(new Set(shapes).size).toBe(shapes.length);
   });
@@ -241,7 +259,14 @@ describe('the schemes', () => {
 
   /** Every layer has to be plantable: a zero share draws nothing and is a scheme with a hole. */
   it('gives every layer of every scheme a usable share and spread', () => {
-    for (const style of ['contemporary', 'cottage', 'naturalistic', 'low-maintenance', 'architectural', 'pollinator'] as const) {
+    for (const style of [
+      'contemporary',
+      'cottage',
+      'naturalistic',
+      'low-maintenance',
+      'architectural',
+      'pollinator',
+    ] as const) {
       for (const spec of schemeFor(style).layers) {
         expect(spec.share, `${style}/${spec.role}`).toBeGreaterThan(0);
         expect(spec.spread.min, `${style}/${spec.role}`).toBeGreaterThan(0);

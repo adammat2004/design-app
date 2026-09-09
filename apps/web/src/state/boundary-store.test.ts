@@ -7,7 +7,7 @@ import {
   rectanglePlotOutline,
 } from '@garden-studio/schema';
 import { draftPolygon, pointInPolygon, polygonArea, vertexLabel } from '@/lib/boundary-geometry';
-import { houseSize, housePolygon } from '@/lib/house';
+import { houseFitsInside, houseSize, housePolygon } from '@/lib/house';
 import type { ZoneId } from '@/lib/zones';
 import {
   effectiveZoneIds,
@@ -173,9 +173,23 @@ describe('placing the house', () => {
     expect(store().houseTool).toBe('move');
   });
 
-  it('refuses a rectangle that will not fit inside the plot', () => {
+  /*
+   * Shrunk rather than refused. The preset is one size and a plot is any size, so a click that
+   * placed nothing and said nothing was the worst of the three possible answers.
+   */
+  it('shrinks a rectangle too big for the plot rather than placing nothing', () => {
     drawPlot();
     store().placeHouseRectangle({ x: 10, y: 8 }, 40, 40);
+
+    const house = store().present.house;
+    expect(house).not.toBeNull();
+    expect(houseSize(house!).width).toBeLessThan(40);
+    expect(houseFitsInside(draftPolygon(store().present), house!)).toBe(true);
+  });
+
+  it('still places nothing when the point is off the plot entirely', () => {
+    drawPlot();
+    store().placeHouseRectangle({ x: 60, y: 8 }, 8, 6);
 
     expect(store().present.house).toBeNull();
   });
@@ -280,12 +294,20 @@ describe('moving and resizing the house', () => {
     expect(houseSize(store().present.house!)).toEqual({ width: 12, depth: 6 });
   });
 
-  it('rejects a resize that would not fit rather than half-applying it', () => {
+  /*
+   * _This reverses_ "reject a resize that would not fit". A house can be the full width of its
+   * plot — a terrace, a bungalow between two side fences — and refusing outright left the typed
+   * number in the box beside a house that had not moved. The clamp answers with the largest house
+   * that fits, and it must actually reach the fence rather than stop short of it.
+   */
+  it('grows a resize as far as the fence instead of rejecting it', () => {
     drawPlot();
     placeHouse();
     store().setHouseSize({ width: 40 });
 
-    expect(houseSize(store().present.house!).width).toBe(8);
+    const house = store().present.house!;
+    expect(houseSize(house).width).toBeCloseTo(20, 3);
+    expect(houseFitsInside(draftPolygon(store().present), house)).toBe(true);
   });
 
   it('rotates from the panel and wraps the angle', () => {

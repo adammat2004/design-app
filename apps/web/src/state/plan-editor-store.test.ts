@@ -192,14 +192,18 @@ describe('direct manipulation', () => {
     expect(shape.kind === 'rect' && shape.centre.x).toBeCloseTo(3.1, 5);
   });
 
-  /** Refused, not clamped — step 2's rule, so both screens behave the same way. */
-  it('refuses a move onto the house and leaves the element where it was', () => {
+  /**
+   * The house is not a no-go area. A patio, a path or a pergola attached to the building is the
+   * ordinary case, and the house is drawn over whatever runs under it — so a move onto it goes
+   * through like any other, and nothing is said about it.
+   */
+  it('allows a move onto the house', () => {
     seed();
     store().moveElementLive('p1', { x: 10, y: 8 });
 
     const shape = store().present.elements[0].shape;
-    expect(shape.kind === 'rect' && shape.centre).toEqual({ x: 3, y: 3 });
-    expect(store().clash).toContain('house');
+    expect(shape.kind === 'rect' && shape.centre).toEqual({ x: 10, y: 8 });
+    expect(store().clash).toBeNull();
   });
 
   it('refuses a move over the boundary', () => {
@@ -220,12 +224,12 @@ describe('direct manipulation', () => {
     expect(store().selectedId).toBe(store().present.elements[0].id);
   });
 
-  it('refuses to add on top of the house', () => {
+  it('adds an element on top of the house', () => {
     seed([]);
     store().addElement('paved-area', { x: 10, y: 8 });
 
-    expect(store().present.elements).toEqual([]);
-    expect(store().clash).toContain('house');
+    expect(store().present.elements).toHaveLength(1);
+    expect(store().clash).toBeNull();
   });
 
   it('duplicates an element, offset and renamed', () => {
@@ -502,12 +506,12 @@ describe('applying an assistant proposal', () => {
       elementId: 'p1',
       label: 'Seating patio',
       before: '3, 3 m',
-      after: '10, 8 m',
+      after: '30, 3 m',
       previous: store().present.elements[0],
-      // Straight onto the house — as if the house had moved after the proposal was built.
+      // Straight through the fence — as if the plot had been redrawn after the proposal was built.
       next: element({
         id: 'p1',
-        shape: { kind: 'rect', centre: { x: 10, y: 8 }, width: 3, depth: 2, rotation: 0 },
+        shape: { kind: 'rect', centre: { x: 30, y: 3 }, width: 3, depth: 2, rotation: 0 },
       }),
     };
 
@@ -515,7 +519,7 @@ describe('applying an assistant proposal', () => {
 
     expect(outcome.applied).toEqual([]);
     expect(outcome.refused).toHaveLength(1);
-    expect(outcome.refused[0].reason).toContain('house');
+    expect(outcome.refused[0].reason).toContain('boundary');
     expect(store().present.elements[0].shape).toEqual(element({ id: 'p1' }).shape);
   });
 
@@ -635,5 +639,59 @@ describe('the labels toggle', () => {
     hydratePlanEditorStore({ elements: [], seededFrom: null, pristine: null }, Date.now());
 
     expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+  });
+});
+
+describe('plant properties and bed membership', () => {
+  const bed = element({
+    id: 'bed',
+    category: 'planting-bed',
+    role: 'fill',
+    fillKind: 'accent',
+    shape: { kind: 'rect', centre: { x: 3, y: 3 }, width: 5, depth: 5, rotation: 0 },
+  });
+  const tree = element({
+    id: 'tree',
+    category: 'planting-bed',
+    symbol: 'tree-deciduous',
+    shape: { kind: 'point', at: { x: 3, y: 3 }, radius: 0.6 },
+  });
+  it('updates species, dimensions and status with undo and reload', () => {
+    seed([bed, tree]);
+    store().replaceSymbol('tree', 'tree-ornamental', 'acer-palmatum-red');
+    store().setCanopyDiameter('tree', 2);
+    store().setStatus('tree', 'keep');
+    const planted = store().present.elements.find((e) => e.id === 'tree')!;
+    expect(planted).toMatchObject({
+      plantId: 'acer-palmatum-red',
+      bedId: 'bed',
+      status: 'keep',
+      shape: { radius: 1 },
+    });
+    store().undo();
+    expect(store().present.elements.find((e) => e.id === 'tree')?.status).toBeUndefined();
+    store().redo();
+    const layout = JSON.parse(
+      JSON.stringify({
+        ...store().present,
+        seededFrom: store().seededFrom,
+        pristine: store().pristine,
+      }),
+    );
+    hydratePlanEditorStore(layout, Date.now());
+    expect(store().present.elements.find((e) => e.id === 'tree')).toMatchObject(planted);
+  });
+  it('detaches a plant moved out of its bed and refuses an out-of-bounds canopy', () => {
+    seed([bed, tree]);
+    store().setPosition('tree', { x: 3, y: 7 });
+    expect(store().present.elements.find((e) => e.id === 'tree')?.bedId).toBeUndefined();
+    store().setCanopyDiameter('tree', 30);
+    expect(store().present.elements.find((e) => e.id === 'tree')?.shape).toMatchObject({
+      radius: 0.6,
+    });
+    store().undo();
+    expect(store().present.elements.find((e) => e.id === 'tree')?.shape).toMatchObject({
+      at: { x: 3, y: 3 },
+    });
   });
 });

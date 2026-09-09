@@ -44,7 +44,7 @@ import { EditorIcon } from './EditorIcon';
  * when there is a 3D view worth having, the tab comes back.
  */
 const VIEWS: { id: 'plan' | 'visualise'; label: string }[] = [
-  { id: 'plan', label: 'Plan' },
+  { id: 'plan', label: '2D Plan' },
   { id: 'visualise', label: 'Visualise' },
 ];
 
@@ -187,31 +187,39 @@ export function EditorToolbar({
         ))}
       </ToolbarGroup>
 
-      <ToolbarGroup>
-        <ToolbarButton
-          testId="editor-undo"
-          label="Undo"
-          icon={<Undo2 aria-hidden className="h-4 w-4" />}
-          disabled={!canUndo}
-          onClick={undo}
-        />
-        <ToolbarButton
-          testId="editor-redo"
-          label="Redo"
-          icon={<Redo2 aria-hidden className="h-4 w-4" />}
-          disabled={!canRedo}
-          onClick={redo}
-        />
-        <ToolbarButton
-          testId="editor-reset"
-          label="Reset"
-          icon={<RotateCcw aria-hidden className="h-4 w-4" />}
-          disabled={!hasPristine}
-          title="Back to the concept as generated, discarding your edits"
-          onClick={resetToConcept}
-        />
-        <DownloadPlanButton />
-      </ToolbarGroup>
+      <details className="relative">
+        <summary className="cursor-pointer rounded-lg border border-garden-line bg-white px-3 py-2 text-xs text-garden-ink">
+          Edit actions
+        </summary>
+        <div className="absolute top-full left-0 z-20 mt-2 rounded-lg bg-white p-2 shadow-lg">
+          {' '}
+          <ToolbarGroup>
+            <ToolbarButton
+              testId="editor-undo"
+              label="Undo"
+              icon={<Undo2 aria-hidden className="h-4 w-4" />}
+              disabled={!canUndo}
+              onClick={undo}
+            />
+            <ToolbarButton
+              testId="editor-redo"
+              label="Redo"
+              icon={<Redo2 aria-hidden className="h-4 w-4" />}
+              disabled={!canRedo}
+              onClick={redo}
+            />
+            <ToolbarButton
+              testId="editor-reset"
+              label="Reset"
+              icon={<RotateCcw aria-hidden className="h-4 w-4" />}
+              disabled={!hasPristine}
+              title="Back to the concept as generated, discarding your edits"
+              onClick={resetToConcept}
+            />
+            <DownloadPlanButton />
+          </ToolbarGroup>
+        </div>
+      </details>
 
       {/* Add feature — the palette's twin, for when the left column is scrolled away. */}
       <div className="relative">
@@ -265,17 +273,24 @@ export function EditorToolbar({
         liability at four: the next one to be added is the one whose active-state class gets
         mistyped. One component, one list.
       */}
-      {TOGGLES.map((toggle) => (
-        <ViewToggle
-          key={toggle.id}
-          testId={`editor-${toggle.id}`}
-          label={toggle.label}
-          title={toggle.title}
-          icon={toggle.icon}
-          on={toggle.on}
-          onClick={toggle.onClick}
-        />
-      ))}
+      <details className="relative">
+        <summary className="cursor-pointer rounded-lg border border-garden-line bg-white px-3 py-2 text-xs text-garden-ink">
+          View settings
+        </summary>
+        <div className="absolute top-full right-0 z-20 mt-2 flex w-48 flex-col gap-1 rounded-lg border border-garden-line bg-white p-2 shadow-lg">
+          {TOGGLES.map((toggle) => (
+            <ViewToggle
+              key={toggle.id}
+              testId={`editor-${toggle.id}`}
+              label={toggle.label}
+              title={toggle.title}
+              icon={toggle.icon}
+              on={toggle.on}
+              onClick={toggle.onClick}
+            />
+          ))}
+        </div>
+      </details>
 
       <div className="relative ml-auto">
         <button
@@ -309,7 +324,6 @@ export function EditorToolbar({
     </div>
   );
 }
-
 
 /**
  * One view switch: an icon, a name and an ON/OFF pill.

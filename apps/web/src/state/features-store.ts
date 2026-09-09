@@ -60,7 +60,11 @@ const HISTORY_LIMIT = 50;
 /** Arrow-key nudge in metres; Shift makes it a whole metre. */
 export const NUDGE = 0.1;
 
-const HOUSE_CLASH = 'That overlaps the house. Place it on the garden instead.';
+/*
+ * No house message, because there is no house rule: an existing patio or path really does meet
+ * the building, and the house is drawn over whatever runs under it. The fence is the one edge a
+ * feature may not cross. Step 5 says the same thing the same way.
+ */
 const FENCE_CLASH = 'That goes over the property boundary.';
 
 let featureCounter = 0;
@@ -164,11 +168,7 @@ function boundaryNow(): Point[] {
 
 /** Why an edit was refused, or null if it is fine. */
 function refusalFor(feature: PlacedFeature): string | null {
-  const house = housePolygonNow();
-  const boundary = boundaryNow();
-
-  if (featureIsLegal(feature, house, boundary)) return null;
-  return featureIsLegal(feature, house, []) ? FENCE_CLASH : HOUSE_CLASH;
+  return featureIsLegal(feature, boundaryNow()) ? null : FENCE_CLASH;
 }
 
 export const useFeaturesStore = create<FeaturesState>((set, get) => {
@@ -425,7 +425,6 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
       const dx = anchor.x - origin.x;
       const dy = anchor.y - origin.y;
 
-      const house = housePolygonNow();
       const boundary = boundaryNow();
 
       const moved = state.present.features.map((candidate) =>
@@ -438,8 +437,7 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
 
       if (
         moved.some(
-          (candidate) =>
-            moving.includes(candidate.id) && !featureIsLegal(candidate, house, boundary),
+          (candidate) => moving.includes(candidate.id) && !featureIsLegal(candidate, boundary),
         )
       ) {
         return;
@@ -455,7 +453,6 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
       let refusal: string | null = null;
 
       commit((draft) => {
-        const house = housePolygonNow();
         const boundary = boundaryNow();
 
         const moved = draft.features.map((feature) =>
@@ -463,8 +460,7 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
         );
 
         const blocked = moved.find(
-          (feature) =>
-            selectedIds.includes(feature.id) && !featureIsLegal(feature, house, boundary),
+          (feature) => selectedIds.includes(feature.id) && !featureIsLegal(feature, boundary),
         );
         if (blocked) {
           refusal = refusalFor(blocked);

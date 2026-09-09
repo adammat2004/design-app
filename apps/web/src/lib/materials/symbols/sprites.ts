@@ -1,5 +1,4 @@
 import {
-  geometryAnchor,
   resolveSymbol,
   type DesignElement,
   type PlanGeometry,
@@ -79,8 +78,7 @@ export function symbolSprite(
   const variants = lookup(family);
   if (variants.length === 0) return null;
 
-  const anchor = geometryAnchor(element.shape);
-  const random = moduleRandom(element.id, Math.round(anchor.x * 100), Math.round(anchor.y * 100));
+  const random = moduleRandom(element.id, 0, 0);
   const asset = variants[Math.min(variants.length - 1, Math.floor(random() * variants.length))]!;
 
   const box = spriteBox(element.shape, asset.image);

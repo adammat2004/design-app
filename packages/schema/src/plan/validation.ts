@@ -9,6 +9,12 @@ import { z } from 'zod';
  * to widen.
  */
 
+/*
+ * There is deliberately no `feature_on_house` or `element_on_house`. Both existed, and both are
+ * gone for the reason `geometryIsLegal` no longer consults the house: a patio attached to the
+ * back wall is the ordinary case rather than a mistake, and the house is drawn over whatever
+ * runs under it. The house itself still may not cross the fence — `house_outside_boundary`.
+ */
 export const ViolationCodeSchema = z.enum([
   /** Fewer than three vertices, or the ring was never closed. */
   'boundary_not_closed',
@@ -16,10 +22,8 @@ export const ViolationCodeSchema = z.enum([
   'invalid_boundary',
   'house_outside_boundary',
   'feature_outside_boundary',
-  'feature_on_house',
   'features_overlap',
   'element_outside_boundary',
-  'element_on_house',
 ]);
 export type ViolationCode = z.infer<typeof ViolationCodeSchema>;
 

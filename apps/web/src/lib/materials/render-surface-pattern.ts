@@ -23,7 +23,7 @@ import {
 import { edgeFor, type MaterialManifestEntry } from './palette';
 import { layerSeed, resolveLayers } from './layers';
 import { samplePlanting } from './planting/sample';
-import { tintSprites } from './sprite-tint';
+import { tintSprites, tintTexture } from './sprite-tint';
 import {
   MIN_CUT_EDGE_PX,
   MIN_DRAWN_MODULE_PX,
@@ -192,6 +192,8 @@ export interface PatternAnchor {
  * against a real canvas in Node without mounting anything. A plain value object keeps that.
  */
 export interface DrawPass {
+  /** World-space crowns and objects that leave gaps in a bed. */
+  exclusions?: Point[][];
   /** Pixels per metre this pass draws at. */
   pxPerMetre: number;
   /**
@@ -448,6 +450,7 @@ export function drawSurfacePattern(
       assets,
       pass.centreline,
       layers[i]!.planting,
+      pass.exclusions,
     );
   }
 
@@ -476,6 +479,8 @@ export function drawSurfacePattern(
  */
 interface SurfaceAssets {
   texture: LoadedAsset | null;
+  /** Every loaded variant of the texture family, so a big surface need not repeat one photograph. */
+  textureVariants: LoadedAsset[];
   /** Ground covered by one texture tile, in pattern-space pixels. */
   tilePx: { w: number; h: number };
   /**
@@ -493,6 +498,7 @@ interface SurfaceAssets {
 
 const NO_ASSETS: SurfaceAssets = {
   texture: null,
+  textureVariants: [],
   tilePx: { w: 0, h: 0 },
   textureIsMass: false,
   faces: [],
@@ -531,22 +537,45 @@ function resolveAssets(
   const all = (ids: AssetId[] | undefined): LoadedAsset[] =>
     ids ? ids.flatMap((id) => lookup(id)) : [];
 
-  let texture = first(wanted.texture);
+  let textureVariants = all(wanted.texture ? [wanted.texture] : undefined);
+  let texture: LoadedAsset | null = textureVariants[0] ?? null;
   let tilePx = { w: 0, h: 0 };
 
   if (texture) {
     const { metres } = ASSET_FAMILIES[texture.entry.id];
     tilePx = { w: metres.w * pxPerMetre, h: metres.h * pxPerMetre };
     // A tile a few pixels across is noise, not gravel; the flat tone underneath reads better.
-    if (Math.min(tilePx.w, tilePx.h) < MIN_TEXTURED_TILE_PX) texture = null;
+    if (Math.min(tilePx.w, tilePx.h) < MIN_TEXTURED_TILE_PX) {
+      texture = null;
+      textureVariants = [];
+    }
   }
 
   const flowerSprites = wanted.flowers ? lookup(wanted.flowers.sprite) : [];
+  const textureIsMass = wanted.sprites === undefined;
+
+  /*
+   * A mass texture *is* the surface, so the palette has to reach the photograph or the tones in
+   * `MATERIAL_TONES` are dead letters for every aggregate — the defect the plant sprites had.
+   *
+   * Baked into the tile rather than washed over the finished surface, and that is not a tidiness
+   * point: a wash is not idempotent, surfaces of the same material genuinely overlap, and the
+   * doubly-tinted patches showed as hard-edged blocks of darker green across one lawn. See
+   * `tintTexture`.
+   */
+  if (texture && textureIsMass) {
+    const tone = averageTone(material.palette);
+    textureVariants = textureVariants.map((variant) =>
+      tintTexture(variant, tone, MASS_TEXTURE_TINT, makeCanvas),
+    );
+    texture = textureVariants[0]!;
+  }
 
   return {
     texture,
+    textureVariants,
     tilePx,
-    textureIsMass: wanted.sprites === undefined,
+    textureIsMass,
     faces: all(wanted.face ? [wanted.face] : undefined),
     /*
      * Tinted towards the material's own palette. Without this the palette does not reach a bed
@@ -581,6 +610,24 @@ function tileTexture(
   rotation: number,
   pxPerMetre: number,
   alpha = 1,
+  /**
+   * Every loaded variant of this family, so a big flat surface does not repeat one photograph.
+   *
+   * A 1.5 m turf tile across a 60 m² lawn is forty copies of one image, and the eye finds that
+   * grid immediately — the "obviously tiled grass" the material brief names. Choosing per tile
+   * from several variants breaks it without any overlay.
+   *
+   * **Chosen from the world cell, and that is what makes it safe.** Surfaces of one material
+   * genuinely overlap, so the choice has to be a function of the ground rather than of the
+   * surface: two lawns covering the same patch pick the same variant and draw the same pixels, so
+   * the overlap stays invisible. A wash or an accumulating tone would not have that property, and
+   * the last thing that lacked it showed as hard-edged blocks across one continuous lawn.
+   *
+   * Today every texture family ships one variant, so this resolves to the tile it always drew and
+   * changes nothing. It is the drop-in point for a richer pack: add `tex-standard-turf-2.webp`
+   * and the lawn stops repeating with no code change.
+   */
+  variants: LoadedAsset[] = [],
 ): void {
   const tileW = tilePx.w / pxPerMetre;
   const tileH = tilePx.h / pxPerMetre;
@@ -589,10 +636,15 @@ function tileTexture(
   const tiles = (range.maxCol - range.minCol + 1) * (range.maxRow - range.minRow + 1);
   if (tiles > MAX_SCATTER_UNITS) return;
 
+  const choices = variants.length > 1 ? variants : null;
+
   context.globalAlpha = alpha;
   for (let row = range.minRow; row <= range.maxRow; row += 1) {
     for (let col = range.minCol; col <= range.maxCol; col += 1) {
-      context.drawImage(texture.image, col * tilePx.w, row * tilePx.h, tilePx.w + 1, tilePx.h + 1);
+      const image = choices
+        ? pick(choices, moduleRandom(`${texture.entry.id}:tile`, col, row)()).image
+        : texture.image;
+      context.drawImage(image, col * tilePx.w, row * tilePx.h, tilePx.w + 1, tilePx.h + 1);
     }
   }
   context.globalAlpha = 1;
@@ -607,7 +659,7 @@ function tileTexture(
  * on Earth it is. The cast-shadow layer — the one that says where the shade falls at four
  * o'clock — stays gated on `site.location`.
  */
-function drawSprite(
+export function drawSprite(
   context: PatternContext,
   sprite: LoadedAsset,
   shadow: LoadedAsset | null,
@@ -663,6 +715,7 @@ function paint(
   centreline?: Point[],
   /** The scheme layer this is, when it is one. Only `scatter` reads it. */
   planting?: PlantingLayer,
+  exclusions?: Point[][],
 ): void {
   const { pattern } = material;
 
@@ -695,13 +748,38 @@ function paint(
         light,
         assets,
         planting,
+        exclusions,
       );
       return;
     case 'hedge':
-      paintHedgeRun(context, material, pattern, outline, origin, rotation, seed, pxPerMetre, light, assets, centreline);
+      paintHedgeRun(
+        context,
+        material,
+        pattern,
+        outline,
+        origin,
+        rotation,
+        seed,
+        pxPerMetre,
+        light,
+        assets,
+        centreline,
+      );
       return;
     case 'pads':
-      paintPads(context, material, pattern, outline, origin, rotation, seed, pxPerMetre, light, assets, centreline);
+      paintPads(
+        context,
+        material,
+        pattern,
+        outline,
+        origin,
+        rotation,
+        seed,
+        pxPerMetre,
+        light,
+        assets,
+        centreline,
+      );
       return;
     case 'water':
       paintWater(
@@ -828,6 +906,7 @@ function paintWater(
       rotation,
       pxPerMetre,
       WATER_TEXTURE_ALPHA,
+      assets.textureVariants,
     );
   }
 
@@ -958,7 +1037,17 @@ function paintModules(
 
   // Stepping stones sit in lawn: the ground between modules is a texture, when there is one.
   if (assets.texture) {
-    tileTexture(context, assets.texture, assets.tilePx, outline, origin, rotation, pxPerMetre);
+    tileTexture(
+      context,
+      assets.texture,
+      assets.tilePx,
+      outline,
+      origin,
+      rotation,
+      pxPerMetre,
+      1,
+      assets.textureVariants,
+    );
   }
 
   /*
@@ -1193,6 +1282,7 @@ function paintScatter(
   assets: SurfaceAssets,
   /** The scheme layer this is, when it is one. Present replaces the even grid with the sampler. */
   planting?: PlantingLayer,
+  exclusions?: Point[][],
 ): void {
   const form = scatterForm(pattern);
 
@@ -1208,7 +1298,17 @@ function paintScatter(
       return;
     }
 
-    tileTexture(context, assets.texture, assets.tilePx, outline, origin, rotation, pxPerMetre);
+    tileTexture(
+      context,
+      assets.texture,
+      assets.tilePx,
+      outline,
+      origin,
+      rotation,
+      pxPerMetre,
+      1,
+      assets.textureVariants,
+    );
 
     if (assets.textureIsMass) {
       /*
@@ -1222,7 +1322,7 @@ function paintScatter(
        * a dark slate is carried where its palette says. This is what stopped a bed of slate
        * chippings reading as a pool of water.
        */
-      tintSurface(context, outline, origin, pxPerMetre, averageTone(material.palette));
+      // The tint is already in the tile — see `tintTexture` for why it cannot be a wash.
       return;
     }
   }
@@ -1261,6 +1361,7 @@ function paintScatter(
       light,
       assets,
       { form, lobes: pattern.lobes, minSize, maxSize },
+      exclusions,
     );
     return;
   }
@@ -1382,11 +1483,21 @@ function paintClippedMass(
   }
 
   context.clip();
-  tileTexture(context, assets.texture, assets.tilePx, outline, origin, rotation, pxPerMetre);
+  tileTexture(
+    context,
+    assets.texture,
+    assets.tilePx,
+    outline,
+    origin,
+    rotation,
+    pxPerMetre,
+    1,
+    assets.textureVariants,
+  );
   context.restore();
 }
 
-interface BlobDraw {
+export interface BlobDraw {
   /** Unit vector towards the light, the same one the slab bevels use. */
   light: Point;
   /** What this unit is shaped like. Resolved by `scatterForm` before it gets here. */
@@ -1407,7 +1518,7 @@ interface BlobDraw {
  * diamond — an obviously drawn shape — where the curve reads as a stone. The lobe count is what
  * separates gravel from planting: four is angular, nine is leafy.
  */
-function drawBlob(context: PatternContext, blob: BlobDraw): void {
+export function drawBlob(context: PatternContext, blob: BlobDraw): void {
   if (blob.form === 'tufted') {
     drawTuft(context, blob);
     return;
@@ -1606,7 +1717,17 @@ function paintStripes(
 
   // The grass itself, when it is a photograph; the bands are then laid over it as shading.
   if (assets.texture) {
-    tileTexture(context, assets.texture, assets.tilePx, outline, origin, rotation, pxPerMetre);
+    tileTexture(
+      context,
+      assets.texture,
+      assets.tilePx,
+      outline,
+      origin,
+      rotation,
+      pxPerMetre,
+      1,
+      assets.textureVariants,
+    );
   }
 
   /*
@@ -1750,7 +1871,6 @@ function averageTone(palette: string[]): string {
   });
 }
 
-
 /**
  * Traces an outline in **pattern space**, where the painters work.
  *
@@ -1781,7 +1901,6 @@ function traceInPattern(
   });
   context.closePath();
 }
-
 
 /**
  * Pads set in single file along a path.
@@ -1817,7 +1936,17 @@ function paintPads(
 ): void {
   // The ground the pads sit in — grass, for stepping stones — before anything is laid on it.
   if (assets.texture) {
-    tileTexture(context, assets.texture, assets.tilePx, outline, origin, rotation, pxPerMetre);
+    tileTexture(
+      context,
+      assets.texture,
+      assets.tilePx,
+      outline,
+      origin,
+      rotation,
+      pxPerMetre,
+      1,
+      assets.textureVariants,
+    );
   }
 
   const padW = pattern.padSize.w / MM_PER_METRE;
@@ -1935,38 +2064,6 @@ function boxAxis(outline: Point[]): Point[] {
       ];
 }
 
-
-/**
- * Carries an already-drawn surface towards a tone, in place.
- *
- * The mass-texture twin of the module face's multiply. Confined to the shape by tracing it and
- * clipping, because unlike a module there is no rectangle to fill — and the context's own clip is
- * to the whole surface, which is exactly what a mass texture covers.
- */
-function tintSurface(
-  context: PatternContext,
-  outline: Point[],
-  origin: Point,
-  pxPerMetre: number,
-  tone: string,
-): void {
-  const box = boundingBox(outline);
-
-  context.save();
-  traceInPattern(context, outline, origin, pxPerMetre);
-  context.clip();
-  context.globalCompositeOperation = 'multiply';
-  context.globalAlpha = MASS_TEXTURE_TINT;
-  context.fillStyle = tone;
-  // Generously past the shape's own box: the clip decides the extent, this only has to cover it.
-  const reach = (Math.hypot(box.width, box.length) + 2) * pxPerMetre;
-  context.fillRect(-reach, -reach, reach * 2, reach * 2);
-  context.globalAlpha = 1;
-  context.globalCompositeOperation = 'source-over';
-  context.restore();
-}
-
-
 /** Everything the planting painter needs of the pattern it stands in for. */
 interface PlantingDraw {
   form: ReturnType<typeof scatterForm>;
@@ -2002,8 +2099,9 @@ function paintPlantingLayer(
   light: Point,
   assets: SurfaceAssets,
   draw: PlantingDraw,
+  exclusions?: Point[][],
 ): void {
-  const placements = samplePlanting(outline, layer, seed);
+  const placements = samplePlanting(outline, layer, seed, { exclusions });
   if (placements.length === 0 || placements.length > MAX_SCATTER_UNITS) return;
 
   const radians = (-rotation * Math.PI) / 180;
@@ -2037,7 +2135,11 @@ function paintPlantingLayer(
      * placement's own position rather than from a counter, so it stays spatially hashed like
      * everything else — a plant keeps its outline when its neighbours change.
      */
-    const random = moduleRandom(`${seed}:blob`, Math.round(placement.at.x * 100), Math.round(placement.at.y * 100));
+    const random = moduleRandom(
+      `${seed}:blob`,
+      Math.round(placement.at.x * 100),
+      Math.round(placement.at.y * 100),
+    );
 
     drawBlob(context, {
       light,
@@ -2054,7 +2156,6 @@ function paintPlantingLayer(
     });
   }
 }
-
 
 /**
  * A clipped hedge, as a run rather than a field.
@@ -2142,67 +2243,65 @@ function paintHedgeRun(
   let index = 0;
 
   for (const line of lines) {
-   const path = line.map(toPattern);
-   let carried = crown / 2;
+    const path = line.map(toPattern);
+    let carried = crown / 2;
 
-   for (let segment = 0; segment + 1 < path.length; segment += 1) {
-    const from = path[segment]!;
-    const to = path[segment + 1]!;
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const length = Math.hypot(dx, dy);
-    if (length < 1e-6) continue;
+    for (let segment = 0; segment + 1 < path.length; segment += 1) {
+      const from = path[segment]!;
+      const to = path[segment + 1]!;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1e-6) continue;
 
-    const ux = dx / length;
-    const uy = dy / length;
-    // The long edges of the run: which side is lit is decided by the same sun as everything else.
-    const litSide = -uy * light.x + ux * light.y < 0 ? 1 : -1;
+      const ux = dx / length;
+      const uy = dy / length;
+      // The long edges of the run: which side is lit is decided by the same sun as everything else.
+      const litSide = -uy * light.x + ux * light.y < 0 ? 1 : -1;
 
-    for (let along = carried; along <= length; along += pitchPx) {
-      const random = moduleRandom(`${seed}:hedge`, index, 0);
-      index += 1;
+      for (let along = carried; along <= length; along += pitchPx) {
+        const random = moduleRandom(`${seed}:hedge`, index, 0);
+        index += 1;
 
-      const cx = from.x + ux * along;
-      const cy = from.y + uy * along;
-      // A little variation along the run, so a long hedge is not a stamped repeat.
-      const radius = (crown / 2) * (0.9 + random() * 0.2);
+        const cx = from.x + ux * along;
+        const cy = from.y + uy * along;
+        // A little variation along the run, so a long hedge is not a stamped repeat.
+        const radius = (crown / 2) * (0.9 + random() * 0.2);
 
-      context.fillStyle = rgbToCss(
-        shiftBrightness(body, (random() * 2 - 1) * TONE_JITTER),
-      );
-      context.beginPath();
-      traceCircleAt(context, cx, cy, radius);
-      context.fill();
+        context.fillStyle = rgbToCss(shiftBrightness(body, (random() * 2 - 1) * TONE_JITTER));
+        context.beginPath();
+        traceCircleAt(context, cx, cy, radius);
+        context.fill();
 
-      if (assets.sprites.length > 0) {
-        const sprite = pick(assets.sprites, random());
-        drawSprite(context, sprite, null, cx, cy, radius, random() * Math.PI * 2, light);
+        if (assets.sprites.length > 0) {
+          const sprite = pick(assets.sprites, random());
+          drawSprite(context, sprite, null, cx, cy, radius, random() * Math.PI * 2, light);
+        }
+
+        /*
+         * The two long edges. Drawn per crown rather than as one stroked path down the whole run,
+         * because the run is a chain of overlapping circles and its true outline is not a polyline —
+         * a short arc on each crown accumulates into exactly the edge the eye reads.
+         */
+        const offset = radius * 0.82;
+        context.fillStyle = lit;
+        context.fillRect(
+          cx - uy * offset * litSide - pitchPx / 2,
+          cy + ux * offset * litSide - Math.max(1, radius * 0.09),
+          pitchPx,
+          Math.max(1, radius * 0.18),
+        );
+        context.fillStyle = shaded;
+        context.fillRect(
+          cx + uy * offset * litSide - pitchPx / 2,
+          cy - ux * offset * litSide - Math.max(1, radius * 0.09),
+          pitchPx,
+          Math.max(1, radius * 0.18),
+        );
       }
 
-      /*
-       * The two long edges. Drawn per crown rather than as one stroked path down the whole run,
-       * because the run is a chain of overlapping circles and its true outline is not a polyline —
-       * a short arc on each crown accumulates into exactly the edge the eye reads.
-       */
-      const offset = radius * 0.82;
-      context.fillStyle = lit;
-      context.fillRect(
-        cx - uy * offset * litSide - pitchPx / 2,
-        cy + ux * offset * litSide - Math.max(1, radius * 0.09),
-        pitchPx,
-        Math.max(1, radius * 0.18),
-      );
-      context.fillStyle = shaded;
-      context.fillRect(
-        cx + uy * offset * litSide - pitchPx / 2,
-        cy - ux * offset * litSide - Math.max(1, radius * 0.09),
-        pitchPx,
-        Math.max(1, radius * 0.18),
-      );
+      carried = pitchPx - ((length - carried) % pitchPx);
     }
-
-    carried = pitchPx - ((length - carried) % pitchPx);
-   }
   }
 }
 

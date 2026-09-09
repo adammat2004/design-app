@@ -1,3 +1,4 @@
+import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
   borderDepth,
@@ -167,6 +168,7 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
 
   return {
     template: 'curved',
+    beds: designedBeds(request, room, terrace, 'curved'),
     terrace,
     lawn,
     lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',

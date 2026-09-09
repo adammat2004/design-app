@@ -1,30 +1,22 @@
 import {
-  boundaryRuns,
-  boundingBox,
-  elementCentreline,
-  elementOutline,
-  housePolygon,
-  insetPolygon,
-  patternAnchor,
+  moduleRandom,
+  pick,
   resolvedGates,
-  shadowCast,
-  shadowOccluders,
   streetEdge,
   streetOutward,
   type BoundaryRun,
   type DesignElement,
-  type HouseFootprint,
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
+import { buildRenderScene, type BuildOptions, type PlanScene } from '../render/build-scene';
+import type { RenderHouse, RenderItem, RenderScene, RenderSurface } from '../render/scene';
+import { LAYER_ORDER } from '../render/visual-layer';
+import { ROOF_TONES, type RenderRoof } from '../render/roof';
 import { COLOUR } from '../canvas-colours';
 import { CATEGORY_COLOURS } from '../concept-colours';
 import { materialFill } from '../material-colours';
-import {
-  canopiesForSymbol,
-  CONTACT_SHADOW_SPRITE,
-  SYMBOL_SPRITES,
-} from './assets/material-assets';
+import { canopiesForSymbol, CONTACT_SHADOW_SPRITE, SYMBOL_SPRITES } from './assets/material-assets';
 import type { LoadedAsset } from './assets/registry';
 import {
   CONTACT_SHADOW_ALPHA,
@@ -34,6 +26,9 @@ import {
   LIGHT_DIRECTION,
   SHADOW_OPACITY,
   SHADOW_TONE,
+  cssToRgb,
+  rgbToCss,
+  shiftBrightness,
 } from './light';
 import {
   boundaryBand,
@@ -49,12 +44,12 @@ import {
   houseGroundShadow,
   HOUSE_SHADOW_ALPHA,
   STREET_KERB_OFFSET,
-  WALL_THICKNESS,
 } from './symbols/property';
-import { MIN_DRAWN_SYMBOL_PX } from './lod';
-import { resolvePattern } from './palette';
+import { MIN_DRAWN_SYMBOL_PX, MIN_DRAWN_UNIT_PX } from './lod';
 import { drawShadowLayer } from './render-shadow-layer';
 import {
+  drawBlob,
+  drawSprite,
   drawSurfacePattern,
   type DrawPass,
   type MakeCanvas,
@@ -97,14 +92,13 @@ import { drawSymbol, MIN_STRUCTURE_DETAIL_PX } from './symbols/draw-symbol';
  * make a 2D context, so the tests hand in `@napi-rs/canvas` and the browser hands in the DOM's.
  */
 
-/** What is drawn. A subset of the document, in the frame every canvas already uses. */
-export interface PlanScene {
-  boundary: Point[];
-  house: HouseFootprint | null;
-  elements: DesignElement[];
-  /** Read only for its sun. `location: null` means no shadow layer is drawn at all. */
-  site: SiteSection;
-}
+/**
+ * What is drawn. A subset of the document, in the frame every canvas already uses.
+ *
+ * Defined with the scene builder, because that is what consumes it now; re-exported here so the
+ * four callers that have always imported it from the composer still can.
+ */
+export type { PlanScene } from '../render/build-scene';
 
 /** The composer needs to composite a layer, which the surface painter never does. */
 export interface PlanContext extends PatternContext {
@@ -139,19 +133,44 @@ export function drawPlan(
   scene: PlanScene,
   pass: PlanPass,
   rasterOrigin: Point,
+  options: BuildOptions = {},
 ): void {
-  const { boundary, house } = scene;
+  drawScene(
+    context,
+    buildRenderScene(scene, { light: pass.light, ...options }),
+    scene.site,
+    pass,
+    rasterOrigin,
+  );
+}
+
+/**
+ * The Canvas2D backend: a resolved scene, put down as pixels.
+ *
+ * Everything it draws was decided by `buildRenderScene` — the order, the exclusions, the layer
+ * stacks, the light, what casts a shadow. What is left here is paint, which is the whole point of
+ * the split: a backend that decides something is a backend that can disagree with the other one.
+ *
+ * `site` is still taken alongside the scene because the fence, the gates and the kerb are drawn
+ * from resolvers that read it directly. They move onto the scene when the Pixi backend needs
+ * them too; until then, duplicating the resolver call would be the drift this seam exists to stop.
+ */
+export function drawScene(
+  context: PlanContext,
+  rendered: RenderScene,
+  site: SiteSection,
+  pass: PlanPass,
+  rasterOrigin: Point,
+): void {
+  const { boundary } = rendered;
   if (boundary.length < 3) return;
 
   const { pxPerMetre } = pass;
-  const light = pass.light ?? LIGHT_DIRECTION;
+  const { light } = rendered;
   const toPx = (point: Point): Point => ({
     x: (point.x - rasterOrigin.x) * pxPerMetre,
     y: (point.y - rasterOrigin.y) * pxPerMetre,
   });
-
-  const elements = scene.elements.filter((element) => !element.hidden);
-  const seam = firstFeatureIndex(elements);
 
   context.save();
 
@@ -161,23 +180,61 @@ export function drawPlan(
   context.fillStyle = PLOT_GROUND;
   context.fill();
 
-  for (const element of elements.slice(0, seam)) {
-    drawElement(context, element, pass, light, toPx, rasterOrigin);
+  for (const item of rendered.ground) {
+    drawItem(context, item, pass, light, toPx, rasterOrigin);
   }
 
-  drawShadows(context, scene, pass, toPx);
+  drawShadows(context, rendered, pass, toPx);
 
-  for (const element of elements.slice(seam)) {
-    drawElement(context, element, pass, light, toPx, rasterOrigin);
+  drawPlants(context, rendered, pass, light, toPx);
+
+  context.restore();
+
+  drawOverlay(context, rendered, site, pass, rasterOrigin);
+}
+
+/**
+ * Everything that stands above the planting: the symbols, the house and the boundary.
+ *
+ * Split out so the WebGL backend can share it rather than reimplement it. Pixi is worth having
+ * for the ground and for the thousands of plant sprites, which is a batching problem; it is not
+ * worth having for the twenty-odd pergolas, sheds, trees and benches on a plan, and a second
+ * implementation of those in WebGL would be a second set of drawing rules to drift from the
+ * first — exactly what `buildRenderScene` exists to prevent. So Visualise composites this pass
+ * onto a 2D canvas over the WebGL one, from the same scene and the same transform.
+ */
+export function drawOverlay(
+  context: PlanContext,
+  rendered: RenderScene,
+  site: SiteSection,
+  pass: PlanPass,
+  rasterOrigin: Point,
+): void {
+  const { boundary } = rendered;
+  if (boundary.length < 3) return;
+
+  const { pxPerMetre } = pass;
+  const { light } = rendered;
+  const toPx = (point: Point): Point => ({
+    x: (point.x - rasterOrigin.x) * pxPerMetre,
+    y: (point.y - rasterOrigin.y) * pxPerMetre,
+  });
+
+  context.save();
+  tracePath(context, boundary, toPx);
+  context.clip();
+
+  for (const item of rendered.objects) {
+    drawItem(context, item, pass, light, toPx, rasterOrigin);
   }
 
   context.restore();
 
   /* The house sits above the planting so a bed can run right up to the wall. */
-  if (house) drawHouse(context, house, pass, toPx);
+  if (rendered.house) drawHouse(context, rendered.house, pass, toPx);
 
-  drawFence(context, boundary, boundaryRuns(scene.site), pxPerMetre, light, toPx);
-  drawAccess(context, scene.site, pxPerMetre, toPx);
+  drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
+  drawAccess(context, site, pxPerMetre, toPx);
 }
 
 /**
@@ -266,25 +323,40 @@ export function firstFeatureIndex(elements: DesignElement[]): number {
 
 /* ---------------------------------------------------------------- elements */
 
-function drawElement(
+function drawItem(
   context: PlanContext,
-  element: DesignElement,
-  pass: DrawPass,
+  item: RenderItem,
+  pass: PlanPass,
   light: Point,
   toPx: (point: Point) => Point,
   rasterOrigin: Point,
 ): void {
+  const { element, part, surface } = item;
   const { shape } = element;
+
+  /*
+   * A bed's neighbours are on its surface, not on the pass, because only the ground pass computes
+   * them — and `null` there means "no opinion", so a caller that set its own exclusions keeps them.
+   */
+  const surfacePass: DrawPass = surface?.exclusions ? { ...pass, exclusions: surface.exclusions } : pass;
+
+  if (part === 'ground') {
+    drawSurface(context, surface, surfacePass, light, toPx, rasterOrigin);
+    return;
+  }
+  if (part === 'object') {
+    drawSymbol(context, element, pass.pxPerMetre, light, pass.assets, toPx);
+    return;
+  }
 
   if (shape.kind === 'point') {
     // A fire pit bowl or a parasol: a sprite on a point, before the drawn symbols get a look in.
     if (drawSymbol(context, element, pass.pxPerMetre, light, pass.assets, toPx)) return;
-    drawPointSymbol(context, element, pass, light, toPx, rasterOrigin);
+    drawPointSymbol(context, element, surface, pass, light, toPx, rasterOrigin);
     return;
   }
 
-  const outline = elementOutline(element);
-  if (outline.length < 3) return;
+  if (!surface) return;
 
   /*
    * A path is its strip — the same ribbon the validator checks — painted like any other surface,
@@ -292,7 +364,7 @@ function drawElement(
    * which never reached the painter and drew every path as a flat lozenge.
    */
   if (shape.kind === 'polyline') {
-    drawSurface(context, element, outline, pass, light, toPx, rasterOrigin);
+    drawSurface(context, surface, surfacePass, light, toPx, rasterOrigin);
     return;
   }
 
@@ -303,12 +375,12 @@ function drawElement(
    */
   if (element.category === 'furniture') {
     if (!drawSymbol(context, element, pass.pxPerMetre, light, pass.assets, toPx)) {
-      drawSurface(context, element, outline, pass, light, toPx, rasterOrigin);
+      drawSurface(context, surface, surfacePass, light, toPx, rasterOrigin);
     }
     return;
   }
 
-  drawSurface(context, element, outline, pass, light, toPx, rasterOrigin);
+  drawSurface(context, surface, surfacePass, light, toPx, rasterOrigin);
 
   if (drawSymbol(context, element, pass.pxPerMetre, light, pass.assets, toPx)) return;
 
@@ -335,54 +407,48 @@ function drawElement(
  */
 function drawSurface(
   context: PlanContext,
-  element: DesignElement,
-  outline: Point[],
+  surface: RenderSurface | null,
   pass: DrawPass,
   light: Point,
   toPx: (point: Point) => Point,
   rasterOrigin: Point,
 ): void {
-  const manifest = resolvePattern(element.material);
+  if (!surface) return;
 
-  if (manifest) {
+  if (surface.material) {
     drawSurfacePattern(
       context,
-      outline,
-      manifest,
-      patternAnchor(element),
-      element.id,
+      surface.outline,
+      surface.material,
+      surface.anchor,
+      surface.seed,
       {
         pxPerMetre: pass.pxPerMetre,
         light,
         assets: pass.assets,
         makeCanvas: pass.makeCanvas,
         // A path lays its stepping stones along its own line, not across its bounding box.
-        centreline: elementCentreline(element) ?? undefined,
+        centreline: surface.centreline ?? undefined,
         // A bed's planting scheme is a property of the bed, so the layer stack needs the element.
-        element,
+        element: surface.element,
+        exclusions: pass.exclusions,
       },
       rasterOrigin,
     );
   } else {
-    tracePath(context, outline, toPx);
-    context.fillStyle = materialFill(element);
+    tracePath(context, surface.outline, toPx);
+    context.fillStyle = materialFill(surface.element);
     context.fill();
   }
 
-  // Fills get no outline — see `ElementDrawing`: a hairline round each zone is a seam across the lawn.
-  if (element.role === 'fill') return;
-
-  tracePath(context, outline, toPx);
-  context.lineWidth = 1.75;
-  context.lineJoin = 'round';
-  context.strokeStyle = CATEGORY_COLOURS[element.category].stroke;
-  context.stroke();
+  // Selection outlines belong to the editor overlay, not the rendered material.
 }
 
 /** The point symbols, from the same pure geometry the Konva `PointSymbol` draws. */
 function drawPointSymbol(
   context: PlanContext,
   element: DesignElement,
+  surface: RenderSurface | null,
   pass: DrawPass,
   light: Point,
   toPx: (point: Point) => Point,
@@ -405,7 +471,7 @@ function drawPointSymbol(
 
   if (element.category === 'planting-bed') {
     const canopies = pass.assets
-      ? canopiesForSymbol(element.symbol).flatMap((id) => pass.assets!(id))
+      ? canopiesForSymbol(element.symbol, element.plantId).flatMap((id) => pass.assets!(id))
       : [];
     if (canopies.length > 0) {
       const shadow = pass.assets!(CONTACT_SHADOW_SPRITE)[0] ?? null;
@@ -430,7 +496,7 @@ function drawPointSymbol(
   }
 
   // The disc itself: the material over the circle the geometry tessellates it to.
-  drawSurface(context, element, elementOutline(element), pass, light, toPx, rasterOrigin);
+  drawSurface(context, surface, pass, light, toPx, rasterOrigin);
 
   /*
    * The drawn bowl and flame stand in only while there is no fire-pit sprite to place: once the
@@ -528,6 +594,108 @@ function drawCanopySprite(
   context.restore();
 }
 
+/**
+ * The roof: its planes shaded against the scene's light, then its ridge and hips creased over them.
+ *
+ * The shading spread is deliberately narrow. A roof drawn with strong plane-to-plane contrast
+ * pulls the eye straight to the house, and the house is context — the subject is the garden. Just
+ * enough separation to say "this is a pitched roof, and the light comes from over there".
+ */
+function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) => Point): void {
+  const tones = ROOF_TONES[roof.material];
+  const base = cssToRgb(tones.base);
+
+  for (const plane of roof.planes) {
+    if (plane.outline.length < 3) continue;
+    tracePath(context, plane.outline, toPx);
+    context.fillStyle = rgbToCss(shiftBrightness(base, plane.lit * ROOF_PLANE_SHADING));
+    context.fill();
+  }
+
+  context.strokeStyle = tones.ridge;
+  context.lineWidth = 1.25;
+  context.lineCap = 'round';
+  for (const [from, to] of roof.ridge) {
+    const a = toPx(from);
+    const b = toPx(to);
+    context.beginPath();
+    context.moveTo(a.x, a.y);
+    context.lineTo(b.x, b.y);
+    context.stroke();
+  }
+}
+
+/** How far a fully lit roof plane moves from a fully shaded one. See `drawRoof`. */
+const ROOF_PLANE_SHADING = 0.14;
+
+/* ---------------------------------------------------------------- planting */
+
+/**
+ * The render-only planting, drawn above the ground rather than inside it.
+ *
+ * Two things here are the whole point of instanced planting, and both are consequences of *not*
+ * being inside `clip(bed.outline)`:
+ *
+ * - **Plants overlap.** Foliage crosses its bed's edge and spills onto the lawn beside it, and
+ *   neighbouring crowns run into one another, which is what turns a scatter of icons into a mass.
+ * - **They stack.** Drawn in `visualLayer` order, so ground cover goes down first and the shrubs
+ *   close over it, rather than every plant being one flat texture in one flat surface.
+ *
+ * They are still clipped to the *plot* — the caller's clip is in force — which is the same rule
+ * the cast-shadow raster follows: a garden plan may not draw over land it does not own.
+ *
+ * Empty in `'baked'` mode, so the 2D Plan drawing is untouched by any of this.
+ */
+function drawPlants(
+  context: PlanContext,
+  rendered: RenderScene,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+): void {
+  if (rendered.plants.length === 0) return;
+
+  const shadow = pass.assets?.(CONTACT_SHADOW_SPRITE)[0] ?? null;
+  const ordered = [...rendered.plants].sort(
+    (a, b) => LAYER_ORDER[a.visualLayer] - LAYER_ORDER[b.visualLayer],
+  );
+
+  for (const plant of ordered) {
+    const at = toPx(plant.at);
+    const radius = (plant.spread / 2) * pass.pxPerMetre;
+    // Below a pixel and a half a plant is not a plant, it is noise on the ground it stands on.
+    if (radius * 2 < MIN_DRAWN_UNIT_PX) continue;
+
+    const variants = plant.assetId ? (pass.assets?.(plant.assetId) ?? []) : [];
+    const sprite = variants.find((asset) => asset.entry.variant === plant.variant) ?? variants[0];
+
+    if (sprite) {
+      drawSprite(context, sprite, shadow, at.x, at.y, radius, plant.rotation, light);
+      continue;
+    }
+
+    /*
+     * No sprite: the drawn blob, from the same spatially hashed generator the surface painter
+     * uses, so a plant keeps its outline when its neighbours change and the two modes agree
+     * about what an un-assetted garden looks like.
+     */
+    drawBlob(context, {
+      light,
+      form: plant.blob.form,
+      x: at.x,
+      y: at.y,
+      radius,
+      lobes: plant.blob.lobes,
+      tone: cssToRgb(pick(plant.blob.palette, plant.tone)),
+      random: moduleRandom(
+        `${plant.blob.seed}:blob`,
+        Math.round(plant.at.x * 100),
+        Math.round(plant.at.y * 100),
+      ),
+    });
+  }
+}
+
 /* ---------------------------------------------------------------- shadows */
 
 /**
@@ -540,17 +708,15 @@ function drawCanopySprite(
  */
 function drawShadows(
   context: PlanContext,
-  scene: PlanScene,
+  rendered: RenderScene,
   pass: PlanPass,
   toPx: (point: Point) => Point,
 ): void {
-  const cast = shadowCast(scene.site);
+  const { cast, occluders } = rendered.shadows;
   if (!cast) return;
-
-  const occluders = shadowOccluders(scene.elements, scene.house, boundaryRuns(scene.site));
   if (occluders.length === 0) return;
 
-  const box = boundingBox(scene.boundary);
+  const box = rendered.bounds;
   const widthPx = Math.max(1, Math.ceil(box.width * pass.pxPerMetre));
   const heightPx = Math.max(1, Math.ceil(box.length * pass.pxPerMetre));
 
@@ -563,7 +729,7 @@ function drawShadows(
     layerContext,
     occluders,
     cast,
-    scene.boundary,
+    rendered.boundary,
     { pxPerMetre: pass.pxPerMetre },
     originMetres,
   );
@@ -582,14 +748,11 @@ function drawShadows(
  */
 function drawHouse(
   context: PlanContext,
-  house: HouseFootprint,
+  rendered: RenderHouse,
   pass: PlanPass,
   toPx: (point: Point) => Point,
 ): void {
-  const outline = housePolygon(house);
-  if (outline.length < 3) return;
-
-  const interior = insetPolygon(outline, WALL_THICKNESS);
+  const { outline, interior } = rendered;
 
   /*
    * The shadow first, so the building stands on the garden rather than beside it. Drawn here
@@ -602,6 +765,22 @@ function drawHouse(
   context.fillStyle = SHADOW_TONE;
   context.fill();
   context.restore();
+
+  /*
+   * A roof, where there is one: Visualise only. A flat grey rectangle is parsed by the eye as
+   * another paved surface, so the drawing loses the one object that gives the garden its scale
+   * and its orientation. The planes are drawn inside the footprint — never over it — so nothing
+   * here can make a legal house look as though it leaves the plot.
+   */
+  if (rendered.roof) {
+    drawRoof(context, rendered.roof, toPx);
+    tracePath(context, outline, toPx);
+    context.lineWidth = 1.5;
+    context.lineJoin = 'round';
+    context.strokeStyle = COLOUR.houseStroke;
+    context.stroke();
+    return;
+  }
 
   tracePath(context, outline, toPx);
   context.fillStyle = interior ? COLOUR.houseWall : COLOUR.houseFill;

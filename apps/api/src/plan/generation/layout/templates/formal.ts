@@ -1,3 +1,4 @@
+import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
   borderDepth,
@@ -156,6 +157,7 @@ export function formal(request: SketchRequest, room: Room): LayoutSketch {
 
   return {
     template: 'formal',
+    beds: designedBeds(request, room, terrace, 'formal'),
     terrace,
     lawn,
     lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',

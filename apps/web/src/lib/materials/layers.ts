@@ -1,4 +1,5 @@
 import {
+  isStructuralRole,
   MM_PER_METRE,
   schemeFor,
   type DesignElement,
@@ -116,10 +117,7 @@ export function resolveLayers(
  * units. That is exactly a bed's ground. Every later layer carries sprites and no texture, so it
  * skips the ground branch and draws only plants. Neither case needed a special path.
  */
-function plantingLayers(
-  material: MaterialManifestEntry,
-  scheme: PlantingScheme,
-): SurfaceLayer[] {
+function plantingLayers(material: MaterialManifestEntry, scheme: PlantingScheme): SurfaceLayer[] {
   const ground: SurfaceLayer = {
     entry: {
       ...material,
@@ -135,44 +133,52 @@ function plantingLayers(
     assets: { texture: soilTextureFor(scheme.base) },
   };
 
-  const layers = scheme.layers.map((layer): SurfaceLayer => {
-    const spacing = cellSize(layer);
+  /*
+   * The infill only. `backdrop` and `specimen` are placed as real elements on top of the bed — see
+   * `STRUCTURAL_ROLES` — so painting them here as well would draw every structural shrub twice: a
+   * texture blob under a sprite, half a metre off it, which reads as a rendering fault rather than
+   * as two plants.
+   */
+  const layers = scheme.layers
+    .filter((layer) => !isStructuralRole(layer.role))
+    .map((layer): SurfaceLayer => {
+      const spacing = cellSize(layer);
 
-    return {
-      entry: {
-        ...material,
-        pattern: {
-          patternType: 'scatter',
-          /*
-           * Units per square metre from the layer's own spacing, scaled by its share — which is
-           * the same number the sampler accepts on, so the drawn density and the sampled density
-           * cannot drift apart.
-           */
-          /*
-           * The layer's *natural* density, with no share term. `share` thins the layer in
-           * `samplePlanting`, by refusing cells — which is what lets it drift. Multiplying it in
-           * here as well thinned it twice, once by rejection and once by spacing the grid further
-           * apart, and a cottage border came out as scattered plants on a field of bark.
-           */
-          density: 1 / (spacing * spacing),
-          sizeRange: {
-            min: layer.spread.min * MM_PER_METRE,
-            max: layer.spread.max * MM_PER_METRE,
+      return {
+        entry: {
+          ...material,
+          pattern: {
+            patternType: 'scatter',
+            /*
+             * Units per square metre from the layer's own spacing, scaled by its share — which is
+             * the same number the sampler accepts on, so the drawn density and the sampled density
+             * cannot drift apart.
+             */
+            /*
+             * The layer's *natural* density, with no share term. `share` thins the layer in
+             * `samplePlanting`, by refusing cells — which is what lets it drift. Multiplying it in
+             * here as well thinned it twice, once by rejection and once by spacing the grid further
+             * apart, and a cottage border came out as scattered plants on a field of bark.
+             */
+            density: 1 / (spacing * spacing),
+            sizeRange: {
+              min: layer.spread.min * MM_PER_METRE,
+              max: layer.spread.max * MM_PER_METRE,
+            },
+            lobes: layer.role === 'edge' ? 7 : 9,
+            form: layer.taxon.type === 'grass-ornamental' ? 'tufted' : 'blob',
           },
-          lobes: layer.role === 'edge' ? 7 : 9,
-          form: layer.taxon.type === 'grass-ornamental' ? 'tufted' : 'blob',
         },
-      },
-      assets: {
-        sprites: {
-          group: 'vegetation',
-          type: layer.taxon.type,
-          ...(layer.taxon.tags ? { tags: layer.taxon.tags } : {}),
+        assets: {
+          sprites: {
+            group: 'vegetation',
+            type: layer.taxon.type,
+            ...(layer.taxon.tags ? { tags: layer.taxon.tags } : {}),
+          },
         },
-      },
-      planting: layer,
-    };
-  });
+        planting: layer,
+      };
+    });
 
   return [ground, ...layers];
 }

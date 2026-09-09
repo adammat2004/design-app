@@ -1,12 +1,33 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { ImageOff, Sparkles } from 'lucide-react';
-import { draftPolygon } from '@/lib/boundary-geometry';
-import { exportPlanPng } from '@/lib/materials/export-plan';
+import dynamic from 'next/dynamic';
+import { Sparkles } from 'lucide-react';
+import { MATURITY_LABELS, MATURITY_ORDER } from '@/lib/render/maturity';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { DownloadPlanButton } from '../DownloadPlanButton';
+
+/*
+ * WebGL, and therefore browser-only. Loaded the way every Konva canvas is and for the same
+ * reason — it cannot server-render — with the second benefit that 2D Plan never downloads Pixi.
+ */
+const VisualiseView = dynamic(
+  () => import('./VisualiseView').then((module) => module.VisualiseView),
+  {
+    ssr: false,
+    loading: () => (
+      <div aria-hidden className="min-h-0 flex-1 animate-pulse rounded-lg bg-garden-sage/40" />
+    ),
+  },
+);
+
+const MINUTES_IN_DAY = 24 * 60;
+
+function clockLabel(minutes: number): string {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
 
 /**
  * The Visualise tab: the same plan, large and clean.
@@ -31,101 +52,87 @@ import { DownloadPlanButton } from '../DownloadPlanButton';
  * panel rather than adding a concept — which is the whole reason for building the shell first.
  */
 export function VisualisePanel() {
-  const boundaryDraft = useBoundaryStore((state) => state.present);
-  const unit = useBoundaryStore((state) => state.unit);
-  const elements = usePlanEditorStore((state) => state.present.elements);
-  const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
-
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const previous = useRef<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-
-    /*
-     * Redrawn whenever the plan changes, at export resolution.
-     *
-     * A full composer pass is far too slow for a canvas that repaints on every drag — which is why
-     * the editor uses Konva and this does not. It is fine here: this tab is a place you arrive at,
-     * not one you edit in, and it draws once per visit.
-     */
-    void (async () => {
-      setFailed(false);
-      try {
-        const blob = await exportPlanPng(
-          {
-            boundary: draftPolygon(boundaryDraft),
-            house: boundaryDraft.house,
-            elements,
-            site: boundaryDraft,
-          },
-          { unit, labels: labelsVisible },
-        );
-        if (!live) return;
-
-        const next = URL.createObjectURL(blob);
-        // Released only once its replacement exists, or the image blanks between renders.
-        if (previous.current) URL.revokeObjectURL(previous.current);
-        previous.current = next;
-        setUrl(next);
-      } catch {
-        if (live) setFailed(true);
-      }
-    })();
-
-    return () => {
-      live = false;
-    };
-  }, [boundaryDraft, elements, unit, labelsVisible]);
-
-  useEffect(
-    () => () => {
-      if (previous.current) URL.revokeObjectURL(previous.current);
-    },
-    [],
-  );
+  const sun = useBoundaryStore((state) => state.present.sun);
+  const hasLocation = useBoundaryStore((state) => state.present.location !== null);
+  const setSun = useBoundaryStore((state) => state.setSun);
+  const maturity = usePlanEditorStore((state) => state.maturity);
+  const setMaturity = usePlanEditorStore((state) => state.setMaturity);
 
   return (
     <div
       data-testid="visualise-panel"
-      className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-garden-line bg-white p-4 shadow-sm"
+      className="flex h-full min-h-0 flex-col gap-3 rounded-xl border border-garden-line bg-white p-4 shadow-sm"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-garden-forest">
             <Sparkles aria-hidden className="h-4 w-4 text-garden-green" />
-            Your garden, drawn clean
+            Your garden, grown in
           </h2>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-garden-muted">
-            The same plan without the editor over it — no grid, no handles, no selection. A
-            photorealistic view of this design is coming; this is the drawing it will be made from.
+            The same plan, planted densely and lit by the sun rather than by the drawing convention.
+            Drag to pan, scroll to zoom. Nothing here changes the design.
           </p>
         </div>
-        <DownloadPlanButton variant="primary" />
+        <DownloadPlanButton variant="primary" view="visualise" />
       </div>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg bg-garden-sage/40 p-4">
-        {failed ? (
-          <p
-            data-testid="visualise-failed"
-            className="flex items-center gap-2 text-xs text-garden-muted"
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-garden-forest">Planting</span>
+          <div
+            role="radiogroup"
+            aria-label="How grown in the planting is drawn"
+            className="flex overflow-hidden rounded-md border border-garden-line"
           >
-            <ImageOff aria-hidden className="h-4 w-4" />
-            The drawing could not be rendered. Try again from the Plan tab.
-          </p>
-        ) : url ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a blob URL, not an optimisable asset
-          <img
-            src={url}
-            alt="The garden plan"
-            data-testid="visualise-image"
-            className="max-h-full w-auto max-w-full rounded shadow-sm"
-          />
+            {MATURITY_ORDER.map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={maturity === option}
+                data-testid={`maturity-${option}`}
+                onClick={() => setMaturity(option)}
+                className={`px-2.5 py-1 text-xs transition-colors ${
+                  maturity === option
+                    ? 'bg-garden-green text-white'
+                    : 'bg-white text-garden-muted hover:bg-garden-sage/40'
+                }`}
+              >
+                {MATURITY_LABELS[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/*
+          The time of day, only where the plan knows where on Earth it is. With no location there
+          is no solar position to move, so a slider would be a control that changes nothing —
+          exactly the false claim `site.location` being nullable exists to avoid.
+        */}
+        {hasLocation ? (
+          <label className="flex items-center gap-2 text-xs font-medium text-garden-forest">
+            Time
+            <input
+              type="range"
+              min={0}
+              max={MINUTES_IN_DAY - 15}
+              step={15}
+              value={sun.minutes}
+              data-testid="sun-time"
+              onChange={(event) => setSun({ minutes: Number(event.target.value) })}
+              className="w-40 accent-garden-green"
+            />
+            <span className="w-10 tabular-nums text-garden-muted">{clockLabel(sun.minutes)}</span>
+          </label>
         ) : (
-          <p className="text-xs text-garden-muted">Drawing your plan…</p>
+          <p className="text-xs text-garden-muted">
+            Set a location in step 1 to light the garden by the real sun.
+          </p>
         )}
       </div>
+
+      <VisualiseView />
     </div>
   );
 }

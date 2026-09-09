@@ -18,6 +18,7 @@ import {
   preloadAssets,
 } from '../src/lib/materials/assets/registry';
 import { drawPlan, type PlanContext, type PlanScene } from '../src/lib/materials/render-plan';
+import type { BuildOptions } from '../src/lib/render/build-scene';
 import type { MakeCanvas, PatternCanvas } from '../src/lib/materials/render-surface-pattern';
 import { preparePreviewDir } from './preview-dir';
 
@@ -40,7 +41,7 @@ const OUT_DIR = join(HERE, '..', '.plan-preview');
 const FIXTURES = join(HERE, 'fixtures');
 const PUBLIC_ASSETS = join(HERE, '..', 'public', 'assets');
 
-const FIXTURE_NAMES = ['suburban', 'l-shape', 'courtyard'] as const;
+const FIXTURE_NAMES = ['suburban', 'l-shape', 'courtyard', 'reference'] as const;
 
 /** The editor's default zoom, and one close enough to read the slabs. */
 const ZOOMS: [number, string][] = [
@@ -73,7 +74,11 @@ function sceneOf(document: PlanDocument): PlanScene {
 }
 
 /** One plan at one zoom, with a margin of paper round it. */
-function renderPlan(scene: PlanScene, pxPerMetre: number): Buffer {
+function renderPlan(
+  scene: PlanScene,
+  pxPerMetre: number,
+  options: BuildOptions = {},
+): Buffer {
   const box = boundingBox(scene.boundary);
   const width = Math.ceil((box.width + MARGIN_METRES * 2) * pxPerMetre);
   const height = Math.ceil((box.length + MARGIN_METRES * 2) * pxPerMetre);
@@ -93,6 +98,7 @@ function renderPlan(scene: PlanScene, pxPerMetre: number): Buffer {
       assets: getAssetVariants,
     },
     { x: box.minX - MARGIN_METRES, y: box.minY - MARGIN_METRES },
+    options,
   );
 
   return canvas.toBuffer('image/png');
@@ -195,6 +201,16 @@ async function main(): Promise<void> {
 
     for (const [pxPerMetre, label] of ZOOMS) {
       write(`${prefix}-${name}-${label}`, renderPlan(scene, pxPerMetre));
+      /*
+       * The same garden with its planting lifted out of the beds' rasters and drawn as sprites
+       * above them. Written beside the plan drawing on purpose: the two are only judgeable
+       * against each other, and the question this sheet answers is whether the beds have stopped
+       * reading as cut-outs.
+       */
+      write(
+        `${prefix}-${name}-${label}-visualise`,
+        renderPlan(scene, pxPerMetre, { view: 'visualise' }),
+      );
     }
   });
 

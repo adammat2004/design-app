@@ -77,6 +77,7 @@ function rasterBytes(entry: CacheEntry): number {
 }
 
 export interface PatternRequest {
+  exclusions?: Point[][];
   /** The surface's own id, which is also what makes its tones differ from its neighbour's. */
   elementId: string;
   material: MaterialManifestEntry;
@@ -203,6 +204,7 @@ export function patternKey(request: PatternRequest): string {
     hashString(anchor).toString(36),
     light,
     request.assetVersion ?? 'none',
+    hashString(JSON.stringify(request.exclusions ?? [])).toString(36),
     zoomBucket(request.pxPerMetre),
     request.pixelRatio ?? 1,
     request.plantingStyle ?? '',
@@ -253,6 +255,7 @@ export function getSurfacePattern(
       maxTier: request.interacting ? 'mass' : undefined,
       centreline: request.centreline,
       element: request.element,
+      exclusions: request.exclusions,
     },
   );
 

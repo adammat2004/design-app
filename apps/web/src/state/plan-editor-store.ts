@@ -1,7 +1,14 @@
 'use client';
 
 import { create } from 'zustand';
-import { SYMBOLS, type SymbolId } from '@garden-studio/schema';
+import {
+  SYMBOLS,
+  PLANT_CATALOGUE,
+  associatePlants,
+  isPlantSymbol,
+  type SymbolId,
+} from '@garden-studio/schema';
+import type { Maturity } from '@/lib/render/scene';
 import type { LayoutSection, Point, ProposedChange } from '@garden-studio/schema';
 import { draftPolygon, polygonCentroid } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
@@ -60,7 +67,11 @@ export const NUDGE = 0.1;
 /** Smallest side a resize handle will produce, in metres. Matches step 2's features. */
 export const MIN_ELEMENT_SIDE = 0.3;
 
-const HOUSE_CLASH = 'That overlaps the house. Keep it on the garden.';
+/*
+ * There is no house message any more, because there is no house rule: a patio, a path or a
+ * pergola attached to the building is the ordinary case, and the house is drawn over whatever
+ * runs under it. The fence is the one edge left that an element may not cross.
+ */
 const FENCE_CLASH = 'That goes over the property boundary.';
 const LOCKED_CLASH = 'That is the ground layer for its zone — change its material instead.';
 
@@ -104,9 +115,23 @@ interface PlanEditorState {
   placingCategory: ElementCategory | null;
   /** With `placingCategory`: the thing being placed, when it is a piece of furniture. */
   placingSymbol: SymbolId | null;
+  placingPlantId: string | null;
   snapEnabled: boolean;
   /** Graph paper on or off. A view preference, so it never enters the undo history. */
   gridVisible: boolean;
+  /**
+   * How grown-in Visualise draws the planting.
+   *
+   * A view preference beside `gridVisible`, and deliberately **not** on the document. It changes
+   * how the picture is drawn and nothing about the design: no geometry moves, no area changes, no
+   * quantity is affected, and the schedule on step 6 cannot see it. Nothing that can disagree with
+   * the plan it summarises is worth persisting — the same argument the review screen makes for
+   * storing nothing.
+   *
+   * It lives here rather than in the panel so that Visualise and the PNG export agree about which
+   * garden they are drawing.
+   */
+  maturity: Maturity;
   /**
    * Whether the plan is annotated.
    *
@@ -139,6 +164,10 @@ interface PlanEditorState {
 
   addElement: (category: ElementCategory, at: Point) => void;
   moveElementLive: (id: string, anchor: Point) => void;
+  setPosition: (id: string, anchor: Point) => void;
+  setCanopyDiameter: (id: string, metres: number) => void;
+  replaceSymbol: (id: string, symbol: SymbolId, plantId?: string) => void;
+  setStatus: (id: string, status: DesignElement['status']) => void;
   resizeElementLive: (id: string, size: Partial<{ width: number; depth: number }>) => void;
   rotateElementLive: (id: string, degrees: number) => void;
   nudgeSelection: (dx: number, dy: number) => void;
@@ -159,13 +188,18 @@ interface PlanEditorState {
 
   toggleSnap: () => void;
   toggleGrid: () => void;
+  setMaturity: (maturity: Maturity) => void;
   toggleLabels: () => void;
   toggleZones: () => void;
   toggleDimensions: () => void;
   /** Metres tall. Read by the shadow model, and until now invisible to the user who owns it. */
   setHeight: (id: string, metres: number) => void;
   setMode: (mode: PlanEditorMode) => void;
-  setPlacing: (category: ElementCategory | null, symbol?: SymbolId | null) => void;
+  setPlacing: (
+    category: ElementCategory | null,
+    symbol?: SymbolId | null,
+    plantId?: string | null,
+  ) => void;
   addMeasurePoint: (point: Point) => void;
   trackMeasurePointer: (point: Point) => void;
   clearMeasurement: () => void;
@@ -188,11 +222,7 @@ function boundaryNow(): Point[] {
 
 /** Why an edit was refused, or null if it is fine. Step 2's rule, verbatim. */
 function refusalFor(geometry: PlanGeometry): string | null {
-  const house = housePolygonNow();
-  const boundary = boundaryNow();
-
-  if (geometryIsLegal(geometry, house, boundary)) return null;
-  return geometryIsLegal(geometry, house, []) ? FENCE_CLASH : HOUSE_CLASH;
+  return geometryIsLegal(geometry, boundaryNow()) ? null : FENCE_CLASH;
 }
 
 /** Default sizes for a hand-placed element, by category. */
@@ -228,7 +258,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
       return {
         past: [...state.past, state.present].slice(-HISTORY_LIMIT),
-        present: next,
+        present: { ...next, elements: associatePlants(next.elements) },
         future: [],
         lastSavedAt: Date.now(),
         clash: null,
@@ -288,8 +318,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
    * write `present` directly, and the gesture bracket supplies the single entry at the end.
    *
    * Unlike step 2's version this also reports the refusal. A shape that silently stops following
-   * the cursor looks like a broken canvas; saying "that overlaps the house" while it will not go
-   * costs nothing and explains itself. The next legal frame clears it.
+   * the cursor looks like a broken canvas; saying "that goes over the property boundary" while it
+   * will not go costs nothing and explains itself. The next legal frame clears it.
    */
   function applyLive(id: string, mutate: (element: DesignElement) => DesignElement) {
     set((state) => {
@@ -306,8 +336,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       return {
         present: {
           ...state.present,
-          elements: state.present.elements.map((candidate) =>
-            candidate.id === id ? next : candidate,
+          elements: associatePlants(
+            state.present.elements.map((candidate) => (candidate.id === id ? next : candidate)),
           ),
         },
         clash: null,
@@ -366,8 +396,10 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     selectedId: null,
     placingCategory: null,
     placingSymbol: null,
+    placingPlantId: null,
     snapEnabled: true,
     gridVisible: true,
+    maturity: 'mature',
     labelsVisible: true,
     zonesVisible: false,
     dimensionsVisible: true,
@@ -401,6 +433,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         selectedId: null,
         placingCategory: null,
         placingSymbol: null,
+        placingPlantId: null,
         alignments: [],
         measurement: null,
         clash: null,
@@ -414,6 +447,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     addElement: (category, at) => {
       const centre = snapped(at);
       const symbol = get().placingSymbol;
+      const plantId = get().placingPlantId;
+      const plant = plantId ? PLANT_CATALOGUE[plantId] : undefined;
 
       /*
        * A symbol brings its own footprint — a lounger is 0.7 × 1.9 m whatever category it is —
@@ -423,7 +458,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       const size = footprint?.kind === 'rect' ? footprint : NEW_ELEMENT_SIZE[category];
       const shape: PlanGeometry =
         footprint?.kind === 'point'
-          ? { kind: 'point', at: centre, radius: footprint.radius }
+          ? { kind: 'point', at: centre, radius: plant ? plant.spread / 2 : footprint.radius }
           : { kind: 'rect', centre, width: size.width, depth: size.depth, rotation: 0 };
 
       const refusal = refusalFor(shape);
@@ -443,17 +478,20 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
             id,
             category,
             role: 'feature',
-            name: symbol ? SYMBOLS[symbol].label : defaultName(category, draft.elements),
+            name:
+              plant?.name ??
+              (symbol ? SYMBOLS[symbol].label : defaultName(category, draft.elements)),
             shape,
             zone: zoneAt(centre, zones)?.id ?? 'back',
             material: defaultMaterial(category),
             elevation: 0,
-            ...(symbol ? { symbol, height: SYMBOLS[symbol].height } : {}),
+            ...(symbol ? { symbol, height: plant?.height ?? SYMBOLS[symbol].height } : {}),
+            ...(plantId ? { plantId } : {}),
           },
         ],
       }));
 
-      set({ selectedId: id, placingCategory: null, placingSymbol: null });
+      set({ selectedId: id, placingCategory: null, placingSymbol: null, placingPlantId: null });
     },
 
     moveElementLive: (id, anchor) => {
@@ -472,6 +510,43 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       set({ alignments: guides });
       applyLive(id, () => moved);
     },
+
+    setPosition: (id, anchor) => {
+      if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
+      commitElement(id, (element) => translateTo(element, anchor));
+    },
+
+    setCanopyDiameter: (id, metres) => {
+      if (!Number.isFinite(metres) || metres < MIN_ELEMENT_SIDE) return;
+      commitElement(id, (element) =>
+        element.shape.kind === 'point'
+          ? { ...element, shape: { ...element.shape, radius: metres / 2 } }
+          : element,
+      );
+    },
+
+    replaceSymbol: (id, symbol, plantId) => {
+      const spec = SYMBOLS[symbol];
+      const plant = plantId ? PLANT_CATALOGUE[plantId] : undefined;
+      if (plantId && (!plant || plant.symbol !== symbol)) return;
+      commitElement(id, (element) => {
+        if (
+          spec.category !== element.category ||
+          (isPlantSymbol(symbol) && element.shape.kind !== 'point')
+        )
+          return element;
+        return {
+          ...element,
+          symbol,
+          plantId,
+          name: plant?.name ?? spec.label,
+          height: element.height ?? plant?.height ?? spec.height,
+        };
+      });
+    },
+
+    setStatus: (id, status) =>
+      commitElement(id, (element) => ({ ...element, status }), { checkGeometry: false }),
 
     resizeElementLive: (id, size) =>
       applyLive(id, (element) => {
@@ -628,7 +703,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
         return {
           past: [...state.past, state.present].slice(-HISTORY_LIMIT),
-          present: next,
+          present: { ...next, elements: associatePlants(next.elements) },
           future: rest,
           clash: null,
         };
@@ -655,6 +730,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      */
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
 
+    setMaturity: (maturity) => set({ maturity }),
+
     toggleLabels: () => set((state) => ({ labelsVisible: !state.labelsVisible })),
 
     toggleZones: () => set((state) => ({ zonesVisible: !state.zonesVisible })),
@@ -662,10 +739,23 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     toggleDimensions: () => set((state) => ({ dimensionsVisible: !state.dimensionsVisible })),
 
     setMode: (mode) =>
-      set({ mode, placingCategory: null, placingSymbol: null, measurement: null, clash: null }),
+      set({
+        mode,
+        placingCategory: null,
+        placingSymbol: null,
+        placingPlantId: null,
+        measurement: null,
+        clash: null,
+      }),
 
-    setPlacing: (category, symbol = null) =>
-      set({ placingCategory: category, placingSymbol: symbol, mode: 'select', clash: null }),
+    setPlacing: (category, symbol = null, plantId = null) =>
+      set({
+        placingCategory: category,
+        placingSymbol: symbol,
+        placingPlantId: plantId,
+        mode: 'select',
+        clash: null,
+      }),
 
     addMeasurePoint: (point) =>
       set((state) => {
@@ -702,7 +792,6 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       const accepted = changes.filter((change) => acceptedIds.includes(change.id));
       if (accepted.length === 0) return outcome;
 
-      const house = housePolygonNow();
       const boundary = boundaryNow();
 
       get().beginGesture();
@@ -711,7 +800,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         const draft = get().present;
 
         if (change.kind === 'add') {
-          if (!geometryIsLegal(change.next.shape, house, boundary)) {
+          if (!geometryIsLegal(change.next.shape, boundary)) {
             outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
             continue;
           }
@@ -754,11 +843,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           continue;
         }
 
-        if (movesGeometry && !geometryIsLegal(change.next.shape, house, boundary)) {
-          outcome.refused.push({
-            changeId: change.id,
-            reason: geometryIsLegal(change.next.shape, house, []) ? FENCE_CLASH : HOUSE_CLASH,
-          });
+        if (movesGeometry && !geometryIsLegal(change.next.shape, boundary)) {
+          outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
           continue;
         }
 
@@ -840,8 +926,10 @@ function ephemeralState() {
     selectedId: null as string | null,
     placingCategory: null as ElementCategory | null,
     placingSymbol: null as SymbolId | null,
+    placingPlantId: null as string | null,
     snapEnabled: true,
     gridVisible: true,
+    maturity: 'mature' as Maturity,
     labelsVisible: true,
     zonesVisible: false,
     dimensionsVisible: true,

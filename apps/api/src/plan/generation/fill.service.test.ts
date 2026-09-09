@@ -145,6 +145,12 @@ describe.skipIf(connection === null)('FillService', () => {
       [centre, { x: centre.x, y: centre.y + 1 }],
     ];
 
+    it('subtracts an edge bed without requiring split lines', async () => {
+      const pieces = await service.remainderPieces({ zone, rooms: [rect(0, 0, 2, 10)], cuts: [] });
+      expect(pieces).toHaveLength(1);
+      expect(polygonArea(pieces[0]!)).toBeCloseTo(100);
+    });
+
     it('cuts the annulus round a room into runs with no holes', async () => {
       const pieces = await service.remainderPieces({ zone, rooms: [lawn], cuts });
 

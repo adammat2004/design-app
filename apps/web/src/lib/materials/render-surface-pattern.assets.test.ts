@@ -11,7 +11,12 @@ import {
 } from './assets/registry';
 import { materialAssets } from './assets/material-assets';
 import { resolvePattern, type MaterialManifestEntry } from './palette';
-import { drawSurfacePattern, type PatternContext } from './render-surface-pattern';
+import {
+  drawSurfacePattern,
+  type MakeCanvas,
+  type PatternCanvas,
+  type PatternContext,
+} from './render-surface-pattern';
 
 /**
  * The painter with real images loaded.
@@ -49,8 +54,13 @@ function have(id: MaterialId, what: 'face' | 'texture' | 'sprites'): boolean {
   return family !== undefined && getAssetVariants(family).length > 0;
 }
 
+const makeCanvas: MakeCanvas = (width, height) =>
+  createCanvas(width, height) as unknown as PatternCanvas;
+
 interface Options {
   material?: MaterialManifestEntry;
+  /** Absent leaves every tint off, which is the pre-asset drawing path. */
+  tint?: boolean;
   assets?: AssetLookup;
   pxPerMetre?: number;
   seed?: string;
@@ -71,7 +81,7 @@ function render(outlines: Point[][], options: Options = {}) {
       material,
       { origin: ORIGIN, rotation: 0 },
       `${options.seed ?? 'surface'}-${index}`,
-      { pxPerMetre, assets: options.assets },
+      { pxPerMetre, assets: options.assets, makeCanvas: options.tint ? makeCanvas : undefined },
       ORIGIN,
     );
   });
@@ -93,6 +103,41 @@ function differ(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
   }
   return count;
 }
+
+describe('a mass texture stacked on itself', () => {
+  /*
+   * Surfaces of one material genuinely overlap: `computeZones` gives a garden one base lawn per
+   * zone, and an accent lawn is drawn over one of them — a measured quarter of the suburban
+   * fixture's lawn is covered twice.
+   *
+   * While the palette was washed over the *finished surface* rather than baked into the tile, that
+   * second draw multiplied the tint again and the overlap showed as a hard-edged block of darker
+   * green across one continuous lawn. Tinting the tile makes the tile opaque, so the second draw
+   * writes the pixels the first one did. This is the test that stops it coming back.
+   */
+  it('is invisible where two lawns of the same turf overlap', () => {
+    if (!have('hardwearing-turf', 'texture')) return;
+
+    const material = resolvePattern('hardwearing-turf')!;
+    const options = { material, assets: getAssetVariants, tint: true };
+
+    const once = render([rectangle], options);
+    const twice = render([rectangle, rectangle], options);
+
+    expect(differ(once.pixels, twice.pixels)).toBe(0);
+  });
+
+  /* And the tint has to be doing something, or the test above passes for the wrong reason. */
+  it('carries the palette into the photograph', () => {
+    if (!have('hardwearing-turf', 'texture')) return;
+
+    const material = resolvePattern('hardwearing-turf')!;
+    const plain = render([rectangle], { material, assets: getAssetVariants });
+    const tinted = render([rectangle], { material, assets: getAssetVariants, tint: true });
+
+    expect(differ(plain.pixels, tinted.pixels)).toBeGreaterThan(0);
+  });
+});
 
 describe('with assets loaded', () => {
   it('draws the same pixels twice', () => {

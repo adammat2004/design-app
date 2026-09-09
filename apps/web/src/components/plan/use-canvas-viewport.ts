@@ -130,10 +130,10 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
   );
 
   const fitToShape = useCallback(
-    (width: number, height: number, options?: { immediate?: boolean }) => {
+    (width: number, height: number, options?: { immediate?: boolean; polygon?: Point[] }) => {
       if (width === 0 || height === 0) return;
 
-      const current = polygonRef.current();
+      const current = options?.polygon ?? polygonRef.current();
 
       const next =
         current.length < 2

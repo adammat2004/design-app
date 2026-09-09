@@ -590,9 +590,18 @@ describe.skipIf(connection === null)('ConceptsService', () => {
     }
   });
 
-  it('stands specimen shrubs inside the beds', async () => {
+  it('stands the structural shrubs inside the beds', async () => {
+    /*
+     * These used to be two to four "specimen shrubs" sampled by PostGIS — a random point in a
+     * random bed. They are now the scheme's own `backdrop` and `specimen` layers, placed by
+     * `samplePlanting` from the same seed and with the same drift and edge-grading the painter uses
+     * for the infill, so a shrub stands where the texture would have drawn one.
+     *
+     * What must stay true either way is what this test has always checked: a shrub is inside a bed,
+     * and drawn after it.
+     */
     const [concept] = await service.generate(plan(), 11);
-    const specimens = concept!.elements.filter((element) => element.symbol === 'specimen');
+    const specimens = concept!.elements.filter((element) => element.symbol?.startsWith('shrub-'));
     const beds = concept!.elements.filter(
       (element) =>
         element.role === 'fill' &&
@@ -610,6 +619,12 @@ describe.skipIf(connection === null)('ConceptsService', () => {
       const bed = beds.find((b) => polygonContainsPolygon(geometryOutline(b.shape), outline))!;
       expect(concept!.elements.indexOf(specimen)).toBeGreaterThan(concept!.elements.indexOf(bed));
     }
+
+    /*
+     * Capped, because the sampler returns a *drawn density* — the right answer for a texture and
+     * the wrong one for a list of objects the user has to scroll through.
+     */
+    expect(specimens.length).toBeLessThanOrEqual(30);
   });
 
   it('puts furniture inside the feature it belongs to, and nowhere else', async () => {

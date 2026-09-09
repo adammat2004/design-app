@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment } from 'react';
-import type { Point } from '@garden-studio/schema';
+import { isPlantSymbol, type Point } from '@garden-studio/schema';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { describeElement, elementAnchor, type DesignElement } from '@/lib/concepts';
@@ -135,7 +135,18 @@ export function layOutConceptLabels(
    */
   const elementLabels: LabelEntry[] = elements
     .filter(
-      (element) => element.role === 'feature' && element.name && element.category !== 'furniture',
+      /*
+       * Furniture and plants carry no chip, for the same reason: they are things that stand *on*
+       * something else, and there are many of them. `stackLabels` resolves collisions by pushing
+       * labels down and only down, so a bed with eight shrubs in it produces a column of chips
+       * running off the bottom of the canvas with leader lines fanning back into the bed. Not
+       * degraded — unusable. What names a bed is the bed's own chip.
+       */
+      (element) =>
+        element.role === 'feature' &&
+        element.name &&
+        element.category !== 'furniture' &&
+        !isPlantSymbol(element.symbol),
     )
     .map((element) => ({
       kind: 'element' as const,

@@ -88,6 +88,8 @@ export function LengthInput({
   metres,
   unit,
   allowNegative,
+  allowZero,
+  readMetres,
   onFocus,
   onBlur,
   onCommit,
@@ -97,6 +99,9 @@ export function LengthInput({
   metres: number;
   unit: Unit;
   allowNegative?: boolean;
+  allowZero?: boolean;
+  /** Read the accepted value after a geometry edit that can be refused. */
+  readMetres?: () => number;
   onFocus?: () => void;
   /** Fires after the commit, so a caller can clear whatever `onFocus` put on screen. */
   onBlur?: () => void;
@@ -111,7 +116,10 @@ export function LengthInput({
 
   function commit() {
     const typed = Number(text);
-    const valid = Number.isFinite(typed) && (allowNegative || typed > 0);
+    const valid =
+      text.trim() !== '' &&
+      Number.isFinite(typed) &&
+      (allowNegative || (allowZero ? typed >= 0 : typed > 0));
 
     if (!valid) {
       setText(formatLengthValue(metres, unit));
@@ -126,6 +134,7 @@ export function LengthInput({
     if (text === formatLengthValue(metres, unit)) return;
 
     onCommit(fromDisplay(typed, unit));
+    if (readMetres) setText(formatLengthValue(readMetres(), unit));
   }
 
   return (
@@ -133,7 +142,7 @@ export function LengthInput({
       <input
         type="number"
         inputMode="decimal"
-        min={allowNegative ? undefined : 0.1}
+        min={allowNegative ? undefined : allowZero ? 0 : 0.1}
         step={0.1}
         data-testid={testId}
         aria-label={label}

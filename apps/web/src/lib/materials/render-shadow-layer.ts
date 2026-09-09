@@ -2,6 +2,7 @@ import {
   boundingBox,
   projectShadow,
   shadowRings,
+  shadowOffset,
   type Point,
   type ShadowCast,
   type ShadowOccluder,
@@ -127,7 +128,13 @@ export function drawShadowLayer(
   context.fillStyle = SHADOW_TONE;
 
   for (const occluder of occluders) {
-    const shadow = projectShadow(occluder.outline, occluder.height, cast);
+    const baseHeight = occluder.baseHeight ?? 0;
+    const offset = shadowOffset(baseHeight, cast);
+    const outline =
+      baseHeight === 0
+        ? occluder.outline
+        : occluder.outline.map((p) => ({ x: p.x + offset.x, y: p.y + offset.y }));
+    const shadow = projectShadow(outline, occluder.height - baseHeight, cast);
     if (!shadow) continue;
 
     /*

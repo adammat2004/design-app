@@ -42,6 +42,7 @@ import {
   rectNormal,
   shedRoof,
 } from '@/lib/materials/symbols/structures';
+import type { ElementPass } from '@/lib/materials/scene-passes';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
 
 /**
@@ -63,6 +64,8 @@ export function ElementDrawing({
   offsetPx = ORIGIN,
   light,
   interacting = false,
+  part = 'all',
+  exclusions,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
@@ -83,12 +86,13 @@ export function ElementDrawing({
    * duration of the gesture, because a moving outline misses the raster cache on every frame.
    */
   interacting?: boolean;
+  part?: ElementPass;
+  exclusions?: Point[][];
 }) {
   const style = CATEGORY_COLOURS[element.category];
   const fill = materialFill(element);
-  const pattern = useSurfacePattern(element, transform.scale, light, interacting);
+  const pattern = useSurfacePattern(element, transform.scale, light, interacting, exclusions);
   const { shape } = element;
-  const isFill = element.role === 'fill';
 
   // Re-renders once, when the sprites arrive; until then a symbol draws its procedural self.
   const assetVersion = useAssetVersion();
@@ -117,7 +121,7 @@ export function ElementDrawing({
   const common = {
     fill,
     stroke: style.stroke,
-    strokeWidth: isFill ? 0 : 1.75,
+    strokeWidth: 0,
   };
 
   /*
@@ -125,7 +129,22 @@ export function ElementDrawing({
    * together, which needs no schema change: `ElementCategory` stays the closed seven-value enum,
    * and a tree is simply what a planting bed looks like when it is a point rather than a region.
    */
-  if (shape.kind === 'point') {
+  if (part === 'object') {
+    return (
+      <Group>
+        <Line points={toPx(elementOutline(element))} closed fill="#000" opacity={0} />
+        <SymbolDrawing
+          element={element}
+          transform={transform}
+          at={at}
+          light={light}
+          sprite={sprite}
+        />
+      </Group>
+    );
+  }
+
+  if (shape.kind === 'point' && part !== 'ground') {
     // A fire pit bowl or a parasol: a sprite on a point, over an invisible circle to grab it by.
     if (sprite) {
       return (
@@ -248,13 +267,15 @@ export function ElementDrawing({
         closed
         lineJoin="round"
       />
-      <SymbolDrawing
-        element={element}
-        transform={transform}
-        at={at}
-        light={light}
-        sprite={sprite}
-      />
+      {part !== 'ground' ? (
+        <SymbolDrawing
+          element={element}
+          transform={transform}
+          at={at}
+          light={light}
+          sprite={sprite}
+        />
+      ) : null}
     </Group>
   );
 }
@@ -479,9 +500,9 @@ function PointSymbol({
   const assetVersion = useAssetVersion();
   // Per species: an evergreen draws a conifer, an ornamental a blossom tree, and so on.
   const canopies = useMemo(
-    () => canopiesForSymbol(element.symbol).flatMap((id) => getAssetVariants(id)),
+    () => canopiesForSymbol(element.symbol, element.plantId).flatMap((id) => getAssetVariants(id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is what changes the answer
-    [assetVersion, element.symbol],
+    [assetVersion, element.symbol, element.plantId],
   );
 
   if (shape.kind !== 'point') return null;

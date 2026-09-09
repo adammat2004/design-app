@@ -1,4 +1,5 @@
 import {
+  geometryClearsHouse,
   geometryIsLegal,
   polygonContainsPolygon,
   SYMBOLS,
@@ -67,7 +68,8 @@ export function furnish(
     const symbol = choices[(start + step) % choices.length]!;
     const shape = fitInside(host.shape, symbol);
     if (!shape) continue;
-    if (!geometryIsLegal(shape, options.houseRing, options.boundary)) continue;
+    if (!geometryIsLegal(shape, options.boundary)) continue;
+    if (!geometryClearsHouse(shape, options.houseRing)) continue;
 
     return {
       id: options.nextId(),

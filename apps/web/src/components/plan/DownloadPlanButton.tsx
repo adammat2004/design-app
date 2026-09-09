@@ -4,6 +4,7 @@ import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { downloadPlanPng, planFileName } from '@/lib/materials/export-plan';
+import type { SceneView } from '@/lib/render/scene';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { ToolbarButton } from './ToolbarButton';
@@ -15,7 +16,20 @@ import { ToolbarButton } from './ToolbarButton';
  * screen cannot hand it two different gardens. Whatever is on the plan right now is what goes in
  * the file, including edits the autosave has not flushed — the picture is of the screen.
  */
-export function DownloadPlanButton({ variant = 'toolbar' }: { variant?: 'toolbar' | 'primary' }) {
+export function DownloadPlanButton({
+  variant = 'toolbar',
+  view = 'plan',
+}: {
+  variant?: 'toolbar' | 'primary';
+  /**
+   * Which drawing to export.
+   *
+   * The Visualise tab passes `'visualise'` so the file matches the view it was taken from — a
+   * download that quietly delivered the plan drawing from the Visualise tab would be exactly the
+   * kind of contradiction between two pictures of one garden that the shared scene exists to stop.
+   */
+  view?: SceneView;
+}) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -34,7 +48,13 @@ export function DownloadPlanButton({ variant = 'toolbar' }: { variant?: 'toolbar
           elements: editor.present.elements,
           site: boundaryDraft,
         },
-        { unit, labels: editor.labelsVisible, fileName: planFileName(projectName) },
+        {
+          unit,
+          labels: editor.labelsVisible,
+          view,
+          maturity: editor.maturity,
+          fileName: planFileName(projectName),
+        },
       );
     } catch {
       setFailed(true);

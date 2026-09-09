@@ -26,6 +26,8 @@ export * from './plan/openings.js';
 export * from './plan/gates.js';
 export * from './plan/boundary-styles.js';
 export * from './plan/planting.js';
+export * from './plan/planting-sample.js';
+export * from './plan/prng.js';
 export * from './plan/sanity.js';
 export * from './plan/plot-presets.js';
 export * from './plan/zones.js';
@@ -43,3 +45,5 @@ export * from './plan/document.js';
 export * from './plan/validation.js';
 export * from './plan/assistant.js';
 export * from './plan/api.js';
+
+export * from './plan/plant-catalogue.js';

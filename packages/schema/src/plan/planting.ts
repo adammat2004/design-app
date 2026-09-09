@@ -56,15 +56,63 @@ export const PlantingStyleSchema = z.enum([
 export type PlantingStyle = z.infer<typeof PlantingStyleSchema>;
 
 /** What a layer is *for*, which is what decides where in the bed it goes. */
-export const PlantingRoleSchema = z.enum([
-  'backdrop',
-  'mass',
-  'mid',
-  'accent',
-  'edge',
-  'specimen',
-]);
+export const PlantingRoleSchema = z.enum(['backdrop', 'mass', 'mid', 'accent', 'edge', 'specimen']);
 export type PlantingRole = z.infer<typeof PlantingRoleSchema>;
+
+/**
+ * The roles that are **placed** rather than painted.
+ *
+ * A border is specified as a quantity per square metre and drawn as a texture, which is what the
+ * rest of this file is for. Its *structure* is different: a designer positions the key shrubs and
+ * the trees and lets the infill fill in around them, and a plan where none of that can be moved is
+ * a picture rather than a design.
+ *
+ * So these two roles are lifted out of the painted stack and emitted as real elements carrying a
+ * symbol — `resolveLayers` drops them, and the generator places them from the same
+ * `samplePlanting` call the painter would have used, so they land exactly where they were drawn.
+ * Everything else stays a texture, which keeps the bed one element with a real area and a real
+ * cost weight.
+ */
+export const STRUCTURAL_ROLES: PlantingRole[] = ['backdrop', 'specimen'];
+
+export function isStructuralRole(role: PlantingRole): boolean {
+  return STRUCTURAL_ROLES.includes(role);
+}
+
+/**
+ * Which symbol a structural plant is placed as.
+ *
+ * ## Why this takes a variant
+ *
+ * The first version answered from the layer's taxon alone, and a whole garden came back as
+ * twenty-five identical evergreen shrubs — every backdrop layer has the same taxon, so every plant
+ * in it got the same symbol. That is worse than the texture it replaced: a repeated stamp reads as
+ * a rendering fault where a texture at least reads as planting.
+ *
+ * A designer repeats a *few* plants, not one and not twenty. So each layer resolves to a short
+ * ordered palette and the placement's own `variant` picks within it — which keeps the whole thing
+ * spatially hashed, because `variant` came from the cell's generator.
+ *
+ * Two thirds / one third rather than an even split: a backdrop is mostly one thing with another
+ * woven through it, which is what makes it read as chosen rather than as mixed.
+ */
+const LAYER_PALETTES: Record<string, string[]> = {
+  architectural: ['shrub-architectural', 'shrub-architectural', 'shrub-evergreen'],
+  flowering: ['shrub-flowering', 'shrub-flowering', 'shrub-evergreen'],
+  evergreen: ['shrub-evergreen', 'shrub-evergreen', 'shrub-flowering'],
+};
+
+export function symbolForLayer(layer: PlantingLayer, variant = 0): string {
+  const tags = layer.taxon.tags ?? [];
+  const key = tags.includes('architectural')
+    ? 'architectural'
+    : tags.includes('flowering') || tags.includes('deciduous')
+      ? 'flowering'
+      : 'evergreen';
+
+  const palette = LAYER_PALETTES[key]!;
+  return palette[Math.min(palette.length - 1, Math.floor(variant * palette.length))]!;
+}
 
 export interface PlantingLayer {
   role: PlantingRole;

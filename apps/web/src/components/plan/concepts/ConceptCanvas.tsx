@@ -11,6 +11,7 @@ import { housePolygon, houseSize } from '@/lib/house';
 import { formatLength } from '@/lib/units';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { CanvasChrome } from '../CanvasChrome';
+import { scenePasses, exclusionMap, type ElementPass } from '@/lib/materials/scene-passes';
 import { ElementDrawing } from '../ElementDrawing';
 import { ShadowLayer } from '../ShadowLayer';
 import { GateMarks } from '../GateMarks';
@@ -76,10 +77,8 @@ export function ConceptCanvas({
   const light = useMemo(() => lightDirection(boundaryDraft) ?? undefined, [boundaryDraft]);
 
   /* Where the shadow layer is spliced in: after every fill, before every feature. */
-  const firstFeatureIndex = useMemo(() => {
-    const index = elements.findIndex((element) => element.role === 'feature');
-    return index === -1 ? elements.length : index;
-  }, [elements]);
+  const passes = useMemo(() => scenePasses(elements), [elements]);
+  const exclusions = useMemo(() => exclusionMap(elements), [elements]);
 
   /*
    * Compare panes refit whenever they are resized; the full canvas fits once and then the
@@ -150,9 +149,11 @@ export function ConceptCanvas({
               cosmetic choice — it is how full coverage is guaranteed. See `concept-fill.ts`.
             */}
             <Layer listening={false}>
-              {elements.slice(0, firstFeatureIndex).map((element) => (
+              {passes.ground.map((element) => (
                 <ElementShape
-                  key={element.id}
+                  key={`ground-${element.id}`}
+                  part="ground"
+                  exclusions={exclusions.get(element.id)}
                   element={element}
                   transform={transform}
                   light={light}
@@ -173,9 +174,10 @@ export function ConceptCanvas({
                 transform={transform}
               />
 
-              {elements.slice(firstFeatureIndex).map((element) => (
+              {passes.objects.map((element) => (
                 <ElementShape
-                  key={element.id}
+                  key={`object-${element.id}`}
+                  part={element.symbol === 'pergola' ? 'object' : 'all'}
                   element={element}
                   transform={transform}
                   light={light}
@@ -277,14 +279,24 @@ function ElementShape({
   element,
   transform,
   light,
+  part,
+  exclusions,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
   light?: Point;
+  part?: ElementPass;
+  exclusions?: Point[][];
 }) {
   return (
     <Group listening={false}>
-      <ElementDrawing element={element} transform={transform} light={light} />
+      <ElementDrawing
+        element={element}
+        transform={transform}
+        light={light}
+        part={part}
+        exclusions={exclusions}
+      />
     </Group>
   );
 }

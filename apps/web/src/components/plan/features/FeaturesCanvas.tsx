@@ -411,17 +411,6 @@ export function FeaturesCanvas() {
                   fill={zoneFill(zone.id)}
                 />
               ))}
-
-              {houseOutline && boundaryDraft.house ? (
-                <HouseShape
-                  outline={houseOutline}
-                  centre={boundaryDraft.house.centre}
-                  rotation={boundaryDraft.house.rotation}
-                  size={houseSize(boundaryDraft.house)}
-                  unit={unit}
-                  transform={transform}
-                />
-              ) : null}
             </Layer>
 
             <Layer>
@@ -607,6 +596,25 @@ export function FeaturesCanvas() {
                   strokeWidth={1}
                   dash={[4, 4]}
                   listening={false}
+                />
+              ) : null}
+            </Layer>
+
+            {/*
+              The house sits *above* the features, the same order the editor, the concept cards
+              and the composer all draw in. A patio really does meet the back wall, so a feature
+              may overlap the footprint — and drawn underneath, the building would disappear
+              beneath the first patio anybody placed against it. Inert: step 1 owns the house.
+            */}
+            <Layer listening={false}>
+              {houseOutline && boundaryDraft.house ? (
+                <HouseShape
+                  outline={houseOutline}
+                  centre={boundaryDraft.house.centre}
+                  rotation={boundaryDraft.house.rotation}
+                  size={houseSize(boundaryDraft.house)}
+                  unit={unit}
+                  transform={transform}
                 />
               ) : null}
             </Layer>

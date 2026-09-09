@@ -200,11 +200,15 @@ export function moveGeometry(geometry: PlanGeometry, to: Point): PlanGeometry {
 /* ---------------------------------------------------------------- constraints */
 
 /**
- * Nothing sits on the house.
+ * Whether a shape stays off the house.
  *
- * Touching is fine — a patio butting up against the back wall is the normal case, and
- * `polygonsIntersect` already treats flush edges as clear. This is the TypeScript twin of the
- * validator's `ST_Intersects(a, b) AND NOT ST_Touches(a, b)`.
+ * **This is a composition rule, not a legality rule** — the generator asks it so a concept it
+ * draws never lays a terrace or a border under the building, and nothing else does. A patio
+ * attached to the back wall is the normal case for a hand-drawn plan, so `geometryIsLegal`
+ * deliberately does not consult this; see its comment.
+ *
+ * Touching is not overlapping: `polygonsIntersect` already treats flush edges as clear, the
+ * TypeScript twin of `ST_Intersects(a, b) AND NOT ST_Touches(a, b)`.
  */
 export function geometryClearsHouse(geometry: PlanGeometry, housePolygon: Point[] | null): boolean {
   if (!housePolygon || housePolygon.length < 3) return true;
@@ -225,17 +229,19 @@ export function geometryFitsInside(geometry: PlanGeometry, boundary: Point[]): b
 
 /**
  * The single predicate every mutation runs before committing. Placement, dragging, reshaping,
- * resizing, rotating and rounding all have to satisfy the same two rules, so they all ask here
- * rather than each remembering to check both — and so does the server's assistant planner,
- * which means a patio the AI proposes is judged by exactly the rule a shed dragged by hand on
- * step 2 is judged by.
+ * resizing, rotating and rounding all have to satisfy the same rule, so they all ask here rather
+ * than each remembering it — and so does the server's assistant planner, which means a patio the
+ * AI proposes is judged by exactly the rule a shed dragged by hand on step 2 is judged by.
+ *
+ * **The house is not part of it, and _this reverses_ "nothing sits on the house".** A patio, a
+ * pergola or a path attached to the building is the ordinary case, and refusing it made the
+ * commonest thing a user wants to draw the one thing they could not. Nothing downstream needs the
+ * old rule: the house is painted opaquely and last in every renderer, so a shape run under a wall
+ * is simply covered. `geometryClearsHouse` is still there for the generator, which does keep its
+ * own composition clear of the house.
  */
-export function geometryIsLegal(
-  geometry: PlanGeometry,
-  housePolygon: Point[] | null,
-  boundary: Point[],
-): boolean {
-  return geometryClearsHouse(geometry, housePolygon) && geometryFitsInside(geometry, boundary);
+export function geometryIsLegal(geometry: PlanGeometry, boundary: Point[]): boolean {
+  return geometryFitsInside(geometry, boundary);
 }
 
 /* ---------------------------------------------------------------- feature wrappers */
@@ -260,10 +266,6 @@ export function featureFitsInside(feature: PlacedFeature, boundary: Point[]): bo
   return geometryFitsInside(feature.geometry, boundary);
 }
 
-export function featureIsLegal(
-  feature: PlacedFeature,
-  housePolygon: Point[] | null,
-  boundary: Point[],
-): boolean {
-  return geometryIsLegal(feature.geometry, housePolygon, boundary);
+export function featureIsLegal(feature: PlacedFeature, boundary: Point[]): boolean {
+  return geometryIsLegal(feature.geometry, boundary);
 }

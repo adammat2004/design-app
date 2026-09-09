@@ -102,16 +102,6 @@ export class GeometryValidationService {
             FROM features a JOIN features b ON a.id < b.id
             WHERE ST_Intersects(a.geom, b.geom) AND NOT ST_Touches(a.geom, b.geom)`,
       );
-
-      if (house) {
-        // Touching stays legal: a patio butting against the back wall is the normal case, and
-        // the same allowance the editor's `geometryClearsHouse` already makes.
-        branches.push(
-          sql`SELECT 'feature_on_house'::text, ARRAY[f.id]
-              FROM features f, house h
-              WHERE ST_Intersects(f.geom, h.geom) AND NOT ST_Touches(f.geom, h.geom)`,
-        );
-      }
     }
 
     if (elements.length > 0) {
@@ -127,22 +117,19 @@ export class GeometryValidationService {
             FROM elements e, boundary b
             WHERE NOT ST_Contains(b.geom, e.geom)`,
       );
-
-      if (house) {
-        branches.push(
-          sql`SELECT 'element_on_house'::text, ARRAY[e.id]
-              FROM elements e, house h
-              WHERE ST_Intersects(e.geom, h.geom) AND NOT ST_Touches(e.geom, h.geom)`,
-        );
-      }
     }
 
     /*
      * There is deliberately no `elements_overlap`. A concept stacks a pergola on a patio on a
      * base fill by design — `element-groups.ts` computes shares against the planned area for
      * exactly that reason — so treating overlap as a violation would flag every correct
-     * concept. Layout elements are checked for containment and house clearance only, which is
-     * precisely what `geometryIsLegal` checks on the client.
+     * concept.
+     *
+     * There is deliberately no `element_on_house` or `feature_on_house` either, and _that
+     * reverses_ an earlier decision. A patio, path or pergola attached to the building is the
+     * ordinary case rather than a mistake, and the house is drawn over whatever runs under it.
+     * Containment is the only rule left, which is precisely what `geometryIsLegal` checks on
+     * the client.
      */
 
     const rows = await this.db.execute<ViolationRow>(
@@ -187,11 +174,9 @@ function sectionFor(code: ViolationCode): ValidationViolation['section'] {
     case 'house_outside_boundary':
       return 'site';
     case 'feature_outside_boundary':
-    case 'feature_on_house':
     case 'features_overlap':
       return 'features';
     case 'element_outside_boundary':
-    case 'element_on_house':
       return 'layout';
   }
 }
@@ -212,13 +197,9 @@ function describeViolation(
       return 'The house is not fully inside the property boundary.';
     case 'feature_outside_boundary':
       return `The ${label(targetIds[0] ?? '')} is not fully inside the property boundary.`;
-    case 'feature_on_house':
-      return `The ${label(targetIds[0] ?? '')} overlaps the house.`;
     case 'features_overlap':
       return `The ${label(targetIds[0] ?? '')} overlaps the ${label(targetIds[1] ?? '')}.`;
     case 'element_outside_boundary':
       return `The ${label(targetIds[0] ?? '')} is not fully inside the property boundary.`;
-    case 'element_on_house':
-      return `The ${label(targetIds[0] ?? '')} overlaps the house.`;
   }
 }

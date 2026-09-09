@@ -3,6 +3,7 @@ import type { Point } from '@garden-studio/schema';
 import { polygonArea } from './boundary-geometry';
 import {
   clampHouseInside,
+  clampHouseSize,
   houseArea,
   houseFitsInside,
   houseFromPoints,
@@ -13,6 +14,7 @@ import {
   rectangleHouse,
   resizeHouse,
   rotateHouse,
+  shrinkHouseToFit,
 } from './house';
 
 /** A 20 m x 16 m plot, origin top-left. */
@@ -208,6 +210,61 @@ describe('clampHouseInside', () => {
   it('leaves a house that never fitted where it was', () => {
     const house = rectangleHouse({ x: 10, y: 8 }, 40, 40);
     expect(clampHouseInside(PLOT, house, { x: 12, y: 8 }).centre).toEqual({ x: 10, y: 8 });
+  });
+});
+
+describe('clampHouseSize', () => {
+  it('applies a size that fits, untouched', () => {
+    const house = rectangleHouse({ x: 10, y: 8 }, 6, 4);
+    expect(houseSize(clampHouseSize(PLOT, house, { width: 12 }))).toMatchObject({ width: 12 });
+  });
+
+  /*
+   * The case this exists for. A house really can be the full width of its plot, and asking for
+   * that used to be refused outright and in silence — so the answer has to be the largest house
+   * that fits, and it has to actually reach the fence rather than stopping visibly short.
+   */
+  it('grows a house asked for the whole plot until it meets both side fences', () => {
+    const house = rectangleHouse({ x: 10, y: 8 }, 6, 4);
+    const clamped = clampHouseSize(PLOT, house, { width: 40 });
+
+    expect(houseFitsInside(PLOT, clamped)).toBe(true);
+    expect(houseSize(clamped).width).toBeCloseTo(20, 3);
+  });
+
+  it('leaves the axis that was not asked about alone', () => {
+    const house = rectangleHouse({ x: 10, y: 8 }, 6, 4);
+    expect(houseSize(clampHouseSize(PLOT, house, { width: 40 })).depth).toBeCloseTo(4);
+  });
+
+  it('leaves a house that never fitted at the size it was', () => {
+    const house = rectangleHouse({ x: 10, y: 8 }, 40, 40);
+    expect(houseSize(clampHouseSize(PLOT, house, { width: 60 }))).toMatchObject({ width: 40 });
+  });
+});
+
+describe('shrinkHouseToFit', () => {
+  it('leaves a house that already fits exactly as it was', () => {
+    const house = rectangleHouse({ x: 10, y: 8 }, 8, 6);
+    expect(shrinkHouseToFit(PLOT, house)).toBe(house);
+  });
+
+  it('shrinks an oversized preset onto a small plot rather than placing nothing', () => {
+    const small: Point[] = [
+      { x: 0, y: 0 },
+      { x: 5, y: 0 },
+      { x: 5, y: 4 },
+      { x: 0, y: 4 },
+    ];
+    const fitted = shrinkHouseToFit(small, rectangleHouse({ x: 2.5, y: 2 }, 8, 6));
+
+    expect(fitted).not.toBeNull();
+    expect(houseFitsInside(small, fitted!)).toBe(true);
+    expect(houseSize(fitted!).width).toBeLessThan(8);
+  });
+
+  it('refuses when the centre is not on the plot at all — that is not "too big"', () => {
+    expect(shrinkHouseToFit(PLOT, rectangleHouse({ x: 60, y: 8 }, 8, 6))).toBeNull();
   });
 });
 

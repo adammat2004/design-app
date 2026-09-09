@@ -131,14 +131,20 @@ describe('placing features', () => {
   });
 });
 
-describe('the house constraint', () => {
-  it('refuses a feature dropped on the house and commits nothing', () => {
+/*
+ * There is no house constraint any more. A patio that meets the back wall, a path that runs to
+ * the door, a tree whose canopy reaches over the roof line — all of them are things that are
+ * really there, and refusing them made the commonest features on a real garden the ones the
+ * screen would not accept. The house is drawn over whatever runs under it. The fence is the one
+ * edge left.
+ */
+describe('the house is not a constraint', () => {
+  it('places a feature on the house', () => {
     store().startPlacing('tree');
     store().placePointAt({ x: 10, y: 8 });
 
-    expect(store().present.features).toHaveLength(0);
-    expect(store().past).toHaveLength(0);
-    expect(store().clash).not.toBeNull();
+    expect(store().present.features).toHaveLength(1);
+    expect(store().clash).toBeNull();
   });
 
   it('allows a feature flush against a house wall', () => {
@@ -152,24 +158,33 @@ describe('the house constraint', () => {
     expect(store().present.features).toHaveLength(1);
   });
 
-  it('drops a drag that would put a feature on the house', () => {
+  it('drags a feature onto the house', () => {
     const id = placeTree();
-    const before = featureAnchor(store().present.features[0]);
 
     store().moveFeatureLive(id, { x: 10, y: 8 });
 
-    expect(featureAnchor(store().present.features[0])).toEqual(before);
+    expect(featureAnchor(store().present.features[0])).toEqual({ x: 10, y: 8 });
   });
 
-  it('refuses a nudge onto the house', () => {
+  it('nudges a feature onto the house', () => {
     const id = placeTree({ x: 4.5, y: 8 });
-    const before = featureAnchor(store().present.features[0]);
 
     // The tree's 1.5 m radius already reaches x = 6, so a step right lands it on the wall.
     store().select(id);
     store().nudgeSelection(1, 0);
 
+    expect(featureAnchor(store().present.features[0])).toEqual({ x: 5.5, y: 8 });
+  });
+
+  it('still refuses a nudge over the fence', () => {
+    const id = placeTree({ x: 1.6, y: 8 });
+    const before = featureAnchor(store().present.features[0]);
+
+    store().select(id);
+    store().nudgeSelection(-1, 0);
+
     expect(featureAnchor(store().present.features[0])).toEqual(before);
+    expect(store().clash).toContain('boundary');
   });
 });
 
@@ -544,14 +559,13 @@ describe('shape editing', () => {
     expect(corners()).toHaveLength(3);
   });
 
-  it('refuses a corner dragged onto the house', () => {
+  it('drags a corner onto the house', () => {
     const id = placePatio();
     store().setEditingShape(id);
 
-    const before = corners();
     store().moveVertexLive(id, 0, { x: 10, y: 8 });
 
-    expect(corners()).toEqual(before);
+    expect(corners()[0]).toEqual({ x: 10, y: 8 });
   });
 
   it('refuses a corner dragged over the fence', () => {
@@ -598,13 +612,26 @@ describe('resize, rotate and rounding', () => {
     expect(store().present.features[0].geometry).toMatchObject({ width: 2.5, rotation: 0 });
   });
 
-  it('refuses a resize that would reach the house', () => {
+  it('refuses a resize that would reach past the fence', () => {
     const id = placeShed();
     const before = store().present.features[0].geometry;
 
+    // 20 m wide about x = 3 runs out through the left-hand boundary; the house is beside the
+    // point now, and the fence is what stops it.
     store().resizeFeatureLive(id, { width: 20 });
 
     expect(store().present.features[0].geometry).toEqual(before);
+  });
+
+  it('resizes right up to and under the house wall', () => {
+    // Beside the house — which spans x 6-14, y 5-11 — so growing to 6 m wide runs under its wall.
+    store().startPlacing('shed');
+    store().placeRectangle({ x: 4, y: 8 }, 2, 2);
+    const id = store().present.features.at(-1)!.id;
+
+    store().resizeFeatureLive(id, { width: 6 });
+
+    expect(store().present.features[0].geometry).toMatchObject({ width: 6 });
   });
 
   it('rounds corners, undoably, and the area follows', () => {

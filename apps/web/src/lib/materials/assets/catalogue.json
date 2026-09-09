@@ -1,6 +1,6 @@
 {
-  "version": "76f88de54850",
-  "generatedAt": "2026-09-05T18:10:42.268Z",
+  "version": "5a0999207197",
+  "generatedAt": "2026-09-05T20:48:02.136Z",
   "assets": [
     {
       "id": "face-concrete-slab",
@@ -1170,6 +1170,15 @@
         "generatedAt": "2026-09-05T18:07:03.265Z",
         "promptHash": "27526a4ea326"
       }
+    },
+    {
+      "id": "tree-japanese-maple",
+      "variant": 1,
+      "file": "sprites/tree-japanese-maple-1.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#6d2c33",
+      "opaqueRadiusRatio": 1.04
     }
   ]
 }

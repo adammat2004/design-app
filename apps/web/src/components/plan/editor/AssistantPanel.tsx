@@ -48,7 +48,7 @@ export function AssistantPanel() {
     >
       <h2 className="flex items-center gap-1.5 text-xs font-semibold text-garden-ink">
         <Sparkles aria-hidden className="h-3.5 w-3.5 text-garden-green" />
-        AI Design Assistant
+        Ask Garden Studio
         <span className="rounded-full bg-garden-sage px-1.5 py-px text-[9px] font-semibold text-garden-forest">
           Beta
         </span>
@@ -60,7 +60,7 @@ export function AssistantPanel() {
         role="log"
         aria-live="polite"
         aria-label="Design assistant conversation"
-        className="mt-3 min-h-[140px] flex-1 space-y-2 overflow-y-auto pr-1"
+        className={`mt-3 space-y-2 overflow-y-auto pr-1 ${messages.length ? 'max-h-80 min-h-36' : ''}`}
       >
         {messages.length === 0 ? (
           <li

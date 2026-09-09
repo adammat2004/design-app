@@ -247,14 +247,17 @@ describe.skipIf(connection === null)('GeometryValidationService', () => {
     expect(result.violations).toEqual([]);
   });
 
-  it('flags a feature sharing interior space with the house', async () => {
+  /*
+   * _This reverses_ `feature_on_house`. A patio, path or pergola that meets the building is the
+   * ordinary case on a real garden, and the house is drawn over whatever runs under it — so the
+   * validator has nothing to say about the overlap. The house's own containment still stands.
+   */
+  it('allows a feature sharing interior space with the house', async () => {
     const result = await service.validate(
       plan({ site: { house: house(5, 2) }, features: [shed('shed-1', 5, 3, 2, 2)] }),
     );
 
-    const onHouse = result.violations.find((v) => v.code === 'feature_on_house');
-    expect(onHouse).toBeDefined();
-    expect(onHouse!.targetIds).toEqual(['shed-1']);
+    expect(result.violations).toEqual([]);
   });
 
   /* ---------------------------------------------------------------- the new geometry kinds */
@@ -373,7 +376,8 @@ describe.skipIf(connection === null)('GeometryValidationService', () => {
     expect(result.violations).toEqual([]);
   });
 
-  it('flags a layout element sitting on the house', async () => {
+  it('allows a layout element sitting on the house', async () => {
+    // A patio attached to the back wall is what step 5 is for; see the feature twin above.
     const result = await service.validate(
       plan({
         site: { house: house(5, 2) },
@@ -383,12 +387,12 @@ describe.skipIf(connection === null)('GeometryValidationService', () => {
       }),
     );
 
-    expect(result.violations.map((v) => v.code)).toContain('element_on_house');
+    expect(result.violations).toEqual([]);
   });
 
   it('names the shapes it is complaining about', async () => {
     const result = await service.validate(
-      plan({ site: { house: house(5, 2) }, features: [shed('shed-1', 5, 3, 2, 2)] }),
+      plan({ features: [shed('shed-1', 5, 3, 2, 2), shed('shed-2', 5.5, 3.5, 2, 2)] }),
     );
 
     expect(result.violations[0]!.message).toContain('shed-1');

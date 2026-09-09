@@ -38,7 +38,7 @@ import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
  * shapes — losing exactly the depth the sprites were introduced for. Enough to place a hedge below
  * a ground cover on the value ladder, not enough to make either stop looking like a photograph.
  */
-export const SPRITE_TINT = 0.3;
+export const SPRITE_TINT = 0.1;
 
 const cache = new Map<string, PatternCanvas>();
 
@@ -80,6 +80,61 @@ export function tintSprite(
    * cut-out gaining a visible square edge.
    */
   context.globalCompositeOperation = 'source-atop';
+  context.globalAlpha = strength;
+  context.fillStyle = tone;
+  context.fillRect(0, 0, width, height);
+
+  cache.set(key, canvas);
+
+  return { ...asset, image: canvas };
+}
+
+/**
+ * A tinted copy of one *texture* tile, drawn once and kept.
+ *
+ * Separate from `tintSprite` for one reason that matters: it composites `multiply` over the whole
+ * tile rather than `source-atop`, and it is baked into the tile instead of being washed over the
+ * finished surface.
+ *
+ * ## Why baking it in is the whole point
+ *
+ * The wash used to be applied per *surface*, after tiling — a `multiply` fill across the outline.
+ * That is not idempotent, and surfaces genuinely do stack: `computeZones` gives a garden one base
+ * lawn per zone and an accent lawn is drawn on top of one of them, so a measured 25% of the
+ * suburban fixture's lawn was covered twice and took the tint twice. The result was rectangular
+ * blocks of darker green with hard edges down the middle of one continuous lawn — the exact
+ * "obviously tiled grass" the material work exists to remove, and a direct contradiction of the
+ * rule that a lawn is one ground the zones merely cut up.
+ *
+ * Tinted into the tile, the tile is opaque, so drawing it twice writes the same pixels twice.
+ * Overlap becomes invisible, which is what it always should have been.
+ */
+export function tintTexture(
+  asset: LoadedAsset,
+  tone: string,
+  strength: number,
+  makeCanvas: MakeCanvas | undefined,
+): LoadedAsset {
+  if (!makeCanvas || strength <= 0) return asset;
+
+  const key = `tex:${asset.entry.id}:${asset.entry.variant}:${tone}:${strength}`;
+  const held = cache.get(key);
+  if (held) return { ...asset, image: held };
+
+  const { width, height } = asset.image;
+  if (width <= 0 || height <= 0) return asset;
+
+  const canvas = makeCanvas(width, height);
+  const context = canvas.getContext('2d');
+  if (!context) return asset;
+
+  context.drawImage(asset.image as PatternCanvas, 0, 0, width, height);
+
+  /*
+   * Multiplied rather than washed, for the reason `FACE_TINT` gives: proportional, so a pale
+   * gravel keeps its brightness while a dark slate is carried where its palette says.
+   */
+  context.globalCompositeOperation = 'multiply';
   context.globalAlpha = strength;
   context.fillStyle = tone;
   context.fillRect(0, 0, width, height);

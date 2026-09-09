@@ -55,7 +55,10 @@ export interface ShadowRequest {
  */
 export function shadowLayerKey(request: ShadowRequest): string {
   const occluders = request.occluders
-    .map((occluder) => `${round(occluder.height)}@${ring(occluder.outline)}`)
+    .map(
+      (occluder) =>
+        `${round(occluder.height)}:${round(occluder.baseHeight ?? 0)}@${ring(occluder.outline)}`,
+    )
     .join('|');
 
   const sun = [

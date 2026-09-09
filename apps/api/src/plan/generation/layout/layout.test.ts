@@ -437,7 +437,15 @@ describe('the utility notch', () => {
     for (const corner of corners) {
       expect(pointInPolygon({ x: corner.u, y: corner.v }, lawn)).toBe(false);
     }
-    // And the lawn still reaches the back border on the far side.
-    expect(Math.max(...withShed.lawn.points.map((p) => p.u))).toBeCloseTo(16 - 2.1, 1);
+    /*
+     * And the lawn still stops short of the back fence, leaving the border.
+     *
+     * Twice the border depth now, not once. The lawn used to be inset by the same `b` on every
+     * side, and a shape inset by a constant leaves an annulus by construction — so the leftover was
+     * a continuous ring of planting round the whole garden and every plan read as a lawn marooned
+     * in a thicket. A designed garden is bordered unevenly: deep at the back, a mowing strip on the
+     * side you walk down. This pins the deep end.
+     */
+    expect(Math.max(...withShed.lawn.points.map((p) => p.u))).toBeCloseTo(16 - 2 * 2.1, 1);
   });
 });

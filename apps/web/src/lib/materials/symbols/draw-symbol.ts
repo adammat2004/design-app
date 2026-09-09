@@ -1,4 +1,9 @@
-import { resolveSymbol, type DesignElement, type Point } from '@garden-studio/schema';
+import {
+  rectToPolygon,
+  resolveSymbol,
+  type DesignElement,
+  type Point,
+} from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '../../concept-colours';
 import { materialFill } from '../../material-colours';
 import { CONTACT_SHADOW_SPRITE } from '../assets/material-assets';
@@ -14,7 +19,6 @@ import {
   shiftBrightness,
 } from '../light';
 import type { PatternCanvas, PatternContext } from '../render-surface-pattern';
-import { beamLines } from './canopy';
 import { symbolSprite } from './sprites';
 import {
   facesLight,
@@ -135,18 +139,27 @@ function drawPergola(
 ): void {
   if (Math.min(shape.width, shape.depth) * pxPerMetre < MIN_STRUCTURE_DETAIL_PX) return;
 
-  context.strokeStyle = CATEGORY_COLOURS.structure.stroke;
-  context.lineWidth = 1.5;
-  context.globalAlpha = 0.55;
-  for (const [from, to] of beamLines(shape.centre, shape.width, shape.depth, shape.rotation)) {
-    const a = toPx(from);
-    const b = toPx(to);
-    context.beginPath();
-    context.moveTo(a.x, a.y);
-    context.lineTo(b.x, b.y);
-    context.stroke();
+  const radians = (shape.rotation * Math.PI) / 180;
+  const count = Math.max(2, Math.ceil(shape.width / 0.35));
+  for (let i = 0; i <= count; i += 1) {
+    const x = -shape.width / 2 + (shape.width * i) / count;
+    const centre = {
+      x: shape.centre.x + x * Math.cos(radians),
+      y: shape.centre.y + x * Math.sin(radians),
+    };
+    context.fillStyle = '#896542';
+    fillRing(
+      context,
+      rectToPolygon({ centre, width: 0.075, depth: shape.depth, rotation: shape.rotation }),
+      toPx,
+    );
+    context.fillStyle = '#cbaa7b';
+    fillRing(
+      context,
+      rectToPolygon({ centre, width: 0.035, depth: shape.depth, rotation: shape.rotation }),
+      toPx,
+    );
   }
-  context.globalAlpha = 1;
 
   context.fillStyle = POST_TONE;
   for (const post of pergolaPosts(shape)) fillRing(context, post, toPx);

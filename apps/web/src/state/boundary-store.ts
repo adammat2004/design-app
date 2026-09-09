@@ -43,6 +43,7 @@ import {
 } from '@/lib/boundary-geometry';
 import {
   clampHouseInside,
+  clampHouseSize,
   houseFitsInside,
   houseFromPoints,
   houseSize,
@@ -52,6 +53,7 @@ import {
   resizeHouse,
   rotateHouse,
   scaleHouseAbout,
+  shrinkHouseToFit,
   type HouseFootprint,
   type HouseSize,
 } from '@/lib/house';
@@ -296,31 +298,37 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
   /**
    * A house change with no history entry, for the frames of a drag. An illegal result is
    * dropped rather than clamped, so the shape simply stops at its last legal size or angle.
+   *
+   * `boundary` is null until the plot is closed — there is no fence to be inside of yet, and a
+   * half-drawn ring handed to `houseFitsInside` reports every house as illegal.
    */
-  function applyHouseLive(mutate: (house: HouseFootprint) => HouseFootprint) {
+  function applyHouseLive(
+    mutate: (house: HouseFootprint, boundary: Point[] | null) => HouseFootprint,
+  ) {
     set((state) => {
       if (!state.present.house) return state;
 
-      const next = mutate(state.present.house);
-      if (state.present.closed && !houseFitsInside(draftPolygon(state.present), next)) {
-        return state;
-      }
+      const boundary = state.present.closed ? draftPolygon(state.present) : null;
+      const next = mutate(state.present.house, boundary);
+      if (boundary && !houseFitsInside(boundary, next)) return state;
 
       return { present: { ...state.present, house: next } };
     });
   }
 
   /** Applies a house change only if the result still fits inside the plot. */
-  function commitHouse(mutate: (house: HouseFootprint, boundary: Point[]) => HouseFootprint) {
+  function commitHouse(
+    mutate: (house: HouseFootprint, boundary: Point[] | null) => HouseFootprint,
+  ) {
     commit((draft) => {
       if (!draft.house) return null;
 
-      const boundary = draftPolygon(draft);
+      const boundary = draft.closed ? draftPolygon(draft) : null;
       const next = mutate(draft.house, boundary);
 
-      // A resize or rotation has no meaningful partial version, so an impossible one is
-      // refused outright rather than half-applied.
-      if (draft.closed && !houseFitsInside(boundary, next)) return null;
+      // A rotation has no meaningful partial version, so an impossible one is refused outright
+      // rather than half-applied. A resize clamps instead — see `setHouseSize`.
+      if (boundary && !houseFitsInside(boundary, next)) return null;
 
       return { ...draft, house: next };
     });
@@ -536,8 +544,17 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
       const centre = snapped(rawCentre);
 
       commit((draft) => {
-        const house = rectangleHouse(centre, width, depth);
-        if (draft.closed && !houseFitsInside(draftPolygon(draft), house)) return null;
+        const requested = rectangleHouse(centre, width, depth);
+        const boundary = draft.closed ? draftPolygon(draft) : null;
+
+        /*
+         * Shrunk to fit rather than refused. The preset is 8 × 6 m and a small plot is a real
+         * thing, so returning null here placed nothing at all and said nothing about why — the
+         * user clicks, the canvas does not change, and there is no way to learn that the house
+         * they asked for was simply too big.
+         */
+        const house = boundary ? shrinkHouseToFit(boundary, requested) : requested;
+        if (!house) return null;
 
         // A freshly placed house means freshly computed zones, and the user almost always
         // wants all of them in scope to begin with.
@@ -593,17 +610,27 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
 
     /*
      * Live variants for dragging a corner or the rotation handle. They skip history — one
-     * entry per gesture comes from beginGesture/endGesture — and silently ignore a value
-     * that would put the house through a fence, so the shape stops at the last legal size
-     * rather than jumping.
+     * entry per gesture comes from beginGesture/endGesture.
+     *
+     * A resize *clamps* rather than refusing, exactly as a drag does: a house can legitimately
+     * be the full width of its plot, and a corner that stops a hair short of the fence with no
+     * way to close the gap is the same failure as one that freezes mid-drag. Rotation still
+     * refuses — there is no meaningful partial angle.
      */
-    resizeHouseLive: (size) => applyHouseLive((house) => resizeHouse(house, size)),
+    resizeHouseLive: (size) =>
+      applyHouseLive((house, boundary) =>
+        boundary ? clampHouseSize(boundary, house, size) : resizeHouse(house, size),
+      ),
     rotateHouseLive: (degrees) => applyHouseLive((house) => rotateHouse(house, degrees)),
 
     nudgeHouse: (dx, dy) =>
       commitHouse((house) => moveHouse(house, { x: house.centre.x + dx, y: house.centre.y + dy })),
 
-    setHouseSize: (size) => commitHouse((house) => resizeHouse(house, size)),
+    /** Typed width or depth. Clamped for the reason `clampHouseSize` gives. */
+    setHouseSize: (size) =>
+      commitHouse((house, boundary) =>
+        boundary ? clampHouseSize(boundary, house, size) : resizeHouse(house, size),
+      ),
 
     setHouseRotation: (degrees) => {
       if (!Number.isFinite(degrees)) return;
@@ -778,7 +805,10 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
 
         const next = setBoundaryStyle(draft.boundaryStyles, edgeVertexId, kind);
         // `commit` treats null as "nothing changed", which keeps a no-op tap off the undo stack.
-        if (next.length === draft.boundaryStyles.length && kindForEdge(draft, edgeVertexId) === kind)
+        if (
+          next.length === draft.boundaryStyles.length &&
+          kindForEdge(draft, edgeVertexId) === kind
+        )
           return null;
 
         return { ...draft, boundaryStyles: next };

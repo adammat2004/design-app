@@ -10,6 +10,7 @@ import {
   elementArea,
   findMaterial,
   formatArea,
+  geometryClearsHouse,
   geometryIsLegal,
   geometryOutline,
   housePolygon,
@@ -39,7 +40,9 @@ import { PlacementService } from '../generation/placement.service.js';
  *
  *  - **Nothing illegal is proposed.** Every produced element goes through the shared
  *    `geometryIsLegal`, the same predicate the canvas and the PostGIS validator use. The editor
- *    store re-checks on apply, so there are now two courtesies and one guarantee.
+ *    store re-checks on apply, so there are now two courtesies and one guarantee. The house is
+ *    not part of that rule — a patio may be attached to the wall — but a newly *added* element
+ *    is still sampled clear of the building; see the `add` branch.
  *  - **The planner writes the facts, the model writes the prose.** Every `before`/`after` string is
  *    measured off geometry, and every "could not" reason is written here. The model is never in a
  *    position to claim an outcome.
@@ -438,8 +441,17 @@ export class PlannerService {
         seed: 7,
       });
 
-      const at = candidates.find((point) =>
-        geometryIsLegal(geometryFor(intent.footprint, point), context.house, context.boundary),
+      /*
+       * The house is not part of `geometryIsLegal` any more — a patio may be attached to the
+       * wall — but a *new* element is still sampled clear of it: `obstacles` carries the house
+       * above, and `geometryClearsHouse` is the TypeScript half of the same rule. Growing or
+       * moving an existing element towards the wall is allowed; conjuring one under the
+       * building is not something a sentence ever meant.
+       */
+      const at = candidates.find(
+        (point) =>
+          geometryIsLegal(geometryFor(intent.footprint, point), context.boundary) &&
+          geometryClearsHouse(geometryFor(intent.footprint, point), context.house),
       );
 
       if (!at) continue;
@@ -578,7 +590,7 @@ function largestLegalFactor(
   context: Context,
 ): number | null {
   const legal = (factor: number) =>
-    geometryIsLegal(scaled(element, factor).shape, context.house, context.boundary) &&
+    geometryIsLegal(scaled(element, factor).shape, context.boundary) &&
     clearOfOthers(scaled(element, factor), element, context);
 
   if (legal(requested)) return requested;
@@ -611,10 +623,7 @@ function firstLegalStep(
     const dy = direction.y * fraction;
     const moved: DesignElement = { ...element, shape: translateGeometry(element.shape, dx, dy) };
 
-    if (
-      geometryIsLegal(moved.shape, context.house, context.boundary) &&
-      clearOfOthers(moved, element, context)
-    ) {
+    if (geometryIsLegal(moved.shape, context.boundary) && clearOfOthers(moved, element, context)) {
       return moved;
     }
   }

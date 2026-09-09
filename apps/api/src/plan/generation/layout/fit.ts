@@ -1,4 +1,5 @@
 import {
+  geometryClearsHouse,
   geometryIsLegal,
   geometryOutline,
   polygonContainsPolygon,
@@ -120,7 +121,9 @@ export function geometryAt(
 
 /** Legal, inside the room, and clear of everything placed — the three checks `pick` made. */
 export function isPlaceable(geometry: PlanGeometry, context: FitContext): boolean {
-  if (!geometryIsLegal(geometry, context.houseRing, context.boundary)) return false;
+  if (!geometryIsLegal(geometry, context.boundary)) return false;
+  // The house is the generator's own rule, not a legality one — see `placeable` in concepts.service.
+  if (!geometryClearsHouse(geometry, context.houseRing)) return false;
 
   const outline = geometryOutline(geometry);
   if (context.room.length >= 3 && !polygonContainsPolygon(context.room, outline)) return false;

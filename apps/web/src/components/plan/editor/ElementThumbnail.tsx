@@ -1,5 +1,6 @@
 'use client';
 
+import { CatalogueThumbnail } from './CatalogueThumbnail';
 import { boundingBox } from '@/lib/boundary-geometry';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { elementOutline, type DesignElement } from '@/lib/concepts';
@@ -47,34 +48,14 @@ export function elementThumbnailGeometry(element: DesignElement) {
 }
 
 export function ElementThumbnail({ element }: { element: DesignElement }) {
-  const plan = elementThumbnailGeometry(element);
-
-  if (!plan) {
-    return (
-      <span
-        data-testid="element-thumbnail-empty"
-        aria-hidden
-        style={{ background: materialFill(element) }}
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-garden-line"
-      />
-    );
-  }
-
   return (
-    <svg
+    <span
       data-testid="element-thumbnail"
       role="img"
-      aria-label={`Shape of ${element.name ?? CATEGORY_COLOURS[element.category].label}`}
-      viewBox={`0 0 ${VIEW} ${VIEW}`}
-      className="h-12 w-12 shrink-0 rounded-lg border border-garden-line bg-garden-canvas"
+      aria-label={element.name ?? CATEGORY_COLOURS[element.category].label}
+      className="block h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-garden-line bg-[#f6f7f4] p-1.5"
     >
-      <polygon
-        points={plan.points}
-        fill={plan.fill}
-        stroke={plan.stroke}
-        strokeWidth={1}
-        strokeLinejoin="round"
-      />
-    </svg>
+      <CatalogueThumbnail element={element} />
+    </span>
   );
 }

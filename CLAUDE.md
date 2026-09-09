@@ -96,7 +96,16 @@ house by `computeZones`, so storing them could only create something stale.
   layout templates — "Terrace and lawn", "Sweeping lawn", "Formal axis" — and the brief's style
   picks the recommended one. See "The layout grammar" below.
 
-**Not built yet:** printing at true scale, the 3D preview, and the optional AI photo-render. React Three Fiber is installed but unused. There is also **no evaluation of any kind** — no benchmark over the generator, no user
+- **Visualise is a live WebGL view, not a picture of one**: `buildRenderScene` resolves the plan
+  once and two backends draw it — Canvas2D for thumbnails, exports and the judging sheets, PixiJS
+  for the Visualise tab, which pans, zooms and answers to a planting-maturity control and a
+  time-of-day slider. Planting there is lifted out of each bed's raster and drawn as sprites above
+  it, so foliage overlaps its bed's edge and its neighbours; the house gets a derived roof. See
+  "The render scene, and the two views" and "PixiJS, and where it earns its place" below.
+
+**Not built yet:** printing at true scale, a navigable 3D preview, and the optional AI
+photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
+draws the same top-down scene rather than a camera. There is also **no evaluation of any kind** — no benchmark over the generator, no user
 study, no measured numbers beyond the generation timings quoted above. That is the largest
 outstanding gap in the project and it is not a feature.
 
@@ -431,8 +440,34 @@ test pinning that, because the generator's placer builds candidate boxes in SQL.
 
 **There is deliberately no `elements_overlap` violation.** A concept stacks a pergola on a patio
 on a base fill by design, so flagging overlapping layout elements would flag every correct
-concept. Layout elements are checked for containment and house clearance only — exactly what
+concept. Layout elements are checked for containment and nothing else — exactly what
 `geometryIsLegal` checks on the client.
+
+**A thing may sit on the house, and _this reverses_ "nothing sits on the house".** A patio against
+the back wall, a path to the door, a pergola off the building: those are the commonest things in a
+real garden and they were the ones the editor would not accept. `geometryIsLegal` is containment
+alone now; `feature_on_house` and `element_on_house` are gone from `ViolationCodeSchema` and from
+the validator. Two things keep it safe. The house is painted **opaquely and last** in every
+renderer — the composer, both Konva canvases, and now step 2's as well, which had it underneath
+and would have lost the building under the first patio placed against it. And the **generator is
+unchanged**: `geometryClearsHouse` survives as the generator's own composition rule, asked
+explicitly by `placeable` in `concepts.service.ts`, by `isPlaceable` in `layout/fit.ts`, by
+`furnish`, and by the assistant's `add` — so a composed concept still never lays ground under the
+building, and the whole concept suite passes untouched. Only what a person places by hand, or asks
+the assistant to move or grow, may overlap. One accepted consequence: an element run under the
+house counts its whole area in step 6's schedule. `groundCoverArea` is base fills only, and those
+come from `computeZones`, which excludes the house, so the ground total is unaffected.
+
+**The house still may not cross the fence — it may reach it.** A house really can be the full width
+of its plot, and `houseFitsInside` always allowed flush (on-edge counts as inside, matching
+`ST_Contains`); what was missing was any way to *get* there. The typed width and depth refused
+outright and in silence, leaving the rejected number in the box beside a house that had not moved.
+`clampHouseSize` answers with the largest house that fits — the binary search `clampHouseInside`
+already used for a drag — and `readMetres` on the two `LengthInput`s settles the field on what was
+actually applied. `shrinkHouseToFit` does the same for placing a preset on a plot too small for it,
+and still returns null for the case shrinking cannot rescue: a centre that is not on the plot.
+Note `resizeHouse` scales about the footprint's own centre, so an off-centre house stops when its
+nearest wall meets a fence; recentring would move a building the user placed deliberately.
 
 **Nothing in generation reads the brief for a design decision — it reads `DesignConstraints`.**
 `resolveConstraints` (`apps/api/src/plan/generation/constraints.ts`) is called once per concept and
@@ -955,6 +990,168 @@ planting changes where the border turns a corner. Two to four `specimen` shrubs 
 accent beds, placed by `candidates` with no obstacles and the shrub's own radius — which is
 exactly "somewhere fully inside this bed". Not done from P7: planting drifts by wedge-splitting a
 band in PostGIS, and formal symmetry.
+
+## The render scene, and the two views
+
+**`buildRenderScene` is the seam, and it exists because there were two drawings of one garden.**
+`ElementDrawing.tsx` builds Konva nodes for the editor and the concept cards; `drawPlan` paints
+the same picture into a 2D context for thumbnails, the PNG and the judging sheets. They shared the
+geometry helpers and the surface painter but not the decisions _between_ them — which is how one
+of them came to draw house openings and the other not to. `apps/web/src/lib/render/build-scene.ts`
+makes every decision that is about the picture rather than about the paint, once, and leaves the
+backends putting down pixels. It is pure: no canvas, no image, no React, so the whole of it is
+testable in Node against plain data.
+
+**It has no authority, and that is the load-bearing part.** Every outline on a `RenderScene` came
+from `geometryOutline`, every height from `heightFor`. `quantities.ts` cannot see a `RenderPlant`.
+Delete `lib/render/` and the plan is dimensionally identical and merely plainer, exactly as
+`lib/materials/` already promised.
+
+**One axis, `view: 'plan' | 'visualise'`, not a bag of flags.** Every difference between the two
+views moves together and a half-visualised plan is a state nobody wants. Prompt §12's rule is kept
+literally: 2D Plan prioritises editability, Visualise prioritises presentation, and switching
+between them changes nothing about the design.
+
+**Planting was clipped to its own bed, and that single fact was most of the visual gap.** The
+painter drew a bed's plants _inside_ `clip(outline)`, so by construction no plant could cross its
+bed's edge, no foliage could spill onto the lawn beside it, nothing could join a height order with
+anything outside its own surface, and no plant could shadow anything but its own bed. Beds read as
+cut-outs because they were. `render/plants.ts` lifts the placements out of the raster and emits
+them as `RenderPlant[]` composited above the ground — the _same_ `samplePlanting` call, seeded the
+same way, so plants land exactly where they always did and are simply drawn as things rather than
+as texture. Measured coverage went from a scatter on mulch to 93% at mature.
+
+**A plant's identity is `bedId:role:col,row`, and it is stable by construction.** Cells are
+indexed from the world origin and every draw is spatially hashed, so editing one bed cannot
+reshuffle another. There is a test asserting a neighbouring bed's plants are deep-equal across an
+edit, which is the prompt's explicit requirement and was already true — it only needed saying.
+
+**Maturity may scale the crown but must never touch `spread`.** `cellSize` is derived from
+`PlantingLayer.spread`, so shrinking it renumbers every world cell and slides the whole bed
+sideways as the user drags the slider. The crown multiplier is applied to `placement.spread`
+_after_ sampling; density goes in as `share`.
+
+**Thinning is monotone, and that is a property rather than a hope.** In `samplePlanting` the
+acceptance draw sits at a _fixed position_ in each cell's sequence and `chance` scales linearly
+with `share`, so lowering it can only remove plants: every survivor keeps the identical position,
+spread, rotation and variant, because those draws come afterwards. `year-1 ⊆ year-3 ⊆ mature`
+positionally, and there is a test on it. A young garden is the mature one with plants taken out,
+not a different garden that happens to be sparser.
+
+**`INSTANCE_DENSITY` is a presentation gain and is deliberately not folded into
+`PlantingScheme.share`.** Those layers are handed to `samplePlanting` by the _generator_ too, to
+place structural shrubs, so moving them would move real `DesignElement`s in generated concepts.
+The scheme stays exactly as authored and only the picture gets denser. Saturating is harmless: the
+sampler places at most one unit per cell.
+
+**`maturity` is a view preference in `ephemeralState()`, beside `gridVisible`** — same five edit
+points, same trap. It changes how the picture is drawn and nothing about the design: no geometry
+moves, no area changes, and the schedule cannot see it.
+
+**The roof is derived, never stored, and never overhangs.** There is no roof form, pitch or storey
+count anywhere in `PlanDocument` and none was added. `roofFor` reads the footprint: a hipped roof
+is the outline and its own `insetPolygon` by half the span, the planes are the quads between them,
+and gable-versus-hipped is the aspect ratio. `insetPolygon` returning `null` _is_ the flat roof, so
+the degenerate case answers itself. **No eaves overhang**, deliberately: it would look slightly
+better and would put drawn geometry outside the outline `houseFitsInside` measures, and a
+presentation flourish that can make a legal house look illegal is not worth a millimetre of
+shading. Note the ridge ring must be filled as a cap — held short of the true half-span so it stays
+a line, it leaves a sliver no slope covers, and unfilled the roof reads as a frame.
+
+## PixiJS, and where it earns its place
+
+**Pixi is a compositor, not a second painter.** Every surface it draws is a raster the existing
+Canvas2D painter produced, through the same `getSurfacePattern` cache the Konva canvas uses,
+uploaded as a texture. The two thousand lines of slab, board, scatter, hedge and water painting are
+reused unchanged, so there is no second implementation of a material to drift from the first. That
+is what keeps `render/pixi/renderer.ts` small.
+
+**What WebGL is actually for here is the plant sprites.** A mature garden is a few thousand of
+them and Visualise is a view you pan, zoom and drag a maturity slider through; Pixi batches
+same-texture sprites so the count stops mattering. A one-shot still never needed this.
+
+**Visualise is two canvases, and the split is a division of labour rather than a compromise.**
+WebGL underneath for the ground, the shadow layer and the planting; a 2D canvas over it for the
+objects, the house and the fence, drawn by `drawOverlay` — the same function `drawScene` calls.
+Pixi earns nothing on the twenty-odd pergolas, benches and trees on a plan, and writing those a
+second time in WebGL would mean two sets of drawing rules that can disagree. Both canvases draw
+from one scene and one transform.
+
+**Determinism lives in the scene because Pixi cannot be pixel-tested.** Pixi v8 has no supported
+Node backend (`@pixi/node` died with v7), and the whole renderer suite runs through
+`@napi-rs/canvas` in Node. So nothing in `render/pixi/` runs under Vitest, and that is handled
+rather than ignored: `buildRenderScene` is pure and asserted on its own, the Canvas2D backend stays
+the reference for the judging sheets, and the WebGL backend is left with nothing to be wrong about
+except paint. Do not try to make the Pixi output byte-testable; make the scene testable instead.
+
+**Three Pixi traps, and all three present identically: "this browser has no WebGL".** That shared
+symptom is the thing to know. A dead WebGL context reports "Could not retrieve shader source",
+`getProgramInfoLog() null` and every vertex attribute missing, whatever actually killed it — so
+the error says nothing about the cause, and the first two below only happen in development, which
+makes them look like a bundler problem. They are not. Pixi bundles fine under both Turbopack and
+webpack, and no alias or transpile setting is needed; if you find yourself editing
+`next.config.ts` to fix a blank Visualise, the cause is on this list instead.
+
+- **The canvas is created in the mount effect, not rendered in JSX.** A canvas hands out one
+  drawing context for its lifetime. React deliberately mounts, cleans up and mounts again in
+  development, so a JSX-owned canvas is handed to a second Pixi `Application` after the first has
+  destroyed its context. A fresh element per mount removes the question entirely. **This is the
+  one that cost the most**, because it looks exactly like Turbopack mangling the GLSL — it
+  reproduces under `next dev` and not under `next build`, which is a bundler-shaped fingerprint
+  for a lifecycle-shaped bug.
+- **`app.destroy({ removeView: false })`.** Pixi's default removes the canvas from the DOM. Even
+  with the canvas created imperatively it is ours to remove, and removing it from under React's
+  wrapper on the first of a double mount leaves the second drawing into nothing.
+- **Never init at zero size.** A context created at 0 x 0 comes up and then fails the same way.
+  The wrapper is waited for. The usual cause is a parent that is a block rather than a flex
+  container, so `flex-1` resolves to no height at all.
+
+**The two layers take their viewport from one measurement, and it must be CSS pixels.** The WebGL
+canvas and the 2D overlay drawn over it each centre the view on `view.centre`, so they have to
+agree about where the middle of the viewport is. Deriving it inside the Pixi backend as
+`renderer.width / renderer.resolution` is a guess about which of the two Pixi's `width` already
+is — and **the guess only shows on a display where they differ**. On a 1x screen the layers line
+up perfectly; on a 2x one the ground and planting sit a fraction of the viewport up and left of
+the fence, house and trees, and the garden appears twice, in two halves. Both now measure the same
+wrapper element and are handed the same `ViewSize`, so they cannot disagree whatever the device
+pixel ratio is. The lesson generalises: **anything that depends on device pixel ratio has to be
+tested at a ratio other than 1**, because 1 is the value that hides the bug, and it is the value a
+headless browser uses by default.
+
+**One mask, redrawn — never a fresh `Graphics` per render.** Assigning a new mask leaves the
+previous one behind as an ordinary child of `world`, and a mask is an opaque filled polygon, so
+from the second render onwards the garden is covered by a white rectangle the size of the plot.
+Unlike the three above this one draws happily; it just draws a white rectangle, and it appears on
+the _second_ render, so it shows up when a control is touched rather than on arrival.
+
+## Materials: idempotence, and why it matters
+
+**A tint over a finished surface is not idempotent, and surfaces of one material overlap.**
+`computeZones` gives a garden one base lawn per zone and an accent lawn is drawn over one of them
+— a measured quarter of the suburban fixture's lawn is covered twice. While the palette was
+multiplied over the _outline_ rather than into the tile, that second draw tinted again and the
+overlap showed as hard-edged blocks of darker green across one continuous lawn. `tintTexture`
+bakes it into the tile instead: the tile is opaque, so drawing it twice writes the same pixels.
+There is a test that stacks two lawns and demands zero differing pixels. **Any new surface
+treatment has to be idempotent or baked** — this is the second time the lesson has been paid for,
+after `tintSprites`.
+
+**Texture variants are chosen from the world cell, for the same reason.** A 1.5 m turf tile across
+a 60 m² lawn is forty copies of one photograph and the eye finds the grid immediately. Choosing per
+tile from several variants breaks it with no overlay — and keying the choice on the _ground_ rather
+than on the surface means two lawns covering the same patch pick the same variant, so the overlap
+stays invisible. Every texture family ships one variant today, so this draws exactly what it always
+did; it is the drop-in point for a richer pack.
+
+**The export is drawn at 2x and resampled down.** Everything here has a size floor — `lod.ts` stops
+drawing a slab under three pixels — so detail does not fade at small scales, it stops. Drawing
+large puts every floor twice as far away and the downsample averages the units into the pixels they
+should have occupied, which is a genuinely different picture from drawing at the final size. Two,
+not four: at 4x a 2400 px plan is a 368 MB canvas that Safari refuses, for a gain that is below the
+floors again. The finishing pass is a small contrast and saturation lift done as arithmetic on the
+pixels rather than through `context.filter`, which is unsupported in places and fails silently
+where it is — a filter that worked on one browser and not another would make the export quietly
+differ. It is not a look and must not become one.
 
 ## Traps already hit
 

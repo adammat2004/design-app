@@ -41,6 +41,7 @@ import { GateMarks, gateGaps } from '../GateMarks';
 import { HouseOpenings } from '../HouseOpenings';
 import { HouseShape } from '../HouseShape';
 import { ShapeHandles } from '../ShapeHandles';
+import { scenePasses, exclusionMap, type ElementPass } from '@/lib/materials/scene-passes';
 import { ElementDrawing } from '../ElementDrawing';
 import { ShadowLayer } from '../ShadowLayer';
 import {
@@ -92,10 +93,11 @@ export function EditorCanvas() {
    * Found rather than assumed. `-1` means the plan is all ground and no objects, in which case
    * the shadows go last and nothing is drawn over them — which is correct, not a fallback.
    */
-  const firstFeatureIndex = useMemo(() => {
-    const index = elements.findIndex((element) => element.role === 'feature');
-    return index === -1 ? elements.length : index;
-  }, [elements]);
+  const passes = useMemo(() => scenePasses(elements), [elements]);
+  const gestureSnapshot = usePlanEditorStore((state) => state.gestureSnapshot);
+  const settledElements = gestureSnapshot?.elements ?? elements;
+  // Hold neighbouring beds and global shadows still during a gesture; refresh on release.
+  const exclusions = useMemo(() => exclusionMap(settledElements), [settledElements]);
 
   const selected = usePlanEditorStore(selectedElement);
   const selectedId = usePlanEditorStore((state) => state.selectedId);
@@ -220,9 +222,9 @@ export function EditorCanvas() {
    *
    * Every zone is covered by a base fill, so a click almost anywhere on the garden lands on a
    * shape — and a shape's own handler cancels the bubble to claim the selection. Leave them
-   * listening and the stage's placement handler is unreachable everywhere except on top of the
-   * house, which is the one place a new element may not go. Full coverage is what makes this
-   * screen's ground look finished; it is also what makes this necessary.
+   * listening and the stage's placement handler is reachable only over the house, which is now
+   * a perfectly ordinary place to put a patio. Full coverage is what makes this screen's ground
+   * look finished; it is also what makes this necessary.
    */
   const elementsListening = !panActive && mode === 'select' && !placingCategory;
 
@@ -314,12 +316,14 @@ export function EditorCanvas() {
               the same array preserves the ordering guarantee above; two Konva layers would not.
             */}
             <Layer>
-              {elements.slice(0, firstFeatureIndex).map((element) => (
+              {passes.ground.map((element) => (
                 <ElementShape
-                  key={element.id}
+                  key={`ground-${element.id}`}
+                  part="ground"
+                  exclusions={exclusions.get(element.id)}
                   element={element}
                   transform={transform}
-                  selected={element.id === selectedId}
+                  selected={element.id === selectedId && element.symbol !== 'pergola'}
                   draggable={elementsDraggable && !isLocked(element)}
                   listening={elementsListening}
                   light={light}
@@ -327,16 +331,17 @@ export function EditorCanvas() {
               ))}
 
               <ShadowLayer
-                elements={elements}
+                elements={settledElements}
                 house={boundaryDraft.house}
                 boundary={polygon}
                 site={boundaryDraft}
                 transform={transform}
               />
 
-              {elements.slice(firstFeatureIndex).map((element) => (
+              {passes.objects.map((element) => (
                 <ElementShape
-                  key={element.id}
+                  key={`object-${element.id}`}
+                  part={element.symbol === 'pergola' ? 'object' : 'all'}
                   element={element}
                   transform={transform}
                   selected={element.id === selectedId}
@@ -526,6 +531,20 @@ export function EditorCanvas() {
           </p>
         ) : null}
 
+        <button
+          type="button"
+          className="absolute right-4 top-4 rounded-lg border border-garden-line bg-white px-3 py-2 text-xs text-garden-ink shadow-sm"
+          onClick={() => {
+            const features = elements.filter(
+              (element) => !element.hidden && element.role === 'feature' && element.zone === 'back',
+            );
+            fitToShape(size.width, size.height, {
+              polygon: features.length ? features.flatMap(elementOutline) : polygon,
+            });
+          }}
+        >
+          Fit garden
+        </button>
         <CanvasChrome
           transform={transform}
           unit={unit}
@@ -603,6 +622,8 @@ function ElementShape({
   draggable,
   listening,
   light,
+  part,
+  exclusions,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
@@ -611,6 +632,8 @@ function ElementShape({
   listening: boolean;
   /** Unit vector towards the light, resolved once per canvas so every element shares one sun. */
   light?: Point;
+  part?: ElementPass;
+  exclusions?: Point[][];
 }) {
   /*
    * The one element whose outline is changing this frame.
@@ -673,6 +696,8 @@ function ElementShape({
         offsetPx={anchor}
         light={light}
         interacting={interacting}
+        part={part}
+        exclusions={exclusions}
       />
 
       {/*

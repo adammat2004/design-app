@@ -206,7 +206,7 @@
           },
           {
             "id": "c2-0-e6",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -232,12 +232,11 @@
             },
             "zone": "right",
             "fillKind": "base",
-            "material": "shrubs",
-            "plantingStyle": "low-maintenance"
+            "material": "decorative-gravel"
           },
           {
             "id": "c2-0-e7",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -263,12 +262,11 @@
             },
             "zone": "back",
             "fillKind": "base",
-            "material": "shrubs",
-            "plantingStyle": "low-maintenance"
+            "material": "decorative-gravel"
           },
           {
             "id": "c2-0-e8",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -294,6 +292,116 @@
             },
             "zone": "left",
             "fillKind": "base",
+            "material": "decorative-gravel"
+          },
+          {
+            "id": "c2-0-e11",
+            "category": "planting-bed",
+            "role": "fill",
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 8.5,
+                  "y": 7.710438
+                },
+                {
+                  "x": 8.636111,
+                  "y": 7.94516
+                },
+                {
+                  "x": 8.636111,
+                  "y": 9.252778
+                },
+                {
+                  "x": 8.544139425,
+                  "y": 9.436721149
+                },
+                {
+                  "x": 8.7,
+                  "y": 10.1
+                },
+                {
+                  "x": 8.5,
+                  "y": 10.829338327
+                },
+                {
+                  "x": 8.5,
+                  "y": 12
+                },
+                {
+                  "x": 9,
+                  "y": 12
+                },
+                {
+                  "x": 9,
+                  "y": 0
+                },
+                {
+                  "x": 8.5,
+                  "y": 0
+                }
+              ],
+              "cornerRadius": 0
+            },
+            "zone": "left",
+            "fillKind": "accent",
+            "material": "shrubs",
+            "plantingStyle": "low-maintenance"
+          },
+          {
+            "id": "c2-0-e10",
+            "category": "planting-bed",
+            "role": "fill",
+            "name": "Flowering border",
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 0.15,
+                  "y": 10.752
+                },
+                {
+                  "x": 1.0284,
+                  "y": 10.752
+                },
+                {
+                  "x": 1.0284,
+                  "y": 10.1725
+                },
+                {
+                  "x": 1.9617,
+                  "y": 9.593
+                },
+                {
+                  "x": 1.9617,
+                  "y": 8.434
+                },
+                {
+                  "x": 1.0284,
+                  "y": 7.8545
+                },
+                {
+                  "x": 1.0284,
+                  "y": 7.375
+                },
+                {
+                  "x": 0.5,
+                  "y": 7.375
+                },
+                {
+                  "x": 0.5,
+                  "y": 7.275
+                },
+                {
+                  "x": 0.15,
+                  "y": 7.275
+                }
+              ],
+              "cornerRadius": 0
+            },
+            "zone": "back",
+            "fillKind": "accent",
             "material": "shrubs",
             "plantingStyle": "low-maintenance"
           },
@@ -305,23 +413,51 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 7.8,
-                  "y": 7.597937843791604
+                  "x": 1.211779608,
+                  "y": 7.968363156
                 },
                 {
-                  "x": 7.8,
-                  "y": 10.8
+                  "x": 1.9617,
+                  "y": 8.434
                 },
                 {
-                  "x": 1.6799999999999997,
-                  "y": 10.8
+                  "x": 1.950426316,
+                  "y": 9.6
                 },
                 {
-                  "x": 1.6799999999999997,
-                  "y": 7.597937843791604
+                  "x": 8.15,
+                  "y": 9.6
+                },
+                {
+                  "x": 8.525,
+                  "y": 9.475
+                },
+                {
+                  "x": 8.636111,
+                  "y": 9.252778
+                },
+                {
+                  "x": 8.636111,
+                  "y": 7.94516
+                },
+                {
+                  "x": 8.525,
+                  "y": 7.722938
+                },
+                {
+                  "x": 8.302778,
+                  "y": 7.611827
+                },
+                {
+                  "x": 1.7,
+                  "y": 7.597938
+                },
+                {
+                  "x": 1.325,
+                  "y": 7.722938
                 }
               ],
-              "cornerRadius": 0.5
+              "cornerRadius": 0
             },
             "zone": "back",
             "fillKind": "accent",
@@ -427,7 +563,7 @@
         "elements": [
           {
             "id": "c2-1-e5",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -453,12 +589,11 @@
             },
             "zone": "front",
             "fillKind": "base",
-            "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
+            "material": "bark-mulch"
           },
           {
             "id": "c2-1-e6",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -484,12 +619,11 @@
             },
             "zone": "right",
             "fillKind": "base",
-            "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
+            "material": "bark-mulch"
           },
           {
             "id": "c2-1-e7",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -515,12 +649,11 @@
             },
             "zone": "back",
             "fillKind": "base",
-            "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
+            "material": "bark-mulch"
           },
           {
             "id": "c2-1-e8",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -546,67 +679,7 @@
             },
             "zone": "left",
             "fillKind": "base",
-            "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-1-e10",
-            "category": "planting-bed",
-            "role": "fill",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 4.503204794,
-                  "y": 7.525192744
-                },
-                {
-                  "x": 5.265848,
-                  "y": 7.57106
-                },
-                {
-                  "x": 5.910976,
-                  "y": 7.777486
-                },
-                {
-                  "x": 6.41521,
-                  "y": 8.033808
-                },
-                {
-                  "x": 7.010314005,
-                  "y": 8.517839705
-                },
-                {
-                  "x": 7.712293,
-                  "y": 8.621793
-                },
-                {
-                  "x": 8.231371,
-                  "y": 8.968629
-                },
-                {
-                  "x": 8.393720623,
-                  "y": 9.211602964
-                },
-                {
-                  "x": 8.5,
-                  "y": 9.211602964
-                },
-                {
-                  "x": 8.5,
-                  "y": 7.375
-                },
-                {
-                  "x": 4.503204794,
-                  "y": 7.375
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
+            "material": "bark-mulch"
           },
           {
             "id": "c2-1-e11",
@@ -616,55 +689,99 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 0.5,
-                  "y": 9.211602964
+                  "x": 8.5,
+                  "y": 9.370661673
                 },
                 {
-                  "x": 0.606279377,
-                  "y": 9.211602964
+                  "x": 8.7,
+                  "y": 10.1
                 },
                 {
-                  "x": 0.768629,
-                  "y": 8.968629
+                  "x": 8.5,
+                  "y": 10.829338327
                 },
                 {
-                  "x": 1.287707,
-                  "y": 8.621793
+                  "x": 8.5,
+                  "y": 12
                 },
                 {
-                  "x": 1.467719749,
-                  "y": 8.585986135
+                  "x": 9,
+                  "y": 12
                 },
                 {
-                  "x": 1.74151,
-                  "y": 8.131701
+                  "x": 9,
+                  "y": 0
                 },
                 {
-                  "x": 2.216004,
-                  "y": 7.809449
+                  "x": 8.5,
+                  "y": 0
+                }
+              ],
+              "cornerRadius": 0
+            },
+            "zone": "left",
+            "fillKind": "accent",
+            "material": "ground-cover",
+            "plantingStyle": "low-maintenance"
+          },
+          {
+            "id": "c2-1-e10",
+            "category": "planting-bed",
+            "role": "fill",
+            "name": "Flowering border",
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 0.15,
+                  "y": 10.752
                 },
                 {
-                  "x": 2.883218,
-                  "y": 7.570147
+                  "x": 1.1382,
+                  "y": 10.752
                 },
                 {
-                  "x": 4.503204794,
-                  "y": 7.525192744
+                  "x": 1.248292,
+                  "y": 10.4043
                 },
                 {
-                  "x": 4.503204794,
+                  "x": 2.053479,
+                  "y": 9.53505
+                },
+                {
+                  "x": 2.2911,
+                  "y": 9.0135
+                },
+                {
+                  "x": 2.181008,
+                  "y": 8.6658
+                },
+                {
+                  "x": 1.375821,
+                  "y": 7.79655
+                },
+                {
+                  "x": 1.183760541,
                   "y": 7.375
                 },
                 {
                   "x": 0.5,
                   "y": 7.375
+                },
+                {
+                  "x": 0.5,
+                  "y": 7.275
+                },
+                {
+                  "x": 0.15,
+                  "y": 7.275
                 }
               ],
               "cornerRadius": 0
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "ornamental-grasses",
+            "material": "ground-cover",
             "plantingStyle": "low-maintenance"
           },
           {
@@ -675,116 +792,100 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 4.5,
-                  "y": 10.947172991188324
+                  "x": 2.181008,
+                  "y": 8.6658
                 },
                 {
-                  "x": 3.734151989656529,
-                  "y": 10.82687761038088
+                  "x": 2.2911,
+                  "y": 9.0135
                 },
                 {
-                  "x": 3.089024294528736,
-                  "y": 10.620452244795148
+                  "x": 2.053479,
+                  "y": 9.53505
                 },
                 {
-                  "x": 2.584790064098897,
-                  "y": 10.364130107064591
+                  "x": 1.861622087,
+                  "y": 9.742171602
                 },
                 {
-                  "x": 2.2039522356669856,
-                  "y": 10.087316536684803
+                  "x": 1.861622087,
+                  "y": 9.742171602
                 },
                 {
-                  "x": 1.9108880510076287,
-                  "y": 9.803892121947431
+                  "x": 2.203952,
+                  "y": 10.087317
                 },
                 {
-                  "x": 1.6775114995565494,
-                  "y": 9.511516669282953
+                  "x": 3.089024,
+                  "y": 10.620452
                 },
                 {
-                  "x": 1.5033488091290295,
-                  "y": 9.198968921895801
-                },
-                {
-                  "x": 1.4208751503366819,
-                  "y": 8.858002595359887
-                },
-                {
-                  "x": 1.4835267142988604,
-                  "y": 8.494196510039785
-                },
-                {
-                  "x": 1.741509513628516,
-                  "y": 8.131700861512872
-                },
-                {
-                  "x": 2.2160042993908746,
-                  "y": 7.809448594355288
-                },
-                {
-                  "x": 2.883217921710135,
-                  "y": 7.570146574253762
-                },
-                {
-                  "x": 3.675576417655782,
-                  "y": 7.525
+                  "x": 3.734152,
+                  "y": 10.826878
                 },
                 {
                   "x": 4.5,
+                  "y": 10.947173
+                },
+                {
+                  "x": 5.324424,
+                  "y": 10.951388
+                },
+                {
+                  "x": 6.116782,
+                  "y": 10.827791
+                },
+                {
+                  "x": 6.783996,
+                  "y": 10.588489
+                },
+                {
+                  "x": 7.25849,
+                  "y": 10.266237
+                },
+                {
+                  "x": 7.516473,
+                  "y": 9.903741
+                },
+                {
+                  "x": 7.579125,
+                  "y": 9.539935
+                },
+                {
+                  "x": 7.496651,
+                  "y": 9.198969
+                },
+                {
+                  "x": 7.322489,
+                  "y": 8.886421
+                },
+                {
+                  "x": 6.796048,
+                  "y": 8.310621
+                },
+                {
+                  "x": 5.910976,
+                  "y": 7.777486
+                },
+                {
+                  "x": 5.265848,
+                  "y": 7.57106
+                },
+                {
+                  "x": 4.5,
                   "y": 7.525
                 },
                 {
-                  "x": 5.265848010343471,
-                  "y": 7.5710602334107255
+                  "x": 2.883218,
+                  "y": 7.570147
                 },
                 {
-                  "x": 5.910975705471264,
-                  "y": 7.7774855989964555
+                  "x": 2.216004,
+                  "y": 7.809449
                 },
                 {
-                  "x": 6.415209935901102,
-                  "y": 8.033807736727013
-                },
-                {
-                  "x": 6.796047764333014,
-                  "y": 8.310621307106802
-                },
-                {
-                  "x": 7.089111948992371,
-                  "y": 8.594045721844171
-                },
-                {
-                  "x": 7.32248850044345,
-                  "y": 8.886421174508651
-                },
-                {
-                  "x": 7.4966511908709705,
-                  "y": 9.198968921895801
-                },
-                {
-                  "x": 7.579124849663318,
-                  "y": 9.539935248431718
-                },
-                {
-                  "x": 7.516473285701139,
-                  "y": 9.90374133375182
-                },
-                {
-                  "x": 7.258490486371484,
-                  "y": 10.26623698227873
-                },
-                {
-                  "x": 6.783995700609125,
-                  "y": 10.588489249436314
-                },
-                {
-                  "x": 6.116782078289866,
-                  "y": 10.827791269537842
-                },
-                {
-                  "x": 5.3244235823442185,
-                  "y": 10.951387540948215
+                  "x": 1.74151,
+                  "y": 8.131701
                 }
               ],
               "cornerRadius": 0
@@ -866,6 +967,26 @@
             "material": "ground-cover",
             "symbol": "tree-deciduous",
             "plantingStyle": "low-maintenance"
+          },
+          {
+            "id": "c2-1-e12",
+            "category": "planting-bed",
+            "role": "feature",
+            "name": "Evergreen shrub",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 0.8232854619070945,
+                "y": 8.193588365000275
+              },
+              "radius": 0.6
+            },
+            "zone": "back",
+            "material": "shrubs",
+            "height": 1.3,
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-1-e10",
+            "plantingStyle": "low-maintenance"
           }
         ]
       },
@@ -923,7 +1044,7 @@
           },
           {
             "id": "c2-2-e7",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -949,12 +1070,11 @@
             },
             "zone": "right",
             "fillKind": "base",
-            "material": "ornamental-grasses",
-            "plantingStyle": "low-maintenance"
+            "material": "decorative-gravel"
           },
           {
             "id": "c2-2-e8",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -980,12 +1100,11 @@
             },
             "zone": "back",
             "fillKind": "base",
-            "material": "ornamental-grasses",
-            "plantingStyle": "low-maintenance"
+            "material": "decorative-gravel"
           },
           {
             "id": "c2-2-e9",
-            "category": "planting-bed",
+            "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
@@ -1011,8 +1130,7 @@
             },
             "zone": "left",
             "fillKind": "base",
-            "material": "ornamental-grasses",
-            "plantingStyle": "low-maintenance"
+            "material": "decorative-gravel"
           },
           {
             "id": "c2-2-e11",
@@ -1022,122 +1140,39 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 4.5,
-                  "y": 12
+                  "x": 8.5,
+                  "y": 9.370661673
                 },
                 {
-                  "x": 8.5,
-                  "y": 12
+                  "x": 8.7,
+                  "y": 10.1
                 },
                 {
                   "x": 8.5,
                   "y": 10.829338327
                 },
                 {
-                  "x": 8.231371,
-                  "y": 11.231371
+                  "x": 8.5,
+                  "y": 12
                 },
                 {
-                  "x": 7.712293,
-                  "y": 11.578207
+                  "x": 9,
+                  "y": 12
                 },
                 {
-                  "x": 7.1,
-                  "y": 11.7
+                  "x": 9,
+                  "y": 0
                 },
                 {
-                  "x": 6.487707,
-                  "y": 11.578207
-                },
-                {
-                  "x": 5.968629,
-                  "y": 11.231371
-                },
-                {
-                  "x": 5.621793,
-                  "y": 10.712293
-                },
-                {
-                  "x": 5.5,
-                  "y": 10.1
-                },
-                {
-                  "x": 5.707743953,
-                  "y": 9.359072
-                },
-                {
-                  "x": 4.5,
-                  "y": 9.359072
+                  "x": 8.5,
+                  "y": 0
                 }
               ],
               "cornerRadius": 0
             },
-            "zone": "back",
+            "zone": "left",
             "fillKind": "accent",
             "material": "ornamental-grasses",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e12",
-            "category": "planting-bed",
-            "role": "fill",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 0.5,
-                  "y": 12
-                },
-                {
-                  "x": 4.5,
-                  "y": 12
-                },
-                {
-                  "x": 4.5,
-                  "y": 9.359072
-                },
-                {
-                  "x": 3.292256047,
-                  "y": 9.359072
-                },
-                {
-                  "x": 3.5,
-                  "y": 10.1
-                },
-                {
-                  "x": 3.378207,
-                  "y": 10.712293
-                },
-                {
-                  "x": 3.031371,
-                  "y": 11.231371
-                },
-                {
-                  "x": 2.512293,
-                  "y": 11.578207
-                },
-                {
-                  "x": 1.9,
-                  "y": 11.7
-                },
-                {
-                  "x": 1.287707,
-                  "y": 11.578207
-                },
-                {
-                  "x": 0.768629,
-                  "y": 11.231371
-                },
-                {
-                  "x": 0.5,
-                  "y": 10.829338327
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "shrubs",
             "plantingStyle": "low-maintenance"
           },
           {
@@ -1307,7 +1342,7 @@
       },
       {
         "id": "c2-0-e6",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1333,12 +1368,11 @@
         },
         "zone": "right",
         "fillKind": "base",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
+        "material": "decorative-gravel"
       },
       {
         "id": "c2-0-e7",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1364,12 +1398,11 @@
         },
         "zone": "back",
         "fillKind": "base",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
+        "material": "decorative-gravel"
       },
       {
         "id": "c2-0-e8",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1395,6 +1428,116 @@
         },
         "zone": "left",
         "fillKind": "base",
+        "material": "decorative-gravel"
+      },
+      {
+        "id": "c2-0-e11",
+        "category": "planting-bed",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 8.5,
+              "y": 7.710438
+            },
+            {
+              "x": 8.636111,
+              "y": 7.94516
+            },
+            {
+              "x": 8.636111,
+              "y": 9.252778
+            },
+            {
+              "x": 8.544139425,
+              "y": 9.436721149
+            },
+            {
+              "x": 8.7,
+              "y": 10.1
+            },
+            {
+              "x": 8.5,
+              "y": 10.829338327
+            },
+            {
+              "x": 8.5,
+              "y": 12
+            },
+            {
+              "x": 9,
+              "y": 12
+            },
+            {
+              "x": 9,
+              "y": 0
+            },
+            {
+              "x": 8.5,
+              "y": 0
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "shrubs",
+        "plantingStyle": "low-maintenance"
+      },
+      {
+        "id": "c2-0-e10",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Flowering border",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0.15,
+              "y": 10.752
+            },
+            {
+              "x": 1.0284,
+              "y": 10.752
+            },
+            {
+              "x": 1.0284,
+              "y": 10.1725
+            },
+            {
+              "x": 1.9617,
+              "y": 9.593
+            },
+            {
+              "x": 1.9617,
+              "y": 8.434
+            },
+            {
+              "x": 1.0284,
+              "y": 7.8545
+            },
+            {
+              "x": 1.0284,
+              "y": 7.375
+            },
+            {
+              "x": 0.5,
+              "y": 7.375
+            },
+            {
+              "x": 0.5,
+              "y": 7.275
+            },
+            {
+              "x": 0.15,
+              "y": 7.275
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
         "material": "shrubs",
         "plantingStyle": "low-maintenance"
       },
@@ -1406,23 +1549,51 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 7.8,
-              "y": 7.597937843791604
+              "x": 1.211779608,
+              "y": 7.968363156
             },
             {
-              "x": 7.8,
-              "y": 10.8
+              "x": 1.9617,
+              "y": 8.434
             },
             {
-              "x": 1.6799999999999997,
-              "y": 10.8
+              "x": 1.950426316,
+              "y": 9.6
             },
             {
-              "x": 1.6799999999999997,
-              "y": 7.597937843791604
+              "x": 8.15,
+              "y": 9.6
+            },
+            {
+              "x": 8.525,
+              "y": 9.475
+            },
+            {
+              "x": 8.636111,
+              "y": 9.252778
+            },
+            {
+              "x": 8.636111,
+              "y": 7.94516
+            },
+            {
+              "x": 8.525,
+              "y": 7.722938
+            },
+            {
+              "x": 8.302778,
+              "y": 7.611827
+            },
+            {
+              "x": 1.7,
+              "y": 7.597938
+            },
+            {
+              "x": 1.325,
+              "y": 7.722938
             }
           ],
-          "cornerRadius": 0.5
+          "cornerRadius": 0
         },
         "zone": "back",
         "fillKind": "accent",
@@ -1537,7 +1708,7 @@
       },
       {
         "id": "c2-0-e6",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1563,12 +1734,11 @@
         },
         "zone": "right",
         "fillKind": "base",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
+        "material": "decorative-gravel"
       },
       {
         "id": "c2-0-e7",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1594,12 +1764,11 @@
         },
         "zone": "back",
         "fillKind": "base",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
+        "material": "decorative-gravel"
       },
       {
         "id": "c2-0-e8",
-        "category": "planting-bed",
+        "category": "gravel-mulch",
         "role": "fill",
         "shape": {
           "kind": "polygon",
@@ -1625,6 +1794,116 @@
         },
         "zone": "left",
         "fillKind": "base",
+        "material": "decorative-gravel"
+      },
+      {
+        "id": "c2-0-e11",
+        "category": "planting-bed",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 8.5,
+              "y": 7.710438
+            },
+            {
+              "x": 8.636111,
+              "y": 7.94516
+            },
+            {
+              "x": 8.636111,
+              "y": 9.252778
+            },
+            {
+              "x": 8.544139425,
+              "y": 9.436721149
+            },
+            {
+              "x": 8.7,
+              "y": 10.1
+            },
+            {
+              "x": 8.5,
+              "y": 10.829338327
+            },
+            {
+              "x": 8.5,
+              "y": 12
+            },
+            {
+              "x": 9,
+              "y": 12
+            },
+            {
+              "x": 9,
+              "y": 0
+            },
+            {
+              "x": 8.5,
+              "y": 0
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "shrubs",
+        "plantingStyle": "low-maintenance"
+      },
+      {
+        "id": "c2-0-e10",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Flowering border",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0.15,
+              "y": 10.752
+            },
+            {
+              "x": 1.0284,
+              "y": 10.752
+            },
+            {
+              "x": 1.0284,
+              "y": 10.1725
+            },
+            {
+              "x": 1.9617,
+              "y": 9.593
+            },
+            {
+              "x": 1.9617,
+              "y": 8.434
+            },
+            {
+              "x": 1.0284,
+              "y": 7.8545
+            },
+            {
+              "x": 1.0284,
+              "y": 7.375
+            },
+            {
+              "x": 0.5,
+              "y": 7.375
+            },
+            {
+              "x": 0.5,
+              "y": 7.275
+            },
+            {
+              "x": 0.15,
+              "y": 7.275
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
         "material": "shrubs",
         "plantingStyle": "low-maintenance"
       },
@@ -1636,23 +1915,51 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 7.8,
-              "y": 7.597937843791604
+              "x": 1.211779608,
+              "y": 7.968363156
             },
             {
-              "x": 7.8,
-              "y": 10.8
+              "x": 1.9617,
+              "y": 8.434
             },
             {
-              "x": 1.6799999999999997,
-              "y": 10.8
+              "x": 1.950426316,
+              "y": 9.6
             },
             {
-              "x": 1.6799999999999997,
-              "y": 7.597937843791604
+              "x": 8.15,
+              "y": 9.6
+            },
+            {
+              "x": 8.525,
+              "y": 9.475
+            },
+            {
+              "x": 8.636111,
+              "y": 9.252778
+            },
+            {
+              "x": 8.636111,
+              "y": 7.94516
+            },
+            {
+              "x": 8.525,
+              "y": 7.722938
+            },
+            {
+              "x": 8.302778,
+              "y": 7.611827
+            },
+            {
+              "x": 1.7,
+              "y": 7.597938
+            },
+            {
+              "x": 1.325,
+              "y": 7.722938
             }
           ],
-          "cornerRadius": 0.5
+          "cornerRadius": 0
         },
         "zone": "back",
         "fillKind": "accent",

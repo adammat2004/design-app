@@ -2,6 +2,8 @@ import type { Point } from '../geometry/primitives.js';
 import type { BoundaryRun } from './boundary-styles.js';
 import { elementOutline, type DesignElement } from './concepts.js';
 import { castsShadow, heightFor, HOUSE_HEIGHT, MIN_SHADOW_HEIGHT } from './heights.js';
+import { isTreeSymbol, resolveSymbol } from './symbols.js';
+import { rectToPolygon } from '../geometry/shapes.js';
 import { housePolygon, type HouseFootprint } from './site.js';
 import type { ShadowCast } from './sun.js';
 
@@ -26,6 +28,8 @@ export interface ShadowOccluder {
   outline: Point[];
   /** Metres, already resolved through `heightFor`. */
   height: number;
+  /** Height of the underside of a canopy or beam; absent for solid objects. */
+  baseHeight?: number;
 }
 
 export interface ShadowGeometry {
@@ -69,7 +73,7 @@ export function projectShadow(
   cast: ShadowCast,
 ): ShadowGeometry | null {
   if (outline.length < 3) return null;
-  if (height < MIN_SHADOW_HEIGHT) return null;
+  if (height + 1e-9 < MIN_SHADOW_HEIGHT) return null;
 
   const offset = shadowOffset(height, cast);
 
@@ -170,11 +174,63 @@ export function shadowOccluders(
   for (const element of elements) {
     if (element.hidden) continue;
     if (!castsShadow(element)) continue;
+    // A bed is ground with separate plants on it, not a solid wall of foliage.
+    if (
+      element.category === 'planting-bed' &&
+      element.shape.kind !== 'point' &&
+      element.material !== 'hedging' &&
+      element.height === undefined
+    )
+      continue;
+
+    // An open pergola casts the shadows of its posts and slats, not a solid roof.
+    if (element.symbol === 'pergola' && element.shape.kind === 'rect') {
+      const shape = element.shape;
+      const radians = (shape.rotation * Math.PI) / 180;
+      const at = (x: number, y: number) => ({
+        x: shape.centre.x + x * Math.cos(radians) - y * Math.sin(radians),
+        y: shape.centre.y + x * Math.sin(radians) + y * Math.cos(radians),
+      });
+      const height = heightFor(element);
+      for (const x of [-shape.width / 2 + 0.075, shape.width / 2 - 0.075]) {
+        for (const y of [-shape.depth / 2 + 0.075, shape.depth / 2 - 0.075]) {
+          occluders.push({
+            outline: rectToPolygon({
+              centre: at(x, y),
+              width: 0.15,
+              depth: 0.15,
+              rotation: shape.rotation,
+            }),
+            height,
+          });
+        }
+      }
+      const count = Math.max(2, Math.ceil(shape.width / 0.35));
+      for (let i = 0; i <= count; i += 1) {
+        occluders.push({
+          outline: rectToPolygon({
+            centre: at(-shape.width / 2 + (shape.width * i) / count, 0),
+            width: 0.075,
+            depth: shape.depth,
+            rotation: shape.rotation,
+          }),
+          height,
+          baseHeight: Math.max(0, height - 0.15),
+        });
+      }
+      continue;
+    }
 
     const outline = elementOutline(element);
     if (outline.length < 3) continue;
 
-    occluders.push({ outline, height: heightFor(element) });
+    const height = heightFor(element);
+    const symbol = resolveSymbol(element);
+    occluders.push({
+      outline,
+      height,
+      ...(symbol && isTreeSymbol(symbol) ? { baseHeight: height * 0.45 } : {}),
+    });
   }
 
   return occluders;

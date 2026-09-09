@@ -1,10 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Copy, Lock, MousePointer2, Palette, Trash2 } from 'lucide-react';
-import { heightFor } from '@garden-studio/schema';
+import { Copy, MousePointer2, Trash2 } from 'lucide-react';
+import {
+  heightFor,
+  PLANT_CATALOGUE,
+  PLANT_SYMBOLS,
+  SYMBOLS,
+  type SymbolId,
+} from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
-import { elementArea, isLocked, type DesignElement } from '@/lib/concepts';
+import { elementAnchor, elementArea, isLocked, type DesignElement } from '@/lib/concepts';
 import { materialsFor } from '@/lib/materials';
 import { formatArea } from '@/lib/units';
 import { ZONE_ORDER } from '@/lib/zones';
@@ -13,52 +19,37 @@ import { selectedElement, usePlanEditorStore } from '@/state/plan-editor-store';
 import { LengthInput } from '../SideLengthsPanel';
 import { ElementThumbnail } from './ElementThumbnail';
 
-/** Zone labels, matching `computeZones` without needing a live zone list to read them from. */
-const ZONE_LABELS: Record<(typeof ZONE_ORDER)[number], string> = {
-  front: 'Front garden',
-  back: 'Back garden',
-  left: 'Left side',
-  right: 'Right side',
-};
-
-/**
- * Everything about the one element that is selected, and the only place some of it can be
- * changed.
- *
- * Dimensions are two-way bound: dragging a handle updates the fields, typing in a field moves the
- * shape. Both go through the same `resizeElementLive`, so neither can produce a size the other
- * would have refused.
- *
- * A locked base fill still gets the full panel — hiding it would leave the user unable to see the
- * ground layer's area or change its material. The controls it cannot accept are disabled with the
- * reason spelled out, rather than silently inert.
- */
+const inputClass =
+  'w-full rounded-md border border-garden-line bg-white px-3 py-2.5 text-xs text-garden-ink focus-visible:outline-2 focus-visible:outline-garden-green disabled:opacity-40';
 export function SelectedElementPanel() {
   const element = usePlanEditorStore(selectedElement);
   const unit = useBoundaryStore((state) => state.unit);
-
   return (
-    <section
-      data-testid="selected-element"
-      className="rounded-xl border border-garden-line bg-white p-4 shadow-sm"
-    >
-      <h2 className="text-xs font-semibold text-garden-ink">Selected feature</h2>
-
-      {element ? (
-        <ElementDetails key={element.id} element={element} unit={unit} />
-      ) : (
-        <p
-          data-testid="selected-none"
-          className="mt-3 text-[11px] leading-relaxed text-garden-muted"
-        >
-          <MousePointer2 aria-hidden className="mr-1 inline h-3.5 w-3.5" />
-          Select a feature on the plan to see its details and change it.
-        </p>
-      )}
+    <section data-testid="selected-element" className="bg-white">
+      <div className="flex h-11 items-center border-b border-garden-line px-5">
+        <h2 className="border-b-2 border-garden-green py-3 text-xs font-semibold text-garden-forest">
+          Edit
+        </h2>
+      </div>
+      <div className="p-5">
+        {element ? (
+          <ElementDetails key={element.id} element={element} unit={unit} />
+        ) : (
+          <div
+            data-testid="selected-none"
+            className="flex flex-col items-center gap-3 py-10 text-center"
+          >
+            <MousePointer2 aria-hidden className="h-7 w-7 text-garden-green" />
+            <p className="text-sm font-medium">Make it your garden</p>
+            <p className="max-w-56 text-xs leading-5 text-garden-muted">
+              Select a tree, surface or feature to adjust its size, position and style.
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
-
 function ElementDetails({
   element,
   unit,
@@ -67,266 +58,315 @@ function ElementDetails({
   unit: Parameters<typeof formatArea>[1];
 }) {
   const store = usePlanEditorStore;
+  const currentElement = () =>
+    store.getState().present.elements.find((item) => item.id === element.id) ?? element;
   const locked = isLocked(element);
   const rect = element.shape.kind === 'rect' ? element.shape : null;
-  const materialRef = useRef<HTMLSelectElement>(null);
-
+  const plant = element.category === 'planting-bed' && element.shape.kind === 'point';
+  const anchor = elementAnchor(element);
+  const species = element.plantId ? PLANT_CATALOGUE[element.plantId] : undefined;
+  const replaceOptions = Object.entries(SYMBOLS).filter(
+    ([, spec]) => spec.category === element.category && spec.footprint.kind === element.shape.kind,
+  );
   return (
-    <div className="mt-3 space-y-3">
-      <div className="flex items-start gap-2.5">
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
         <ElementThumbnail element={element} />
-
         <div className="min-w-0 flex-1">
           <NameField
             name={element.name ?? CATEGORY_COLOURS[element.category].label}
             onCommit={(name) => store.getState().renameElement(element.id, name)}
           />
-
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span
-              data-testid="element-category"
-              style={{
-                background: CATEGORY_COLOURS[element.category].fill,
-                borderColor: CATEGORY_COLOURS[element.category].stroke,
-              }}
-              className="inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-semibold text-garden-ink"
-            >
-              {CATEGORY_COLOURS[element.category].label}
-            </span>
-            {locked ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-garden-line px-1.5 py-px text-[9px] font-medium text-garden-muted">
-                <Lock aria-hidden className="h-2.5 w-2.5" />
-                Ground layer
-              </span>
-            ) : null}
-          </div>
-
-          <p
-            data-testid="element-id"
-            className="mt-1 truncate font-mono text-[10px] text-garden-muted"
-          >
-            {element.id}
+          <p data-testid="element-category" className="mt-1 text-xs text-garden-muted">
+            {species?.botanicalName ?? CATEGORY_COLOURS[element.category].label}
           </p>
         </div>
       </div>
-
       {locked ? (
         <p
           data-testid="locked-reason"
-          className="rounded-lg border border-dashed border-garden-line bg-garden-sage/40 px-2.5 py-2 text-[10px] leading-relaxed text-garden-muted"
+          className="rounded-md bg-garden-sage/50 p-3 text-xs leading-5 text-garden-muted"
         >
-          This is the ground layer for its zone. It keeps the garden fully covered, so its shape is
-          fixed — but you can change what it is made of.
+          Ground layer. Change its material here; its boundary follows the garden.
         </p>
       ) : null}
-
-      <Field label="Area">
-        <span data-testid="element-area" className="block py-1 text-right text-sm text-garden-ink">
-          {formatArea(elementArea(element), unit)}
-        </span>
-      </Field>
-
-      {rect ? (
-        <>
-          <Field label="Width">
-            <LengthInput
-              testId="element-width"
-              label="Element width"
-              metres={rect.width}
-              unit={unit}
-              onCommit={(width) => {
-                store.getState().beginGesture();
-                store.getState().resizeElementLive(element.id, { width });
-                store.getState().endGesture();
-              }}
-            />
-          </Field>
-
-          <Field label="Depth">
-            <LengthInput
-              testId="element-depth"
-              label="Element depth"
-              metres={rect.depth}
-              unit={unit}
-              onCommit={(depth) => {
-                store.getState().beginGesture();
-                store.getState().resizeElementLive(element.id, { depth });
-                store.getState().endGesture();
-              }}
-            />
-          </Field>
-        </>
-      ) : (
-        <p className="text-[10px] leading-relaxed text-garden-muted">
-          Free-form shapes are resized on the plan by dragging their corners.
-        </p>
-      )}
-
-      <Field label="Material">
-        <select
-          ref={materialRef}
-          data-testid="element-material"
-          aria-label="Material"
-          value={element.material ?? ''}
-          onChange={(event) => store.getState().setMaterial(element.id, event.target.value)}
-          className="w-full min-w-0 rounded-md border border-garden-line bg-white px-2 py-1 text-sm text-garden-ink focus-visible:border-garden-green focus-visible:outline-none"
-        >
-          {materialsFor(element.category).map((material) => (
-            <option key={material.id} value={material.id}>
-              {material.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Zone">
-        <select
-          data-testid="element-zone"
-          aria-label="Zone"
-          value={element.zone}
-          disabled={locked}
-          onChange={(event) =>
-            store.getState().setZone(element.id, event.target.value as (typeof ZONE_ORDER)[number])
-          }
-          className="w-full min-w-0 rounded-md border border-garden-line bg-white px-2 py-1 text-sm text-garden-ink focus-visible:border-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {ZONE_ORDER.map((zone) => (
-            <option key={zone} value={zone}>
-              {ZONE_LABELS[zone]}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      {/*
-        Rotation, for the shapes that have one.
-
-        `PlanGeometry.rect.rotation` has existed since the geometry union was written and the canvas
-        has always had a handle for it — but a handle is a coarse instrument, and "turn the pergola
-        to exactly 30 degrees" was not expressible anywhere. A slider is, and it costs one control.
-      */}
-      {rect ? (
-        <Field label="Rotation">
-          <div className="flex w-full min-w-0 items-center gap-2">
-            <input
-              type="range"
-              data-testid="element-rotation"
-              aria-label="Element rotation"
-              min={0}
-              max={359}
-              step={1}
-              value={Math.round(rect.rotation) % 360}
-              onChange={(event) =>
-                store.getState().rotateElementLive(element.id, Number(event.target.value))
-              }
-              /*
-               * One undo entry for the whole drag, not one per frame — the same bracket the canvas
-               * handles use. Pointer and key events rather than change, because a range input fires
-               * change continuously and gives no other signal for "done".
-               */
-              onPointerDown={() => store.getState().beginGesture()}
-              onPointerUp={() => store.getState().endGesture()}
-              onKeyDown={() => store.getState().beginGesture()}
-              onKeyUp={() => store.getState().endGesture()}
-              className="min-w-0 flex-1 accent-garden-green"
-            />
-            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-garden-ink">
-              {Math.round(rect.rotation) % 360}&deg;
-            </span>
-          </div>
+      {plant ? (
+        <Field label="Plant type / species">
+          <select
+            aria-label="Plant type or species"
+            data-testid="element-species"
+            className={inputClass}
+            value={element.plantId ?? element.symbol ?? 'tree-deciduous'}
+            onChange={(event) => {
+              const choice = PLANT_CATALOGUE[event.target.value];
+              store
+                .getState()
+                .replaceSymbol(
+                  element.id,
+                  choice?.symbol ?? (event.target.value as SymbolId),
+                  choice ? event.target.value : undefined,
+                );
+            }}
+          >
+            <optgroup label="Plant types">
+              {PLANT_SYMBOLS.map((symbol) => (
+                <option key={symbol} value={symbol}>
+                  {SYMBOLS[symbol].label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Named species">
+              {Object.entries(PLANT_CATALOGUE).map(([id, p]) => (
+                <option key={id} value={id}>
+                  {p.name} ({p.botanicalName})
+                </option>
+              ))}
+            </optgroup>
+          </select>
         </Field>
       ) : null}
-
-      {/*
-        Height, which has driven the shadow model since the sun landed and has never been visible.
-
-        A user whose pergola throws a two-metre shadow could not see why, or correct it. `heightFor`
-        resolves a default from the symbol, then the material, then the category — so the field
-        shows what is actually being used rather than a blank, and typing over it is the override.
-      */}
-      <Field label="Height">
-        <LengthInput
-          testId="element-height"
-          label="Element height"
-          metres={heightFor(element)}
-          unit={unit}
-          onCommit={(metres) => store.getState().setHeight(element.id, metres)}
-        />
-      </Field>
-
-      <Field label="Elevation">
-        <LengthInput
-          testId="element-elevation"
-          label="Elevation above grade"
-          metres={element.elevation ?? 0}
-          unit={unit}
-          allowNegative
-          onCommit={(metres) => store.getState().setElevation(element.id, metres)}
-        />
-      </Field>
-
-      <div className="space-y-2 border-t border-garden-line pt-3">
+      {!plant && replaceOptions.length > 0 && !locked ? (
+        <Field label="Replace with">
+          <select
+            data-testid="element-replace"
+            aria-label="Replace feature"
+            value={element.symbol ?? ''}
+            className={inputClass}
+            onChange={(event) =>
+              store.getState().replaceSymbol(element.id, event.target.value as SymbolId)
+            }
+          >
+            <option value="" disabled>
+              Choose a feature
+            </option>
+            {replaceOptions.map(([id, spec]) => (
+              <option key={id} value={id}>
+                {spec.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Height">
+          <LengthInput
+            testId="element-height"
+            allowZero
+            readMetres={() => heightFor(currentElement())}
+            label="Element height"
+            metres={heightFor(element)}
+            unit={unit}
+            onCommit={(metres) => store.getState().setHeight(element.id, metres)}
+          />
+        </Field>
+        {plant && element.shape.kind === 'point' ? (
+          <Field label="Canopy width">
+            <LengthInput
+              testId="element-canopy"
+              readMetres={() => {
+                const shape = currentElement().shape;
+                return shape.kind === 'point' ? shape.radius * 2 : 0;
+              }}
+              label="Canopy diameter"
+              metres={element.shape.radius * 2}
+              unit={unit}
+              onCommit={(metres) => store.getState().setCanopyDiameter(element.id, metres)}
+            />
+          </Field>
+        ) : (
+          <Field label="Area">
+            <span data-testid="element-area" className="block py-2 text-sm tabular-nums">
+              {formatArea(elementArea(element), unit)}
+            </span>
+          </Field>
+        )}
+      </div>
+      {rect && !locked ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {(['width', 'depth'] as const).map((dimension) => (
+              <Field key={dimension} label={dimension === 'width' ? 'Width' : 'Depth'}>
+                <LengthInput
+                  testId={`element-${dimension}`}
+                  readMetres={() => {
+                    const shape = currentElement().shape;
+                    return shape.kind === 'rect' ? shape[dimension] : rect[dimension];
+                  }}
+                  label={`Element ${dimension}`}
+                  metres={rect[dimension]}
+                  unit={unit}
+                  onCommit={(value) => {
+                    store.getState().beginGesture();
+                    store.getState().resizeElementLive(element.id, { [dimension]: value });
+                    store.getState().endGesture();
+                  }}
+                />
+              </Field>
+            ))}
+          </div>
+          <Field label="Rotation">
+            <div className="flex items-center gap-3">
+              <span className="w-10 text-xs tabular-nums">{Math.round(rect.rotation)}°</span>
+              <input
+                type="range"
+                aria-label="Element rotation"
+                data-testid="element-rotation"
+                min={0}
+                max={359}
+                value={Math.round(rect.rotation) % 360}
+                onChange={(event) =>
+                  store.getState().rotateElementLive(element.id, Number(event.target.value))
+                }
+                onPointerDown={() => store.getState().beginGesture()}
+                onPointerUp={() => store.getState().endGesture()}
+                onPointerCancel={() => store.getState().endGesture()}
+                onBlur={() => store.getState().endGesture()}
+                onKeyDown={() => store.getState().beginGesture()}
+                onKeyUp={() => store.getState().endGesture()}
+                className="min-w-0 flex-1 accent-garden-green"
+              />
+            </div>
+          </Field>
+        </>
+      ) : null}
+      {!locked ? (
+        <div className="grid grid-cols-2 gap-3">
+          {(['x', 'y'] as const).map((axis) => (
+            <Field key={axis} label={`Position ${axis.toUpperCase()}`}>
+              <LengthInput
+                testId={`element-position-${axis}`}
+                readMetres={() => elementAnchor(currentElement())[axis]}
+                label={`Position ${axis.toUpperCase()}`}
+                metres={anchor[axis]}
+                unit={unit}
+                allowNegative
+                onCommit={(value) =>
+                  store.getState().setPosition(element.id, { ...anchor, [axis]: value })
+                }
+              />
+            </Field>
+          ))}
+        </div>
+      ) : null}
+      {!plant ? (
+        <Field label="Material">
+          <select
+            data-testid="element-material"
+            aria-label="Material"
+            value={element.material ?? ''}
+            className={inputClass}
+            onChange={(event) => store.getState().setMaterial(element.id, event.target.value)}
+          >
+            {materialsFor(element.category).map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {!locked ? (
+        <Field label="Status">
+          <select
+            data-testid="element-status"
+            aria-label="Design status"
+            className={inputClass}
+            value={element.status ?? ''}
+            onChange={(event) =>
+              store
+                .getState()
+                .setStatus(
+                  element.id,
+                  event.target.value === ''
+                    ? undefined
+                    : (event.target.value as DesignElement['status']),
+                )
+            }
+          >
+            <option value="">Proposed</option>
+            <option value="keep">Keep</option>
+            <option value="remove">Remove</option>
+            <option value="replace">Replace</option>
+          </select>
+          <span className="mt-1 text-[10px] text-garden-muted">
+            Mark the intended work. Delete removes the object from the plan.
+          </span>
+        </Field>
+      ) : null}
+      <div className="flex gap-3">
         <button
           type="button"
-          data-testid="change-material"
-          onClick={() => {
-            materialRef.current?.focus();
-            // Chromium only; a no-op elsewhere, which is why focus is called first.
-            materialRef.current?.showPicker?.();
-          }}
-          className="flex w-full items-center justify-center gap-1.5 rounded-full border border-garden-line px-3 py-1.5 text-xs font-medium text-garden-ink hover:bg-garden-sage focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none"
+          data-testid="duplicate-element"
+          disabled={locked}
+          onClick={() => store.getState().duplicateElement(element.id)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-garden-line py-2.5 text-xs disabled:opacity-40"
         >
-          <Palette aria-hidden className="h-3.5 w-3.5" />
-          Change material
+          <Copy aria-hidden className="h-4 w-4" />
+          Duplicate
         </button>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            data-testid="duplicate-element"
-            disabled={locked}
-            title={locked ? 'The ground layer cannot be duplicated.' : undefined}
-            onClick={() => store.getState().duplicateElement(element.id)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-garden-line px-3 py-1.5 text-xs font-medium text-garden-ink hover:bg-garden-sage focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Copy aria-hidden className="h-3.5 w-3.5" />
-            Duplicate
-          </button>
-
-          <button
-            type="button"
-            data-testid="delete-element"
-            disabled={locked}
-            title={locked ? 'The ground layer cannot be deleted.' : undefined}
-            onClick={() => store.getState().deleteElement(element.id)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Trash2 aria-hidden className="h-3.5 w-3.5" />
-            Delete
-          </button>
-        </div>
+        <button
+          type="button"
+          data-testid="delete-element"
+          disabled={locked}
+          onClick={() => store.getState().deleteElement(element.id)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 py-2.5 text-xs text-red-600 disabled:opacity-40"
+        >
+          <Trash2 aria-hidden className="h-4 w-4" />
+          Delete
+        </button>
       </div>
+      <details className="rounded-md border border-garden-line p-3">
+        <summary className="cursor-pointer text-xs font-medium">Advanced options</summary>
+        <div className="mt-4 space-y-4">
+          <Field label="Zone">
+            <select
+              data-testid="element-zone"
+              aria-label="Zone"
+              value={element.zone}
+              disabled={locked}
+              className={inputClass}
+              onChange={(event) =>
+                store
+                  .getState()
+                  .setZone(element.id, event.target.value as (typeof ZONE_ORDER)[number])
+              }
+            >
+              {ZONE_ORDER.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone.charAt(0).toUpperCase() + zone.slice(1)} garden
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Elevation">
+            <LengthInput
+              testId="element-elevation"
+              readMetres={() => currentElement().elevation ?? 0}
+              label="Elevation above grade"
+              metres={element.elevation ?? 0}
+              unit={unit}
+              allowNegative
+              onCommit={(metres) => store.getState().setElevation(element.id, metres)}
+            />
+          </Field>
+        </div>
+      </details>
     </div>
   );
 }
-
-/** Label left, control right in a fixed column — `SelectedObjectPanel`'s row, verbatim. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex items-center justify-between gap-3">
-      <span className="text-xs text-garden-muted">{label}</span>
-      <span className="w-32">{children}</span>
+    <label className="flex min-w-0 flex-col gap-2">
+      <span className="text-[11px] text-garden-muted">{label}</span>
+      {children}
     </label>
   );
 }
 
-/**
- * Inline-editable title. Same focused-ref resync as step 2's rename field: while the user is
- * typing the store must not overwrite the draft, and an empty name reverts rather than committing.
- */
 function NameField({ name, onCommit }: { name: string; onCommit: (name: string) => void }) {
   const [text, setText] = useState(name);
   const focused = useRef(false);
+  const cancelled = useRef(false);
 
   useEffect(() => {
     if (!focused.current) setText(name);
@@ -343,17 +383,22 @@ function NameField({ name, onCommit }: { name: string; onCommit: (name: string) 
       }}
       onBlur={() => {
         focused.current = false;
+        if (cancelled.current) {
+          cancelled.current = false;
+          return;
+        }
         if (text.trim() === '') setText(name);
         else onCommit(text);
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.currentTarget.blur();
         if (event.key === 'Escape') {
+          cancelled.current = true;
           setText(name);
           event.currentTarget.blur();
         }
       }}
-      className="w-full min-w-0 rounded-md border border-transparent px-1 py-0.5 text-xs font-semibold text-garden-ink hover:border-garden-line focus-visible:border-garden-green focus-visible:outline-none"
+      className="w-full min-w-0 rounded-md border border-transparent px-1 py-0.5 text-base font-semibold text-garden-ink hover:border-garden-line focus-visible:border-garden-green focus-visible:outline-none"
     />
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+import { associatePlants } from '@garden-studio/schema';
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { elementArea, isLocked, type DesignElement } from '@/lib/concepts';
@@ -22,7 +24,12 @@ export function PlacedElementsList() {
   const selectedId = usePlanEditorStore((state) => state.selectedId);
   const unit = useBoundaryStore((state) => state.unit);
 
-  const groups = groupElements(elements);
+  const associated = useMemo(() => associatePlants(elements), [elements]);
+  const groups = groupElements(
+    associated.filter(
+      (element) => !element.bedId || !associated.some((bed) => bed.id === element.bedId),
+    ),
+  );
 
   return (
     <section>
@@ -46,12 +53,34 @@ export function PlacedElementsList() {
 
             <ul className="mt-1 space-y-1">
               {group.elements.map((element) => (
-                <ElementRow
-                  key={element.id}
-                  element={element}
-                  selected={element.id === selectedId}
-                  unit={unit}
-                />
+                <li key={element.id} className="list-none">
+                  <ul>
+                    <ElementRow
+                      element={element}
+                      selected={element.id === selectedId}
+                      unit={unit}
+                    />
+                  </ul>
+                  {associated.some((plant) => plant.bedId === element.id) ? (
+                    <details open className="ml-3 border-l border-garden-line pl-2">
+                      <summary className="cursor-pointer py-1 text-[10px] text-garden-muted">
+                        Plants in this bed
+                      </summary>
+                      <ul>
+                        {associated
+                          .filter((plant) => plant.bedId === element.id)
+                          .map((plant) => (
+                            <ElementRow
+                              key={plant.id}
+                              element={plant}
+                              selected={plant.id === selectedId}
+                              unit={unit}
+                            />
+                          ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </li>
               ))}
             </ul>
           </div>

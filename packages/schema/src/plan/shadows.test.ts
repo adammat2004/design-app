@@ -189,7 +189,7 @@ describe('shadowOccluders', () => {
     expect(flat).toEqual([]);
   });
 
-  it('includes planting, resolving each one to its own height', () => {
+  it('casts solid hedge shadows without treating a ground-cover bed as a solid slab', () => {
     const occluders = shadowOccluders(
       [
         element({ id: 'hedge', material: 'hedging' }),
@@ -198,7 +198,25 @@ describe('shadowOccluders', () => {
       null,
     );
 
-    expect(occluders.map((o) => o.height)).toEqual([1.8, 0.25]);
+    expect(occluders.map((o) => o.height)).toEqual([1.8]);
+  });
+
+  it('includes raised tree crowns and leaves the trunk clearance open', () => {
+    const tree = element({
+      symbol: 'tree-deciduous',
+      height: 4,
+      shape: { kind: 'point', at: { x: 8, y: 8 }, radius: 2 },
+    });
+    const [crown] = shadowOccluders([tree], null);
+    expect(crown?.height).toBe(4);
+    expect(crown?.baseHeight).toBe(1.8);
+  });
+
+  it('casts pergola slats and posts instead of an opaque roof', () => {
+    const pergola = element({ category: 'structure', symbol: 'pergola', height: 2.4 });
+    const occluders = shadowOccluders([pergola], null);
+    expect(occluders.filter((o) => !o.baseHeight)).toHaveLength(4);
+    expect(occluders.filter((o) => o.baseHeight && o.baseHeight > 2)).toHaveLength(7);
   });
 
   it('skips hidden elements', () => {
