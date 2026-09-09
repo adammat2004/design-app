@@ -7,7 +7,9 @@ import { BoundaryToolsPanel } from './BoundaryToolsPanel';
 import { CanvasToolbar } from './CanvasToolbar';
 import { DesignAreasPanel } from './DesignAreasPanel';
 import { AccessPanel } from './AccessPanel';
+import { AddressSearchPanel } from './AddressSearchPanel';
 import { BoundaryStylePanel } from './BoundaryStylePanel';
+import { MappingMethodPanel } from './MappingMethodPanel';
 import { HouseToolsPanel } from './HouseToolsPanel';
 import { SunPanel } from './SunPanel';
 import { LegendPanel } from './LegendPanel';
@@ -27,6 +29,7 @@ export function MapScreen() {
   const planHref = usePlanHref();
   const mode = useBoundaryStore((state) => state.mode);
   const draft = useBoundaryStore((state) => state.present);
+  const mappingMethod = useBoundaryStore((state) => state.mappingMethod);
 
   // Step 2 places features in the garden, which needs both an enclosed plot and a house to
   // work the garden areas out from.
@@ -85,6 +88,16 @@ export function MapScreen() {
                 states, not a measurement they draw — and it reads against the same plan.
               */}
               <BoundaryStylePanel />
+            </>
+          ) : mappingMethod === 'undecided' && draft.vertices.length === 0 ? (
+            /* Trace over a photograph, or build from measurements — the same outline either way. */
+            <MappingMethodPanel />
+          ) : mappingMethod === 'aerial' ? (
+            <>
+              <AddressSearchPanel />
+              {/* No shape picker and no measured corners: the photograph is the shape. */}
+              <SideLengthsPanel />
+              <BoundaryToolsPanel />
             </>
           ) : (
             <>

@@ -144,6 +144,23 @@ export const SiteSectionSchema = z.object({
    * on every solar claim in the app, and `orientation` alone is not enough to make one.
    */
   location: SiteLocationSchema.nullable().default(null),
+  /**
+   * Where local (0, 0) is on Earth, or `null` when the plan was drawn from measurements alone.
+   *
+   * This is the whole affine between the plan and the map: the frame's rotation is
+   * `orientation`, which already means "screen-up to north", so no bearing is stored here. It is
+   * what lets a plan traced over aerial imagery be reopened with the same imagery under the same
+   * corners. Nothing downstream reads it — generation, validation, zones and rendering are
+   * unchanged whether it is set or not — and the imagery itself is never stored: a reopened plan
+   * fetches tiles again from this point.
+   *
+   * Distinct from `location` on purpose. `location` is "somewhere on the garden, for the sun",
+   * which the user may clear or set by hand; this is the exact origin of the metre frame. Setting
+   * one from the other is a deliberate act in the store, never an inference here.
+   *
+   * An addition with a default, so no `PLAN_DOCUMENT_VERSION` bump.
+   */
+  georeference: SiteLocationSchema.nullable().default(null),
   sun: SiteSunSchema.default({ dayOfYear: 172, minutes: 900 }),
   /**
    * Gates in the fence, keyed on the boundary edge they are in. See `gate.ts` for why a gate is

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Info } from 'lucide-react';
+import { Check, Info } from 'lucide-react';
 import {
   boundaryEdges,
   draftPolygon,
@@ -18,10 +18,20 @@ export function SideLengthsPanel() {
   const setEdgeLength = useBoundaryStore((state) => state.setEdgeLength);
   const select = useBoundaryStore((state) => state.select);
   const previewEdgeReflow = useBoundaryStore((state) => state.previewEdgeReflow);
+  const checkedEdgeIds = useBoundaryStore((state) => state.checkedEdgeIds);
+  const confirmEdge = useBoundaryStore((state) => state.confirmEdge);
 
   const polygon = draftPolygon(draft);
   const edges = boundaryEdges(polygon, draft.closed);
   const vertexCount = polygon.length;
+
+  /*
+   * A side traced over a photograph is an estimate — typically within half a metre on clear
+   * imagery, a metre or more where a hedge hides the fence. Each one says so until the user
+   * types it or ticks it. Typing goes through `setEdgeLength`, which marks it; the tick is for
+   * a side that was right as traced.
+   */
+  const traced = draft.georeference !== null;
 
   return (
     <section className="space-y-3 border-t border-garden-line pt-4">
@@ -31,6 +41,13 @@ export function SideLengthsPanel() {
           <Info aria-hidden className="h-3.5 w-3.5 text-garden-muted" />
         </span>
       </h2>
+
+      {traced && edges.length > 0 ? (
+        <p data-testid="side-lengths-estimate-note" className="text-[11px] leading-relaxed text-garden-muted">
+          Traced from imagery, so these are estimates — usually within about half a metre. Type any
+          side you know, or tick it if it looks right.
+        </p>
+      ) : null}
 
       {edges.length === 0 ? (
         <p className="text-xs text-garden-muted">
@@ -68,12 +85,61 @@ export function SideLengthsPanel() {
                   onBlur={() => previewEdgeReflow(null)}
                   onCommit={(metres) => setEdgeLength(edge.index, metres)}
                 />
+
+                {traced ? (
+                  <EstimateBadge
+                    edgeIndex={edge.index}
+                    checked={
+                      draft.vertices[edge.index] !== undefined &&
+                      checkedEdgeIds.includes(draft.vertices[edge.index]!.id)
+                    }
+                    onConfirm={() => {
+                      const start = draft.vertices[edge.index];
+                      if (start) confirmEdge(start.id);
+                    }}
+                  />
+                ) : null}
               </li>
             );
           })}
         </ul>
       )}
     </section>
+  );
+}
+
+/** "estimated" until the side has been typed or ticked; then a quiet tick. */
+function EstimateBadge({
+  edgeIndex,
+  checked,
+  onConfirm,
+}: {
+  edgeIndex: number;
+  checked: boolean;
+  onConfirm: () => void;
+}) {
+  if (checked) {
+    return (
+      <span
+        data-testid={`side-checked-${edgeIndex}`}
+        title="Checked"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-garden-green text-white"
+      >
+        <Check aria-hidden className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid={`side-confirm-${edgeIndex}`}
+      title="Estimated from the photograph. Tick it if it looks right, or type the real length."
+      onClick={onConfirm}
+      className="shrink-0 rounded-full border border-garden-warn/60 px-2 py-0.5 text-[10px] font-semibold text-garden-warn hover:bg-garden-sage"
+    >
+      est.
+    </button>
   );
 }
 

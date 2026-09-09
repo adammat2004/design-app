@@ -90,6 +90,8 @@ test('a plot started from the rectangle preset can be measured, and survives a r
   await expect(page).toHaveURL(/\/plan\/[0-9a-f-]{36}\/map$/);
   const planUrl = page.url();
 
+  // Step 1 now opens on the mapping-method choice; measurements is the path these tests take.
+  await page.getByTestId('method-manual').click();
   await page.getByTestId('plot-preset-rectangle').click();
 
   // The default is a real plot, not an empty grid: 12 x 8 m.
@@ -125,6 +127,8 @@ test('a patio door added to the house survives a reload', async ({ page }) => {
   await page.goto('/plan');
   const planUrl = page.url();
 
+  // Step 1 now opens on the mapping-method choice; measurements is the path these tests take.
+  await page.getByTestId('method-manual').click();
   await page.getByTestId('plot-preset-rectangle').click();
   await page.getByTestId('plot-shape-continue').click();
 
@@ -201,6 +205,8 @@ test('a side gate and the street edge survive a reload', async ({ page }) => {
   await page.goto('/plan');
   const planUrl = page.url();
 
+  // Step 1 now opens on the mapping-method choice; measurements is the path these tests take.
+  await page.getByTestId('method-manual').click();
   await page.getByTestId('plot-preset-rectangle').click();
   await page.getByTestId('plot-shape-continue').click();
 

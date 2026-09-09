@@ -876,6 +876,87 @@ concept's gravel panel.
 **The lawn panel is turf whatever the style.** A cottage garden used to draw its one mown panel as
 `wildflower`; the meadow belongs in the borders, and the planting branch offers it there.
 
+## Aerial mapping ("Find my property")
+
+**An optional way to make the same `SiteSection`, not a second model.** Step 1 opens on a choice —
+trace over aerial imagery, or enter measurements — and both paths run the same store, the same
+tools and the same checklist. Nothing after step 1 can tell which was used, and that is checked by
+the aerial store tests parsing the result with `SiteSectionSchema`. The manual path is unchanged.
+
+**The imagery is a Konva layer, not a map SDK.** `ImageryLayer` draws Web Mercator raster tiles as
+`KonvaImage`s inside the existing stage, positioned by the same `metresToPx` every handle uses. A
+MapLibre canvas underneath would have been a second camera to keep in step with the eased zoom on
+every frame, a second WebGL context with the three Pixi traps, and a renderer no test can reach —
+for the sake of tile fetching, which `lib/geo/tiles.ts` and `tile-cache.ts` do in a few hundred
+lines. Fetches are deferred while `useCanvasViewport` reports `zooming`; drawing from the cache
+carries on, with the parent tile standing in for one still loading.
+
+**The imagery has no authority, and it is never stored or exported.** Nothing measures off it;
+`drawPlan` never sees it; delete `lib/geo/` and `ImageryLayer` and the plan is dimensionally
+identical. Provider terms forbid screenshots in place of live tiles anyway.
+
+**Never measure in Web Mercator metres.** They are inflated by `1 / cos(latitude)` — ×1.67 at
+Dublin, ×1.61 at London — so a 10 m fence would read 16.7 m. `lib/geo/local-frame.ts` is a local
+tangent plane about `site.georeference` using the **WGS84 radii of curvature** (a mean sphere is
+0.33% short east–west, 65 cm across a 200 m garden). The truncation error across a 200 m plot is
+8 mm. Tiles are placed through the *same* `toLocal`, so imagery and geometry agree by construction;
+a placed tile is 0.24% shorter than wide because Mercator is spherical and the frame is not, and
+there is a test pinning that so nobody "fixes" it.
+
+**`site.georeference` is the only persisted field, and the first corner is where it is fixed.**
+It is the WGS84 position of local (0, 0); the frame's rotation is `orientation`, which already
+means screen-up-to-north, so no bearing is stored. While the user is still finding their roof the
+imagery is centred on an ephemeral `imageryAnchor` (a search result, or the browser's location);
+the first click calls `georeferenceAt` with that point's lat/lng and `translateOrigin` shifts the
+viewport by the same amount so the photograph does not move. Corner A is therefore (0, 0) and what
+the document keeps is a point on the user's own fence, never a geocoder's result — which at least
+two providers' terms forbid storing. There is **no re-normalisation** after close: nothing assumes
+the plot sits at the origin, and a test pins that zones and areas are translation-invariant.
+
+**`georeferenceAt` applies the sun location rather than offering it** — the one exception to the
+"offered, not applied" rule, because the user has just pointed at their garden on a photograph.
+It only fills `location` if it is null, so a hand-set one wins; `setLocation(null)` clears the sun
+alone and `clearGeoreference` ("Remove location data") clears both. It also puts `orientation` at
+0 and locks the field: the photograph is north-up and a turned frame would rotate the sun but not
+the picture. `localFrame` takes the orientation anyway, for the day the tiles rotate too.
+
+**Grid snap comes off for tracing and back on for measuring.** A real fence is not on a half-metre
+grid and forced right angles fight the picture; both are per `mappingMethod`, which is ephemeral
+and **derived on load** by `mappingMethodOf` — a plan with a georeference was traced, one with
+corners and none was measured — so a stored flag cannot go stale. The grid, the car and the plot
+fill step aside while imagery is showing; zone tints drop to 35%.
+
+**A traced side is an estimate until it is typed or ticked.** `checkedEdgeIds` (ephemeral) drives
+the "est." badge in `SideLengthsPanel` and the "Check measurements" row in the checklist, which
+never gates Continue. Correction is `setEdgeLength`/`reflowEdge` unchanged — pin the preceding
+corner, slide the following one, with `ReflowHint` showing which — and typing a length marks the
+side checked even when the number did not change.
+
+**The server side is one seam, configured in `.env`.** `GET /imagery/config` hands the browser a
+tile template, a credit line and a zoom range; `GET /imagery/tiles/:z/:x/:y[@2x]` proxies tiles
+(default, keeps keys server-side, same-origin so no canvas tainting); `POST /geocode` is a POST so
+the address is never in a URL an access log keeps. Every provider serves `(z, x, y)` tiles, so
+"which provider" is `IMAGERY_TILE_TEMPLATE` and nothing in the browser knows. `IMAGERY_DELIVERY=
+direct` exists for providers whose terms forbid proxying; then the template goes to the browser as
+is and any token in it must be URL-restricted. Two geocoders: `nominatim` (keyless, strict usage
+policy — the search box submits on Enter, not per keystroke) and `esri` (keyed, `forStorage=false`).
+Nothing configured ⇒ 503 ⇒ the aerial card disables itself and says so, exactly like the assistant.
+Addresses are never logged, never stored, never put in a project name; the results list shows
+labels only and upstream errors are never echoed because they can contain the query.
+
+**Licensing decides whether this can ship, not code.** As of September 2026: Mapbox Product Terms
+§1.6 permit tracing satellite imagery into vector data only for non-commercial use or OSM (§2.7.2
+forbids storing temporary geocodes, §1.9/§2.8.1 forbid proxying and screenshots); Google forbids
+tracing building outlines outright; Esri and MapTiler restrict derivatives to non-commercial use;
+Azure Maps has no tracing clause found; Tailte Éireann (MapGenie, 25 cm national) and OS MasterMap
+Imagery / Bluesky via resellers are bespoke licences. The provider seam is what makes the eventual
+answer a configuration change. Do not add a map SDK to "fix" any of this.
+
+**Test the imagery at a device pixel ratio other than 1.** The aerial e2e spec sets
+`deviceScaleFactor: 2`; `imagery-status` carries `data-loaded`/`data-total` because a canvas cannot
+be queried. `tileZoomFor` never lets `MIN_SCALE` hit a provider's minimum zoom, and above
+`maxZoom` tiles are simply drawn larger — the chrome says "sharpest at about N m across".
+
 ## Rendering with assets
 
 **Assets are generated offline, checked in, and never required.** `tools/assets` asks an image model

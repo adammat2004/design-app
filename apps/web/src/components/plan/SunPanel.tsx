@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Compass, Crosshair, Sun } from 'lucide-react';
 import { hasSolarPosition, solarPosition } from '@garden-studio/schema';
 import { useBoundaryStore } from '@/state/boundary-store';
+import { useGeolocation } from './use-geolocation';
 
 /**
  * Where the garden is, which way it faces, and when we are looking at it.
@@ -25,45 +26,18 @@ export function SunPanel() {
   const setLocation = useBoundaryStore((state) => state.setLocation);
   const setSun = useBoundaryStore((state) => state.setSun);
 
-  const [problem, setProblem] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
-
   const located = hasSolarPosition(draft);
   const position = solarPosition(draft);
+  const traced = draft.georeference !== null;
 
-  const useMyLocation = () => {
-    setProblem(null);
-
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setProblem('This browser cannot share a location. Type the coordinates instead.');
-      return;
-    }
-
-    setAsking(true);
-    navigator.geolocation.getCurrentPosition(
-      (result) => {
-        setAsking(false);
-        setLocation({
-          latitude: result.coords.latitude,
-          longitude: result.coords.longitude,
-        });
-      },
-      /*
-       * Every branch names what went wrong AND what to do about it. A bare "location failed"
-       * leaves the user with no next move, and the next move here is always the same one: the
-       * manual fields below are not a fallback for failure, they are always available.
-       */
-      (error) => {
-        setAsking(false);
-        setProblem(
-          error.code === error.PERMISSION_DENIED
-            ? 'Location permission was refused. Type the coordinates instead.'
-            : 'Could not get a location just now. Type the coordinates instead.',
-        );
-      },
-      { timeout: 10_000 },
-    );
-  };
+  /*
+   * Every failure names what went wrong AND what to do about it — see `useGeolocation`. The
+   * manual fields below are not a fallback for failure, they are always available.
+   */
+  const { ask: useMyLocation, asking, problem } = useGeolocation(
+    setLocation,
+    'Type the coordinates instead.',
+  );
 
   return (
     <section data-testid="sun-panel" className="space-y-3 border-t border-garden-line pt-4">
@@ -85,7 +59,14 @@ export function SunPanel() {
             aria-label="Degrees clockwise from the top of the plan to true north"
             value={Math.round(draft.orientation)}
             onChange={(event) => setOrientation(Number(event.target.value))}
-            className="w-16 rounded-md border border-garden-line bg-white px-2 py-1 text-sm text-garden-ink focus-visible:outline-none"
+            /*
+             * Locked while the plan is pinned to aerial imagery. The photograph is north-up and
+             * cannot be turned, so a turned frame would rotate the sun but not the picture — two
+             * norths on one drawing.
+             */
+            disabled={traced}
+            title={traced ? 'North is up while the plan is pinned to aerial imagery.' : undefined}
+            className="w-16 rounded-md border border-garden-line bg-white px-2 py-1 text-sm text-garden-ink focus-visible:outline-none disabled:opacity-50"
           />
           <span aria-hidden>° from up</span>
         </label>

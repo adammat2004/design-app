@@ -133,6 +133,8 @@ async function capture(item: Case): Promise<void> {
     selectedZoneIds: computeZones(item.plot, house).map((zone) => zone.id),
     orientation: 0,
     location: item.location ?? null,
+    // Drawn from measurements, so no origin on Earth — the fixtures are not traced plans.
+    georeference: null,
     sun: { dayOfYear: 172, minutes: 900 },
     gates: [],
     streetEdgeVertexId: null,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import { Plus } from 'lucide-react';
@@ -28,8 +28,12 @@ import {
   type CanvasTransform,
 } from '@/lib/canvas-transform';
 import { formatArea, formatLength, type Unit } from '@/lib/units';
+import { localFrame } from '@/lib/geo/local-frame';
+import { nativePixelsPerMetre } from '@/lib/geo/web-mercator';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
+import { useImageryStore } from '@/state/imagery-store';
 import { CanvasChrome } from './CanvasChrome';
+import { ImageryLayer, type ImageryStatus } from './ImageryLayer';
 import { EdgeHitLines } from './EdgeHitLines';
 import { GateMarks } from './GateMarks';
 import { EditableVertices } from './EditableVertices';
@@ -66,6 +70,34 @@ export function BoundaryCanvas() {
   const sizeAnchorVisible = useBoundaryStore((state) => state.sizeAnchorVisible);
   const selectedWallId = useBoundaryStore((state) => state.selectedWallId);
   const measurement = useBoundaryStore((state) => state.measurement);
+  const mappingMethod = useBoundaryStore((state) => state.mappingMethod);
+  const imageryAnchor = useBoundaryStore((state) => state.imageryAnchor);
+  const imageryVisible = useBoundaryStore((state) => state.imageryVisible);
+  const imageryConfig = useImageryStore((state) => state.config);
+  const loadImagery = useImageryStore((state) => state.load);
+
+  /*
+   * The metre frame's place on Earth: the stored origin once the first corner is down, and the
+   * search result the imagery is centred on until then. Null on a measured plan, and then there
+   * is no imagery, no toggle and no attribution — the canvas is exactly what it always was.
+   */
+  const geoAnchor = draft.georeference ?? imageryAnchor;
+  const frame = useMemo(
+    () => (geoAnchor ? localFrame(geoAnchor, draft.orientation) : null),
+    [geoAnchor, draft.orientation],
+  );
+
+  useEffect(() => {
+    if (geoAnchor) void loadImagery();
+  }, [geoAnchor, loadImagery]);
+
+  const imageryOn = frame !== null && imageryConfig !== null && imageryVisible;
+  const [imageryStatus, setImageryStatus] = useState<ImageryStatus>({ loaded: 0, total: 0 });
+  const handleImageryStatus = useCallback((status: ImageryStatus) => {
+    setImageryStatus((current) =>
+      current.loaded === status.loaded && current.total === status.total ? current : status,
+    );
+  }, []);
 
   const {
     wrapperRef,
@@ -87,10 +119,17 @@ export function BoundaryCanvas() {
     stageCentre,
     fitToShape,
     zoomAbout,
+    translateOrigin,
+    zooming,
     handleWheel,
     pointerInMetres,
   } = useCanvasViewport({
     getPolygon: () => draftPolygon(useBoundaryStore.getState().present),
+    // With imagery centred on an address, open as wide as the geocoder's confidence warrants.
+    getEmptySpan: () => {
+      const state = useBoundaryStore.getState();
+      return state.imageryAnchor ?? state.present.georeference ? state.imageryViewSpan : null;
+    },
   });
 
   /** Alignment lines only make sense mid-gesture, so they are shown while dragging. */
@@ -132,7 +171,11 @@ export function BoundaryCanvas() {
       useBoundaryStore.subscribe((state, previous) => {
         const enclosed = state.present.closed && !previous.present.closed;
         const cleared = previous.present.vertices.length > 0 && state.present.vertices.length === 0;
-        if (!enclosed && !cleared) return;
+        // A new search result centres the imagery on it — but only before the first corner is
+        // down, after which the view belongs to the user and the photograph must stay put.
+        const relocated =
+          state.imageryAnchor !== previous.imageryAnchor && state.present.vertices.length === 0;
+        if (!enclosed && !cleared && !relocated) return;
 
         const box = wrapperRef.current?.getBoundingClientRect();
         if (box) fitToShape(Math.round(box.width), Math.round(box.height));
@@ -273,6 +316,19 @@ export function BoundaryCanvas() {
     }
 
     if (mode === 'boundary' && boundaryTool === 'draw' && !draft.closed) {
+      /*
+       * The first corner of a traced plan fixes the frame to the Earth. Until now the metre
+       * origin was wherever the geocoder put the imagery; from here on it is corner A, so what
+       * the document stores is a point on the user's own fence and never a geocoder's guess. The
+       * viewport is shifted by the same amount so the photograph does not move under the cursor.
+       */
+      if (frame && draft.georeference === null && draft.vertices.length === 0) {
+        useBoundaryStore.getState().georeferenceAt(frame.toLatLng(at));
+        translateOrigin(at);
+        useBoundaryStore.getState().addVertexAt({ x: 0, y: 0 });
+        return;
+      }
+
       addVertexAt(at);
       return;
     }
@@ -418,19 +474,36 @@ export function BoundaryCanvas() {
             onDragEnd={handleStageDragEnd}
             onWheel={handleWheel}
           >
-            <Layer listening={false}>
-              <SquareGrid
+            {/*
+              The photograph, when there is one, underneath everything. The grid and the car
+              exist to give a drawing a scale to originate from; a photograph of the garden does
+              that better than either, so both step aside while it is showing.
+            */}
+            {imageryOn && frame && imageryConfig ? (
+              <ImageryLayer
                 transform={transform}
-                unit={unit}
-                width={size.width}
-                height={size.height}
+                frame={frame}
+                config={imageryConfig}
+                zooming={zooming}
+                onStatus={handleImageryStatus}
               />
+            ) : null}
+
+            <Layer listening={false}>
+              {!imageryOn ? (
+                <SquareGrid
+                  transform={transform}
+                  unit={unit}
+                  width={size.width}
+                  height={size.height}
+                />
+              ) : null}
               {/*
                 Parked beside the plot rather than pinned to a corner of the screen, so it scales
                 with the drawing — see `sizeAnchorAt`. Only once the outline is closed: while the
                 user is still clicking corners the bounding box moves under every click.
               */}
-              {sizeAnchorVisible && draft.closed && anchorAt ? (
+              {sizeAnchorVisible && !imageryOn && draft.closed && anchorAt ? (
                 <SizeAnchor at={anchorAt} transform={transform} unit={unit} />
               ) : null}
 
@@ -466,9 +539,10 @@ export function BoundaryCanvas() {
                 <Line
                   points={polygonToKonvaPoints(polygon, transform)}
                   closed={draft.closed}
-                  fill={draft.closed ? COLOUR.fill : undefined}
+                  // Over a photograph the fill would hide exactly what the house is placed by.
+                  fill={draft.closed && !imageryOn ? COLOUR.fill : undefined}
                   stroke={COLOUR.stroke}
-                  strokeWidth={2}
+                  strokeWidth={imageryOn ? 3 : 2}
                   lineJoin="round"
                   listening={false}
                 />
@@ -481,6 +555,7 @@ export function BoundaryCanvas() {
                   points={polygonToKonvaPoints(zone.polygon, transform)}
                   closed
                   fill={zoneFill(zone.id)}
+                  opacity={imageryOn ? 0.35 : 1}
                   listening={false}
                 />
               ))}
@@ -786,8 +861,20 @@ export function BoundaryCanvas() {
         ) : null}
 
         {draft.vertices.length === 0 ? (
-          <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-garden-muted">
-            Click anywhere to place your first corner (A).
+          <p
+            data-testid="canvas-empty-hint"
+            className={[
+              'absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm',
+              imageryOn
+                ? 'mx-auto w-fit rounded-md bg-white/85 px-3 py-1 text-garden-ink'
+                : 'text-garden-muted',
+            ].join(' ')}
+          >
+            {mappingMethod === 'aerial' && !geoAnchor
+              ? 'Search for your address to bring up the photograph.'
+              : imageryOn
+                ? 'Find your roof, then click the first corner of your property (A).'
+                : 'Click anywhere to place your first corner (A).'}
           </p>
         ) : null}
 
@@ -803,6 +890,25 @@ export function BoundaryCanvas() {
           transform={transform}
           unit={unit}
           panning={panning}
+          imagery={
+            frame && imageryConfig
+              ? {
+                  attribution: imageryConfig.attribution,
+                  visible: imageryVisible,
+                  onToggle: () => useBoundaryStore.getState().toggleImagery(),
+                  loaded: imageryStatus.loaded,
+                  total: imageryStatus.total,
+                  // How much ground the view spans when the provider's sharpest tiles are at 1:1.
+                  sharpestSpan:
+                    size.width /
+                    nativePixelsPerMetre(
+                      imageryConfig.maxZoom,
+                      frame.anchor.latitude,
+                      imageryConfig.tileSize,
+                    ),
+                }
+              : null
+          }
           onZoomIn={() => zoomAbout(1.25, stageCentre)}
           onZoomOut={() => zoomAbout(0.8, stageCentre)}
           onFit={() => fitToShape(size.width, size.height)}

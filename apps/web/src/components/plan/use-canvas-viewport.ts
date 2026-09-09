@@ -58,10 +58,23 @@ export function isStageDrag(event: { target: { getStage(): unknown } }): boolean
  * below outlives any one render — reading the shape through a captured prop would refit to
  * whatever the geometry was when the observer was attached.
  */
-export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] }) {
+export function useCanvasViewport({
+  getPolygon,
+  getEmptySpan,
+}: {
+  getPolygon: () => Point[];
+  /**
+   * How many metres the shorter side of the view should show when there is no shape to frame
+   * yet, or `null` for the default scale. The aerial flow answers with the geocoder's precision:
+   * a rooftop result opens tight, a postcode centroid opens wide enough to find the roof by eye.
+   */
+  getEmptySpan?: () => number | null;
+}) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ scale: DEFAULT_SCALE, offsetX: 0, offsetY: 0 });
   const [panning, setPanning] = useState(false);
+  /** True while the ease loop is chasing a zoom target — the imagery layer defers loads on it. */
+  const [zooming, setZooming] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -78,8 +91,10 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
    * would tear down and rebuild the resize observer on each one.
    */
   const polygonRef = useRef(getPolygon);
+  const emptySpanRef = useRef(getEmptySpan);
   useLayoutEffect(() => {
     polygonRef.current = getPolygon;
+    emptySpanRef.current = getEmptySpan;
   });
 
   /*
@@ -94,6 +109,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
 
   const runEase = useCallback(() => {
     if (frameRef.current !== null) return;
+    setZooming(true);
 
     const step = () => {
       let settled = false;
@@ -117,6 +133,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
       });
 
       frameRef.current = settled ? null : requestAnimationFrame(step);
+      if (settled) setZooming(false);
     };
 
     frameRef.current = requestAnimationFrame(step);
@@ -138,8 +155,16 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
       const next =
         current.length < 2
           ? // Nothing to frame yet, so put the metre origin in the middle and let the user draw
-            // outwards from there.
-            { scale: DEFAULT_SCALE, offsetX: width / 2, offsetY: height / 2 }
+            // outwards from there. With imagery the origin is the address, and how far out to
+            // start depends on how surely the geocoder placed it.
+            (() => {
+              const span = emptySpanRef.current?.() ?? null;
+              const scale =
+                span && span > 0
+                  ? clamp(Math.min(width, height) / span, MIN_SCALE, MAX_SCALE)
+                  : DEFAULT_SCALE;
+              return { scale, offsetX: width / 2, offsetY: height / 2 };
+            })()
           : (() => {
               const fitted = fitTransform(current, {
                 width,
@@ -237,6 +262,24 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
     },
     [],
   );
+
+  /**
+   * Moves the metre origin to `delta` (in metres) while leaving every pixel where it is.
+   *
+   * The aerial flow fixes the frame's origin at the first corner the user clicks — so the moment
+   * that corner is placed, everything the viewport was showing relative to the old origin is
+   * now `delta` metres away from the new one. Shifting the offsets by the same amount is what
+   * keeps the photograph still under the cursor while the coordinate system moves under it.
+   */
+  const translateOrigin = useCallback((delta: Point) => {
+    const shift = (v: { scale: number; offsetX: number; offsetY: number }) => ({
+      ...v,
+      offsetX: v.offsetX + delta.x * v.scale,
+      offsetY: v.offsetY + delta.y * v.scale,
+    });
+    targetRef.current = shift(targetRef.current);
+    setViewport(shift);
+  }, []);
 
   const handleWheel = useCallback(
     (event: Konva.KonvaEventObject<WheelEvent>) => {
@@ -415,6 +458,8 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
     fitToShape,
     zoomAbout,
     foldStageOffset,
+    translateOrigin,
+    zooming,
     handleWheel,
     pointerInMetres,
   };

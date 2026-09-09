@@ -1,6 +1,8 @@
 import {
   AssistantProposalSchema,
+  GeocodeResponseSchema,
   GenerateConceptsResultSchema,
+  ImageryConfigSchema,
   PlanProjectSchema,
   PlanProjectSummarySchema,
   SectionPatchResultSchema,
@@ -10,6 +12,8 @@ import {
   type FeaturesSection,
   type GardenBrief,
   type GenerateConceptsResult,
+  type GeocodeResult,
+  type ImageryConfig,
   type LayoutSection,
   type PlanDocument,
   type PlanProject,
@@ -219,4 +223,41 @@ export function validateDocument(document: PlanDocument): Promise<ValidationResu
     method: 'POST',
     body: JSON.stringify({ document }),
   });
+}
+
+/* ---------------------------------------------------------------- aerial mapping */
+
+/**
+ * What the browser needs to draw imagery. Proxied templates come back as API-relative paths,
+ * so they are made absolute here — the one place that knows where the API is.
+ *
+ * A 503 is the "not set up on this server" state and is returned as `null` rather than thrown:
+ * it is the ordinary answer on a machine with no imagery configured, and the step-1 card reads it
+ * to disable itself, exactly as the chat panel does for the assistant.
+ */
+export async function getImageryConfig(): Promise<ImageryConfig | null> {
+  try {
+    const config = await request('/imagery/config', ImageryConfigSchema, { cache: 'no-store' });
+    return {
+      ...config,
+      tileTemplate: absolute(config.tileTemplate),
+      retinaTemplate: config.retinaTemplate ? absolute(config.retinaTemplate) : null,
+    };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 503) return null;
+    throw error;
+  }
+}
+
+/** Address, Eircode or postcode → candidate positions. Never cached, never stored. */
+export function geocode(query: string, signal?: AbortSignal): Promise<GeocodeResult[]> {
+  return request('/geocode', GeocodeResponseSchema, {
+    method: 'POST',
+    body: JSON.stringify({ query }),
+    signal,
+  }).then((response) => response.results);
+}
+
+function absolute(path: string): string {
+  return path.startsWith('/') ? `${API_URL}${path}` : path;
 }

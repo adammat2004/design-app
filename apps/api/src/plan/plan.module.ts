@@ -7,6 +7,8 @@ import { PlannerService } from './assistant/planner.service.js';
 import { ConceptsService } from './generation/concepts.service.js';
 import { FillService } from './generation/fill.service.js';
 import { PlacementService } from './generation/placement.service.js';
+import { GeoController } from './geo/geo.controller.js';
+import { GeoService } from './geo/geo.service.js';
 import { GeometryValidationService } from './geometry-validation.service.js';
 import { PlanProjectsController } from './plan-projects.controller.js';
 import { PlanProjectsService } from './plan-projects.service.js';
@@ -17,8 +19,9 @@ import { PlanProjectsService } from './plan-projects.service.js';
  */
 @Module({
   imports: [AnthropicModule],
-  controllers: [PlanProjectsController, AssistantController],
+  controllers: [PlanProjectsController, AssistantController, GeoController],
   providers: [
+    GeoService,
     GeometryValidationService,
     PlacementService,
     FillService,

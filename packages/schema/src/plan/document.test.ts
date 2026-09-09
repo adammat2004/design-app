@@ -231,6 +231,8 @@ describe('PlanDocumentSchema', () => {
       // is up" is a real statement about the drawing; a latitude cannot, so this stays absent
       // and every solar claim in the app is gated on it being filled in.
       location: null,
+      // Null too: a plan drawn from measurements has no origin on Earth, and nothing guesses one.
+      georeference: null,
       // About 21 June at 15:00 — the longest day, at the hour a garden is judged.
       sun: { dayOfYear: 172, minutes: 900 },
       // No gate and no street until the user says: nothing is inferred into the document.

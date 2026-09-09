@@ -73,6 +73,14 @@ export type HouseTool = 'rectangle' | 'custom' | 'move' | 'rotate';
 
 export type Selection = { kind: 'vertex'; id: string } | { kind: 'house' } | null;
 
+/**
+ * How step 1 is being done. `undecided` shows the choice; `aerial` shows the address search and
+ * imagery; `manual` shows the shape picker and measured corners. Ephemeral and derived on load —
+ * a plan with a `georeference` was traced, one with corners and none was measured — so a stored
+ * flag cannot go stale.
+ */
+export type MappingMethod = 'undecided' | 'aerial' | 'manual';
+
 /** Clicking this close to the first point closes the polygon, in metres. */
 export const CLOSE_DISTANCE = 0.6;
 
@@ -178,6 +186,39 @@ interface BoundaryState {
   lastSavedAt: number;
   gestureSnapshot: BoundaryDraft | null;
   projectName: string;
+
+  /* ---- aerial mapping: everything here is ephemeral except `present.georeference` ---- */
+
+  mappingMethod: MappingMethod;
+  /**
+   * Where the imagery is centred while the user is still finding their roof — a search result
+   * or the browser's location. Not the frame's origin: that is fixed by the first corner, so a
+   * geocoder's guess is never what gets stored.
+   */
+  imageryAnchor: SiteLocation | null;
+  /** How wide the first view should open, in metres, for the precision of that anchor. */
+  imageryViewSpan: number;
+  /** The aerial toggle. Only meaningful once there is somewhere to draw imagery of. */
+  imageryVisible: boolean;
+  /**
+   * Sides the user has typed or confirmed since load, by the id of the vertex they start at.
+   * A traced side is an estimate until then, and the panel says so per side.
+   */
+  checkedEdgeIds: string[];
+
+  setMappingMethod: (method: MappingMethod) => void;
+  /** Centres the imagery on a place, opening `span` metres across. Nothing is stored. */
+  locateImagery: (location: SiteLocation, span: number) => void;
+  /**
+   * Fixes the metre frame to the Earth: `georeference` becomes this point, `location` is set from
+   * it if the user has not set one by hand, north goes up, and the grid snap comes off — a real
+   * fence is not on a half-metre grid. One undo entry.
+   */
+  georeferenceAt: (location: SiteLocation) => void;
+  /** Forgets where the plan is on Earth: the georeference and the sun location both. */
+  clearGeoreference: () => void;
+  toggleImagery: () => void;
+  confirmEdge: (edgeVertexId: string) => void;
 
   addVertexAt: (point: Point) => void;
   /** Places the next corner from a measured length and turn, exactly as typed. */
@@ -357,6 +398,57 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
     gestureSnapshot: null,
     projectName: 'My garden',
 
+    mappingMethod: 'undecided',
+    imageryAnchor: null,
+    imageryViewSpan: 60,
+    imageryVisible: true,
+    checkedEdgeIds: [],
+
+    setMappingMethod: (mappingMethod) =>
+      set((state) => ({
+        mappingMethod,
+        // Tracing a fence does not want the half-metre grid or forced right angles; measuring does.
+        snapEnabled: mappingMethod !== 'aerial',
+        rightAngleSnap: mappingMethod !== 'aerial',
+        boundaryTool: state.present.closed ? state.boundaryTool : 'draw',
+      })),
+
+    locateImagery: (location, span) =>
+      set({ imageryAnchor: location, imageryViewSpan: span, imageryVisible: true }),
+
+    georeferenceAt: (location) => {
+      const parsed = SiteLocationSchema.safeParse(location);
+      if (!parsed.success) return;
+
+      commit((draft) => ({
+        ...draft,
+        georeference: parsed.data,
+        // Applied rather than offered: the user has just pointed at their garden on a map. A
+        // location they typed by hand earlier still wins, and Clear in the sun panel still works.
+        location: draft.location ?? parsed.data,
+        // Imagery is north-up, so the frame is too. A turned frame would rotate the sun but not
+        // the photograph — see `localFrame`, which takes the orientation for the day that changes.
+        orientation: 0,
+      }));
+      set({ mappingMethod: 'aerial', snapEnabled: false, rightAngleSnap: false, imageryVisible: true });
+    },
+
+    clearGeoreference: () =>
+      commit((draft) =>
+        draft.georeference === null && draft.location === null
+          ? null
+          : { ...draft, georeference: null, location: null },
+      ),
+
+    toggleImagery: () => set((state) => ({ imageryVisible: !state.imageryVisible })),
+
+    confirmEdge: (edgeVertexId) =>
+      set((state) =>
+        state.checkedEdgeIds.includes(edgeVertexId)
+          ? state
+          : { checkedEdgeIds: [...state.checkedEdgeIds, edgeVertexId] },
+      ),
+
     addVertexAt: (raw) => {
       const state = get();
       const { present } = state;
@@ -473,7 +565,11 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
       if (selection?.kind === 'vertex' && selection.id === id) set({ selection: null });
     },
 
-    setEdgeLength: (edgeIndex, metres) =>
+    setEdgeLength: (edgeIndex, metres) => {
+      // Typing a length is checking it, whether or not the number changed.
+      const start = get().present.vertices[edgeIndex];
+      if (start) get().confirmEdge(start.id);
+
       commit((draft) => {
         if (!Number.isFinite(metres) || metres <= 0) return null;
 
@@ -494,7 +590,8 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         if (draft.closed && !polygonIsSimple(vertices)) return null;
 
         return { ...draft, vertices };
-      }),
+      });
+    },
 
     /*
      * Replaces the whole outline — how a preset is applied, and how its dimension fields edit it
@@ -949,6 +1046,10 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         hoveredEdgeIndex: null,
         housePoints: [],
         measurement: null,
+        checkedEdgeIds: [],
+        // Starting over on a traced plan keeps the imagery where it was, so the user can redraw
+        // over the same roof rather than search for it again. The stored origin goes with the draft.
+        imageryAnchor: state.imageryAnchor ?? state.present.georeference,
         lastSavedAt: Date.now(),
       })),
 
@@ -1044,7 +1145,18 @@ function ephemeralState() {
     accessTool: null as AccessTool,
     measurement: null,
     gestureSnapshot: null as BoundaryDraft | null,
+    mappingMethod: 'undecided' as MappingMethod,
+    imageryAnchor: null as SiteLocation | null,
+    imageryViewSpan: 60,
+    imageryVisible: true,
+    checkedEdgeIds: [] as string[],
   };
+}
+
+/** What a stored plan says about how it was made — see `MappingMethod`. */
+export function mappingMethodOf(site: BoundaryDraft): MappingMethod {
+  if (site.georeference !== null) return 'aerial';
+  return site.vertices.length > 0 ? 'manual' : 'undecided';
 }
 
 /** Test hook: the store is a module singleton, so suites must reset it between cases. */
@@ -1095,12 +1207,18 @@ export function hydrateBoundaryStore(
     /^g(\d+)$/,
   );
 
+  const mappingMethod = mappingMethodOf(site);
+
   useBoundaryStore.setState({
     ...ephemeralState(),
     present: site,
     unit,
     projectName,
     lastSavedAt: savedAt,
+    mappingMethod,
+    // A traced plan reopens the way it was drawn: over the photograph, with the grid snap off.
+    snapEnabled: mappingMethod !== 'aerial',
+    rightAngleSnap: mappingMethod !== 'aerial',
   });
 }
 

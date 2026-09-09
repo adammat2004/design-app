@@ -15,6 +15,7 @@ export function SubStepChecklist() {
   const mode = useBoundaryStore((state) => state.mode);
   const unit = useBoundaryStore((state) => state.unit);
   const setMode = useBoundaryStore((state) => state.setMode);
+  const checkedEdgeIds = useBoundaryStore((state) => state.checkedEdgeIds);
 
   const totalArea = polygonArea(draftPolygon(draft));
   const houseDone = draft.house !== null;
@@ -24,6 +25,16 @@ export function SubStepChecklist() {
   const hasGardenDoor = gardenDoors(draft.house).length > 0;
   const hasStreet = streetEdge(draft) !== null;
   const accessDone = hasGardenDoor && hasStreet;
+
+  /*
+   * A traced outline gets one extra row: its sides are estimates until the user has looked at
+   * them. It ticks when every side has been typed or confirmed and it never gates Continue —
+   * that would turn a courtesy into a form.
+   */
+  const traced = draft.georeference !== null;
+  const checkedCount = draft.vertices.filter((vertex) => checkedEdgeIds.includes(vertex.id)).length;
+  const sideCount = draft.closed ? draft.vertices.length : Math.max(0, draft.vertices.length - 1);
+  const measurementsDone = draft.closed && checkedCount >= sideCount;
 
   return (
     <ol data-testid="sub-steps" className="space-y-2">
@@ -36,14 +47,34 @@ export function SubStepChecklist() {
             ? `${draft.vertices.length} points · ${formatArea(totalArea, unit)}`
             : draft.vertices.length > 0
               ? `${draft.vertices.length} points · not closed yet`
-              : 'Click the corners of your property'
+              : traced
+                ? 'Click the corners of your property on the photograph'
+                : 'Click the corners of your property'
         }
         done={draft.closed}
         active={mode === 'boundary'}
         onClick={() => setMode('boundary')}
       />
+      {traced ? (
+        <SubStep
+          number={2}
+          testId="sub-step-measurements"
+          title="Check measurements"
+          detail={
+            !draft.closed
+              ? 'Traced sides are estimates — check them once the outline is closed'
+              : measurementsDone
+                ? 'Every side checked'
+                : `${checkedCount} of ${sideCount} sides checked · type any you know`
+          }
+          done={measurementsDone}
+          active={mode === 'boundary' && draft.closed}
+          disabled={!draft.closed}
+          onClick={() => setMode('boundary')}
+        />
+      ) : null}
       <SubStep
-        number={2}
+        number={traced ? 3 : 2}
         testId="sub-step-house"
         title="House footprint"
         detail={
@@ -55,7 +86,7 @@ export function SubStepChecklist() {
         onClick={() => setMode('house')}
       />
       <SubStep
-        number={3}
+        number={traced ? 4 : 3}
         testId="sub-step-access"
         title="Access"
         detail={
