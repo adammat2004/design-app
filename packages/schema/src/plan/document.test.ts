@@ -237,6 +237,9 @@ describe('PlanDocumentSchema', () => {
       gates: [],
       streetEdgeVertexId: null,
       boundaryStyles: [],
+      // Null rather than the whole plot: the generator skips its clip entirely on null, which is
+      // what keeps a plan with no drawn redesign area generating exactly what it always did.
+      scopePolygon: null,
     });
     expect(document.features).toEqual({ features: [], skipped: false });
     expect(document.brief.budget).toBeNull();

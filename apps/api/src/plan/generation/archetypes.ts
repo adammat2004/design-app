@@ -12,7 +12,6 @@ import {
   type MaterialId,
   type Point,
   type PlanGeometry,
-  type SymbolId,
   type ZoneId,
 } from '@garden-studio/schema';
 import type { DesignConstraints } from './constraints.js';
@@ -89,10 +88,11 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
   },
   firePit: {
     category: 'gravel-mulch',
-    footprint: { kind: 'point', radius: 1.4 },
+    footprint: { kind: 'point', radius: 2 },
     prefer: ['back', 'left', 'right'],
     affinity: 'far-from-house',
     planName: 'Fire pit',
+    material: 'decorative-gravel',
   },
   storage: {
     category: 'structure',
@@ -218,32 +218,10 @@ export function archetypeFor(index: number, recommendedIndex: number): Archetype
 
 /* ---------------------------------------------------------------- furnishing */
 
-/**
- * What a requested feature *is*, when its category cannot say. A store is a shed; a pergola is a
- * pergola. Set on the host element itself, so the drawing knows to give it a roof or posts.
- */
-export const HOST_SYMBOLS: Partial<Record<DesiredFeature, SymbolId>> = {
-  pergola: 'pergola',
-  storage: 'shed',
-  vegPatch: 'raised-bed',
-};
-
-/**
- * What goes *inside* a requested feature: the table under the pergola, the sofa on the patio.
- *
- * This is the single biggest difference between a plan that reads as designed and one that reads
- * as zoned. A patio with nothing on it is a rectangle; a patio with a lounge set on it is a place.
- * One list per feature, indexed by the concept — the balanced concept gets the sofa, the
- * entertaining one the long table, the retreat a lounger — and `furnish` walks the list until
- * something fits, so a small pergola gets the four-seater rather than nothing.
- */
-export const FURNISHINGS: Partial<Record<DesiredFeature, SymbolId[]>> = {
-  pergola: ['dining-set-6', 'dining-set-4'],
-  seating: ['sofa-set', 'dining-set-6', 'lounger'],
-  outdoorKitchen: ['bbq'],
-  firePit: ['fire-pit'],
-  play: ['swing', 'trampoline', 'slide'],
-};
+// The furnishing tables live in a leaf module (`furnishings.ts`) because the sketch layer derives
+// the terrace floor from them, and this file imports the template registry that the sketch layer
+// is part of. Re-exported here for the callers that always found them here.
+export { FURNISHINGS, HOST_SYMBOLS } from './furnishings.js';
 
 /**
  * The default surface a concept falls back to, and what it accents with.
@@ -270,6 +248,7 @@ export function fillPalette(
     structure: ['lawn', 'planting-bed'],
     'water-feature': ['lawn', 'planting-bed'],
     furniture: ['lawn', 'planting-bed'],
+    lighting: ['lawn', 'planting-bed'],
     'existing-feature': ['lawn', 'planting-bed'],
   };
 
@@ -358,6 +337,15 @@ export function materialFor(
         if (dear) return 'teak-furniture';
         return formal ? 'steel-furniture' : 'rattan-furniture';
 
+      /*
+       * Finish follows the same two axes every other category does, and brass is deliberately the
+       * dear answer rather than the formal one: solid brass is the fitting that survives, and it
+       * suits a cottage garden weathering to bronze quite as much as a modern one.
+       */
+      case 'lighting':
+        if (dear) return 'antique-brass';
+        return formal ? 'brushed-steel' : 'black-aluminium';
+
       case 'existing-feature':
         return 'existing';
     }
@@ -376,6 +364,38 @@ export function materialFor(
     : chosen;
 
   return canTake(category, permitted) ? permitted : defaultMaterial(category);
+}
+
+/**
+ * What a concept edges its beds with, or `null` for the spade cut every border has for free.
+ *
+ * **Restraint is the design here.** Edging is a real cost by the metre and a real visual weight,
+ * and a garden with a hard course round every bed reads as a municipal planting scheme rather than
+ * a garden. So it is offered only where a style actually calls for it:
+ *
+ * - **formal** wants the line — a clipped, defined edge is most of what makes a formal garden read
+ *   as one — and takes setts, or brick where the budget is modest.
+ * - **cottage** takes brick, which is the traditional answer and the one that suits the planting
+ *   falling over it.
+ * - **modern** takes steel, which is the whole point of steel edging: a line with no width.
+ * - **low maintenance** takes steel too, because that is what it is *for* — the edge that keeps
+ *   the gravel in and never needs recutting.
+ * - everything else gets nothing, which is the commonest answer and the right one.
+ *
+ * Never on a low budget, for the same reason lighting is not: a concept that quietly specified
+ * ninety metres of granite would be misreporting what it costs to build.
+ */
+export function edgingFor(constraints: DesignConstraints): MaterialId | null {
+  if (constraints.budget === 'low') return null;
+
+  const dear = constraints.budget === 'high' || constraints.budget === 'premium';
+  const lowUpkeep = constraints.maintenance === 'low' || constraints.style === 'lowMaintenance';
+
+  if (constraints.style === 'formal') return dear ? 'sett-edging' : 'brick-edging';
+  if (constraints.style === 'cottage') return 'brick-edging';
+  if (constraints.style === 'modern' || lowUpkeep) return 'steel-edging';
+
+  return null;
 }
 
 /**

@@ -27,6 +27,13 @@ export const CATEGORY_COLOURS: Record<ElementCategory, CategoryStyle> = {
   /** A warm neutral: furniture is drawn as a sprite, and this is its selection outline and its chip. */
   furniture: { fill: '#e2d3bd', stroke: '#9c8460', label: 'Furniture' },
   /*
+   * A warm amber, and the one category whose colour is about the thing it *emits* rather than the
+   * thing it is. Every fitting on the plan is a dark metal object a few centimetres across, so a
+   * palette taken from the product would be an unreadable grey dot; the light is what the symbol
+   * is for.
+   */
+  lighting: { fill: '#f5d98f', stroke: '#b98a2b', label: 'Lighting' },
+  /*
    * Carried over from step 2 rather than given a colour of its own. A feature the user chose
    * to keep should look on the concept exactly as it looked when they kept it — a second
    * palette for the same object would read as a different object.
@@ -47,5 +54,6 @@ export const CATEGORY_ORDER: ElementCategory[] = [
   'structure',
   'water-feature',
   'furniture',
+  'lighting',
   'existing-feature',
 ];

@@ -6,8 +6,6 @@ import { BoundaryCanvasLoader } from './BoundaryCanvasLoader';
 import { BoundaryToolsPanel } from './BoundaryToolsPanel';
 import { CanvasToolbar } from './CanvasToolbar';
 import { DesignAreasPanel } from './DesignAreasPanel';
-import { AccessPanel } from './AccessPanel';
-import { BoundaryStylePanel } from './BoundaryStylePanel';
 import { HouseToolsPanel } from './HouseToolsPanel';
 import { SunPanel } from './SunPanel';
 import { LegendPanel } from './LegendPanel';
@@ -21,6 +19,7 @@ import { PropertySummary } from './PropertySummary';
 import { SelectedObjectPanel } from './SelectedObjectPanel';
 import { SideLengthsPanel } from './SideLengthsPanel';
 import { SubStepChecklist } from './SubStepChecklist';
+import { SuggestionsRow } from './segments/SuggestionsRow';
 import { TipCallout } from './TipCallout';
 
 export function MapScreen() {
@@ -73,19 +72,16 @@ export function MapScreen() {
 
           <SubStepChecklist />
 
+          {/*
+            The property details, offered as chips once there is a house to describe them against.
+            Outside the mode switch: a suggestion is worth taking whichever tool is in hand, and
+            the sides and walls they stand in for are clicked on the plan, not chosen from a panel.
+          */}
+          <SuggestionsRow />
+
           {/* The tools follow whichever sub-step is in hand. */}
           {mode === 'house' ? (
             <HouseToolsPanel />
-          ) : mode === 'access' ? (
-            <>
-              <AccessPanel />
-              {/*
-                With access rather than with the outline tools. What a side is made of is the same
-                *kind* of question as which fence the gate is in — a fact about the site the user
-                states, not a measurement they draw — and it reads against the same plan.
-              */}
-              <BoundaryStylePanel />
-            </>
           ) : (
             <>
               {/* The shape picker, or the dimension fields once the outline matches a preset. */}

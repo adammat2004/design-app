@@ -8,9 +8,10 @@ import { useBoundaryStore } from '@/state/boundary-store';
 /**
  * Where the garden is, which way it faces, and when we are looking at it.
  *
- * These three are one concept and they belong together. North lived in `OpeningsPanel` — a panel
- * about doors — purely because that is where it was added; splitting north from location would
- * put half of "sun and shade" in a panel about door positions and the other half here.
+ * These three are one concept and they belong together. North was once beside the openings
+ * controls — a panel about doors — purely because that is where it was added; splitting north
+ * from location would put half of "sun and shade" wherever doors are edited and the other half
+ * here.
  *
  * **Location is the gate on every solar claim in the app.** Until it is filled in, the plan draws
  * with the conventional top-left light and says nothing about sun or shade. That is deliberate:

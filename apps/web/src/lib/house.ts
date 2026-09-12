@@ -1,4 +1,5 @@
 import {
+  DEFAULT_STOREYS,
   MIN_HOUSE_SIDE,
   defaultWalls,
   houseFitsInside,
@@ -44,7 +45,14 @@ export function houseFromPoints(points: Point[]): HouseFootprint | null {
     points.map((point) => ({ x: point.x - centre.x, y: point.y - centre.y })),
   );
 
-  return { outline, walls: defaultWalls(outline), openings: [], centre, rotation: 0 };
+  return {
+    outline,
+    walls: defaultWalls(outline),
+    openings: [],
+    centre,
+    rotation: 0,
+    storeys: DEFAULT_STOREYS,
+  };
 }
 
 /** Scales the outline about its own origin so its bounding box matches the requested size. */

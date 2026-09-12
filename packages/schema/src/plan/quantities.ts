@@ -1,8 +1,10 @@
-import { elementArea, type DesignElement } from './concepts.js';
+import { elementArea, isCounted, type DesignElement } from './concepts.js';
+import { edgingRuns } from './edging.js';
+import type { Point } from '../geometry/primitives.js';
 import type { ElementCategory } from './concepts.js';
 import type { BudgetBand } from './brief.js';
 import { findMaterial, materialLabel, MATERIALS } from './materials.js';
-import { isModular, materialPattern, unitsPerSquareMetre } from './material-patterns.js';
+import { isCountable, materialPattern, unitsPerSquareMetre } from './material-patterns.js';
 
 /**
  * What a plan is made of, counted.
@@ -44,6 +46,14 @@ export interface ScheduleLine {
   /** How many separate elements on the plan use this material. */
   elementCount: number;
   /**
+   * Linear metres, for the products sold by the metre — which today means edging and nothing else.
+   *
+   * `null` rather than `0` for everything measured by area, and the distinction matters: a nought
+   * would read as "no edging here", where the honest answer for a patio is that linear metres is
+   * not the unit it is bought in. The same reason `units` is nullable.
+   */
+  lengthM: number | null;
+  /**
    * Products to order — slabs, boards.
    *
    * `null` wherever a count would be a lie, which is most materials. See `planSchedule`.
@@ -55,7 +65,7 @@ export interface ScheduleLine {
 /**
  * Every material on the plan, largest first.
  *
- * **Unit counts are given only for modular products, and that restriction is load-bearing.**
+ * **Unit counts are given only for real products, and that restriction is load-bearing.**
  * `unitsPerSquareMetre` will happily return a number for a scatter, but `material-patterns.ts` is
  * explicit that scatter densities are *drawn* densities chosen so a bed reads as planting at a
  * glance — a border really planted at the drawn density would close up in a season. Multiplying one
@@ -63,10 +73,23 @@ export interface ScheduleLine {
  * list, which is exactly the misreading that file warns against. Slabs and boards are safe because
  * their manifest entries are real product dimensions.
  *
+ * A patio pack is counted too, on the same test rather than as an exception: its members are real
+ * product dimensions and a pack is sold by the area it covers, so a count from its mean unit is
+ * what a takeoff wants. `isCountable` is where that line is drawn.
+ *
  * Hidden elements are excluded: the user has taken them out of the drawing, and a schedule that
  * counts what the plan does not show is a schedule nobody can check.
  */
-export function planSchedule(elements: DesignElement[]): ScheduleLine[] {
+export function planSchedule(
+  elements: DesignElement[],
+  /*
+   * What edging may not lie along: the boundary ring and the house. Optional, and absent means no
+   * exclusion — a caller with neither (a thumbnail, a unit test) gets the honest whole-outline
+   * answer rather than a quietly different one. The review screen passes both, which is the number
+   * anybody would order against.
+   */
+  exclude: { boundary?: Point[]; house?: Point[] } = {},
+): ScheduleLine[] {
   const lines = new Map<string, ScheduleLine>();
 
   for (const element of elements) {
@@ -84,22 +107,24 @@ export function planSchedule(elements: DesignElement[]): ScheduleLine[] {
       category: element.category,
       areaSqm: 0,
       elementCount: 0,
+      lengthM: null,
       units: null,
       unitLabel: null,
     };
 
     /*
-     * Furniture is counted, not measured. A dining set has a footprint for placing and selecting
-     * it, but "2.4 m² of teak" is not a quantity anyone orders — the honest line is "1 item".
+     * Furniture and lighting are counted, not measured. A dining set has a footprint for placing
+     * and selecting it, but "2.4 m² of teak" is not a quantity anyone orders — the honest line is
+     * "1 item". A bollard is the same argument at a twentieth of the size.
      */
-    if (element.category !== 'furniture') line.areaSqm += elementArea(element);
+    if (!isCounted(element.category)) line.areaSqm += elementArea(element);
     line.elementCount += 1;
 
     lines.set(material.id, line);
   }
 
   for (const line of lines.values()) {
-    if (line.category === 'furniture') {
+    if (isCounted(line.category)) {
       line.units = line.elementCount;
       line.unitLabel = line.elementCount === 1 ? 'item' : 'items';
       continue;
@@ -107,6 +132,43 @@ export function planSchedule(elements: DesignElement[]): ScheduleLine[] {
     const counted = countUnits(line.materialId, line.areaSqm);
     line.units = counted?.units ?? null;
     line.unitLabel = counted?.label ?? null;
+  }
+
+  /*
+   * Edging, which is the one thing on the plan measured in metres rather than in square metres.
+   *
+   * It has no elements of its own — a run is derived from the outline of the bed it follows, see
+   * `plan/edging.ts` — so it cannot come out of the loop above and gets its own pass. Grouped by
+   * material like everything else, and laid `over` rather than on the ground, because an edging
+   * course is drawn on top of the surface it edges.
+   */
+  for (const run of edgingRuns(elements, exclude)) {
+    const material = findMaterial(run.material);
+    if (!material) continue;
+
+    const line = lines.get(material.id) ?? {
+      layer: 'over' as const,
+      materialId: material.id,
+      label: materialLabel(material.id),
+      category: 'planting-bed' as ElementCategory,
+      areaSqm: 0,
+      elementCount: 0,
+      lengthM: 0,
+      units: null,
+      unitLabel: null,
+    };
+
+    line.lengthM = (line.lengthM ?? 0) + run.length;
+    // Runs rather than areas, which is what the table says it is counting for a length line.
+    line.elementCount += 1;
+    lines.set(material.id, line);
+  }
+
+  for (const line of lines.values()) {
+    if (line.lengthM === null) continue;
+    // Rounded up for the same reason a slab count is: you cannot order four fifths of a kerb.
+    line.units = Math.ceil(line.lengthM);
+    line.unitLabel = 'm';
   }
 
   // Ground first, then what is laid over it — the order the drawing is built in, so the table
@@ -123,7 +185,7 @@ function countUnits(materialId: string, areaSqm: number): { units: number; label
   if (areaSqm <= 0) return null;
 
   const pattern = materialPattern(materialId);
-  if (!pattern || !isModular(pattern)) return null;
+  if (!pattern || !isCountable(pattern)) return null;
 
   const perSquareMetre = unitsPerSquareMetre(pattern);
   if (perSquareMetre === null) return null;
@@ -182,8 +244,8 @@ export function materialCostIndex(elements: DesignElement[]): number {
     const size = elementArea(element);
     // Point features have no area; a tree should not weigh the same as a terrace.
     if (size <= 0) continue;
-    // Furniture is not laid by area, so its cost band is not an area-weighted one. See above.
-    if (element.category === 'furniture') continue;
+    // Furniture and lighting are not laid by area, so neither weighs an area-weighted band.
+    if (isCounted(element.category)) continue;
 
     const material = findMaterial(element.material) ?? MATERIALS[element.category][0];
     if (!material) continue;

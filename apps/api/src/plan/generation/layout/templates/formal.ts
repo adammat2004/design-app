@@ -3,11 +3,15 @@ import {
   behindTerrace,
   borderDepth,
   clamp,
+  clampToRoom,
   isCourtyard,
-  rectCentre,
-  rectSize,
+  lawnEnd,
+  lawnStart,
   roomBehind,
   terraceDepth,
+  terraceEndSlot,
+  terraceFloor,
+  terraceSlot,
   terraceWidth,
   type LayoutSketch,
   type LocalPoint,
@@ -28,51 +32,58 @@ const AXIS_WIDTH = 1.2;
  * the pergola, or a bench — and the utility pieces in the two far corners. The mirror line is the
  * door's own normal, so a door off-centre on its wall still gets a plan that is symmetric about
  * the view from it, which is what formal means.
+ *
+ * The one thing that may break the mirror is the terrace. Symmetry uses the narrower side of the
+ * door for both halves, and a door a metre from a fence would mirror the terrace into a strip too
+ * narrow for its table; so the terrace keeps its floor and slides along the wall to stay in the
+ * room, exactly as the other templates do, while the lawn and the axis stay centred on the door.
  */
 export function formal(request: SketchRequest, room: Room): LayoutSketch {
   const s = request.scale;
   const D = room.uMax;
   const b = borderDepth(s);
 
-  // Symmetry needs equal room either side of the axis; use the narrower side for both.
-  const hw = Math.min(-room.vMin, room.vMax);
+  // Symmetry needs equal room either side of the axis; use the narrower side for both, but never
+  // narrower than the terrace's floor.
+  const floor = terraceFloor(room);
+  const hw = Math.max(Math.min(-room.vMin, room.vMax), floor.width / 2);
   const symmetric: Room = { uMin: room.uMin, uMax: room.uMax, vMin: -hw, vMax: hw };
 
   const depth = terraceDepth(s, D);
-  const width = Math.min(terraceWidth(request, symmetric), 2 * hw - 0.8);
-  const doorHalf = (request.doorWidth ?? 0) / 2;
-  const half = Math.max(width / 2, doorHalf);
+  const width = Math.max(floor.width, Math.min(terraceWidth(request, room), 2 * hw - 0.8));
+  const [v0, v1] = clampToRoom(width, room, (request.doorWidth ?? 0) / 2);
   const terrace: LocalRect = {
     u0: Math.max(room.uMin, 0),
     u1: Math.max(room.uMin, 0) + depth,
-    v0: -half,
-    v1: half,
+    v0,
+    v1,
   };
   const T = terrace.u1;
 
-  const courtyard = isCourtyard(s, D);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
   // Behind the terrace the room may be narrower (an L-plot): the lawn and the far slots mirror
   // about the axis within *that* width.
   const deep = roomBehind(symmetric, T + 0.4);
   const dw = Math.max(0.5, Math.min(-deep.vMin, deep.vMax));
   // The focal room at the end of the axis takes a share of what is free behind the terrace, so a
   // shallow garden keeps a lawn in front of it rather than a pool with no lawn at all.
-  const lawnStart = T + 0.6 * s;
-  const axisEnd = Math.min(clamp(3.4 * s, 2.4, 5), Math.max(1.2, (D - b - lawnStart) * 0.45));
+  const start = lawnStart(s, D, T);
+  const end = lawnEnd(s, D, T);
+  const axisEnd = Math.min(clamp(3.4 * s, 2.4, 5), Math.max(1.2, (end - start) * 0.45));
 
   const lawn: LayoutSketch['lawn'] = courtyard
     ? null
     : {
         kind: 'rect',
-        rect: { u0: lawnStart, u1: D - b - axisEnd, v0: -(dw - b), v1: dw - b },
+        rect: { u0: start, u1: end - axisEnd, v0: -(dw - b), v1: dw - b },
         cornerRadius: 0,
       };
 
   const utility = behindTerrace(T, D - b, 2.4 * s);
-  const lawnRoom = behindTerrace(lawnStart, lawn ? lawn.rect.u1 : D - b, 3.6 * s);
+  const lawnRoom = behindTerrace(start, lawn ? lawn.rect.u1 : D - b, 3.6 * s);
 
   const slots: Slot[] = [
-    { id: 'terrace', kind: 'terrace', anchor: rectCentre(terrace), maxSize: rectSize(terrace) },
+    terraceSlot(terrace, room),
     {
       id: 'beside-terrace',
       kind: 'beside-terrace',
@@ -116,12 +127,7 @@ export function formal(request: SketchRequest, room: Room): LayoutSketch {
         anchor: { u: lawnRoom.u, v: -(dw - b - 2.1 * s) },
         maxSize: { width: 3.6 * s, depth: lawnRoom.depth },
       },
-      {
-        id: 'terrace-end',
-        kind: 'terrace-end',
-        anchor: { u: T / 2, v: terrace.v0 - 1.9 * s },
-        maxSize: { width: 3.6 * s, depth: Math.max(2.4, T) },
-      },
+      terraceEndSlot(terrace, 'left', s),
     );
   } else {
     slots.push({

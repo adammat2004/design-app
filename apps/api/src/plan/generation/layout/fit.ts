@@ -52,7 +52,16 @@ export function fitInSlot(
 ): PlanGeometry | null {
   const sized = sizeToSlot(footprint, slot);
 
-  for (let scale = 1; scale >= MIN_SCALE - 1e-9; scale *= SHRINK_STEP) {
+  /*
+   * How far the footprint may shrink: to `MIN_SCALE`, or to the slot's own floor if that is
+   * nearer. A footprint the slot has already sized below its floor is refused outright — the
+   * honest answer, and the card reports the feature as not included. Refuse, never shrink below
+   * usable.
+   */
+  const floor = slot.minSize ? Math.max(MIN_SCALE, floorScale(sized, slot.minSize)) : MIN_SCALE;
+  if (floor > 1 + 1e-9) return null;
+
+  for (const scale of shrinkSteps(floor)) {
     const scaled = scaleFootprint(sized, scale);
 
     for (const anchor of nudges(slot.anchor)) {
@@ -62,6 +71,34 @@ export function fitInSlot(
   }
 
   return null;
+}
+
+/** 1, 0.9, 0.81 … down to `floor`, then `floor` itself, so the last try is exactly the floor. */
+function* shrinkSteps(floor: number): Generator<number> {
+  let scale = 1;
+  while (scale > floor + 1e-9) {
+    yield scale;
+    scale *= SHRINK_STEP;
+  }
+  yield floor;
+}
+
+/**
+ * The scale at which `sized` meets `minSize`: over 1 when it is already too small. Compared side
+ * to side — short to short, long to long — because `sizeToSlot` may have turned the footprint.
+ */
+export function floorScale(sized: Footprint, minSize: { width: number; depth: number }): number {
+  if (sized.kind === 'point') {
+    const diameter = sized.radius * 2;
+    return diameter > 0 ? Math.min(minSize.width, minSize.depth) / diameter : Infinity;
+  }
+  const [short, long] = [sized.width, sized.depth].sort((a, b) => a - b) as [number, number];
+  const [minShort, minLong] = [minSize.width, minSize.depth].sort((a, b) => a - b) as [
+    number,
+    number,
+  ];
+  if (short <= 0 || long <= 0) return Infinity;
+  return Math.max(minShort / short, minLong / long);
 }
 
 /** The slot's anchor, then rings of nudges around it along the frame's axes. */

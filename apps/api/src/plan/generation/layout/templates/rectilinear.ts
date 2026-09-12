@@ -3,10 +3,13 @@ import {
   behindTerrace,
   borderDepth,
   isCourtyard,
-  rectCentre,
-  rectSize,
+  lawnEnd,
+  lawnStart,
+  MOWING_STRIP,
   roomBehind,
+  terraceEndSlot,
   terraceRect,
+  terraceSlot,
   type LayoutSketch,
   type LocalPoint,
   type Room,
@@ -32,7 +35,7 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
 
   const gate = request.gateSide ?? 'right';
   const gateSign = gate === 'right' ? 1 : -1;
-  const courtyard = isCourtyard(s, D);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
 
   // The part of the room behind the terrace: on an L-plot, the deep limb alone.
   const deep = roomBehind(room, T + 0.4);
@@ -41,9 +44,7 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
   /** A `v` on the other side. */
   const farV = (metres: number) => (gate === 'right' ? deep.vMin + metres : deep.vMax - metres);
 
-  const slots: Slot[] = [
-    { id: 'terrace', kind: 'terrace', anchor: rectCentre(terrace), maxSize: rectSize(terrace) },
-  ];
+  const slots: Slot[] = [terraceSlot(terrace, room)];
 
   // Beside the terrace along the house wall, on the gate's side: an outdoor kitchen lives here.
   slots.push({
@@ -55,12 +56,7 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
   });
 
   // At the end of the terrace, continuing along the wall away from the gate: the dining pergola.
-  slots.push({
-    id: 'terrace-end',
-    kind: 'terrace-end',
-    anchor: { u: T / 2, v: gate === 'right' ? terrace.v0 - 1.9 * s : terrace.v1 + 1.9 * s },
-    maxSize: { width: 3.6 * s, depth: Math.max(2.4, T) },
-  });
+  slots.push(terraceEndSlot(terrace, gate === 'right' ? 'left' : 'right', s));
 
   /*
    * The utility corner: the shed stands in the far corner on the gate's side, 0.6 m off both
@@ -138,12 +134,11 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
    * as the space left over. So: the back gets a deep border (2×), the far side a normal one, and
    * the gate side only a mowing strip, because that is the side you walk down.
    */
-  const mowingStrip = 0.35;
   const lawnRect = {
-    u0: T + 0.6 * s,
-    u1: D - Math.min(2 * b, Math.max(0.4, D - (T + 0.6 * s) - 1.6)),
-    v0: gate === 'right' ? deep.vMin + b : deep.vMin + mowingStrip,
-    v1: gate === 'right' ? deep.vMax - mowingStrip : deep.vMax - b,
+    u0: lawnStart(s, D, T),
+    u1: lawnEnd(s, D, T),
+    v0: gate === 'right' ? deep.vMin + b : deep.vMin + MOWING_STRIP,
+    v1: gate === 'right' ? deep.vMax - MOWING_STRIP : deep.vMax - b,
   };
   const notched = notchV > 0 && notchU > lawnRect.u0 + 1.5 && notchU < lawnRect.u1;
   const lawn: LayoutSketch['lawn'] = courtyard

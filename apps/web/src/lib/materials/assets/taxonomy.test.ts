@@ -6,6 +6,7 @@ import {
   canopiesForSymbol,
   CANOPY_SPRITES,
   CONTACT_SHADOW_SPRITE,
+  LIGHT_POOL_SPRITE,
   materialAssets,
   MATERIAL_ASSETS,
   SYMBOL_SPRITES,
@@ -238,7 +239,11 @@ describe('every generated asset is reachable', () => {
   };
 
   it('has a consumer for every family, or a written reason', () => {
-    const reachable = new Set<AssetId>([CONTACT_SHADOW_SPRITE, ...CANOPY_SPRITES]);
+    const reachable = new Set<AssetId>([
+      CONTACT_SHADOW_SPRITE,
+      LIGHT_POOL_SPRITE,
+      ...CANOPY_SPRITES,
+    ]);
     // Trees resolve per species now, so the general canopy pool is no longer the whole story.
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
 
@@ -261,7 +266,11 @@ describe('every generated asset is reachable', () => {
 
   /** And the reverse: a reason left behind for an asset that *is* now drawn is stale. */
   it('has no stale exemptions', () => {
-    const reachable = new Set<AssetId>([CONTACT_SHADOW_SPRITE, ...CANOPY_SPRITES]);
+    const reachable = new Set<AssetId>([
+      CONTACT_SHADOW_SPRITE,
+      LIGHT_POOL_SPRITE,
+      ...CANOPY_SPRITES,
+    ]);
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
     for (const material of Object.keys(MATERIAL_ASSETS)) {
       for (const sprite of materialAssets(material)?.sprites ?? []) reachable.add(sprite);

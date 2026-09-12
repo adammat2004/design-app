@@ -197,10 +197,10 @@ describe.skipIf(connection === null)('FillService', () => {
     });
   });
 
-  describe('clipToRoom', () => {
+  describe('clipTo', () => {
     it('keeps the part of a shape that lies in the room', async () => {
       const shape = rect(8, 2, 8, 4); // Runs 4 m past the zone's right edge.
-      const clipped = await service.clipToRoom(shape, zone);
+      const clipped = await service.clipTo(shape, zone);
 
       expect(clipped).not.toBeNull();
       expect(polygonArea(clipped!)).toBeCloseTo(16, 3);
@@ -209,14 +209,83 @@ describe.skipIf(connection === null)('FillService', () => {
 
     it('insets the result when asked', async () => {
       const shape = rect(2, 2, 6, 4);
-      const inset = await service.clipToRoom(shape, zone, 0.5);
+      const inset = await service.clipTo(shape, zone, 0.5);
 
       expect(inset).not.toBeNull();
       expect(polygonArea(inset!)).toBeCloseTo(15, 3);
     });
 
     it('is null when the shape misses the room', async () => {
-      expect(await service.clipToRoom(rect(20, 20, 2, 2), zone)).toBeNull();
+      expect(await service.clipTo(rect(20, 20, 2, 2), zone)).toBeNull();
+    });
+  });
+
+  describe('clipRingsTo', () => {
+    it('buckets the pieces by input index', async () => {
+      const left = rect(0, 0, 5, 10);
+      const right = rect(7, 0, 5, 10);
+      // Covers all of `left` and only the first 2 m of `right`.
+      const scope = rect(0, 0, 9, 10);
+
+      const [leftPieces, rightPieces] = await service.clipRingsTo([left, right], scope);
+
+      expect(polygonArea(leftPieces![0]!)).toBeCloseTo(50, 3);
+      expect(polygonArea(rightPieces![0]!)).toBeCloseTo(20, 3);
+    });
+
+    /*
+     * The case `clipTo` cannot answer and this method exists for. A U-shaped redesign area cuts one
+     * zone into two gardens; keeping only the larger would leave the other with no base fill under
+     * it, which draws as bare graph paper inside the area the user asked to have designed.
+     */
+    it('keeps every surviving piece, largest first', async () => {
+      /*
+       * A U opening upwards whose connecting bar sits below the zone, so the two arms reach into
+       * the zone but the bar never does — one simple ring, two disjoint pieces of zone. A U whose
+       * bar is inside the zone would clip to a single connected U and prove nothing.
+       */
+      const u = [
+        { x: 1, y: -5 },
+        { x: 11, y: -5 },
+        { x: 11, y: 8 },
+        { x: 7, y: 8 },
+        { x: 7, y: -1 },
+        { x: 4, y: -1 },
+        { x: 4, y: 8 },
+        { x: 1, y: 8 },
+      ];
+
+      const [pieces] = await service.clipRingsTo([zone], u);
+
+      expect(pieces).toHaveLength(2);
+      // The right arm is 4 m wide, the left 3 m, both 8 m deep — so ordering is observable.
+      expect(pieces!.map((piece) => polygonArea(piece))).toEqual([32, 24]);
+    });
+
+    it('drops a sliver too narrow to be a garden', async () => {
+      // 0.8 m of overlap — under MIN_FILL_SIDE, so the negative-buffer width test empties it.
+      expect(await service.clipRingsTo([zone], rect(-10, 0, 10.8, 10))).toEqual([[]]);
+    });
+
+    it('is empty for a ring the scope misses entirely', async () => {
+      expect(await service.clipRingsTo([zone], rect(40, 40, 6, 6))).toEqual([[]]);
+    });
+
+    it('returns open rings, as every other ring in the generator is', async () => {
+      const [pieces] = await service.clipRingsTo([zone], rect(1, 1, 8, 8));
+      const ring = pieces![0]!;
+
+      expect(ring[0]).not.toEqual(ring.at(-1));
+    });
+
+    it('leaves a bucket empty rather than dropping it, so indexes still line up', async () => {
+      const [first, second] = await service.clipRingsTo(
+        [zone, rect(40, 40, 6, 6)],
+        rect(1, 1, 8, 8),
+      );
+
+      expect(first).toHaveLength(1);
+      expect(second).toEqual([]);
     });
   });
 

@@ -19,6 +19,7 @@ export const MaterialIdSchema = z.enum([
   'stone-pavers',
   'concrete',
   'porcelain',
+  'stone-setts',
   'gravel-paving',
   'timber-decking',
   'stepping-stones',
@@ -48,6 +49,20 @@ export const MaterialIdSchema = z.enum([
   'formal-pool',
   'rill',
   'water-bowl',
+  // edging — not a category; see `EDGING_MATERIALS`
+  'brick-edging',
+  'concrete-kerb',
+  'sett-edging',
+  'timber-sleeper',
+  'steel-edging',
+  // walling — retaining, also not a category; see `WALLING_MATERIALS`
+  'walling-stone',
+  'brick-walling',
+  'rendered-block',
+  // lighting
+  'black-aluminium',
+  'brushed-steel',
+  'antique-brass',
   // furniture
   'teak-furniture',
   'rattan-furniture',
@@ -73,6 +88,7 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'stone-pavers', label: 'Natural stone pavers', cost: 4 },
     { id: 'concrete', label: 'Concrete', cost: 2 },
     { id: 'porcelain', label: 'Porcelain tiles', cost: 4 },
+    { id: 'stone-setts', label: 'Stone setts', cost: 3 },
     { id: 'gravel-paving', label: 'Gravel', cost: 1 },
     { id: 'timber-decking', label: 'Timber decking', cost: 3 },
     { id: 'stepping-stones', label: 'Stepping stones', cost: 2 },
@@ -112,6 +128,17 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'rattan-furniture', label: 'Rattan', cost: 2 },
     { id: 'steel-furniture', label: 'Powder-coated steel', cost: 3 },
   ],
+  /*
+   * A light fitting is specified by its finish, the way a timber structure is specified by its
+   * timber. These three are the finishes a garden range actually comes in, and they are genuinely
+   * a cost decision: solid brass is several times the price of powder-coated aluminium and is the
+   * one that survives a coastal garden.
+   */
+  lighting: [
+    { id: 'black-aluminium', label: 'Powder-coated black', cost: 2 },
+    { id: 'brushed-steel', label: 'Brushed stainless steel', cost: 3 },
+    { id: 'antique-brass', label: 'Solid brass', cost: 4 },
+  ],
   'water-feature': [
     { id: 'naturalistic-pond', label: 'Naturalistic pond', cost: 2 },
     { id: 'formal-pool', label: 'Formal pool', cost: 4 },
@@ -124,6 +151,65 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
    */
   'existing-feature': [{ id: 'existing', label: 'Existing — unchanged', cost: 1 }],
 };
+
+/**
+ * What a surface may be edged with.
+ *
+ * **Not in `MATERIALS`, because edging is not an `ElementCategory`.** An edging run is derived from
+ * the outline of the thing it edges — see `plan/edging.ts` — so there is no element to give a
+ * category to, and inventing one would mean an element the editor can select, move and delete
+ * independently of the bed it belongs to, which is exactly the drift the derivation exists to
+ * prevent. The list is the same `Material` shape so cost, label and lookup all work unchanged.
+ *
+ * Ordered cheapest-first by intent rather than by `cost`: a spade cut is what a border has unless
+ * somebody pays for something, which is why `null` rather than an entry here is the default.
+ */
+export const EDGING_MATERIALS: Material[] = [
+  { id: 'steel-edging', label: 'Steel edging', cost: 2 },
+  { id: 'brick-edging', label: 'Brick soldier course', cost: 2 },
+  { id: 'timber-sleeper', label: 'Timber sleeper', cost: 2 },
+  { id: 'sett-edging', label: 'Granite sett course', cost: 3 },
+  { id: 'concrete-kerb', label: 'Concrete kerb', cost: 3 },
+];
+
+/**
+ * What a retaining wall is built of.
+ *
+ * Outside `MATERIALS` for the same reason `EDGING_MATERIALS` is: a retaining face is derived from
+ * the edge of a raised element — see `plan/levels.ts` — so there is no element to give a category
+ * to. Three, because that is how many answers there really are at garden scale: coursed stone,
+ * brick, or block with a render on it.
+ *
+ * **Absent is a real answer and the default.** A raised terrace with no `retaining` set draws a
+ * plain upstand in its own paving darkened, which is exactly what an in-situ concrete edge or a
+ * terrace retained in its own stone looks like. Choosing one of these is choosing to make the wall
+ * a different material from the thing it holds up.
+ */
+export const WALLING_MATERIALS: Material[] = [
+  { id: 'walling-stone', label: 'Coursed stone walling', cost: 4 },
+  { id: 'brick-walling', label: 'Brick walling', cost: 3 },
+  { id: 'rendered-block', label: 'Rendered blockwork', cost: 2 },
+];
+
+export function isWallingMaterial(id: string | undefined): boolean {
+  return id !== undefined && WALLING_MATERIALS.some((material) => material.id === id);
+}
+
+/** The categories a surface must be for edging to mean anything: the four that cover ground. */
+export const EDGEABLE_CATEGORIES: ElementCategory[] = [
+  'lawn',
+  'planting-bed',
+  'paved-area',
+  'gravel-mulch',
+];
+
+export function canBeEdged(category: ElementCategory): boolean {
+  return EDGEABLE_CATEGORIES.includes(category);
+}
+
+export function isEdgingMaterial(id: string | undefined): boolean {
+  return id !== undefined && EDGING_MATERIALS.some((material) => material.id === id);
+}
 
 export function materialsFor(category: ElementCategory): Material[] {
   return MATERIALS[category];
@@ -142,7 +228,12 @@ export function findMaterial(id: string | undefined): Material | null {
     if (match) return match;
   }
 
-  return null;
+  // Edging and walling last, outside the category loop, because they belong to no category.
+  return (
+    EDGING_MATERIALS.find((material) => material.id === id) ??
+    WALLING_MATERIALS.find((material) => material.id === id) ??
+    null
+  );
 }
 
 export function materialLabel(id: string | undefined): string {

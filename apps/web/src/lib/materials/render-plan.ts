@@ -10,13 +10,24 @@ import {
   type SiteSection,
 } from '@garden-studio/schema';
 import { buildRenderScene, type BuildOptions, type PlanScene } from '../render/build-scene';
-import type { RenderHouse, RenderItem, RenderScene, RenderSurface } from '../render/scene';
+import type {
+  RenderHouse,
+  RenderItem,
+  RenderOpening,
+  RenderScene,
+  RenderSurface,
+} from '../render/scene';
 import { LAYER_ORDER } from '../render/visual-layer';
 import { ROOF_TONES, type RenderRoof } from '../render/roof';
 import { COLOUR } from '../canvas-colours';
 import { CATEGORY_COLOURS } from '../concept-colours';
 import { materialFill } from '../material-colours';
-import { canopiesForSymbol, CONTACT_SHADOW_SPRITE, SYMBOL_SPRITES } from './assets/material-assets';
+import {
+  canopiesForSymbol,
+  CONTACT_SHADOW_SPRITE,
+  LIGHT_POOL_SPRITE,
+  SYMBOL_SPRITES,
+} from './assets/material-assets';
 import type { LoadedAsset } from './assets/registry';
 import {
   CONTACT_SHADOW_ALPHA,
@@ -24,6 +35,9 @@ import {
   CONTACT_SHADOW_SCALE,
   FENCE_SHADE_OPACITY,
   LIGHT_DIRECTION,
+  LIGHT_POOL_ALPHA,
+  NIGHT_MAX_ALPHA,
+  NIGHT_TONE,
   SHADOW_OPACITY,
   SHADOW_TONE,
   cssToRgb,
@@ -41,12 +55,17 @@ import {
 } from './symbols/boundary';
 import {
   fenceShadeBands,
+  gateSwings,
   houseGroundShadow,
   HOUSE_SHADOW_ALPHA,
+  openGapTicks,
   STREET_KERB_OFFSET,
+  swingGeometry,
+  WALL_THICKNESS,
+  type SwingGeometry,
 } from './symbols/property';
 import { MIN_DRAWN_SYMBOL_PX, MIN_DRAWN_UNIT_PX } from './lod';
-import { drawShadowLayer } from './render-shadow-layer';
+import { PRESENTATION_SHADOW_SOFTNESS, renderShadowLayer } from './render-shadow-layer';
 import {
   drawBlob,
   drawSprite,
@@ -184,6 +203,36 @@ export function drawScene(
     drawItem(context, item, pass, light, toPx, rasterOrigin);
   }
 
+  /*
+   * The edging courses, between the ground and everything that stands on it.
+   *
+   * Above the surfaces because a course is laid *on* the ground it edges, and below the shadows
+   * and the objects because it is still ground: a tree's shadow falls across a brick course, and
+   * the shed stands on top of one. Nothing here is an element — see `RenderScene.edging`.
+   */
+  for (const surface of rendered.edging) {
+    drawSurface(context, surface, pass, light, toPx, rasterOrigin);
+  }
+
+  /*
+   * The retaining faces, above the edging and still below everything that stands up.
+   *
+   * A flat fill rather than a pattern, deliberately: at 450 mm a wall top is a couple of pixels
+   * across at plan zoom, and asking the module painter for a course of blockwork inside it would
+   * spend a raster on something that lands as one tone anyway. The tone is the host's own paving
+   * darkened, so a level change reads as the same material stepping down rather than as a foreign
+   * object laid round it.
+   */
+  for (const level of rendered.levels) {
+    if (level.surface) {
+      drawSurface(context, level.surface, pass, light, toPx, rasterOrigin);
+      continue;
+    }
+    context.fillStyle = level.colour;
+    tracePath(context, level.outline, toPx);
+    context.fill();
+  }
+
   drawShadows(context, rendered, pass, toPx);
 
   drawPlants(context, rendered, pass, light, toPx);
@@ -231,10 +280,72 @@ export function drawOverlay(
   context.restore();
 
   /* The house sits above the planting so a bed can run right up to the wall. */
-  if (rendered.house) drawHouse(context, rendered.house, pass, toPx);
+  if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx);
 
   drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
   drawAccess(context, site, pxPerMetre, toPx);
+
+  drawLighting(context, rendered, pass, toPx);
+}
+
+/**
+ * Night, and the pools the fittings throw into it.
+ *
+ * Last of everything and clipped to the plot, because it is a property of the *scene* rather than
+ * of any element in it: the wash has to fall on the house, the fence and the paving equally, and a
+ * garden that darkened while its own boundary stayed at noon would read as a mistake rather than
+ * as dusk. Clipped for the reason the shadow raster is — a plan that dimmed the neighbour's
+ * property would be describing land it does not own.
+ *
+ * Draws nothing at all when `night` is null or zero, so every daylight sheet and every plan with
+ * no location is byte-identical to what it was before lighting existed.
+ */
+function drawLighting(
+  context: PlanContext,
+  rendered: RenderScene,
+  pass: PlanPass,
+  toPx: (point: Point) => Point,
+): void {
+  const { night, lights, boundary } = rendered;
+  if (night === null || night <= 0) return;
+
+  context.save();
+  tracePath(context, boundary, toPx);
+  context.clip();
+
+  context.globalAlpha = night * NIGHT_MAX_ALPHA;
+  context.fillStyle = NIGHT_TONE;
+  context.fill();
+  context.globalAlpha = 1;
+
+  const pool = pass.assets?.(LIGHT_POOL_SPRITE)[0];
+  if (pool) {
+    /*
+     * `lighter` rather than `source-over`: two lamps on one shrub really are brighter than one, and
+     * the pool tile is a pre-multiplied warm gradient so adding it lifts the wash back out instead
+     * of painting a pale disc over it. The opposite of the shadow rule, deliberately — see
+     * `LIGHT_POOL_ALPHA`.
+     */
+    context.globalCompositeOperation = 'lighter';
+    for (const item of lights) {
+      const centre = toPx(item.at);
+      const reach = item.radius * pass.pxPerMetre;
+      if (reach < 1) continue;
+
+      context.globalAlpha = Math.max(0, Math.min(1, item.intensity)) * LIGHT_POOL_ALPHA;
+      context.drawImage(
+        pool.image as PatternCanvas,
+        centre.x - reach,
+        centre.y - reach,
+        reach * 2,
+        reach * 2,
+      );
+    }
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = 'source-over';
+  }
+
+  context.restore();
 }
 
 /**
@@ -271,11 +382,11 @@ function drawAccess(
     context.globalAlpha = 1;
   }
 
-  for (const { segment, inward } of resolvedGates(site)) {
+  for (const { gate, segment, inward } of resolvedGates(site)) {
     const from = toPx(segment[0]);
     const to = toPx(segment[1]);
 
-    // The gap: the rail painted out in paper for the width of the gate.
+    // The gap: the rail painted out in paper for the width of the opening.
     context.lineWidth = 6;
     context.lineCap = 'butt';
     context.strokeStyle = PLOT_GROUND;
@@ -284,34 +395,31 @@ function drawAccess(
     context.lineTo(to.x, to.y);
     context.stroke();
 
-    // The leaf standing open into the garden, and the quarter arc it swings through.
-    const width = Math.hypot(segment[1].x - segment[0].x, segment[1].y - segment[0].y);
-    const hinge = segment[0];
-    const open = toPx({ x: hinge.x + inward.x * width, y: hinge.y + inward.y * width });
-    context.lineWidth = 1.5;
-    context.strokeStyle = COLOUR.fencePost;
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(open.x, open.y);
-    context.stroke();
-
-    context.beginPath();
-    const along = { x: (segment[1].x - hinge.x) / width, y: (segment[1].y - hinge.y) / width };
-    for (let step = 0; step <= 12; step += 1) {
-      const t = step / 12;
-      // Sweep from the closed leaf (along the fence) round to the open one (inward).
-      const dir = {
-        x: along.x * Math.cos((Math.PI / 2) * t) + inward.x * Math.sin((Math.PI / 2) * t),
-        y: along.y * Math.cos((Math.PI / 2) * t) + inward.y * Math.sin((Math.PI / 2) * t),
-      };
-      const at = toPx({ x: hinge.x + dir.x * width, y: hinge.y + dir.y * width });
-      if (step === 0) context.moveTo(at.x, at.y);
-      else context.lineTo(at.x, at.y);
+    /*
+     * What is hung in it, which is the whole difference between the three kinds — and the same
+     * answer the canvas draws, because both ask `gateSwings`. This used to be worked out inline
+     * here with its own arc loop, which always hinged the leaf on the segment's first end; a gate
+     * and the same gate on an exported PNG could therefore open from opposite sides.
+     */
+    for (const swing of gateSwings(segment, inward, gate.kind)) {
+      drawSwing(context, swing, COLOUR.fencePost, toPx);
     }
-    context.lineWidth = 1;
-    context.globalAlpha = 0.7;
-    context.stroke();
-    context.globalAlpha = 1;
+
+    if (gate.kind === 'open') {
+      context.save();
+      context.strokeStyle = COLOUR.fencePost;
+      context.lineWidth = 1.5;
+      context.setLineDash?.([4, 3]);
+      for (const [tickFrom, tickTo] of openGapTicks(segment, inward)) {
+        const a = toPx(tickFrom);
+        const b = toPx(tickTo);
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.stroke();
+      }
+      context.restore();
+    }
   }
 }
 
@@ -338,7 +446,9 @@ function drawItem(
    * A bed's neighbours are on its surface, not on the pass, because only the ground pass computes
    * them — and `null` there means "no opinion", so a caller that set its own exclusions keeps them.
    */
-  const surfacePass: DrawPass = surface?.exclusions ? { ...pass, exclusions: surface.exclusions } : pass;
+  const surfacePass: DrawPass = surface?.exclusions
+    ? { ...pass, exclusions: surface.exclusions }
+    : pass;
 
   if (part === 'ground') {
     drawSurface(context, surface, surfacePass, light, toPx, rasterOrigin);
@@ -431,6 +541,7 @@ function drawSurface(
         centreline: surface.centreline ?? undefined,
         // A bed's planting scheme is a property of the bed, so the layer stack needs the element.
         element: surface.element,
+        layers: surface.layers,
         exclusions: pass.exclusions,
       },
       rasterOrigin,
@@ -610,10 +721,59 @@ function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) =
     tracePath(context, plane.outline, toPx);
     context.fillStyle = rgbToCss(shiftBrightness(base, plane.lit * ROOF_PLANE_SHADING));
     context.fill();
+    // Slate courses follow each eave, so rotated houses retain the same physical tile size.
+    const a = toPx(plane.outline[0]!);
+    const b = toPx(plane.outline[1]!);
+    const edgeMetres = Math.hypot(
+      plane.outline[1]!.x - plane.outline[0]!.x,
+      plane.outline[1]!.y - plane.outline[0]!.y,
+    );
+    const scale = Math.hypot(b.x - a.x, b.y - a.y) / Math.max(edgeMetres, 0.001);
+    if (scale < 12 || roof.form === 'flat') continue;
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const local = plane.outline.map((point) => {
+      const p = toPx(point);
+      return {
+        x: (p.x - a.x) * Math.cos(angle) + (p.y - a.y) * Math.sin(angle),
+        y: -(p.x - a.x) * Math.sin(angle) + (p.y - a.y) * Math.cos(angle),
+      };
+    });
+    context.save();
+    tracePath(context, plane.outline, toPx);
+    context.clip();
+    context.translate(a.x, a.y);
+    context.rotate(angle);
+    const tw = scale * 0.32;
+    const th = scale * 0.2;
+    const left = Math.floor(Math.min(...local.map((p) => p.x)) / tw) - 1;
+    const right = Math.ceil(Math.max(...local.map((p) => p.x)) / tw);
+    const top = Math.floor(Math.min(...local.map((p) => p.y)) / th);
+    const bottom = Math.ceil(Math.max(...local.map((p) => p.y)) / th);
+    for (let row = top; row <= bottom; row++) {
+      for (let col = left; col <= right; col++) {
+        const random = moduleRandom(`roof:${roof.material}`, col, row);
+        const shade = plane.lit * ROOF_PLANE_SHADING + (random() - 0.5) * 0.055;
+        const x = (col + Math.abs(row % 2) * 0.5) * tw;
+        const y = row * th;
+        context.fillStyle = rgbToCss(shiftBrightness(base, shade));
+        context.fillRect(x, y, tw, th);
+        context.fillStyle = 'rgba(20,27,31,0.24)';
+        context.fillRect(
+          x,
+          y + th - Math.max(0.45, scale * 0.012),
+          tw,
+          Math.max(0.45, scale * 0.012),
+        );
+        context.fillRect(x, y, Math.max(0.3, scale * 0.008), th);
+        context.fillStyle = 'rgba(220,226,230,0.08)';
+        context.fillRect(x, y, tw, Math.max(0.3, scale * 0.006));
+      }
+    }
+    context.restore();
   }
 
   context.strokeStyle = tones.ridge;
-  context.lineWidth = 1.25;
+  context.lineWidth = 2.8;
   context.lineCap = 'round';
   for (const [from, to] of roof.ridge) {
     const a = toPx(from);
@@ -622,6 +782,11 @@ function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) =
     context.moveTo(a.x, a.y);
     context.lineTo(b.x, b.y);
     context.stroke();
+    context.strokeStyle = 'rgba(210,220,224,0.32)';
+    context.lineWidth = 0.8;
+    context.stroke();
+    context.strokeStyle = tones.ridge;
+    context.lineWidth = 2.8;
   }
 }
 
@@ -716,27 +881,16 @@ function drawShadows(
   if (!cast) return;
   if (occluders.length === 0) return;
 
-  const box = rendered.bounds;
-  const widthPx = Math.max(1, Math.ceil(box.width * pass.pxPerMetre));
-  const heightPx = Math.max(1, Math.ceil(box.length * pass.pxPerMetre));
-
-  const layer = pass.makeCanvas(widthPx, heightPx);
-  const layerContext = layer.getContext('2d');
-  if (!layerContext) return;
-
-  const originMetres = { x: box.minX, y: box.minY };
-  drawShadowLayer(
-    layerContext,
-    occluders,
-    cast,
-    rendered.boundary,
-    { pxPerMetre: pass.pxPerMetre },
-    originMetres,
-  );
-
-  const at = toPx(originMetres);
+  const raster = renderShadowLayer(occluders, cast, rendered.boundary, {
+    pxPerMetre: pass.pxPerMetre,
+    makeCanvas: pass.makeCanvas,
+    softnessMetres: rendered.view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0,
+  });
+  if (!raster) return;
+  const at = toPx(raster.originMetres);
+  const scale = pass.pxPerMetre / raster.pxPerMetre;
   context.globalAlpha = SHADOW_OPACITY;
-  context.drawImage(layer, at.x, at.y);
+  context.drawImage(raster.canvas, at.x, at.y, raster.widthPx * scale, raster.heightPx * scale);
   context.globalAlpha = 1;
 }
 
@@ -750,6 +904,7 @@ function drawHouse(
   context: PlanContext,
   rendered: RenderHouse,
   pass: PlanPass,
+  pxPerMetre: number,
   toPx: (point: Point) => Point,
 ): void {
   const { outline, interior } = rendered;
@@ -779,6 +934,12 @@ function drawHouse(
     context.lineJoin = 'round';
     context.strokeStyle = COLOUR.houseStroke;
     context.stroke();
+    /*
+     * No openings over a roof, deliberately. From directly above a roof you cannot see the doors
+     * beneath it, and drawing them on the slopes would be the one place this renderer told a lie
+     * about what you are looking at. Visualise is the only view with a roof; every other one gets
+     * the flat diagram below, where the openings are exactly the point.
+     */
     return;
   }
 
@@ -805,6 +966,116 @@ function drawHouse(
   tracePath(context, interior, toPx);
   context.fillStyle = COLOUR.houseFill;
   context.fill();
+
+  drawOpenings(context, rendered.openings, pxPerMetre, toPx);
+}
+
+/**
+ * The doors and windows, cut into the wall band.
+ *
+ * A port of `HouseOpenings`, so a sheet and the screen agree about where you step out of the
+ * house. Until this existed the composer drew none of them: a patio door was visible on step 1 and
+ * absent from every thumbnail, PNG export and judging sheet of the same plan — which is exactly
+ * backwards, since the door is the single most layout-determining object in the drawing and the
+ * sheets are what the design gets judged on.
+ */
+function drawOpenings(
+  context: PlanContext,
+  openings: RenderOpening[],
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  for (const { opening, segment, normal } of openings) {
+    const [start, end] = segment;
+    const glazed = opening.type === 'window' || opening.type === 'upper-window';
+
+    context.save();
+    // Upstairs openings are drawn faintly: they are real, but nothing walks out of one.
+    if (opening.floorLevel > 0) context.globalAlpha = 0.35;
+
+    /*
+     * The cut runs half a wall in from the line the opening sits on and is exactly one wall
+     * thick, because the drawn wall is a band *inside* the outline — a stroke centred on the
+     * outline would cut half of itself into the garden.
+     */
+    const half = WALL_THICKNESS / 2;
+    const gapFrom = toPx({ x: start.x - normal.x * half, y: start.y - normal.y * half });
+    const gapTo = toPx({ x: end.x - normal.x * half, y: end.y - normal.y * half });
+    const from = toPx(start);
+    const to = toPx(end);
+
+    context.lineCap = 'butt';
+
+    /*
+     * A window is not a hole you walk through, so it is not drawn as one: the wall carries on past
+     * it and two fine lines cross the band. Drawn as a gap, every window read as a doorway.
+     */
+    if (!glazed) {
+      context.beginPath();
+      context.moveTo(gapFrom.x, gapFrom.y);
+      context.lineTo(gapTo.x, gapTo.y);
+      context.lineWidth = Math.max(3, WALL_THICKNESS * pxPerMetre + 1);
+      context.strokeStyle = COLOUR.houseFill;
+      context.stroke();
+    }
+
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.lineWidth = 2.5;
+    context.strokeStyle = COLOUR.handle;
+    context.stroke();
+
+    if (glazed) {
+      context.beginPath();
+      context.moveTo(gapFrom.x, gapFrom.y);
+      context.lineTo(gapTo.x, gapTo.y);
+      context.lineWidth = 1.5;
+      context.stroke();
+    }
+
+    if (opening.swing !== 'none') {
+      const swing = swingGeometry(start, end, normal, opening.swing === 'inward');
+      if (swing) drawSwing(context, swing, COLOUR.houseStroke, toPx);
+    }
+
+    context.restore();
+  }
+}
+
+/** A leaf standing open and the arc it sweeps. One drawing, from `swingGeometry`'s one answer. */
+function drawSwing(
+  context: PlanContext,
+  swing: SwingGeometry,
+  stroke: string,
+  toPx: (point: Point) => Point,
+): void {
+  context.save();
+  context.strokeStyle = stroke;
+
+  context.beginPath();
+  swing.arc.forEach((point, index) => {
+    const at = toPx(point);
+    if (index === 0) context.moveTo(at.x, at.y);
+    else context.lineTo(at.x, at.y);
+  });
+  context.lineWidth = 1;
+  context.globalAlpha = 0.7;
+  context.setLineDash?.([3, 3]);
+  context.stroke();
+
+  // The leaf itself, solid, so the arc reads as the path it swept rather than as a shape.
+  context.setLineDash?.([]);
+  context.globalAlpha = 1;
+  const hinge = toPx(swing.hinge);
+  const open = toPx(swing.open);
+  context.beginPath();
+  context.moveTo(hinge.x, hinge.y);
+  context.lineTo(open.x, open.y);
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  context.restore();
 }
 
 /** Post spacing along the fence, in metres — the same figure `FenceLine` defaults to. */

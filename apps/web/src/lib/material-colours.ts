@@ -19,6 +19,7 @@ export const MATERIAL_FILLS: Record<MaterialId, string | null> = {
   'stone-pavers': '#dfe3dc',
   concrete: '#d6d8d3',
   porcelain: '#e6e8e4',
+  'stone-setts': '#c9cbc2',
   'gravel-paving': '#e6e2d6',
   'timber-decking': '#d3c0a3',
   'stepping-stones': '#dcded8',
@@ -52,6 +53,22 @@ export const MATERIAL_FILLS: Record<MaterialId, string | null> = {
   'teak-furniture': '#c9a06c',
   'rattan-furniture': '#a99a86',
   'steel-furniture': '#8d9195',
+  // edging — the product's own colour; a run is painted, not tinted towards anything
+  'brick-edging': '#a86b52',
+  'concrete-kerb': '#c3c2bc',
+  'sett-edging': '#9a9c95',
+  'timber-sleeper': '#8a7150',
+  /* No pattern entry, so this hex *is* the drawing: a 3 mm blade seen from above is a dark line. */
+  'steel-edging': '#54585c',
+  // walling — the top course of a retaining wall
+  'walling-stone': '#b9b2a2',
+  'brick-walling': '#a86b52',
+  /* No pattern entry: a rendered wall is a smooth band of one colour, so this hex is the drawing. */
+  'rendered-block': '#c6c3bb',
+  // lighting — the fitting's own finish, which is what a sprite that is never tinted has to be
+  'black-aluminium': '#3b3d40',
+  'brushed-steel': '#9aa0a4',
+  'antique-brass': '#9d7c46',
   // existing-feature
   existing: null,
 };

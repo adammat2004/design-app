@@ -165,6 +165,26 @@ describe('drawShadowLayer', () => {
 });
 
 describe('renderShadowLayer', () => {
+  it('softens the merged presentation shadow without double-darkening or leaking outside the plot', () => {
+    const occluder = { outline: square(5, 10, 2), height: 4 };
+    const pass = { pxPerMetre: 50, makeCanvas, softnessMetres: 0.06 };
+    const single = renderShadowLayer([occluder], NORTHWARD, PLOT, pass)!;
+    const duplicate = renderShadowLayer([occluder, occluder], NORTHWARD, PLOT, pass)!;
+    const pixels = (raster: typeof single) =>
+      (raster.canvas as unknown as ReturnType<typeof createCanvas>).getContext('2d');
+    expect(pixels(single).getImageData(0, 0, 1000, 1000).data).toEqual(
+      pixels(duplicate).getImageData(0, 0, 1000, 1000).data,
+    );
+    const edgeAlpha = pixels(single).getImageData(249, 400, 1, 1).data[3]!;
+    expect(edgeAlpha).toBeGreaterThan(0);
+    expect(edgeAlpha).toBeLessThan(255);
+    expect(pixels(single).getImageData(300, 400, 1, 1).data[3]).toBe(255);
+    const triangle = [PLOT[0]!, PLOT[1]!, PLOT[3]!];
+    const clipped = renderShadowLayer([{ outline: square(9, 11, 2), height: 4 }],
+      NORTHWARD, triangle, pass)!;
+    expect(pixels(clipped).getImageData(550, 550, 1, 1).data[3]).toBe(0);
+  });
+
   it('is null when there is nothing to cast a shadow', () => {
     expect(renderShadowLayer([], NORTHWARD, PLOT, { pxPerMetre: 10, makeCanvas })).toBeNull();
   });

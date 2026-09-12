@@ -1,5 +1,6 @@
 import {
   AssistantProposalSchema,
+  GardenProposalSchema,
   GenerateConceptsResultSchema,
   PlanProjectSchema,
   PlanProjectSummarySchema,
@@ -7,6 +8,7 @@ import {
   ValidationResultSchema,
   ValidationViolationSchema,
   type AssistantProposal,
+  type GardenProposal,
   type FeaturesSection,
   type GardenBrief,
   type GenerateConceptsResult,
@@ -208,6 +210,22 @@ export function proposeChanges(
   signal?: AbortSignal,
 ): Promise<AssistantProposal> {
   return request(`/plan-projects/${id}/assistant/messages`, AssistantProposalSchema, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+    signal,
+  });
+}
+
+/**
+ * Asks the garden assistant to record what the user has described. Sends only the sentence, for
+ * the same reason `proposeChanges` does.
+ */
+export function proposeGardenChanges(
+  id: string,
+  message: string,
+  signal?: AbortSignal,
+): Promise<GardenProposal> {
+  return request(`/plan-projects/${id}/assistant/garden`, GardenProposalSchema, {
     method: 'POST',
     body: JSON.stringify({ message }),
     signal,

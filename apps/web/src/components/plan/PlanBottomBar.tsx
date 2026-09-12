@@ -22,6 +22,7 @@ export function PlanBottomBar({
   continueLabel = 'Continue',
   caption,
   blockedReason = null,
+  secondaryAction,
 }: {
   /**
    * The previous step. Steps 1 to 3 leave this off: they carry their own back-links in the
@@ -35,6 +36,13 @@ export function PlanBottomBar({
   /** Reassurance under the button group. Renders nothing when absent, as on steps 1 and 2. */
   caption?: string;
   blockedReason?: string | null;
+  /**
+   * A second way forward, beside Continue. Step 2's "Skip this step" is the only user of it.
+   *
+   * A slot rather than a `skippable` flag, so the shared bar does not grow a step-2-shaped feature
+   * — it still knows nothing about what any step means, which is what has kept it shared.
+   */
+  secondaryAction?: { label: string; hint?: string; onClick: () => void | Promise<void> };
 }) {
   const router = useRouter();
   const saving = useSyncStore(selectSaving);
@@ -139,6 +147,19 @@ export function PlanBottomBar({
 
       <div className="ml-auto flex flex-col items-end gap-1">
         <div className="flex items-center gap-2">
+          {secondaryAction ? (
+            <button
+              type="button"
+              data-testid="secondary-action"
+              title={secondaryAction.hint}
+              disabled={leaving}
+              onClick={() => void secondaryAction.onClick()}
+              className="rounded-full border border-garden-line px-4 py-2 text-sm font-medium text-garden-ink hover:bg-garden-sage disabled:opacity-50"
+            >
+              {secondaryAction.label}
+            </button>
+          ) : null}
+
           <button
             type="button"
             data-testid="save-draft"

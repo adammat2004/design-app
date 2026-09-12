@@ -1,0 +1,804 @@
+{
+  "version": 2,
+  "unit": "m",
+  "site": {
+    "vertices": [
+      {
+        "x": 0,
+        "y": 0,
+        "id": "v0"
+      },
+      {
+        "x": 14,
+        "y": 0,
+        "id": "v1"
+      },
+      {
+        "x": 14,
+        "y": 22,
+        "id": "v2"
+      },
+      {
+        "x": 0,
+        "y": 22,
+        "id": "v3"
+      }
+    ],
+    "closed": true,
+    "house": {
+      "outline": [
+        {
+          "x": -5,
+          "y": -2.5,
+          "id": "h0"
+        },
+        {
+          "x": 5,
+          "y": -2.5,
+          "id": "h1"
+        },
+        {
+          "x": 5,
+          "y": 2.5,
+          "id": "h2"
+        },
+        {
+          "x": -5,
+          "y": 2.5,
+          "id": "h3"
+        }
+      ],
+      "walls": [
+        {
+          "id": "w0",
+          "kind": "external"
+        },
+        {
+          "id": "w1",
+          "kind": "external"
+        },
+        {
+          "id": "w2",
+          "kind": "external"
+        },
+        {
+          "id": "w3",
+          "kind": "external"
+        }
+      ],
+      "openings": [
+        {
+          "id": "o1",
+          "wallId": "w0",
+          "offsetAlongEdge": 5,
+          "width": 2.4,
+          "type": "patio-door",
+          "sillHeight": 0,
+          "floorLevel": 0,
+          "swing": "none"
+        },
+        {
+          "id": "o2",
+          "wallId": "w2",
+          "offsetAlongEdge": 5,
+          "width": 0.9,
+          "type": "front-door",
+          "sillHeight": 0,
+          "floorLevel": 0,
+          "swing": "inward"
+        }
+      ],
+      "centre": {
+        "x": 7,
+        "y": 19.5
+      },
+      "rotation": 0
+    },
+    "selectedZoneIds": [
+      "back",
+      "left",
+      "right"
+    ],
+    "orientation": 0,
+    "location": {
+      "latitude": 53.4,
+      "longitude": -2.98
+    },
+    "sun": {
+      "dayOfYear": 172,
+      "minutes": 900
+    },
+    "gates": [
+      {
+        "id": "g1",
+        "edgeVertexId": "v1",
+        "offsetAlongEdge": 16,
+        "width": 0.9
+      }
+    ],
+    "streetEdgeVertexId": "v2",
+    "boundaryStyles": []
+  },
+  "features": {
+    "features": [],
+    "skipped": false
+  },
+  "brief": {
+    "purpose": "Representative composition and circulation fixture.",
+    "desiredFeatures": [
+      "seating",
+      "water",
+      "storage"
+    ],
+    "featuresOther": "",
+    "budget": "medium",
+    "maintenance": "medium",
+    "style": "formal",
+    "styleOther": ""
+  },
+  "concepts": {
+    "concepts": [],
+    "selectedId": null,
+    "chosenConceptId": null,
+    "seed": 1
+  },
+  "layout": {
+    "elements": [
+      {
+        "id": "c11-2-e14",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 12,
+              "y": 0
+            },
+            {
+              "x": 14,
+              "y": 0
+            },
+            {
+              "x": 14,
+              "y": 22
+            },
+            {
+              "x": 12,
+              "y": 22
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "right",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "c11-2-e15",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 12,
+              "y": 17
+            },
+            {
+              "x": 2,
+              "y": 17
+            },
+            {
+              "x": 1.9999999999999951,
+              "y": 0
+            },
+            {
+              "x": 11.999999999999995,
+              "y": 0
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "c11-2-e16",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 1.9999999999999976,
+              "y": 0
+            },
+            {
+              "x": 2,
+              "y": 22
+            },
+            {
+              "x": 0,
+              "y": 22
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "left",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "c11-2-e17",
+        "category": "paved-area",
+        "role": "fill",
+        "name": "Side return",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 12,
+              "y": 17
+            },
+            {
+              "x": 14,
+              "y": 17
+            },
+            {
+              "x": 14,
+              "y": 22
+            },
+            {
+              "x": 12,
+              "y": 22
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "right",
+        "fillKind": "accent",
+        "material": "stone-setts"
+      },
+      {
+        "id": "c11-2-e18",
+        "category": "paved-area",
+        "role": "fill",
+        "name": "Side return",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 17
+            },
+            {
+              "x": 1.9999999999999996,
+              "y": 17
+            },
+            {
+              "x": 2,
+              "y": 22
+            },
+            {
+              "x": 0,
+              "y": 22
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "stone-setts"
+      },
+      {
+        "id": "c11-2-e20",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Terrace flank",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0.15,
+              "y": 16.7
+            },
+            {
+              "x": 1.85,
+              "y": 16.7
+            },
+            {
+              "x": 1.85,
+              "y": 13.041597
+            },
+            {
+              "x": 0.15,
+              "y": 13.041597
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "hedging",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e21",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Terrace flank",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 12.15,
+              "y": 15.4
+            },
+            {
+              "x": 13.85,
+              "y": 15.4
+            },
+            {
+              "x": 13.85,
+              "y": 13.041597
+            },
+            {
+              "x": 12.15,
+              "y": 13.041597
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "hedging",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e22",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Rear border",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0.15,
+              "y": 3.627072
+            },
+            {
+              "x": 2.236695,
+              "y": 3.627072
+            },
+            {
+              "x": 2.236695,
+              "y": 2.255341
+            },
+            {
+              "x": 5.259255,
+              "y": 2.255341
+            },
+            {
+              "x": 5.259255,
+              "y": 3.627072
+            },
+            {
+              "x": 5.940027122,
+              "y": 3.627072
+            },
+            {
+              "x": 5.994707,
+              "y": 3.35218
+            },
+            {
+              "x": 6.230582,
+              "y": 2.999168
+            },
+            {
+              "x": 6.583594,
+              "y": 2.763293
+            },
+            {
+              "x": 7,
+              "y": 2.680464
+            },
+            {
+              "x": 7.416406,
+              "y": 2.763293
+            },
+            {
+              "x": 7.769418,
+              "y": 2.999168
+            },
+            {
+              "x": 8.005293,
+              "y": 3.35218
+            },
+            {
+              "x": 8.059972878,
+              "y": 3.627072
+            },
+            {
+              "x": 13.85,
+              "y": 3.627072
+            },
+            {
+              "x": 13.85,
+              "y": 0.15
+            },
+            {
+              "x": 0.15,
+              "y": 0.15
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "hedging",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e23",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Left border",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0.15,
+              "y": 12.891597
+            },
+            {
+              "x": 1.963536,
+              "y": 12.891597
+            },
+            {
+              "x": 1.963536,
+              "y": 3.627072
+            },
+            {
+              "x": 0.15,
+              "y": 3.627072
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "hedging",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e24",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Right border",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 12.036464,
+              "y": 12.891597
+            },
+            {
+              "x": 13.85,
+              "y": 12.891597
+            },
+            {
+              "x": 13.85,
+              "y": 3.627072
+            },
+            {
+              "x": 12.036464,
+              "y": 3.627072
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "hedging",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e19",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 1.963536,
+              "y": 12.316183
+            },
+            {
+              "x": 12.036464,
+              "y": 12.316183
+            },
+            {
+              "x": 12.036464,
+              "y": 7.537172
+            },
+            {
+              "x": 1.963536,
+              "y": 7.537172
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "standard-turf"
+      },
+      {
+        "id": "c11-2-e1",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Seating patio",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 7,
+            "y": 15.020798628135905
+          },
+          "width": 10,
+          "depth": 3.9584027437281906,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "concrete"
+      },
+      {
+        "id": "c11-2-e2",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Sun lounger",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 7,
+            "y": 15.020798628135905
+          },
+          "width": 0.7,
+          "depth": 1.9,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "steel-furniture",
+        "height": 0.4,
+        "symbol": "lounger"
+      },
+      {
+        "id": "c11-2-e3",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Sun lounger",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 8.05,
+            "y": 15.020798628135905
+          },
+          "width": 0.7,
+          "depth": 1.9,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "steel-furniture",
+        "height": 0.4,
+        "symbol": "lounger"
+      },
+      {
+        "id": "c11-2-e4",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Planter",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 2.6500000000000004,
+            "y": 16.35
+          },
+          "width": 0.6,
+          "depth": 0.6,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "steel-furniture",
+        "height": 0.9,
+        "symbol": "planter"
+      },
+      {
+        "id": "c11-2-e5",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Planter",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 11.35,
+            "y": 16.35
+          },
+          "width": 0.6,
+          "depth": 0.6,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "steel-furniture",
+        "height": 0.9,
+        "symbol": "planter"
+      },
+      {
+        "id": "c11-2-e6",
+        "category": "water-feature",
+        "role": "feature",
+        "name": "Water feature",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 7,
+            "y": 3.7685860087624583
+          },
+          "radius": 1.0881216862190881
+        },
+        "zone": "back",
+        "material": "formal-pool"
+      },
+      {
+        "id": "c11-2-e7",
+        "category": "structure",
+        "role": "feature",
+        "name": "Garden store",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 3.7479746969768586,
+            "y": 3.464365058657263
+          },
+          "width": 3.022560239497467,
+          "depth": 2.4180481915979737,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "softwood",
+        "symbol": "shed"
+      },
+      {
+        "id": "c11-2-e8",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Axis path",
+        "shape": {
+          "kind": "polyline",
+          "points": [
+            {
+              "x": 7,
+              "y": 13.04159725627181
+            },
+            {
+              "x": 7,
+              "y": 7.537172017524917
+            }
+          ],
+          "width": 1.2
+        },
+        "zone": "back",
+        "material": "concrete"
+      },
+      {
+        "id": "c11-2-e9",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Path to the shed",
+        "shape": {
+          "kind": "polyline",
+          "points": [
+            {
+              "x": 3.747974696976858,
+              "y": 13.04159725627181
+            },
+            {
+              "x": 3.747974696976858,
+              "y": 4.72338915445625
+            }
+          ],
+          "width": 1.05
+        },
+        "zone": "back",
+        "material": "stone-setts"
+      },
+      {
+        "id": "c11-2-e10",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Side path",
+        "shape": {
+          "kind": "polyline",
+          "points": [
+            {
+              "x": 13.95,
+              "y": 16
+            },
+            {
+              "x": 12.05,
+              "y": 16
+            }
+          ],
+          "width": 1.2
+        },
+        "zone": "right",
+        "material": "stone-setts"
+      },
+      {
+        "id": "c11-2-e11",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Path to water feature",
+        "shape": {
+          "kind": "polyline",
+          "points": [
+            {
+              "x": 9.5,
+              "y": 13.04159725627181
+            },
+            {
+              "x": 7.428624876958195,
+              "y": 4.822363407401887
+            }
+          ],
+          "width": 0.85
+        },
+        "zone": "back",
+        "material": "stepping-stones"
+      },
+      {
+        "id": "c11-2-e12",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Tree",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 12.1,
+            "y": 1.9000000000000004
+          },
+          "radius": 1.6
+        },
+        "zone": "right",
+        "material": "hedging",
+        "symbol": "tree-evergreen",
+        "plantingStyle": "architectural"
+      },
+      {
+        "id": "c11-2-e13",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Japanese maple",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 12.1,
+            "y": 8.5
+          },
+          "radius": 1.6
+        },
+        "zone": "right",
+        "material": "hedging",
+        "height": 3,
+        "symbol": "tree-ornamental",
+        "plantId": "acer-palmatum-red",
+        "plantingStyle": "architectural"
+      }
+    ],
+    "seededFrom": null,
+    "pristine": null
+  }
+}

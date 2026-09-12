@@ -8,9 +8,15 @@ import { boundingBox, insetPolygon, type Point } from '@garden-studio/schema';
  * The house is context, not subject. A garden plan needs the building to read as a building —
  * otherwise the eye parses a flat grey rectangle as another paved surface and the whole drawing
  * loses its anchor — but it does not need the *actual* house, and nothing here pretends to
- * reconstruct one. There is no roof pitch, storey count or roof form anywhere in `PlanDocument`,
- * deliberately (`HOUSE_HEIGHT` is a flat six metres and says why), so this is inferred from the
- * footprint alone and inferred afresh on every render.
+ * reconstruct one. There is no roof pitch or roof form anywhere in `PlanDocument`, so this is
+ * inferred from the footprint alone and inferred afresh on every render.
+ *
+ * **`house.storeys` is deliberately not read here**, though it exists now and `houseHeight` turns
+ * it into an eaves line for the shadow pass. A roof seen from directly above covers exactly the
+ * same ground whether the house below it is one storey or three: height changes how far the
+ * *shadow* falls, which is `shadowOccluders`' business, and would change a perspective view, which
+ * this is not. Taking the storey count as an input here would be a dependency that changes no
+ * pixel — and one a later reader would reasonably assume must matter.
  *
  * **The footprint is untouched.** The roof is drawn *within* `housePolygon(house)`, never outside
  * it — which is why there is no eaves overhang here. An overhang would look slightly better and
@@ -87,6 +93,9 @@ const RIDGE_INSET_RATIO = 0.46;
 export function roofFor(outline: Point[], light: Point): RenderRoof | null {
   if (outline.length < 3) return null;
 
+  const rectangular = rectangularRoof(outline, light);
+  if (rectangular) return rectangular;
+
   const box = boundingBox(outline);
   const short = Math.min(box.width, box.length);
   const long = Math.max(box.width, box.length);
@@ -142,6 +151,59 @@ export function roofFor(outline: Point[], light: Point): RenderRoof | null {
   ]);
 
   return { form, material: DEFAULT_ROOF_MATERIAL, planes, ridge };
+}
+
+/** Orthogonal footprints get a real ridge in the building's frame, including rotated houses. */
+function rectangularRoof(outline: Point[], light: Point): RenderRoof | null {
+  if (outline.length !== 4) return null;
+  const [a, b, c, d] = outline as [Point, Point, Point, Point];
+  const ab = { x: b.x - a.x, y: b.y - a.y };
+  const ad = { x: d.x - a.x, y: d.y - a.y };
+  const w = Math.hypot(ab.x, ab.y);
+  const h = Math.hypot(ad.x, ad.y);
+  if (
+    Math.min(w, h) < 0.3 ||
+    Math.abs(ab.x * ad.x + ab.y * ad.y) > w * h * 1e-6 ||
+    Math.hypot(c.x - b.x - d.x + a.x, c.y - b.y - d.y + a.y) > 1e-5
+  )
+    return null;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const u = w >= h ? ab : ad;
+  const v = w >= h ? ad : ab;
+  const at = (x: number, y: number): Point => ({
+    x: a.x + (u.x * x) / long + (v.x * y) / short,
+    y: a.y + (u.y * x) / long + (v.y * y) / short,
+  });
+  const form = long / short >= GABLE_ASPECT ? 'gable' : 'hipped';
+  const inset = form === 'gable' ? 0 : short * 0.42;
+  const corners = [at(0, 0), at(long, 0), at(long, short), at(0, short)];
+  const r0 = at(inset, short / 2);
+  const r1 = at(long - inset, short / 2);
+  const rings = [
+    [corners[0]!, corners[1]!, r1, r0],
+    [corners[2]!, corners[3]!, r0, r1],
+    ...(form === 'hipped'
+      ? [
+          [corners[3]!, corners[0]!, r0],
+          [corners[1]!, corners[2]!, r1],
+        ]
+      : []),
+  ];
+  return {
+    form,
+    material: DEFAULT_ROOF_MATERIAL,
+    planes: rings.map((ring) => ({
+      outline: ring,
+      lit: litness(ring[0]!, ring[1]!, ring[2]!, light),
+    })),
+    ridge: [
+      [r0, r1],
+      ...(form === 'hipped'
+        ? corners.map((corner, i): [Point, Point] => [corner, i === 0 || i === 3 ? r0 : r1])
+        : []),
+    ],
+  };
 }
 
 /**

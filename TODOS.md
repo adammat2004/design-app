@@ -16,12 +16,58 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
       `DrawPass`/`RenderPass`. Proved byte-identical against the previous render.
 - [x] **Phase 2 — render.** Sun model (suncalc), shadow layer, planting `form` axis, LOD policy,
       cut edges, water, one light everywhere, dev HUD, `before/` history, three diagrams.
-- [ ] **Phase 3 — deliverable.** In progress. - [x] T18 error boundaries; API-down told apart from 404 (verified in the browser) - [x] T22 label truncation - [x] T17 project list, landing copy corrected, e2e flow added - [ ] T14 plan view with labels, legend and a quantity schedule - [ ] T15 print at true scale, chunked with progress - [ ] T21 correct the stale CLAUDE.md claims and record the decisions
+- [ ] **Phase 3 — deliverable.** In progress. - [x] T18 error boundaries; API-down told apart from 404 (verified in the browser) - [x] T22 label truncation - [x] T17 project list, landing copy corrected, e2e flow added - [ ] T14 plan view with labels, legend and a quantity schedule - [ ] T15 print at true scale, chunked with progress - [x] T21 stale CLAUDE.md claims corrected and the decisions recorded
+
+## In flight — the missing-products plan (plan: `~/.claude/plans/can-you-do-some-starry-willow.md`)
+
+The gap analysis behind this: the vocabulary was strong on **areas** and **objects** and had nothing
+for two other classes a real design is specified in — **linear products** (no linear quantity existed
+anywhere) and **the third dimension** (`elevation` was a documented dead field). Plus two catalogue
+gaps, lighting and depth.
+
+- [x] **S1 assets that needed no model change.** `face-stone-setts` — the material every front path
+      and access route is forced to, and the only paving with no photograph — plus
+      `plant-shrub-topiary`, and top-ups on `tree-conifer`, `tree-japanese-maple` and the three
+      one-variant timber faces. `plant-climber` was **pulled**: `taxonomy.test.ts` caught that
+      nothing draws climbers, and generating them would pay for pictures the app never reads. It
+      lands with a boundary-planting pass.
+- [x] **S2 lighting.** `lighting` is the ninth `ElementCategory` — **not** `furniture`, because
+      furniture is _hosted_ and a fitting is not (see CLAUDE.md). Four fittings, three finishes, a
+      procedural `fx-light-pool`, `nightFraction` as a dusk ramp gated on `site.location`, and a
+      generator scheme of uplights at trees and bollards down the longer paths. This is what makes
+      the second half of Visualise's 24-hour slider mean anything: before it, 11 pm drew noon.
+      `pnpm render:plan` writes `04-lighting-hours.png`.
+- [x] **S3 linear products.** `DesignElement.edging` names a product; `plan/edging.ts` derives the
+      runs from the outline they follow, dropping the sides against the fence and the house and
+      refusing a seam two beds share. On the l-shape fixture that is 139 m of brick rather than
+      196 m. First linear quantity in the app (`ScheduleLine.lengthM`). Five faces generated.
+- [x] **S4 level changes.** `elevation` is drawn at last: a derived retaining face
+      (`plan/levels.ts`), a shadow cast from the top of the plinth, and a flight of `steps` whose
+      treads come from the rise. The model is **local** — no ground surface, nothing infers a slope.
+      `retaining` names a walling material (stone, brick, rendered block) or keeps the plain
+      upstand. `PLAN_DOCUMENT_VERSION` 3, no-op migration.
+- [ ] **S5 services and structures.** `greenhouse`, `bin-store`, `log-store`, `water-butt`,
+      `compost-bin`. The first three are rectangles with regular structure, so they are geometry
+      following `shedRoof`/`gazeboRoof` and need no photographs — only `tex-glass-roof`. The last
+      two get sprites. An outdoor tap is deliberately excluded: 100 mm is under every floor in
+      `lod.ts`.
+      **Blocked in part:** the plan says "fold these into the arrival grammar", and the arrival
+      grammar is not built — it is its own item below. So this splits into the objects (which ship
+      hand-placeable on their own) and the placement, which waits.
+      **Effort:** S for the objects, M for the placement once arrival lands.
+- [ ] **A freestanding linear run.** Edging is a field on its host, so it cannot express a run with
+      nothing either side — a kerb along a drive. That is exactly what the parking/driveway item
+      needs, and it is the one thing the derived shape gives up. Answer is an element carrying a
+      `hostId`, with the sync cost that implies. **Effort:** M, and only worth it with parking.
+- [ ] **Climbers, and planting on a vertical surface.** Nothing covers a fence, a wall or a
+      pergola, so every boundary in every plan is bare. Needs a drawing pass before the asset
+      family is worth generating — see S1. **Effort:** M.
 
 ## In flight — drafted.ai-level plans (plan: `~/.claude/plans/i-am-making-a-steady-wadler.md`)
 
 - [x] **P0 composer + `render:plan`.** `drawPlan`, three captured fixtures, judging sheets.
-- [x] **P1 asset pipeline.** `tools/assets`, 82 files, catalogue, registry, preload, cache key.
+- [x] **P1 asset pipeline.** `tools/assets`, 82 files at the time, catalogue, registry, preload,
+      cache key. (147 now — see the missing-products plan below.)
 - [x] **P2 textured surfaces.** Faces per module, tiled textures, water, stripes over turf.
 - [x] **P3 planting and trees.** Sprites per scatter unit, canopies inscribed, contact shadows.
       The paving kerb was tried and reverted (it drew a line down every shared edge).
@@ -46,6 +92,62 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
       planting because the room is a half-plane: a second room per limb would design it. Slot
       preferences are a fixed table rather than anything the brief's _purpose_ text touches. The
       curved template's kidney is one wave shape at one phase. Effort: M each.
+
+- [ ] **Source art for the finer paving.** The slab and sett face photographs in
+      `apps/web/public/assets/` were generated against 600 mm and 900 mm modules; they are now
+      cover-fitted into 400 mm slabs, 300 mm setts and the pack's mixed units, so each unit shows a
+      smaller crop of the same stone and the grain reads slightly large. Regenerate the paving
+      families through `tools/assets` with prompts written for the new sizes — the spec _is_ the
+      specification, so this is re-running the tool, not new code.
+      **Effort:** S, and it needs `OPEN_AI_API_KEY`. Nothing is broken without it: the procedural
+      pattern is what draws when a photograph is missing.
+
+- [ ] **The fence border vanishes inside a deeply inset redesign area.** `borderRegions` grows its
+      annulus from the **boundary** by `BORDER_WIDTH` (1.5 m), so a custom redesign area inset more
+      than that from the fence intersects the annulus in nothing and the side and remote zones lose
+      their planted borders entirely — they read as bare base fill.
+      **Why it is not just widened:** growing the band from the *scope ring* instead would put a bed
+      along the interior edge of the drawn area, which is defensible design but a different claim
+      from "a border hugs the fence", and it would need its own `ST_NumInteriorRings` reasoning for
+      an annulus that is no longer anchored to the plot.
+      **Effort:** S–M, in `fill.service.ts` and the border pass of `concepts.service.ts`.
+
+- [ ] **A concave redesign area makes plans sparser.** `localBox` is the *bounding box* of the
+      clipped room, so an L- or U-shaped drawn area has the templates propose geometry across the
+      notch; `fitInSlot` then refuses it and the feature falls through to the sampler. The plan is
+      still legal and still inside the area — it is just less composed the more concave the outline.
+      Same class as the existing L-plot limitation. `roomBehind` mitigates it where a template calls
+      it. **Effort:** M.
+
+- [ ] **A `scope` action from the garden assistant is a separate undo entry** from features added in
+      the same sentence, because scope lives in `boundary-store` and features in `features-store`.
+      One history over both stores would make Undo mean different things depending on which screen
+      you are looking at, so this is recorded rather than "fixed". **Effort:** M if ever wanted, and
+      it needs a cross-store transaction concept that does not exist today.
+
+- [ ] **The driveway surface.** *Everything but the paving is done*: a driveway is a `Gate` with
+      `kind: 'vehicle'`, placed on a side from that side's editor, 3 m wide, drawn as a double gate,
+      kept clear to a car's five metres by `gateThresholdDepth`, and never chosen as the side path's
+      start (`sidePathGate`). No `site.parking` field and no version bump were needed after all,
+      because the gap in the boundary is a fact about the side and the existing key already said
+      which side. What is left is `front.ts` drawing a paved drive from that opening to the house,
+      with the front path joining it — the suburban fixture already has a drive to judge it on.
+      **Why:** the drive is the most visible difference between the traced target's front garden
+      and any generated one. A front too small for a lawn is gravel today, which is honest but
+      plain. Inferring a drive silently would draw a car space on plots that have none — the same
+      mistake `suggestedDoorWall` and `site.location` exist to avoid.
+      **Effort:** M. Independent of everything below.
+
+- [ ] **Compose the arrival and the wide side, and tighten the composition bands.**
+      **Why:** `COMPOSITION_BANDS` is asserted on the garden proper only. Over the whole plot the
+      traced target shows 2% of base ground showing; generated plans show 5-46%, and the courtyard
+      fixture's own room sits at 37-40%. The gap is the front garden (a path across a lawn) and the
+      part of a wide side return that no room reached.
+      **Shape:** an arrival grammar (bin standing, a bed against the street, a threshold) and a
+      second room per secondary side; then re-derive the bands from the target and assert them on
+      the whole plot rather than the room.
+      **Effort:** M. Run `COMPOSITION_REPORT=1 pnpm --filter @garden-studio/api test reference-fixture`
+      for the current table.
 - [ ] **P8 optional AI hero render.** Segmentation map + plan PNG → image model, stored in a
       `plan_renders` table keyed on `revision`, gated on `RENDER_API_KEY` exactly like the assistant,
       labelled "AI impression — not the plan". Effort: M.
@@ -150,9 +252,18 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
       **Effort:** ~3 days once forms exist.
 
 - [ ] **3D preview.** `three`, `@react-three/fiber` and `@react-three/drei` are installed and
-      entirely unused. The height manifest from Phase 1 is exactly what R3F would need.
+      entirely unused. The height manifest from Phase 1 is exactly what R3F would need, and the
+      property now carries the rest of it: `house.storeys` through `houseHeight`, per-side
+      `BoundaryRun.height`, and every door and window with an offset, a width and a sill. What is
+      still missing is a ground model, which is a deliberate refusal — see `levels.ts`.
       Either build it or drop the dependencies — carrying an unused 3D stack is bundle weight
       and a question a marker will ask.
+
+- [x] **Drag a gate or a door along its side on the plan.** `AttachmentHandle` does it for both,
+      projecting the pointer onto the parent segment so the thing cannot leave it; end handles
+      resize and appear only once the span is big enough to have ends worth grabbing. `SegmentTrack`
+      gives a side the same unrolled strip the wall has. Not done: dragging on *touch* — the stage
+      still binds mouse events only, which is a pre-existing gap.
 
 - [ ] **Verify the live Anthropic call.** `ANTHROPIC_API_KEY` is now present in `apps/api/.env`
       and the path has never been exercised — every assistant test mocks the SDK. Check

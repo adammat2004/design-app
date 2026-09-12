@@ -139,8 +139,11 @@ export class IntentService {
  * the latter, so the broad check would swallow it. Authentication failures are reported as 503
  * rather than 401 — a bad key on the server is not the client's fault, and saying so would tell an
  * unauthenticated caller something about our configuration.
+ *
+ * Exported because the garden assistant makes the same call to the same API and must fail the same
+ * way. Two mappings would drift, and the one that drifted would be the one nobody tested.
  */
-function toHttpException(error: unknown, logger: Logger): Error {
+export function toHttpException(error: unknown, logger: Logger): Error {
   if (error instanceof BadGatewayException || error instanceof ServiceUnavailableException) {
     return error;
   }

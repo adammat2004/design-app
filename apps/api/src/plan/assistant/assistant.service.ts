@@ -1,7 +1,8 @@
-import { HttpException, HttpStatus, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { AssistantProposal, PlanDocument } from '@garden-studio/schema';
 import { IntentService } from './intent.service.js';
 import { PlannerService } from './planner.service.js';
+import { AssistantRateLimit } from './rate-limit.js';
 
 /**
  * Orchestration: interpret, plan, then assemble the reply.
@@ -14,20 +15,11 @@ import { PlannerService } from './planner.service.js';
  */
 @Injectable()
 export class AssistantService {
-  /**
-   * In-process token bucket. The API has no auth, so a reachable deployment would otherwise hand
-   * a stranger an Anthropic bill; this is the cheap half of the answer and the README says to keep
-   * the server on localhost, which is the rest of it.
-   */
-  private readonly hits = new Map<string, number[]>();
-
-  private static readonly WINDOW_MS = 60_000;
-  private static readonly PER_PROJECT = 6;
-  private static readonly OVERALL = 20;
-
   constructor(
     private readonly intent: IntentService,
     private readonly planner: PlannerService,
+    /** Shared with the garden assistant — see `rate-limit.ts` for why it is not one bucket each. */
+    private readonly limit: AssistantRateLimit,
   ) {}
 
   get available(): boolean {
@@ -50,7 +42,7 @@ export class AssistantService {
       );
     }
 
-    this.rateLimit(projectId);
+    this.limit.check(projectId);
 
     const envelope = await this.intent.interpret(message, document);
     const { changes, unplaceable } = await this.planner.plan(document, envelope.intents);
@@ -61,29 +53,6 @@ export class AssistantService {
       suggestions: envelope.suggestions,
       unplaceable,
     };
-  }
-
-  private rateLimit(projectId: string): void {
-    const now = Date.now();
-    const since = now - AssistantService.WINDOW_MS;
-
-    for (const [key, times] of this.hits) {
-      const recent = times.filter((time) => time > since);
-      if (recent.length === 0) this.hits.delete(key);
-      else this.hits.set(key, recent);
-    }
-
-    const project = this.hits.get(projectId) ?? [];
-    const overall = [...this.hits.values()].reduce((total, times) => total + times.length, 0);
-
-    if (project.length >= AssistantService.PER_PROJECT || overall >= AssistantService.OVERALL) {
-      throw new HttpException(
-        'That is a lot of questions at once — give it a minute.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    this.hits.set(projectId, [...project, now]);
   }
 }
 

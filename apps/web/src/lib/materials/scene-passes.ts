@@ -11,6 +11,7 @@ export function scenePasses(elements: DesignElement[]) {
     const raised =
       element.category === 'structure' ||
       element.category === 'furniture' ||
+      element.category === 'lighting' ||
       element.category === 'existing-feature' ||
       (element.category === 'planting-bed' && element.shape.kind === 'point');
     if (!raised || element.symbol === 'pergola') ground.push(element);
@@ -18,7 +19,18 @@ export function scenePasses(elements: DesignElement[]) {
   }
   // Canopies stand above furniture, even when furniture was added later.
   const heightOrder = (element: DesignElement) =>
-    element.category === 'planting-bed' ? 3 : element.category === 'structure' ? 2 : 1;
+    /*
+     * Lighting last of all, above the canopies. A fitting is the smallest object on the plan and
+     * the easiest to lose under one — and an uplight under a tree is precisely the case where it
+     * would be hidden by the thing it exists to light.
+     */
+    element.category === 'lighting'
+      ? 4
+      : element.category === 'planting-bed'
+        ? 3
+        : element.category === 'structure'
+          ? 2
+          : 1;
   objects.sort((a, b) => heightOrder(a) - heightOrder(b));
   return { ground, objects };
 }

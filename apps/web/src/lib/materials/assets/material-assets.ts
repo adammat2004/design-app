@@ -47,6 +47,16 @@ export const MATERIAL_ASSETS: Partial<Record<MaterialId, MaterialAssetSpec>> = {
   'stone-pavers': { face: 'face-stone-paver' },
   concrete: { face: 'face-concrete-slab' },
   porcelain: { face: 'face-porcelain-tile' },
+  'stone-setts': { face: 'face-stone-setts' },
+
+  /* ---- edging and walling: no category, but real products with real faces ---- */
+  'brick-edging': { face: 'face-edging-brick' },
+  'concrete-kerb': { face: 'face-kerb-concrete' },
+  'sett-edging': { face: 'face-edging-setts' },
+  'timber-sleeper': { face: 'face-sleeper-timber' },
+  'walling-stone': { face: 'face-walling-stone' },
+  /* A brick is a brick: the walling course and the edging course draw the same photograph. */
+  'brick-walling': { face: 'face-edging-brick' },
   'stepping-stones': { face: 'face-stepping-stone', texture: 'tex-standard-turf' },
   'timber-decking': { face: 'face-decking-wood' },
   'gravel-paving': { texture: 'tex-gravel-paving' },
@@ -174,6 +184,10 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
   slide: 'play-slide',
   trampoline: 'play-trampoline',
   'raised-bed': 'play-raised-bed',
+  'light-spike': 'light-spike',
+  'light-bollard': 'light-bollard',
+  'light-recessed': 'light-recessed',
+  'light-wall': 'light-wall',
   specimen: 'plant-shrub',
   /*
    * The three structural shrubs, mapped to the families Phase D generated for them. Architectural
@@ -188,6 +202,9 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
 
 /** The disc every sprite stands on. */
 export const CONTACT_SHADOW_SPRITE: AssetId = 'fx-soft-shadow';
+
+/** The pool of light a fitting throws after dark. Composited by `drawLighting`, not by a material. */
+export const LIGHT_POOL_SPRITE: AssetId = 'fx-light-pool';
 
 /**
  * What this material draws with, sprites resolved.

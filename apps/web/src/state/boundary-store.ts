@@ -2,21 +2,37 @@
 
 import { create } from 'zustand';
 import {
+  accessAfterDelete,
   canWallHold,
   clampOffsetToEdge,
   clampOffsetToWall,
   firstFreeOffset,
+  firstFreeOffsetOnEdge,
   fitsOnEdge,
   fitsOnWall,
   GATE_DEFAULT_WIDTH,
+  GATE_DEFAULTS,
+  gateEdge,
+  gatesAfterSplit,
   houseWalls,
+  inheritBoundaryStyle,
+  MIN_GATE_WIDTH,
+  MIN_OPENING_WIDTH,
+  offsetFromEndPreserved,
+  spanFromDraggedEnd,
+  wallLength,
+  type SpanEnd,
+  scaleOffsets,
+  styleForEdge,
   suggestedGateEdge,
   kindForEdge,
   type BoundaryKind,
+  type GateKind,
   pruneBoundaryStyles,
   setBoundaryStyle,
   suggestedStreetEdge,
   OPENING_DEFAULTS,
+  scopeRing,
   SiteLocationSchema,
   SiteSectionSchema,
   SiteSunSchema,
@@ -26,12 +42,14 @@ import {
   type SiteSun,
   type OpeningType,
   type Point,
+  type Swing,
   type WallKind,
 } from '@garden-studio/schema';
 import {
   boundaryEdges,
   draftPolygon,
   edgeLength,
+  edgeReflowTargets,
   nextDrawPoint,
   polygonCentroid,
   polygonIsSimple,
@@ -63,15 +81,35 @@ import { computeZones, ZONE_ORDER, type GardenZone, type ZoneId } from '@/lib/zo
 import { highestId } from '@/lib/hydration';
 import type { Unit } from '@/lib/units';
 
-/** Boundary mode draws the plot; House mode places the building inside it. */
-export type EditorMode = 'boundary' | 'house' | 'access' | 'select' | 'measure';
+/**
+ * Boundary mode draws the plot and House mode places the building inside it — the two creation
+ * modes, whose empty-canvas gestures (click to drop a corner, drag out a rectangle) are what
+ * stop them being folded into Select. Select is where the property is *described*: every side,
+ * wall, gate and door is clickable there, and it is the mode a placed house lands the user in.
+ *
+ * There used to be a fourth, Access, with a one-shot tool armed from a panel to click a fence
+ * for a gate or the street. Everything it did is a property of a side, and a side is a thing you
+ * select — so it went, and its chips became `SuggestionsRow`.
+ */
+export type EditorMode = 'boundary' | 'house' | 'select' | 'measure';
 
-/** What the next click on the fence does while in access mode. `null` means nothing. */
-export type AccessTool = 'gate' | 'street' | null;
 export type BoundaryTool = 'draw' | 'add-point' | 'move' | 'delete';
 export type HouseTool = 'rectangle' | 'custom' | 'move' | 'rotate';
 
-export type Selection = { kind: 'vertex'; id: string } | { kind: 'house' } | null;
+/**
+ * What the inspector is about. A side is named by the vertex its edge starts at and a wall by its
+ * id, for the reason gates and openings are keyed that way: an index goes stale the moment a
+ * corner is inserted, an id does not. A gate or an opening selected on its own still shows its
+ * parent's editor, with that entry expanded.
+ */
+export type Selection =
+  | { kind: 'vertex'; id: string }
+  | { kind: 'house' }
+  | { kind: 'edge'; edgeVertexId: string }
+  | { kind: 'wall'; wallId: string }
+  | { kind: 'gate'; id: string }
+  | { kind: 'opening'; id: string }
+  | null;
 
 /** Clicking this close to the first point closes the polygon, in metres. */
 export const CLOSE_DISTANCE = 0.6;
@@ -130,6 +168,53 @@ function editOpening(
       openings: house.openings.map((opening) => (opening.id === openingId ? next : opening)),
     },
   };
+}
+
+/** The boundary twin of `editOpening`: a gate edit is kept only if the gate still fits its side. */
+function editGate(
+  draft: BoundaryDraft,
+  gateId: string,
+  mutate: (gate: Gate, draft: BoundaryDraft) => Gate,
+): BoundaryDraft | null {
+  const current = draft.gates.find((gate) => gate.id === gateId);
+  if (!current) return null;
+
+  const next = mutate(current, draft);
+  if (next === current) return null;
+  if (!fitsOnEdge(draft, next)) return null;
+
+  return { ...draft, gates: draft.gates.map((gate) => (gate.id === gateId ? next : gate)) };
+}
+
+/**
+ * Whether what is selected still exists in this draft.
+ *
+ * Deleting a corner takes its side with it, reclassifying a wall can remove the door that was
+ * selected on it, and a removed gate is gone: an inspector left open on any of them would be a
+ * panel about nothing. Checked after the commits that can remove things, never inside them —
+ * selection is ephemeral and must not ride along in the history.
+ */
+function selectionExists(selection: Selection, draft: BoundaryDraft): boolean {
+  switch (selection?.kind) {
+    case undefined:
+      return true;
+    case 'vertex':
+    case 'edge':
+      return draft.vertices.some(
+        (vertex) =>
+          vertex.id === (selection.kind === 'vertex' ? selection.id : selection.edgeVertexId),
+      );
+    case 'house':
+      return draft.house !== null;
+    case 'wall':
+      return (
+        draft.house !== null && houseWalls(draft.house).some((wall) => wall.id === selection.wallId)
+      );
+    case 'gate':
+      return draft.gates.some((gate) => gate.id === selection.id);
+    case 'opening':
+      return draft.house?.openings.some((opening) => opening.id === selection.id) ?? false;
+  }
 }
 
 /**
@@ -200,35 +285,57 @@ interface BoundaryState {
   nudgeHouse: (dx: number, dy: number) => void;
   setHouseSize: (size: Partial<HouseSize>) => void;
   setHouseRotation: (degrees: number) => void;
+  /** One to three. The one vertical fact about the building — see `HouseFootprint.storeys`. */
+  setStoreys: (storeys: number) => void;
   removeHouse: () => void;
 
   /* ---- walls and openings, all of them house edits ---- */
 
-  /** Which wall the elevation strip is showing. Ephemeral: it is a view, not a fact about the plot. */
-  selectedWallId: string | null;
+  /** Selects a wall (or clears the selection): `selection = { kind: 'wall' }`, kept as a verb. */
   selectWall: (wallId: string | null) => void;
   setWallKind: (wallId: string, kind: WallKind) => void;
-  /** Places one at the first offset that fits, or does nothing when the wall is full. */
+  /** Places one at the first offset that fits and selects it, or does nothing when the wall is full. */
   addOpening: (wallId: string, type: OpeningType) => void;
   moveOpening: (openingId: string, offsetAlongEdge: number) => void;
   setOpeningWidth: (openingId: string, width: number) => void;
   setOpeningSill: (openingId: string, sillHeight: number) => void;
+  /** Frames of a drag along the wall, on the plan or on the strip. */
+  moveOpeningLive: (openingId: string, offsetAlongEdge: number) => void;
+  resizeOpeningLive: (openingId: string, end: SpanEnd, at: number) => void;
+  /** Hinged in, hinged out, or sliding — what decides whether a door sweeps an arc to keep clear. */
+  setOpeningSwing: (openingId: string, swing: Swing) => void;
+  /** Pulls an opening a resize has pushed off its wall back onto it, where the wall still has room. */
+  fitOpening: (openingId: string) => void;
   removeOpening: (openingId: string) => void;
 
-  /* ---- access: gates in the fence and the street edge, both site facts ---- */
+  /* ---- what hangs on the boundary: gates in the fence, the street edge, what each side is ---- */
 
-  /** Armed tool in access mode. Ephemeral: which button was pressed is not a fact about the plot. */
-  accessTool: AccessTool;
-  setAccessTool: (tool: AccessTool) => void;
-  /** Places a gate on this boundary edge at the point clicked, measured from the edge's start. */
-  addGateOnEdge: (edgeIndex: number, point: Point) => void;
+  /**
+   * Adds an opening in this side and selects it. Without an offset it goes at the first place it
+   * fits; with one it goes there, clamped onto the side and refused through another gate.
+   */
+  addGate: (edgeVertexId: string, kind?: GateKind, offsetAlongEdge?: number) => void;
   /** Takes the inferred side gate. Offered, not applied — see `suggestedGateEdge`. */
   addSuggestedGate: () => void;
+  setGateKind: (gateId: string, kind: GateKind) => void;
+  setGateWidth: (gateId: string, width: number) => void;
+  setGateOffset: (gateId: string, offsetAlongEdge: number) => void;
+  /**
+   * Frames of a drag along the fence: no history, one entry comes from the gesture as a whole.
+   * The live/commit pair the house and the corners already use.
+   */
+  moveGateLive: (gateId: string, offsetAlongEdge: number) => void;
+  /** Frames of an end-handle drag: the dragged end follows, the other stays put. */
+  resizeGateLive: (gateId: string, end: SpanEnd, at: number) => void;
+  /** Pulls a gate a drag has left off its side back onto it, where the side still has room. */
+  fitGate: (gateId: string) => void;
   removeGate: (gateId: string) => void;
-  /** Which boundary edge faces the street, by index; `null` clears it. */
-  setStreetEdge: (edgeIndex: number | null) => void;
+  /** Which side faces the street, by the vertex its edge starts at; `null` clears it. */
+  setStreetEdge: (edgeVertexId: string | null) => void;
   /** What one side of the property is made of. Setting it back to a fence removes the entry. */
   setBoundaryKind: (edgeVertexId: string, kind: BoundaryKind) => void;
+  /** How tall that side stands; `null` goes back to the kind's own default. */
+  setBoundaryHeight: (edgeVertexId: string, height: number | null) => void;
   setSuggestedStreetEdge: () => void;
   /** Degrees clockwise from screen-up to true north. */
   setOrientation: (degrees: number) => void;
@@ -245,6 +352,14 @@ interface BoundaryState {
 
   toggleZone: (id: ZoneId) => void;
   toggleAllZones: () => void;
+  /**
+   * The custom redesign outline, or `null` to go back to whole zones.
+   *
+   * Lives here rather than in the features store because it is part of the *site* — it is stored,
+   * synced and undone with the boundary and the house, and the generator reads it off
+   * `site.scopePolygon`. Step 2 owns the drawing of it; this owns the fact.
+   */
+  setScopePolygon: (points: Point[] | null) => void;
 
   /** Rescales the whole plot about its own centroid — the sanity warning's one-tap fix. */
   scalePlot: (factor: number) => void;
@@ -268,6 +383,8 @@ interface BoundaryState {
   setHouseTool: (tool: HouseTool) => void;
   setUnit: (unit: Unit) => void;
   select: (selection: Selection) => void;
+  /** Clears a selection whose target no longer exists. Called after anything that removes things. */
+  reconcileSelection: () => void;
   hoverEdge: (index: number | null) => void;
   setProjectName: (name: string) => void;
 }
@@ -350,8 +467,6 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
     rightAngleSnap: true,
     reflowEdgeIndex: null,
     sizeAnchorVisible: true,
-    selectedWallId: null,
-    accessTool: null,
     measurement: null,
     lastSavedAt: Date.now(),
     gestureSnapshot: null,
@@ -425,24 +540,23 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         const inserted = { id: nextVertexId(), x: point.x, y: point.y };
         vertices.splice(edgeIndex + 1, 0, inserted);
 
-        /*
-         * A gate on the split edge keeps its place in the fence: one beyond the new corner is
-         * re-homed onto the new edge with its offset shortened by the first half's length. The
-         * street edge stays on the first half. Labels are positional, so everything after the
-         * insert reletters for free.
-         */
-        const firstHalf = start ? edgeLength(start, point) : 0;
-        const gates = draft.gates.map((gate) =>
-          start && gate.edgeVertexId === start.id && gate.offsetAlongEdge > firstHalf
-            ? {
-                ...gate,
-                edgeVertexId: inserted.id,
-                offsetAlongEdge: gate.offsetAlongEdge - firstHalf,
-              }
-            : gate,
-        );
+        if (!start) return { ...draft, vertices };
 
-        return { ...draft, vertices, gates };
+        /*
+         * What was hung on the split edge stays where it was in the fence: a gate beyond the new
+         * corner is re-homed onto the new edge with its offset measured from that corner, and the
+         * side's kind is carried onto both halves. The street edge stays on the first half. Labels
+         * are positional, so everything after the insert reletters for free. The rules themselves
+         * live in the schema, beside the resolvers they have to agree with.
+         */
+        const firstHalf = edgeLength(start, point);
+        const after = { ...draft, vertices };
+
+        return {
+          ...after,
+          gates: gatesAfterSplit(after, start.id, inserted.id, firstHalf),
+          boundaryStyles: inheritBoundaryStyle(draft.boundaryStyles, start.id, inserted.id),
+        };
       }),
 
     deleteVertex: (id) => {
@@ -451,26 +565,26 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         if (index === -1) return null;
         if (draft.closed && draft.vertices.length <= MIN_VERTICES) return null;
 
+        const vertices = draft.vertices.filter((vertex) => vertex.id !== id);
+        const after = { ...draft, vertices };
+
+        /*
+         * The edge that started at this corner is gone. What was hung on it is carried onto the
+         * edge that replaces it where that edge actually passes through it — deleting a redundant
+         * corner on a straight side loses nothing — and dropped where the corner was a real bend.
+         * The side's kind goes with the edge: left behind, the entry would describe an edge that
+         * no longer exists, and because vertex ids come from a counter it could later be claimed
+         * by a corner added somewhere else entirely.
+         */
         return {
-          ...draft,
-          vertices: draft.vertices.filter((vertex) => vertex.id !== id),
-          // The edge that started at this corner is gone, and so is anything hung on it.
-          gates: draft.gates.filter((gate) => gate.edgeVertexId !== id),
-          streetEdgeVertexId: draft.streetEdgeVertexId === id ? null : draft.streetEdgeVertexId,
-          /*
-           * Including what that side was made of. Left behind, the entry would describe an edge
-           * that no longer exists — and because vertex ids come from a counter, it could later be
-           * claimed by a corner added somewhere else entirely.
-           */
-          boundaryStyles: pruneBoundaryStyles(
-            draft.boundaryStyles,
-            draft.vertices.filter((vertex) => vertex.id !== id),
-          ),
+          ...after,
+          ...accessAfterDelete(draft, after, id),
+          boundaryStyles: pruneBoundaryStyles(draft.boundaryStyles, vertices),
         };
       });
 
-      const { selection } = get();
-      if (selection?.kind === 'vertex' && selection.id === id) set({ selection: null });
+      // The corner is gone, and so is the side that started at it.
+      get().reconcileSelection();
     },
 
     setEdgeLength: (edgeIndex, metres) =>
@@ -493,7 +607,32 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
          */
         if (draft.closed && !polygonIsSimple(vertices)) return null;
 
-        return { ...draft, vertices };
+        /*
+         * Every side but one is lengthened from its far end, and a gate's offset — metres from
+         * the side's *start* — needs nothing. The closing edge ends on corner A, so it is its start
+         * that slides, and a gate measured from that corner would slide with it. Re-measuring from
+         * the pinned end keeps the gate where it was hung.
+         */
+        const targets = edgeReflowTargets(draft.vertices.length, edgeIndex);
+        const startMoved = targets !== null && targets.movedIndex === edgeIndex;
+        const startVertex = draft.vertices[edgeIndex];
+        const gates =
+          edge && startVertex && startMoved
+            ? draft.gates.map((gate) =>
+                gate.edgeVertexId === startVertex.id
+                  ? {
+                      ...gate,
+                      offsetAlongEdge: offsetFromEndPreserved(
+                        gate.offsetAlongEdge,
+                        edgeLength(edge.start, edge.end),
+                        metres,
+                      ),
+                    }
+                  : gate,
+              )
+            : draft.gates;
+
+        return { ...draft, vertices, gates };
       }),
 
     /*
@@ -556,12 +695,22 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         const house = boundary ? shrinkHouseToFit(boundary, requested) : requested;
         if (!house) return null;
 
-        // A freshly placed house means freshly computed zones, and the user almost always
-        // wants all of them in scope to begin with.
-        return { ...draft, house, selectedZoneIds: [...ZONE_ORDER] };
+        /*
+         * A freshly placed house means freshly computed zones, and the user almost always wants
+         * all of them in scope to begin with. The drawn redesign area goes for the same reason and
+         * is stronger: it was traced against a garden that no longer exists, and keeping it would
+         * clip the design to an outline the user drew around something else.
+         */
+        return { ...draft, house, selectedZoneIds: [...ZONE_ORDER], scopePolygon: null };
       });
 
-      if (get().present.house) set({ selection: { kind: 'house' }, houseTool: 'move' });
+      /*
+       * A placed house lands the user in Select, with the house selected: the next things to do —
+       * drag it, click a wall for its doors, click a side for its fence — are all selection.
+       */
+      if (get().present.house) {
+        set({ selection: { kind: 'house' }, houseTool: 'move', mode: 'select' });
+      }
     },
 
     addHousePoint: (point) =>
@@ -577,8 +726,13 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         return;
       }
 
-      commit((draft) => ({ ...draft, house, selectedZoneIds: [...ZONE_ORDER] }));
-      set({ housePoints: [], selection: { kind: 'house' }, houseTool: 'move' });
+      commit((draft) => ({
+        ...draft,
+        house,
+        selectedZoneIds: [...ZONE_ORDER],
+        scopePolygon: null,
+      }));
+      set({ housePoints: [], selection: { kind: 'house' }, houseTool: 'move', mode: 'select' });
     },
 
     /*
@@ -637,8 +791,18 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
       commitHouse((house) => rotateHouse(house, degrees));
     },
 
+    // A plain house edit, not a `commitHouse` one: the footprint does not move.
+    setStoreys: (storeys) =>
+      commit((draft) => {
+        if (!draft.house || !Number.isInteger(storeys) || storeys < 1 || storeys > 3) return null;
+        if (draft.house.storeys === storeys) return null;
+        return { ...draft, house: { ...draft.house, storeys } };
+      }),
+
     removeHouse: () => {
-      commit((draft) => (draft.house ? { ...draft, house: null, selectedZoneIds: [] } : null));
+      commit((draft) =>
+        draft.house ? { ...draft, house: null, selectedZoneIds: [], scopePolygon: null } : null,
+      );
       set({ selection: null, housePoints: [] });
     },
 
@@ -652,9 +816,9 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
      * in `fitsOnWall` so the same rule applies wherever an opening comes from.
      */
 
-    selectWall: (selectedWallId) => set({ selectedWallId }),
+    selectWall: (wallId) => set({ selection: wallId === null ? null : { kind: 'wall', wallId } }),
 
-    setWallKind: (wallId, kind) =>
+    setWallKind: (wallId, kind) => {
       commit((draft) => {
         if (!draft.house) return null;
 
@@ -673,9 +837,14 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         );
 
         return { ...draft, house: { ...draft.house, walls, openings } };
-      }),
+      });
+      // The door that was selected may be one the new kind just removed.
+      get().reconcileSelection();
+    },
 
-    addOpening: (wallId, type) =>
+    addOpening: (wallId, type) => {
+      let added: string | null = null;
+
       commit((draft) => {
         if (!draft.house) return null;
 
@@ -692,6 +861,7 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         const offsetAlongEdge = firstFreeOffset(draft.house, wallId, candidate);
         if (offsetAlongEdge === null) return null;
 
+        added = candidate.id;
         return {
           ...draft,
           house: {
@@ -699,7 +869,11 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
             openings: [...draft.house.openings, { ...candidate, offsetAlongEdge }],
           },
         };
-      }),
+      });
+
+      // Selected on arrival, so its wall's editor opens with it and the next move is obvious.
+      if (added) set({ selection: { kind: 'opening', id: added } });
+    },
 
     moveOpening: (openingId, offsetAlongEdge) =>
       commit((draft) =>
@@ -732,7 +906,66 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         ),
       ),
 
-    removeOpening: (openingId) =>
+    moveOpeningLive: (openingId, offsetAlongEdge) =>
+      set((state) => {
+        const next = editOpening(state.present, openingId, (opening, house) => ({
+          ...opening,
+          offsetAlongEdge:
+            clampOffsetToWall(house, opening.wallId, opening.width, offsetAlongEdge) ??
+            opening.offsetAlongEdge,
+        }));
+
+        return next ? { present: next } : state;
+      }),
+
+    resizeOpeningLive: (openingId, end, at) =>
+      set((state) => {
+        const next = editOpening(state.present, openingId, (opening, house) => {
+          const length = wallLength(house, opening.wallId);
+          if (length === null) return opening;
+
+          const half = opening.width / 2;
+          const resized = spanFromDraggedEnd(
+            [opening.offsetAlongEdge - half, opening.offsetAlongEdge + half],
+            end,
+            at,
+            MIN_OPENING_WIDTH,
+            length,
+          );
+
+          // Field by field, for the reason `resizeGateLive` gives.
+          return resized
+            ? { ...opening, offsetAlongEdge: resized.offset, width: resized.width }
+            : opening;
+        });
+
+        return next ? { present: next } : state;
+      }),
+
+    setOpeningSwing: (openingId, swing) =>
+      commit((draft) =>
+        editOpening(draft, openingId, (opening) =>
+          opening.swing === swing ? opening : { ...opening, swing },
+        ),
+      ),
+
+    fitOpening: (openingId) =>
+      commit((draft) =>
+        editOpening(draft, openingId, (opening, house) => {
+          const offsetAlongEdge = clampOffsetToWall(
+            house,
+            opening.wallId,
+            opening.width,
+            opening.offsetAlongEdge,
+          );
+          if (offsetAlongEdge === null || offsetAlongEdge === opening.offsetAlongEdge) {
+            return opening;
+          }
+          return { ...opening, offsetAlongEdge };
+        }),
+      ),
+
+    removeOpening: (openingId) => {
       commit((draft) =>
         draft.house
           ? {
@@ -743,75 +976,211 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
               },
             }
           : null,
-      ),
+      );
+      get().reconcileSelection();
+    },
 
-    setAccessTool: (tool) => set({ accessTool: tool }),
+    addGate: (edgeVertexId, kind = 'pedestrian', offsetAlongEdge) => {
+      let added: string | null = null;
 
-    addGateOnEdge: (edgeIndex, point) => {
       commit((draft) => {
-        const start = draft.vertices[edgeIndex];
-        const end = draft.vertices[(edgeIndex + 1) % draft.vertices.length];
-        if (!start || !end || !draft.closed) return null;
+        if (!draft.closed || !draft.vertices.some((vertex) => vertex.id === edgeVertexId)) {
+          return null;
+        }
 
-        const desired = edgeLength(start, point);
-        const offset = clampOffsetToEdge(draft, start.id, GATE_DEFAULT_WIDTH, desired);
+        const candidate: Gate = {
+          id: nextGateId(),
+          edgeVertexId,
+          offsetAlongEdge: 0,
+          width: GATE_DEFAULTS[kind].width,
+          kind,
+        };
+        const offset =
+          offsetAlongEdge === undefined
+            ? firstFreeOffsetOnEdge(draft, edgeVertexId, candidate)
+            : clampOffsetToEdge(draft, edgeVertexId, candidate.width, offsetAlongEdge);
         if (offset === null) return null;
 
-        const gate: Gate = {
-          id: nextGateId(),
-          edgeVertexId: start.id,
-          offsetAlongEdge: offset,
-          width: GATE_DEFAULT_WIDTH,
-        };
+        const gate = { ...candidate, offsetAlongEdge: offset };
         // Through another gate is refused outright rather than nudged: two gates a metre apart
         // is a mistake the user should see, not one the store should quietly resolve.
         if (!fitsOnEdge(draft, gate)) return null;
 
+        added = gate.id;
         return { ...draft, gates: [...draft.gates, gate] };
       });
-      set({ accessTool: null });
+
+      if (added) set({ selection: { kind: 'gate', id: added } });
     },
 
-    addSuggestedGate: () =>
+    addSuggestedGate: () => {
+      let added: string | null = null;
+
       commit((draft) => {
         const suggestion = suggestedGateEdge(draft);
         if (!suggestion) return null;
 
-        const gate: Gate = { id: nextGateId(), ...suggestion, width: GATE_DEFAULT_WIDTH };
+        const gate: Gate = {
+          id: nextGateId(),
+          ...suggestion,
+          width: GATE_DEFAULT_WIDTH,
+          kind: 'pedestrian',
+        };
         if (!fitsOnEdge(draft, gate)) return null;
 
+        added = gate.id;
         return { ...draft, gates: [...draft.gates, gate] };
+      });
+
+      if (added) set({ selection: { kind: 'gate', id: added } });
+    },
+
+    setGateKind: (gateId, kind) =>
+      commit((draft) =>
+        editGate(draft, gateId, (gate, site) => {
+          if (gate.kind === kind) return gate;
+
+          /*
+           * A kind is also a default width — a drive is three metres, a gate under one — and a
+           * width the user never typed follows the kind. Re-clamped so widening does not push it
+           * off the end of the side.
+           */
+          const typed = gate.width !== GATE_DEFAULTS[gate.kind].width;
+          const width = typed ? gate.width : GATE_DEFAULTS[kind].width;
+          const offsetAlongEdge =
+            clampOffsetToEdge(site, gate.edgeVertexId, width, gate.offsetAlongEdge) ??
+            gate.offsetAlongEdge;
+
+          return { ...gate, kind, width, offsetAlongEdge };
+        }),
+      ),
+
+    setGateWidth: (gateId, width) =>
+      commit((draft) =>
+        editGate(draft, gateId, (gate, site) => {
+          if (!(width >= MIN_GATE_WIDTH)) return gate;
+
+          const offsetAlongEdge =
+            clampOffsetToEdge(site, gate.edgeVertexId, width, gate.offsetAlongEdge) ??
+            gate.offsetAlongEdge;
+
+          return { ...gate, width, offsetAlongEdge };
+        }),
+      ),
+
+    setGateOffset: (gateId, offsetAlongEdge) =>
+      commit((draft) =>
+        editGate(draft, gateId, (gate, site) => ({
+          ...gate,
+          offsetAlongEdge:
+            clampOffsetToEdge(site, gate.edgeVertexId, gate.width, offsetAlongEdge) ??
+            gate.offsetAlongEdge,
+        })),
+      ),
+
+    moveGateLive: (gateId, offsetAlongEdge) =>
+      set((state) => {
+        const next = editGate(state.present, gateId, (gate, site) => ({
+          ...gate,
+          offsetAlongEdge:
+            clampOffsetToEdge(site, gate.edgeVertexId, gate.width, offsetAlongEdge) ??
+            gate.offsetAlongEdge,
+        }));
+
+        return next ? { present: next } : state;
       }),
 
-    removeGate: (gateId) =>
+    resizeGateLive: (gateId, end, at) =>
+      set((state) => {
+        const next = editGate(state.present, gateId, (gate, site) => {
+          const edge = gateEdge(site, gate);
+          if (!edge) return gate;
+
+          const half = gate.width / 2;
+          const resized = spanFromDraggedEnd(
+            [gate.offsetAlongEdge - half, gate.offsetAlongEdge + half],
+            end,
+            at,
+            MIN_GATE_WIDTH,
+            edgeLength(edge[0], edge[1]),
+          );
+
+          /*
+           * Mapped field by field rather than spread. The helper is about spans, so it answers
+           * `offset`; a gate stores `offsetAlongEdge`. Spreading set the width, left the position
+           * behind and added a stray key — which the tests below caught and nothing else would.
+           *
+           * Refused rather than clamped: the gate stops dead at its minimum, which is visible.
+           */
+          return resized
+            ? { ...gate, offsetAlongEdge: resized.offset, width: resized.width }
+            : gate;
+        });
+
+        return next ? { present: next } : state;
+      }),
+
+    fitGate: (gateId) =>
+      commit((draft) =>
+        editGate(draft, gateId, (gate, site) => {
+          const offsetAlongEdge = clampOffsetToEdge(
+            site,
+            gate.edgeVertexId,
+            gate.width,
+            gate.offsetAlongEdge,
+          );
+          if (offsetAlongEdge === null || offsetAlongEdge === gate.offsetAlongEdge) return gate;
+          return { ...gate, offsetAlongEdge };
+        }),
+      ),
+
+    removeGate: (gateId) => {
       commit((draft) => {
         if (!draft.gates.some((gate) => gate.id === gateId)) return null;
         return { ...draft, gates: draft.gates.filter((gate) => gate.id !== gateId) };
-      }),
-
-    setStreetEdge: (edgeIndex) => {
-      commit((draft) => {
-        const next = edgeIndex === null ? null : (draft.vertices[edgeIndex]?.id ?? null);
-        if (edgeIndex !== null && next === null) return null;
-        if (next === draft.streetEdgeVertexId) return null;
-        return { ...draft, streetEdgeVertexId: next };
       });
-      set({ accessTool: null });
+      get().reconcileSelection();
     },
+
+    setStreetEdge: (edgeVertexId) =>
+      commit((draft) => {
+        if (edgeVertexId !== null && !draft.vertices.some((vertex) => vertex.id === edgeVertexId)) {
+          return null;
+        }
+        if (edgeVertexId === draft.streetEdgeVertexId) return null;
+        return { ...draft, streetEdgeVertexId: edgeVertexId };
+      }),
 
     setBoundaryKind: (edgeVertexId, kind) =>
       commit((draft) => {
         if (!draft.vertices.some((vertex) => vertex.id === edgeVertexId)) return null;
+        if (kindForEdge(draft, edgeVertexId) === kind) return null;
 
-        const next = setBoundaryStyle(draft.boundaryStyles, edgeVertexId, kind);
-        // `commit` treats null as "nothing changed", which keeps a no-op tap off the undo stack.
-        if (
-          next.length === draft.boundaryStyles.length &&
-          kindForEdge(draft, edgeVertexId) === kind
-        )
-          return null;
+        // A typed height is a fact about that side, not about its kind, and survives the change.
+        const height = styleForEdge(draft, edgeVertexId)?.height;
+        return {
+          ...draft,
+          boundaryStyles: setBoundaryStyle(draft.boundaryStyles, edgeVertexId, kind, height),
+        };
+      }),
 
-        return { ...draft, boundaryStyles: next };
+    setBoundaryHeight: (edgeVertexId, height) =>
+      commit((draft) => {
+        if (!draft.vertices.some((vertex) => vertex.id === edgeVertexId)) return null;
+        if (height !== null && !(height > 0)) return null;
+
+        const current = styleForEdge(draft, edgeVertexId)?.height;
+        if ((height ?? undefined) === current) return null;
+
+        return {
+          ...draft,
+          boundaryStyles: setBoundaryStyle(
+            draft.boundaryStyles,
+            edgeVertexId,
+            kindForEdge(draft, edgeVertexId),
+            height ?? undefined,
+          ),
+        };
       }),
 
     setSuggestedStreetEdge: () =>
@@ -851,6 +1220,19 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
           : [...draft.selectedZoneIds, id],
       })),
 
+    setScopePolygon: (points) =>
+      commit((draft) => {
+        /*
+         * Refused rather than stored when it is not a usable area. `scopeRing` is the one rule —
+         * the PostGIS validator and the generator both ask it — so a ring that crosses itself or
+         * leaves the fence never reaches the document in the first place.
+         */
+        if (points !== null && scopeRing({ ...draft, scopePolygon: points }) === null) return null;
+        if (points === null && draft.scopePolygon === null) return null;
+
+        return { ...draft, scopePolygon: points };
+      }),
+
     toggleAllZones: () =>
       commit((draft) => {
         const available = computeZones(draftPolygon(draft), draft.house).map((zone) => zone.id);
@@ -873,6 +1255,9 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
      * narrow side return can fall below the sliver threshold. Keeping the ticks is exactly what
      * `effectiveZoneIds` was built for: the choice survives in the document and comes back if the
      * zone does.
+     *
+     * Gate offsets scale with the fence they are measured along (`scaleOffsets` says why widths do
+     * not); the house's openings are handled inside `scaleHouseAbout` for the same reason.
      */
     scalePlot: (factor) =>
       commit((draft) => {
@@ -887,6 +1272,7 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
             ...scalePointAbout(vertex, centre, factor),
           })),
           house: draft.house ? scaleHouseAbout(draft.house, centre, factor) : null,
+          gates: scaleOffsets(draft.gates, factor),
         };
       }),
 
@@ -901,7 +1287,7 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
       set((state) => {
         const snapshot = state.gestureSnapshot;
         if (!snapshot) return { gestureSnapshot: null };
-        if (sameGeometry(snapshot, state.present)) return { gestureSnapshot: null };
+        if (sameDraft(snapshot, state.present)) return { gestureSnapshot: null };
 
         return {
           gestureSnapshot: null,
@@ -911,7 +1297,17 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         };
       }),
 
-    undo: () =>
+    /*
+     * Undo keeps the selection where it can, rather than clearing it outright.
+     *
+     * Clearing was right while only a corner or the house could be selected: undo usually meant
+     * geometry had appeared or gone, so whatever was selected was suspect. It is wrong now that a
+     * gate, a door or a side can be selected — undoing a gate drag closed the very panel the user
+     * was dragging in, so the correction they had just made vanished from under them along with
+     * the thing they were correcting. `reconcileSelection` drops it only if its target genuinely
+     * is not in the restored draft.
+     */
+    undo: () => {
       set((state) => {
         const previous = state.past.at(-1);
         if (!previous) return state;
@@ -920,11 +1316,12 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
           past: state.past.slice(0, -1),
           present: previous,
           future: [state.present, ...state.future],
-          selection: null,
         };
-      }),
+      });
+      get().reconcileSelection();
+    },
 
-    redo: () =>
+    redo: () => {
       set((state) => {
         const [next, ...rest] = state.future;
         if (!next) return state;
@@ -933,9 +1330,10 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
           past: [...state.past, state.present],
           present: next,
           future: rest,
-          selection: null,
         };
-      }),
+      });
+      get().reconcileSelection();
+    },
 
     resetDraft: () =>
       set((state) => ({
@@ -981,12 +1379,11 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
 
     setMode: (mode) =>
       set((state) => {
-        // Nothing to put a house inside of — or a gate in the fence of — until the plot is enclosed.
-        if ((mode === 'house' || mode === 'access') && !state.present.closed) return state;
+        // Nothing to put a house inside of until the plot is enclosed.
+        if (mode === 'house' && !state.present.closed) return state;
 
         return {
           mode,
-          accessTool: null,
           housePoints: [],
           // Leaving measure mode throws the tape away — it was never meant to persist.
           measurement: null,
@@ -998,13 +1395,25 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
     setHouseTool: (houseTool) => set({ houseTool, housePoints: [] }),
     setUnit: (unit) => set({ unit }),
     select: (selection) => set({ selection }),
+    reconcileSelection: () =>
+      set((state) =>
+        selectionExists(state.selection, state.present) ? state : { selection: null },
+      ),
     hoverEdge: (hoveredEdgeIndex) => set({ hoveredEdgeIndex }),
     setProjectName: (projectName) => set({ projectName }),
   };
 });
 
-/** Whether two drafts describe the same shapes — the test a drag uses to earn a history entry. */
-function sameGeometry(a: BoundaryDraft, b: BoundaryDraft): boolean {
+/**
+ * Whether two drafts describe the same property — the test a drag uses to earn a history entry.
+ *
+ * Everything a gesture can move is compared, not just the outlines. The first version looked at
+ * vertices and the house alone, which was complete while those were the only things that could be
+ * dragged; a gate slid along its fence would have ended the gesture on "nothing changed" and left
+ * no way to undo it. Anything else a drag might touch has to be added here, or the same thing
+ * happens to it.
+ */
+function sameDraft(a: BoundaryDraft, b: BoundaryDraft): boolean {
   if (a.vertices.length !== b.vertices.length) return false;
   if (
     a.vertices.some((vertex, i) => vertex.x !== b.vertices[i].x || vertex.y !== b.vertices[i].y)
@@ -1012,14 +1421,31 @@ function sameGeometry(a: BoundaryDraft, b: BoundaryDraft): boolean {
     return false;
   }
 
+  if (!sameList(a.gates, b.gates)) return false;
+  if (!sameList(a.boundaryStyles, b.boundaryStyles)) return false;
+  if (a.streetEdgeVertexId !== b.streetEdgeVertexId) return false;
+
   if (!a.house || !b.house) return a.house === b.house;
   if (a.house.centre.x !== b.house.centre.x || a.house.centre.y !== b.house.centre.y) return false;
   if (a.house.rotation !== b.house.rotation) return false;
+  if (a.house.storeys !== b.house.storeys) return false;
   if (a.house.outline.length !== b.house.outline.length) return false;
+  if (!sameList(a.house.walls, b.house.walls)) return false;
+  if (!sameList(a.house.openings, b.house.openings)) return false;
 
   return a.house.outline.every(
     (point, i) => point.x === b.house!.outline[i].x && point.y === b.house!.outline[i].y,
   );
+}
+
+/**
+ * Element-wise value equality for the small records hung on the property. A false negative here
+ * costs one spare history entry; a false positive loses an edit, so the comparison is by value.
+ */
+function sameList<T>(a: T[], b: T[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((item, i) => JSON.stringify(item) === JSON.stringify(b[i]));
 }
 
 /**
@@ -1040,11 +1466,48 @@ function ephemeralState() {
     rightAngleSnap: true,
     reflowEdgeIndex: null as number | null,
     sizeAnchorVisible: true,
-    selectedWallId: null as string | null,
-    accessTool: null as AccessTool,
     measurement: null,
     gestureSnapshot: null as BoundaryDraft | null,
   };
+}
+
+/* ---- what is selected, resolved ---- */
+
+/**
+ * The wall the wall editor is about: a selected wall, or the wall of a selected opening. A gate or
+ * an opening selected on its own still shows its parent's editor, with that entry expanded.
+ */
+export function selectedWallId(state: {
+  selection: Selection;
+  present: BoundaryDraft;
+}): string | null {
+  const { selection, present } = state;
+  if (selection?.kind === 'wall') return selection.wallId;
+  if (selection?.kind === 'opening') {
+    return present.house?.openings.find((opening) => opening.id === selection.id)?.wallId ?? null;
+  }
+  return null;
+}
+
+/** The side the side editor is about: a selected side, or the side of a selected gate. */
+export function selectedEdgeVertexId(state: {
+  selection: Selection;
+  present: BoundaryDraft;
+}): string | null {
+  const { selection, present } = state;
+  if (selection?.kind === 'edge') return selection.edgeVertexId;
+  if (selection?.kind === 'gate') {
+    return present.gates.find((gate) => gate.id === selection.id)?.edgeVertexId ?? null;
+  }
+  return null;
+}
+
+export function selectedGateId(state: { selection: Selection }): string | null {
+  return state.selection?.kind === 'gate' ? state.selection.id : null;
+}
+
+export function selectedOpeningId(state: { selection: Selection }): string | null {
+  return state.selection?.kind === 'opening' ? state.selection.id : null;
 }
 
 /** Test hook: the store is a module singleton, so suites must reset it between cases. */

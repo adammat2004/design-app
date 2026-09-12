@@ -2,7 +2,6 @@
 
 import {
   Car,
-  DoorOpen,
   House,
   Magnet,
   MousePointer2,
@@ -55,14 +54,6 @@ export function CanvasToolbar() {
           // Nothing to put a house inside of until the plot is enclosed.
           disabled={!closed}
           onClick={() => setMode('house')}
-        />
-        <ToolbarButton
-          testId="canvas-mode-access"
-          label="Access"
-          icon={<DoorOpen aria-hidden className="h-4 w-4" />}
-          pressed={mode === 'access'}
-          disabled={!closed}
-          onClick={() => setMode('access')}
         />
       </ToolbarGroup>
 

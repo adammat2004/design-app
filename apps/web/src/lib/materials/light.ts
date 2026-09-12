@@ -143,3 +143,27 @@ export function shiftBrightness(colour: Rgb, amount: number): Rgb {
 
   return { r: clamp(colour.r), g: clamp(colour.g), b: clamp(colour.b) };
 }
+
+/* ---------------------------------------------------------------- after dark */
+
+/**
+ * The colour the garden is washed with at full night, and how far that wash goes.
+ *
+ * A deep blue rather than a grey or a black, because that is what an unlit garden actually looks
+ * like at dusk and because a neutral darkening reads as the brightness being turned down rather
+ * than as night falling. The alpha stops well short of 1 on purpose: a plan is a document before it is a
+ * picture, and one that hid its own geometry after six o'clock would be a worse drawing however
+ * convincing the night was. At 0.62 every bed and every path is still legible.
+ */
+export const NIGHT_TONE = '#101c2e';
+export const NIGHT_MAX_ALPHA = 0.62;
+
+/**
+ * How strongly a pool of light lifts the wash back out, at `intensity` 1.
+ *
+ * Composited `lighter`, so pools that overlap genuinely add — two spike lights on one shrub really
+ * is brighter than either. That is the opposite of the cast-shadow rule, where two shadows on one
+ * patch must *not* double-darken, and the difference is physical rather than stylistic: shadow is
+ * the absence of one light source and cannot be more absent, whereas two lamps are two lamps.
+ */
+export const LIGHT_POOL_ALPHA = 0.85;

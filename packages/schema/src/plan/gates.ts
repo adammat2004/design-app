@@ -7,8 +7,16 @@ import {
   polygonArea,
   type Point,
 } from '../geometry/primitives.js';
+import {
+  carryOntoSegment,
+  clampOffset,
+  offsetAfterSplit,
+  spanFits,
+  spanOnSegment,
+  spansOverlap,
+} from './along-edge.js';
 import type { PlanGeometry } from './features.js';
-import { GATE_DEFAULT_WIDTH, type Gate } from './gate.js';
+import { GATE_DEFAULT_WIDTH, type Gate, type GateKind } from './gate.js';
 import { OPENING_DEFAULTS, type Opening } from './opening.js';
 import {
   firstFreeOffset,
@@ -57,20 +65,7 @@ export function gateSegment(site: SiteForGates, gate: Gate): [Point, Point] | nu
   const edge = gateEdge(site, gate);
   if (!edge) return null;
 
-  const [start, end] = edge;
-  const length = edgeLength(start, end);
-  const half = gate.width / 2;
-  const from = gate.offsetAlongEdge - half;
-  const to = gate.offsetAlongEdge + half;
-
-  if (from < -MIN_EDGE_LENGTH || to > length + MIN_EDGE_LENGTH) return null;
-
-  const unit = { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
-
-  return [
-    { x: start.x + unit.x * from, y: start.y + unit.y * from },
-    { x: start.x + unit.x * to, y: start.y + unit.y * to },
-  ];
+  return spanOnSegment(edge, gate.offsetAlongEdge, gate.width);
 }
 
 export function gateCentre(site: SiteForGates, gate: Gate): Point | null {
@@ -91,6 +86,15 @@ export function gateNormal(site: SiteForGates, gate: Gate): Point | null {
   if (!edge) return null;
 
   return inwardNormal(edge, boundaryPolygon(site));
+}
+
+/**
+ * The unit vector pointing into the garden across this side, or `null` for a side that does not
+ * resolve. What a side editor needs to say which way a side faces without inventing a gate on it.
+ */
+export function edgeInwardNormal(site: SiteForGates, edgeVertexId: string): Point | null {
+  const edge = edgeByVertexId(site, edgeVertexId);
+  return edge ? inwardNormal(edge, boundaryPolygon(site)) : null;
 }
 
 function inwardNormal(edge: [Point, Point], boundary: Point[]): Point | null {
@@ -151,15 +155,12 @@ export function fitsOnEdge(site: SiteForGates, candidate: Gate): boolean {
   if (!edge) return false;
 
   const length = edgeLength(edge[0], edge[1]);
-  const [from, to] = gateSpan(candidate);
-  if (from < -MIN_EDGE_LENGTH || to > length + MIN_EDGE_LENGTH) return false;
+  if (!spanFits(length, candidate.offsetAlongEdge, candidate.width)) return false;
 
+  const span = gateSpan(candidate);
   return gatesOnEdge(site, candidate.edgeVertexId)
     .filter((other) => other.id !== candidate.id)
-    .every((other) => {
-      const [otherFrom, otherTo] = gateSpan(other);
-      return to <= otherFrom + MIN_EDGE_LENGTH || from >= otherTo - MIN_EDGE_LENGTH;
-    });
+    .every((other) => !spansOverlap(span, gateSpan(other)));
 }
 
 /** The nearest offset that keeps a gate of this width wholly on the edge. */
@@ -172,11 +173,119 @@ export function clampOffsetToEdge(
   const edge = edgeByVertexId(site, edgeVertexId);
   if (!edge) return null;
 
-  const length = edgeLength(edge[0], edge[1]);
-  const half = width / 2;
-  if (width > length) return length / 2;
+  return clampOffset(edgeLength(edge[0], edge[1]), width, desired);
+}
 
-  return Math.min(length - half, Math.max(half, desired));
+/**
+ * Somewhere on this edge a gate of this width will fit, preferring the centre, then the gaps
+ * between what is already there. The boundary twin of `firstFreeOffset`, and `null` for the same
+ * reason: an edge with no room is reported, not quietly given a gate through another gate.
+ */
+export function firstFreeOffsetOnEdge(
+  site: SiteForGates,
+  edgeVertexId: string,
+  candidate: Gate,
+): number | null {
+  const edge = edgeByVertexId(site, edgeVertexId);
+  if (!edge) return null;
+
+  const length = edgeLength(edge[0], edge[1]);
+  if (candidate.width > length) return null;
+
+  const half = candidate.width / 2;
+  const occupied = gatesOnEdge(site, edgeVertexId)
+    .filter((other) => other.id !== candidate.id)
+    .map(gateSpan)
+    .sort((a, b) => a[0] - b[0]);
+
+  const offers = [length / 2];
+  let cursor = 0;
+  for (const [, to] of occupied) {
+    offers.push(cursor + half);
+    cursor = Math.max(cursor, to);
+  }
+  offers.push(cursor + half, length - half);
+
+  for (const offer of offers) {
+    const placed = { ...candidate, edgeVertexId, offsetAlongEdge: offer };
+    if (fitsOnEdge(site, placed)) return offer;
+  }
+
+  return null;
+}
+
+/* ---------------------------------------------------------------- when the edge changes */
+
+/**
+ * The gates after their edge is cut in two by a new corner.
+ *
+ * `site` is the site *after* the insert — the new vertex is in it — and `firstHalf` is how far
+ * along the old edge the cut fell. A gate beyond the cut moves to the new edge with its offset
+ * measured from the new corner; one before it stays. Either is then clamped onto its half, so a
+ * gate the cut ran through is nudged whole onto one side rather than left straddling a corner.
+ * A gate wider than its half is left where the clamp puts it and simply stops resolving.
+ */
+export function gatesAfterSplit(
+  site: SiteForGates,
+  edgeVertexId: string,
+  insertedVertexId: string,
+  firstHalf: number,
+): Gate[] {
+  return site.gates.map((gate) => {
+    if (gate.edgeVertexId !== edgeVertexId) return gate;
+
+    const split = offsetAfterSplit(gate.offsetAlongEdge, firstHalf);
+    const home = split.half === 'second' ? insertedVertexId : edgeVertexId;
+    const offsetAlongEdge = clampOffsetToEdge(site, home, gate.width, split.offset) ?? split.offset;
+
+    return { ...gate, edgeVertexId: home, offsetAlongEdge };
+  });
+}
+
+/**
+ * The gates and the street edge after a corner is removed and the two edges either side of it
+ * become one.
+ *
+ * `before` and `after` are the site with and without the corner. The edge that started at the
+ * deleted corner is gone; the edge that started at the corner *before* it now runs on to the
+ * corner after. Anything on the vanished edge is carried onto that merged edge where the merged
+ * edge actually passes through it — which is every time the deleted corner was a redundant one on
+ * a straight side — and dropped where it does not, because a gate that was on a real bend has no
+ * honest place on the straight line that replaced it.
+ *
+ * Gates already on the surviving edge keep their offsets from its start, which has not moved.
+ */
+export function accessAfterDelete(
+  before: SiteForGates,
+  after: SiteForGates,
+  deletedVertexId: string,
+): { gates: Gate[]; streetEdgeVertexId: string | null } {
+  const index = before.vertices.findIndex((vertex) => vertex.id === deletedVertexId);
+  const previous = before.vertices[(index - 1 + before.vertices.length) % before.vertices.length];
+  const merged = previous ? edgeByVertexId(after, previous.id) : null;
+
+  const gates: Gate[] = after.gates.filter((gate) => gate.edgeVertexId !== deletedVertexId);
+  if (index >= 0 && previous && merged) {
+    for (const gate of before.gates) {
+      if (gate.edgeVertexId !== deletedVertexId) continue;
+
+      const centre = gateCentre(before, gate);
+      const offset = centre ? carryOntoSegment(centre, merged, gate.width) : null;
+      if (offset === null) continue;
+
+      const carried = { ...gate, edgeVertexId: previous.id, offsetAlongEdge: offset };
+      if (fitsOnEdge({ ...after, gates }, carried)) gates.push(carried);
+    }
+  }
+
+  let streetEdgeVertexId = before.streetEdgeVertexId;
+  if (streetEdgeVertexId === deletedVertexId) {
+    const old = edgeByVertexId(before, deletedVertexId);
+    const foot = old && merged ? carryOntoSegment(midpoint(old[0], old[1]), merged, 0) : null;
+    streetEdgeVertexId = foot === null || !previous ? null : previous.id;
+  }
+
+  return { gates, streetEdgeVertexId };
 }
 
 /* ---------------------------------------------------------------- the street */
@@ -358,11 +467,17 @@ export function gateSide(
   return across >= 0 ? 'right' : 'left';
 }
 
+/** A gate that resolves, with everything a caller needs to draw it or design from it. */
+export interface ResolvedGate {
+  gate: Gate;
+  segment: [Point, Point];
+  centre: Point;
+  inward: Point;
+}
+
 /** Every gate that currently resolves, with its centre and inward normal. */
-export function resolvedGates(
-  site: SiteForGates,
-): { gate: Gate; segment: [Point, Point]; centre: Point; inward: Point }[] {
-  const out: { gate: Gate; segment: [Point, Point]; centre: Point; inward: Point }[] = [];
+export function resolvedGates(site: SiteForGates): ResolvedGate[] {
+  const out: ResolvedGate[] = [];
   for (const gate of site.gates) {
     const segment = gateSegment(site, gate);
     const inward = gateNormal(site, gate);
@@ -372,17 +487,54 @@ export function resolvedGates(
   return out;
 }
 
+/**
+ * Which opening a side path should start at, or `null` when none should.
+ *
+ * The generator used to take `resolvedGates(site)[0]` — whichever gate happened to be stored
+ * first — and route the garden's side path from it. That was fine while every gate was a 900 mm
+ * pedestrian one, and it is wrong now that a gap in the boundary can be a driveway or an open
+ * frontage:
+ *
+ * - **Nothing on the street edge.** A gate in the street frontage is the *front* garden's
+ *   business, and `front.ts` already runs a path to the kerb. Starting the back garden's side path
+ *   there drags it through the front garden and past the house.
+ * - **A pedestrian gate first.** It is what a side path is for: the bins, the mower, a person
+ *   carrying something in. A driveway is where a car stands, which is why it gets the deeper
+ *   keep-clear rather than a footpath.
+ * - **But a driveway off the street will do** if it is the only way in, because you can walk
+ *   through one; it is simply the last choice.
+ *
+ * `open` counts as walk-through: a gap with nothing hung in it is still how you get through.
+ */
+const GATE_PREFERENCE: Record<GateKind, number> = { pedestrian: 0, open: 1, vehicle: 2 };
+
+export function sidePathGate(site: SiteForGates): ResolvedGate | null {
+  const street = site.streetEdgeVertexId;
+
+  const candidates = resolvedGates(site).filter(
+    (entry) => street === null || entry.gate.edgeVertexId !== street,
+  );
+
+  let best: ResolvedGate | null = null;
+  for (const entry of candidates) {
+    if (!best || GATE_PREFERENCE[entry.gate.kind] < GATE_PREFERENCE[best.gate.kind]) best = entry;
+  }
+
+  return best;
+}
+
 /* ---------------------------------------------------------------- everything at once */
 
 /**
- * The whole of step 1's access sub-step, inferred: the street in front of the house, patio doors
+ * The whole of step 1's property detail, inferred: the street in front of the house, patio doors
  * centred on the wall facing away from it, a front door on the wall facing it, and a side gate
  * on the wider return. Returns the site with those added and nothing else touched; anything the
  * user has already placed is kept and only the gaps are filled.
  *
  * This is what a fixture or a capture script wants — a site that reads as a real one — and what a
- * "set it up for me" tap would apply. It is deliberately **not** applied silently anywhere: every
- * inference is offered by `AccessPanel`, for the reason `suggestedDoorWall` gives.
+ * "set it up for me" tap would apply. It is deliberately **not** applied silently anywhere: each
+ * inference is offered one chip at a time by `SuggestionsRow`, and everything it covers can also
+ * be stated by clicking the side or the wall it is about. Same rule `suggestedDoorWall` gives.
  */
 export function suggestedAccess<S extends SiteForGates>(site: S): S {
   const { house } = site;
@@ -426,6 +578,7 @@ export function suggestedAccess<S extends SiteForGates>(site: S): S {
             edgeVertexId: gate.edgeVertexId,
             offsetAlongEdge: gate.offsetAlongEdge,
             width: GATE_DEFAULT_WIDTH,
+            kind: 'pedestrian',
           },
         ],
       };

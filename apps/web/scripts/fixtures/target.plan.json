@@ -1,0 +1,832 @@
+{
+  "version": 2,
+  "unit": "m",
+  "site": {
+    "vertices": [
+      {
+        "x": 0,
+        "y": 0,
+        "id": "v0"
+      },
+      {
+        "x": 22,
+        "y": 0,
+        "id": "v1"
+      },
+      {
+        "x": 22,
+        "y": 19.5,
+        "id": "v2"
+      },
+      {
+        "x": 0,
+        "y": 19.5,
+        "id": "v3"
+      }
+    ],
+    "closed": true,
+    "house": {
+      "outline": [
+        {
+          "x": -4.5,
+          "y": -3,
+          "id": "h0"
+        },
+        {
+          "x": 4.5,
+          "y": -3,
+          "id": "h1"
+        },
+        {
+          "x": 4.5,
+          "y": 3,
+          "id": "h2"
+        },
+        {
+          "x": -4.5,
+          "y": 3,
+          "id": "h3"
+        }
+      ],
+      "walls": [
+        {
+          "id": "w0",
+          "kind": "external"
+        },
+        {
+          "id": "w1",
+          "kind": "external"
+        },
+        {
+          "id": "w2",
+          "kind": "external"
+        },
+        {
+          "id": "w3",
+          "kind": "external"
+        }
+      ],
+      "openings": [
+        {
+          "id": "o1",
+          "wallId": "w0",
+          "offsetAlongEdge": 4.5,
+          "width": 2.4,
+          "type": "patio-door",
+          "sillHeight": 0,
+          "floorLevel": 0,
+          "swing": "none"
+        },
+        {
+          "id": "o2",
+          "wallId": "w2",
+          "offsetAlongEdge": 4.5,
+          "width": 0.9,
+          "type": "front-door",
+          "sillHeight": 0,
+          "floorLevel": 0,
+          "swing": "inward"
+        }
+      ],
+      "centre": {
+        "x": 10.85,
+        "y": 14.6
+      },
+      "rotation": 0
+    },
+    "selectedZoneIds": [
+      "back",
+      "left",
+      "right",
+      "front"
+    ],
+    "orientation": 0,
+    "location": {
+      "latitude": 53.4,
+      "longitude": -2.98
+    },
+    "sun": {
+      "dayOfYear": 172,
+      "minutes": 900
+    },
+    "gates": [
+      {
+        "id": "g1",
+        "edgeVertexId": "v1",
+        "offsetAlongEdge": 10.6,
+        "width": 0.9
+      }
+    ],
+    "streetEdgeVertexId": "v2",
+    "boundaryStyles": []
+  },
+  "features": {
+    "features": [],
+    "skipped": false
+  },
+  "brief": {
+    "purpose": "Traced from target_design.png, the reference plan this generator is judged against. Scaled so the main house is 9 m wide; proportions, not a survey. The dining terrace sits at the far, sunny end with the lawn meeting the house, a decked lounge beside the house, a kitchen garden and shed in the utility corner, a paved side terrace, and a driveway rather than a lawn at the front.",
+    "desiredFeatures": [
+      "seating",
+      "firePit",
+      "storage",
+      "vegPatch"
+    ],
+    "featuresOther": "",
+    "budget": "high",
+    "maintenance": "medium",
+    "style": "modern",
+    "styleOther": ""
+  },
+  "concepts": {
+    "concepts": [],
+    "selectedId": null,
+    "chosenConceptId": null,
+    "seed": 1
+  },
+  "layout": {
+    "elements": [
+      {
+        "id": "target-e1",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 6.35,
+              "y": 17.6
+            },
+            {
+              "x": 15.35,
+              "y": 17.6
+            },
+            {
+              "x": 15.350000000000001,
+              "y": 19.5
+            },
+            {
+              "x": 6.349999999999998,
+              "y": 19.5
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "front",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "target-e2",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 15.350000000000001,
+              "y": 0
+            },
+            {
+              "x": 22,
+              "y": 0
+            },
+            {
+              "x": 22,
+              "y": 19.5
+            },
+            {
+              "x": 15.35,
+              "y": 19.5
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "right",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "target-e3",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 15.35,
+              "y": 11.6
+            },
+            {
+              "x": 6.35,
+              "y": 11.600000000000001
+            },
+            {
+              "x": 6.349999999999996,
+              "y": 0
+            },
+            {
+              "x": 15.349999999999996,
+              "y": 0
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "right",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "target-e4",
+        "category": "lawn",
+        "role": "fill",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 6.349999999999998,
+              "y": 0
+            },
+            {
+              "x": 6.349999999999998,
+              "y": 19.5
+            },
+            {
+              "x": 0,
+              "y": 19.5
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "left",
+        "fillKind": "base",
+        "material": "standard-turf"
+      },
+      {
+        "id": "target-e5",
+        "category": "gravel-mulch",
+        "role": "fill",
+        "name": "Utility corner",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 17.9,
+            "y": 2.6
+          },
+          "width": 5.400000000000002,
+          "depth": 4.2,
+          "rotation": 0
+        },
+        "zone": "right",
+        "fillKind": "accent",
+        "material": "decorative-gravel"
+      },
+      {
+        "id": "target-e6",
+        "category": "lawn",
+        "role": "fill",
+        "name": "Lawn",
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 9.6,
+              "y": 3.7
+            },
+            {
+              "x": 16.9,
+              "y": 3.7
+            },
+            {
+              "x": 16.9,
+              "y": 11.6
+            },
+            {
+              "x": 5.3,
+              "y": 11.6
+            },
+            {
+              "x": 5.3,
+              "y": 6.2
+            },
+            {
+              "x": 9.6,
+              "y": 6.2
+            }
+          ],
+          "cornerRadius": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "standard-turf"
+      },
+      {
+        "id": "target-e7",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Back border",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 4.8,
+            "y": 1.1
+          },
+          "width": 9.6,
+          "depth": 2.2,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "mixed-border"
+      },
+      {
+        "id": "target-e8",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Back border",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 12.399999999999999,
+            "y": 1.85
+          },
+          "width": 5.6,
+          "depth": 3.7,
+          "rotation": 0
+        },
+        "zone": "back",
+        "fillKind": "accent",
+        "material": "mixed-border"
+      },
+      {
+        "id": "target-e9",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Left border",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 1.15,
+            "y": 5.65
+          },
+          "width": 2.3,
+          "depth": 6.8999999999999995,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "shrubs"
+      },
+      {
+        "id": "target-e10",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Lawn-side bed",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 3.8,
+            "y": 7.65
+          },
+          "width": 3,
+          "depth": 2.8999999999999995,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "mixed-border"
+      },
+      {
+        "id": "target-e11",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Right border",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 21.3,
+            "y": 2.35
+          },
+          "width": 1.3999999999999986,
+          "depth": 4.7,
+          "rotation": 0
+        },
+        "zone": "right",
+        "fillKind": "accent",
+        "material": "ornamental-grasses"
+      },
+      {
+        "id": "target-e12",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Front corner",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 1.15,
+            "y": 16.55
+          },
+          "width": 2.3,
+          "depth": 5.9,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "shrubs"
+      },
+      {
+        "id": "target-e13",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Front bed",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 5.449999999999999,
+            "y": 18.55
+          },
+          "width": 6.3,
+          "depth": 1.8999999999999986,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "mixed-border"
+      },
+      {
+        "id": "target-e14",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Front bed",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 12.8,
+            "y": 18.55
+          },
+          "width": 5.200000000000001,
+          "depth": 1.8999999999999986,
+          "rotation": 0
+        },
+        "zone": "front",
+        "fillKind": "accent",
+        "material": "mixed-border"
+      },
+      {
+        "id": "target-e15",
+        "category": "planting-bed",
+        "role": "fill",
+        "name": "Deck-side bed",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 1.15,
+            "y": 11.35
+          },
+          "width": 2.3,
+          "depth": 4.5,
+          "rotation": 0
+        },
+        "zone": "left",
+        "fillKind": "accent",
+        "material": "ground-cover"
+      },
+      {
+        "id": "target-e16",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Dining terrace",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 5.949999999999999,
+            "y": 4.2
+          },
+          "width": 7.3,
+          "depth": 4,
+          "rotation": 0
+        },
+        "zone": "left",
+        "material": "stone-pavers"
+      },
+      {
+        "id": "target-e17",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Side lounge deck",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 4.3,
+            "y": 11.35
+          },
+          "width": 4,
+          "depth": 4.5,
+          "rotation": 0
+        },
+        "zone": "left",
+        "material": "timber-decking"
+      },
+      {
+        "id": "target-e18",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Side terrace",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 19.45,
+            "y": 8.15
+          },
+          "width": 5.100000000000001,
+          "depth": 6.8999999999999995,
+          "rotation": 0
+        },
+        "zone": "right",
+        "material": "stone-pavers"
+      },
+      {
+        "id": "target-e19",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Driveway",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 18.7,
+            "y": 15.55
+          },
+          "width": 6.6,
+          "depth": 7.9,
+          "rotation": 0
+        },
+        "zone": "right",
+        "material": "stone-pavers"
+      },
+      {
+        "id": "target-e20",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Front path",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 9.399999999999999,
+            "y": 18.55
+          },
+          "width": 1.5999999999999996,
+          "depth": 1.8999999999999986,
+          "rotation": 0
+        },
+        "zone": "front",
+        "material": "stone-pavers"
+      },
+      {
+        "id": "target-e21",
+        "category": "paved-area",
+        "role": "feature",
+        "name": "Path to the shed",
+        "shape": {
+          "kind": "polyline",
+          "points": [
+            {
+              "x": 15.2,
+              "y": 2
+            },
+            {
+              "x": 15.2,
+              "y": 4.7
+            }
+          ],
+          "width": 0.9
+        },
+        "zone": "back",
+        "material": "stepping-stones"
+      },
+      {
+        "id": "target-e22",
+        "category": "structure",
+        "role": "feature",
+        "name": "Garden store",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 19.25,
+            "y": 2.45
+          },
+          "width": 1.8999999999999986,
+          "depth": 2.5,
+          "rotation": 0
+        },
+        "zone": "right",
+        "material": "softwood",
+        "symbol": "shed"
+      },
+      {
+        "id": "target-e23",
+        "category": "structure",
+        "role": "feature",
+        "name": "Raised beds",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 16.65,
+            "y": 2.7
+          },
+          "width": 1.4999999999999982,
+          "depth": 2,
+          "rotation": 0
+        },
+        "zone": "right",
+        "material": "softwood",
+        "symbol": "raised-bed"
+      },
+      {
+        "id": "target-e24",
+        "category": "existing-feature",
+        "role": "feature",
+        "name": "Garage",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 4.85,
+            "y": 15.600000000000001
+          },
+          "width": 2.9999999999999996,
+          "depth": 4.000000000000002,
+          "rotation": 0
+        },
+        "zone": "left",
+        "material": "existing"
+      },
+      {
+        "id": "target-e25",
+        "category": "gravel-mulch",
+        "role": "feature",
+        "name": "Fire pit",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 4.2,
+            "y": 4.2
+          },
+          "radius": 1.4
+        },
+        "zone": "left",
+        "material": "decorative-gravel"
+      },
+      {
+        "id": "target-e26",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Dining set",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 7.3,
+            "y": 4.2
+          },
+          "width": 2.4000000000000004,
+          "depth": 2.4000000000000004,
+          "rotation": 0
+        },
+        "zone": "back",
+        "material": "teak-furniture",
+        "height": 0.75,
+        "symbol": "dining-set-6"
+      },
+      {
+        "id": "target-e27",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Lounge set",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 4.3,
+            "y": 11.350000000000001
+          },
+          "width": 2.5999999999999996,
+          "depth": 2.0999999999999996,
+          "rotation": 0
+        },
+        "zone": "left",
+        "material": "rattan-furniture",
+        "height": 0.8,
+        "symbol": "sofa-set"
+      },
+      {
+        "id": "target-e28",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Lounger",
+        "shape": {
+          "kind": "rect",
+          "centre": {
+            "x": 19.75,
+            "y": 6.55
+          },
+          "width": 0.7000000000000028,
+          "depth": 1.9000000000000004,
+          "rotation": 0
+        },
+        "zone": "right",
+        "material": "teak-furniture",
+        "height": 0.4,
+        "symbol": "lounger"
+      },
+      {
+        "id": "target-e29",
+        "category": "furniture",
+        "role": "feature",
+        "name": "Fire bowl",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 4.2,
+            "y": 4.2
+          },
+          "radius": 0.6
+        },
+        "zone": "left",
+        "material": "steel-furniture",
+        "height": 0.4,
+        "symbol": "fire-pit"
+      },
+      {
+        "id": "target-e30",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Tree",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 1.4,
+            "y": 3.5
+          },
+          "radius": 1.6
+        },
+        "zone": "left",
+        "material": "shrubs",
+        "symbol": "tree-deciduous"
+      },
+      {
+        "id": "target-e31",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Tree",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 1.6,
+            "y": 12.5
+          },
+          "radius": 1.5
+        },
+        "zone": "left",
+        "material": "shrubs",
+        "symbol": "tree-multistem"
+      },
+      {
+        "id": "target-e32",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Tree",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 21,
+            "y": 2
+          },
+          "radius": 1.2
+        },
+        "zone": "right",
+        "material": "shrubs",
+        "symbol": "tree-ornamental"
+      },
+      {
+        "id": "target-e33",
+        "category": "planting-bed",
+        "role": "feature",
+        "name": "Tree",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 20.4,
+            "y": 8.4
+          },
+          "radius": 1.6
+        },
+        "zone": "right",
+        "material": "shrubs",
+        "symbol": "tree-evergreen"
+      }
+    ],
+    "seededFrom": null,
+    "pristine": []
+  }
+}

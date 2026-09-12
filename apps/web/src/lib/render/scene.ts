@@ -2,6 +2,7 @@ import type {
   BoundaryRun,
   DesignElement,
   HouseFootprint,
+  Opening,
   Point,
   ShadowCast,
   ShadowOccluder,
@@ -70,8 +71,88 @@ export interface RenderScene {
   shadows: { cast: ShadowCast | null; occluders: ShadowOccluder[] };
   /** Unit vector *towards* the light. The real sun when there is one, the drawing light otherwise. */
   light: Point;
+  /**
+   * How dark it is: 0 in daylight, 1 after civil twilight, `null` when the plan makes no solar
+   * claim at all. Straight from `nightFraction`, and null for the reason `shadows.cast` is.
+   */
+  night: number | null;
+  /**
+   * The fittings that are lit, and the pool each one throws.
+   *
+   * **Empty by day**, and empty for a plan with no location, so a scene that has never mentioned
+   * where it is draws exactly what it drew before this existed. A fitting is still drawn as an
+   * object in daylight — it is a real thing that is really there — but it throws nothing.
+   */
+  lights: RenderLight[];
+  /**
+   * Edging courses, derived from the hosts they follow rather than stored anywhere.
+   *
+   * Resolved to `RenderSurface` so the existing painter draws them with no new code path — an
+   * edging course is a narrow strip of paving and wants exactly the module, joint and tone
+   * treatment a patio gets. The `element` on each is **synthetic** and never leaves this layer:
+   * `plan/edging.ts` returns geometry, and giving it an id and a material here is what lets the
+   * surface painter take it. Nothing reads it back, and `quantities.ts` cannot see it.
+   */
+  edging: RenderSurface[];
+  /**
+   * The retaining faces of everything that does not sit on grade.
+   *
+   * Derived from `levelBands`, which is derived from `DesignElement.elevation` — so, like edging,
+   * a retaining structure is never a thing anybody places and can never be left behind when the
+   * terrace it holds up is moved. Empty for a plan where everything is on one level, which is most
+   * plans and every plan that existed before this.
+   */
+  levels: RenderLevel[];
   maturity: Maturity;
   boundaryRuns: BoundaryRun[];
+}
+
+/**
+ * One lit fitting, resolved to the pool it throws rather than to the object that throws it.
+ *
+ * The fitting itself is an ordinary `RenderItem` in `objects` and draws as its sprite; this is the
+ * *light*, which is a separate thing with a separate size. That split is the whole reason a
+ * 120 mm spike light works on a plan at all: the fitting is a dot four pixels across and the pool
+ * it casts is three metres, and it is the pool a reader sees.
+ */
+export interface RenderLight {
+  /** The element's own id, so a backend can key on it. */
+  id: string;
+  /** World metres — the fitting's own anchor. */
+  at: Point;
+  /** Radius of the pool on the ground, world metres. */
+  radius: number;
+  /** 0-1. The fitting's own output scaled by how dark it is, so dusk comes up gradually. */
+  intensity: number;
+}
+
+/**
+ * One retaining face, resolved to the band a plan actually draws.
+ *
+ * The strip **straddles** the host's edge rather than sitting outside it, which is where a
+ * retaining wall really is: the terrace above bears on it, so its thickness is half under the
+ * paving and half proud of it. That also means a raised element's drawn extent is its real extent —
+ * nothing grows a margin it did not have, so `houseFitsInside` and the validator still measure the
+ * same shape they always did.
+ */
+export interface RenderLevel {
+  hostId: string;
+  /** The tessellated band, world metres. */
+  outline: Point[];
+  /** Metres of exposed face. */
+  rise: number;
+  sunken: boolean;
+  /**
+   * The painter's arguments when a walling material was chosen, else `null`.
+   *
+   * Two answers rather than one, because they are two different drawings and both are truthful. A
+   * wall built of something — coursed stone, brick — has a top course worth painting, and gets the
+   * same module treatment a patio does. A terrace retained in its *own* paving has no such course:
+   * it is an upstand of the same stuff, and the honest drawing is the host's tone a shade darker.
+   */
+  surface: RenderSurface | null;
+  /** The plain upstand's fill: the host's own material, darkened. Used when `surface` is null. */
+  colour: string;
 }
 
 /**
@@ -179,7 +260,25 @@ export interface RenderHouse {
   interior: Point[] | null;
   /** Derived every build, and only in `'visualise'`; the plan drawing keeps the flat diagram. */
   roof: RenderRoof | null;
+  /**
+   * The doors and windows, resolved to where they actually are.
+   *
+   * Only those that currently resolve: an opening whose wall a resize has shortened under it is
+   * left out here exactly as it is left off the canvas, rather than being drawn hanging off the
+   * end of the building. The composer drew none of these at all until now, so a door was visible
+   * on screen and absent from every thumbnail, export and judging sheet of the same plan.
+   */
+  openings: RenderOpening[];
   house: HouseFootprint;
+}
+
+/** One opening, resolved: where it is and which way is out through it. */
+export interface RenderOpening {
+  opening: Opening;
+  /** The opening's own two ends along its wall, in world metres. */
+  segment: [Point, Point];
+  /** Unit vector pointing out of the building. */
+  normal: Point;
 }
 
 /**
@@ -210,7 +309,16 @@ export type VisualLayer =
   | 'shrub'
   | 'specimen'
   | 'tree'
-  | 'house';
+  | 'house'
+  /**
+   * Light fittings, above everything including the house.
+   *
+   * The top of the stack because a fitting is the smallest object on the plan and the one most
+   * easily lost: a spike light is 120 mm, so a canopy drawn over it hides it completely — and the
+   * spike lights that matter most are precisely the ones uplighting a tree. A wall light is on the
+   * house for the same reason.
+   */
+  | 'lighting';
 
 /**
  * Which of the two views is being drawn.

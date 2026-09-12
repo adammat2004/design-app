@@ -12,7 +12,7 @@ import { shadowCacheStats } from '@/lib/materials/shadow-cache';
  * and nothing surfaced them. A collapsed hit rate does not throw and does not warn — it just feels
  * slightly slow, on a development machine faster than the one this will be marked on.
  *
- * **Development only, and gated on `NODE_ENV` rather than on a store flag.** That is deliberate:
+ * **Development only, explicitly enabled with `NEXT_PUBLIC_RENDER_HUD=1`.** That is deliberate:
  * `gridVisible` is documented as having five edit points, and the one that bites is
  * `ephemeralState()`, shared by the test reset and the hydrator — miss it and the flag survives a
  * reload. Another toggle would mean another five, for something no user ever needs to see.
@@ -25,13 +25,13 @@ export function RenderHud() {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
+    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_RENDER_HUD !== '1') return;
 
     const timer = setInterval(() => setTick((value) => value + 1), 500);
     return () => clearInterval(timer);
   }, []);
 
-  if (process.env.NODE_ENV === 'production') return null;
+  if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_RENDER_HUD !== '1') return null;
 
   void tick;
 

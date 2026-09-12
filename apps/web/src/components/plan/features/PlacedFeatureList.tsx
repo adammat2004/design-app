@@ -1,6 +1,5 @@
 'use client';
 
-import { Ban } from 'lucide-react';
 import { summariseFeatures } from '@/lib/features';
 import { useFeaturesStore } from '@/state/features-store';
 import { FeatureIcon } from './FeatureIcon';
@@ -10,13 +9,15 @@ import { StatusPill } from './StatusPill';
  * A summary view, not the primary control. Status is set on the plan itself, where the user can
  * see the thing they are deciding about; this list is for finding something that has scrolled
  * off screen and for reading the totals.
+ *
+ * The "nothing to add" checkbox that used to live at the bottom is gone: skipping is a real answer
+ * and now has a real button in the bottom bar. Two controls writing one flag — one of which also
+ * navigated and one of which did not — was the confusing half of the old screen.
  */
 export function PlacedFeatureList() {
   const features = useFeaturesStore((state) => state.present.features);
   const selectedIds = useFeaturesStore((state) => state.selectedIds);
-  const skipped = useFeaturesStore((state) => state.skipped);
   const select = useFeaturesStore((state) => state.select);
-  const setSkipped = useFeaturesStore((state) => state.setSkipped);
 
   const summary = summariseFeatures(features);
 
@@ -29,7 +30,7 @@ export function PlacedFeatureList() {
           data-testid="placed-features-empty"
           className="mt-2 text-[11px] leading-relaxed text-garden-muted"
         >
-          Nothing placed yet. Pick a feature type above, or skip this step if the garden is bare.
+          Nothing placed yet. Pick a feature above, describe your garden, or skip this step.
         </p>
       ) : (
         <>
@@ -72,33 +73,6 @@ export function PlacedFeatureList() {
           </p>
         </>
       )}
-
-      {/*
-        Plenty of properties genuinely have nothing worth mapping. Saying so is a real answer,
-        so it is recorded rather than left as an empty list step 3 has to guess about.
-      */}
-      <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-dashed border-garden-line px-2 py-2 hover:bg-garden-sage/40">
-        <input
-          type="checkbox"
-          data-testid="skip-step"
-          checked={skipped}
-          onChange={(event) => setSkipped(event.target.checked)}
-          className="sr-only"
-        />
-        <span
-          className={[
-            'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-            skipped
-              ? 'border-garden-green bg-garden-green text-white'
-              : 'border-garden-line bg-white',
-          ].join(' ')}
-        >
-          {skipped ? <Ban aria-hidden className="h-3 w-3" /> : null}
-        </span>
-        <span className="text-[11px] leading-relaxed text-garden-muted">
-          Nothing to add — skip this step.
-        </span>
-      </label>
     </section>
   );
 }

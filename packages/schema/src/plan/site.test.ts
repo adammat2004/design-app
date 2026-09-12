@@ -128,6 +128,30 @@ describe('what the ids have to survive', () => {
     expect(houseSize(scaled).width).toBeCloseTo(0.8);
   });
 
+  it('a rescale carries the doors with the walls, at their real width', () => {
+    // A door 6 m along an 8 m wall is 0.6 m along the 0.8 m wall afterwards — and still a door's
+    // width, because the wall was what was drawn wrong. Left at 6 m it would simply stop resolving.
+    const withDoor = {
+      ...house,
+      openings: [
+        {
+          id: 'o1',
+          wallId: 'w0',
+          offsetAlongEdge: 6,
+          width: 0.9,
+          type: 'back-door' as const,
+          sillHeight: 0,
+          floorLevel: 0,
+          swing: 'inward' as const,
+        },
+      ],
+    };
+    const scaled = scaleHouseAbout(withDoor, { x: 0, y: 0 }, 0.1);
+
+    expect(scaled.openings[0]!.offsetAlongEdge).toBeCloseTo(0.6);
+    expect(scaled.openings[0]!.width).toBe(0.9);
+  });
+
   it('and a custom outline keeps them one per corner', () => {
     const custom = withOutline([
       { x: -3, y: -3 },

@@ -21,6 +21,14 @@ export const ViolationCodeSchema = z.enum([
   /** The outline crosses itself. */
   'invalid_boundary',
   'house_outside_boundary',
+  /**
+   * The custom redesign area crosses itself, is a sliver, or leaves the property.
+   *
+   * Reported rather than absorbed. `scopeRing` refuses an unusable ring, and refusing it silently
+   * would turn "design only this corner" into "design the whole plot" with nothing on screen to
+   * say so — the one outcome worse than either answer.
+   */
+  'invalid_scope_polygon',
   'feature_outside_boundary',
   'features_overlap',
   'element_outside_boundary',

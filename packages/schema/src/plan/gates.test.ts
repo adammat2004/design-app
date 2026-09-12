@@ -3,14 +3,18 @@ import { pointInPolygon, type Point } from '../geometry/primitives.js';
 import { geometryOutline } from './features.js';
 import { GATE_THRESHOLD_DEPTH, type Gate } from './gate.js';
 import {
+  accessAfterDelete,
   clampOffsetToEdge,
+  firstFreeOffsetOnEdge,
   fitsOnEdge,
   gateCentre,
+  gatesAfterSplit,
   gateNormal,
   gateSegment,
   gateSide,
   gateThresholdRect,
   resolvedGates,
+  sidePathGate,
   streetEdge,
   streetOutward,
   suggestedAccess,
@@ -43,6 +47,7 @@ const gate = (overrides: Partial<Gate> = {}): Gate => ({
   edgeVertexId: 'v2',
   offsetAlongEdge: 6,
   width: 0.9,
+  kind: 'pedestrian',
   ...overrides,
 });
 
@@ -194,6 +199,246 @@ describe('suggestedAccess', () => {
   it('does nothing without a house', () => {
     const s = site({ house: null });
     expect(suggestedAccess(s)).toBe(s);
+  });
+});
+
+describe('sidePathGate', () => {
+  /*
+   * The generator used to take `resolvedGates(site)[0]` — whichever gate was stored first — and
+   * route the garden's side path from it. Harmless while every gate was a 900 mm pedestrian one;
+   * wrong the moment a gap in the boundary can be a driveway or a street frontage.
+   */
+  it('takes the only gate when there is one', () => {
+    const s = site({ gates: [gate()] });
+    expect(sidePathGate(s)?.gate.id).toBe('g1');
+  });
+
+  it('prefers a pedestrian gate to a driveway, whatever the order they are stored in', () => {
+    const drive = gate({
+      id: 'g2',
+      edgeVertexId: 'v4',
+      offsetAlongEdge: 8,
+      width: 3,
+      kind: 'vehicle',
+    });
+    const walk = gate({ id: 'g3', edgeVertexId: 'v2', offsetAlongEdge: 6 });
+
+    expect(sidePathGate(site({ gates: [drive, walk] }))?.gate.id).toBe('g3');
+    expect(sidePathGate(site({ gates: [walk, drive] }))?.gate.id).toBe('g3');
+  });
+
+  /*
+   * The front path already runs to the kerb. Starting the *back* garden's side path at the street
+   * frontage would drag it through the front garden and past the house.
+   */
+  it('ignores a gate on the street edge', () => {
+    const s = site({
+      streetEdgeVertexId: 'v3',
+      gates: [gate({ id: 'g2', edgeVertexId: 'v3', offsetAlongEdge: 10 })],
+    });
+
+    expect(sidePathGate(s)).toBeNull();
+  });
+
+  it('still takes a side gate when the street has one too', () => {
+    const s = site({
+      streetEdgeVertexId: 'v3',
+      gates: [
+        gate({ id: 'g2', edgeVertexId: 'v3', offsetAlongEdge: 10 }),
+        gate({ id: 'g3', edgeVertexId: 'v2', offsetAlongEdge: 6 }),
+      ],
+    });
+
+    expect(sidePathGate(s)?.gate.id).toBe('g3');
+  });
+
+  it('will walk through a driveway when that is the only way in', () => {
+    const drive = gate({ edgeVertexId: 'v2', offsetAlongEdge: 6, width: 3, kind: 'vehicle' });
+    expect(sidePathGate(site({ gates: [drive] }))?.gate.kind).toBe('vehicle');
+  });
+
+  it('treats an open gap as walk-through, ahead of a driveway', () => {
+    const drive = gate({
+      id: 'g2',
+      edgeVertexId: 'v4',
+      offsetAlongEdge: 8,
+      width: 3,
+      kind: 'vehicle',
+    });
+    const gap = gate({ id: 'g3', edgeVertexId: 'v2', offsetAlongEdge: 6, width: 3, kind: 'open' });
+
+    expect(sidePathGate(site({ gates: [drive, gap] }))?.gate.id).toBe('g3');
+  });
+
+  it('has no answer with no gates, or when none of them resolve', () => {
+    expect(sidePathGate(site())).toBeNull();
+    expect(sidePathGate(site({ gates: [gate({ edgeVertexId: 'v9' })] }))).toBeNull();
+  });
+});
+
+describe('gate kinds', () => {
+  it('reads a stored gate that predates kinds as the pedestrian gate it was', () => {
+    const parsed = SiteSectionSchema.parse({
+      vertices: [],
+      closed: false,
+      house: null,
+      gates: [{ id: 'g1', edgeVertexId: 'v2', offsetAlongEdge: 6 }],
+    });
+
+    expect(parsed.gates[0]).toEqual({
+      id: 'g1',
+      edgeVertexId: 'v2',
+      offsetAlongEdge: 6,
+      width: 0.9,
+      kind: 'pedestrian',
+    });
+  });
+});
+
+describe('firstFreeOffsetOnEdge', () => {
+  it('offers the centre of an empty side', () => {
+    expect(firstFreeOffsetOnEdge(site(), 'v2', gate())).toBe(8);
+  });
+
+  it('offers the first gap when the centre is taken', () => {
+    const s = site({ gates: [gate({ offsetAlongEdge: 8 })] });
+    expect(firstFreeOffsetOnEdge(s, 'v2', gate({ id: 'g2' }))).toBeCloseTo(0.45);
+  });
+
+  it('is null for a side too short to hold it', () => {
+    expect(firstFreeOffsetOnEdge(site(), 'v2', gate({ width: 40 }))).toBeNull();
+  });
+});
+
+/**
+ * The same plot with a corner v9 put into the right-hand side, v2 (20,0) → v3 (20,16), four
+ * metres down from v2. The side is straight, so v9 is a redundant corner.
+ */
+function withCorner(at: Point, overrides: Partial<SiteSection> = {}): SiteSection {
+  return site({
+    vertices: [
+      { id: 'v1', x: 0, y: 0 },
+      { id: 'v2', x: 20, y: 0 },
+      { id: 'v9', ...at },
+      { id: 'v3', x: 20, y: 16 },
+      { id: 'v4', x: 0, y: 16 },
+    ],
+    ...overrides,
+  });
+}
+
+describe('gatesAfterSplit', () => {
+  const cut = { x: 20, y: 4 };
+
+  it('leaves a gate before the cut where it was', () => {
+    const after = withCorner(cut, { gates: [gate({ offsetAlongEdge: 2 })] });
+    const [moved] = gatesAfterSplit(after, 'v2', 'v9', 4);
+
+    expect(moved).toMatchObject({ edgeVertexId: 'v2', offsetAlongEdge: 2 });
+  });
+
+  it('re-homes a gate beyond the cut onto the new edge, measured from the new corner', () => {
+    const after = withCorner(cut, { gates: [gate({ offsetAlongEdge: 10 })] });
+    const [moved] = gatesAfterSplit(after, 'v2', 'v9', 4);
+
+    expect(moved).toMatchObject({ edgeVertexId: 'v9', offsetAlongEdge: 6 });
+    // Same place on the plan as before the corner went in.
+    expect(gateCentre(after, moved!)).toEqual({ x: 20, y: 10 });
+  });
+
+  it('nudges a gate the cut ran through whole onto one half', () => {
+    // Centre 4.2 m along, so it goes to the second half at 0.2 m — and is clamped to 0.45 so it
+    // sits flush against the new corner rather than straddling it.
+    const after = withCorner(cut, { gates: [gate({ offsetAlongEdge: 4.2 })] });
+    const [moved] = gatesAfterSplit(after, 'v2', 'v9', 4);
+
+    expect(moved).toMatchObject({ edgeVertexId: 'v9', offsetAlongEdge: 0.45 });
+    expect(fitsOnEdge(after, moved!)).toBe(true);
+  });
+
+  it('leaves gates on other sides alone', () => {
+    const after = withCorner(cut, { gates: [gate({ edgeVertexId: 'v4', offsetAlongEdge: 3 })] });
+    expect(gatesAfterSplit(after, 'v2', 'v9', 4)).toEqual(after.gates);
+  });
+});
+
+describe('accessAfterDelete', () => {
+  it('carries a gate across when the deleted corner was on a straight side', () => {
+    // On v9's edge, 8 m along: at (20, 12). The merged side v2 → v3 passes straight through it.
+    const before = withCorner(
+      { x: 20, y: 4 },
+      {
+        gates: [gate({ edgeVertexId: 'v9', offsetAlongEdge: 8 })],
+        streetEdgeVertexId: 'v9',
+      },
+    );
+    const after = site({ gates: before.gates, streetEdgeVertexId: 'v9' });
+
+    const result = accessAfterDelete(before, after, 'v9');
+
+    expect(result.gates).toHaveLength(1);
+    expect(result.gates[0]).toMatchObject({ edgeVertexId: 'v2', offsetAlongEdge: 12 });
+    expect(gateCentre(after, result.gates[0]!)).toEqual({ x: 20, y: 12 });
+    expect(result.streetEdgeVertexId).toBe('v2');
+  });
+
+  it('drops a gate that was on a real bend, and forgets a street that was', () => {
+    // The corner stuck 4 m out into next door: the gate's old centre is nowhere near the line.
+    const before = withCorner(
+      { x: 24, y: 8 },
+      {
+        gates: [gate({ edgeVertexId: 'v9', offsetAlongEdge: 3 })],
+        streetEdgeVertexId: 'v9',
+      },
+    );
+    const after = site({ gates: before.gates, streetEdgeVertexId: 'v9' });
+
+    const result = accessAfterDelete(before, after, 'v9');
+
+    expect(result.gates).toHaveLength(0);
+    expect(result.streetEdgeVertexId).toBeNull();
+  });
+
+  it('will not carry a gate through one already on the merged side', () => {
+    const before = withCorner(
+      { x: 20, y: 4 },
+      {
+        gates: [
+          gate({ id: 'g1', edgeVertexId: 'v2', offsetAlongEdge: 2 }),
+          gate({ id: 'g2', edgeVertexId: 'v9', offsetAlongEdge: 8 }),
+          // 0.3 m along v9's edge is (20, 4.3): on the merged side it would land at 4.3.
+          gate({ id: 'g3', edgeVertexId: 'v9', offsetAlongEdge: 0.3 }),
+        ],
+      },
+    );
+    const after = site({
+      gates: [
+        gate({ id: 'g1', edgeVertexId: 'v2', offsetAlongEdge: 2 }),
+        gate({ id: 'g4', edgeVertexId: 'v2', offsetAlongEdge: 4.3 }),
+      ],
+    });
+
+    const result = accessAfterDelete(before, { ...after, gates: [...after.gates] }, 'v9');
+    const ids = result.gates.map((entry) => entry.id).sort();
+
+    // g1 and g4 were already there, g2 is carried, g3 would go through g4 and is dropped.
+    expect(ids).toEqual(['g1', 'g2', 'g4']);
+  });
+
+  it('leaves gates on other sides and an unrelated street edge alone', () => {
+    const before = withCorner(
+      { x: 24, y: 8 },
+      {
+        gates: [gate({ edgeVertexId: 'v4', offsetAlongEdge: 3 })],
+        streetEdgeVertexId: 'v3',
+      },
+    );
+    const after = site({ gates: before.gates, streetEdgeVertexId: 'v3' });
+
+    expect(accessAfterDelete(before, after, 'v9')).toEqual({
+      gates: before.gates,
+      streetEdgeVertexId: 'v3',
+    });
   });
 });
 

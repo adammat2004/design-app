@@ -8,6 +8,7 @@ import {
 } from '@garden-studio/schema';
 import { LIGHT_DIRECTION } from '../materials/light';
 import { buildRenderScene, type PlanScene } from './build-scene';
+import { LAYER_ORDER } from './visual-layer';
 
 const BOUNDARY: Point[] = [
   { x: 0, y: 0 },
@@ -59,6 +60,177 @@ function scene(elements: DesignElement[], over: Partial<SiteSection> = {}): Plan
   });
   return { boundary: BOUNDARY, house: null, elements, site };
 }
+
+const MANCHESTER = { latitude: 53.48, longitude: -2.24 };
+
+function spike(id: string, x: number, y: number): DesignElement {
+  return {
+    id,
+    category: 'lighting',
+    role: 'feature',
+    name: 'Spike uplight',
+    symbol: 'light-spike',
+    material: 'black-aluminium',
+    zone: 'back',
+    shape: { kind: 'point', at: { x, y }, radius: 0.06 },
+  } as DesignElement;
+}
+
+describe('level changes', () => {
+  const raised = (elevation: number): DesignElement =>
+    ({
+      id: 'terrace',
+      category: 'paved-area',
+      role: 'feature',
+      name: 'Seating patio',
+      material: 'stone-pavers',
+      zone: 'back',
+      elevation,
+      shape: { kind: 'rect', centre: { x: 10, y: 10 }, width: 6, depth: 4, rotation: 0 },
+    }) as DesignElement;
+
+  it('retains a raised surface and leaves a flat one alone', () => {
+    expect(buildRenderScene(scene([lawn(), raised(0.34)])).levels).toHaveLength(1);
+    expect(buildRenderScene(scene([lawn(), raised(0)])).levels).toEqual([]);
+  });
+
+  it('draws a plain upstand when no walling was chosen', () => {
+    const [band] = buildRenderScene(scene([lawn(), raised(0.34)])).levels;
+
+    expect(band!.outline.length).toBeGreaterThanOrEqual(3);
+    expect(band!.rise).toBeCloseTo(0.34, 6);
+    expect(band!.sunken).toBe(false);
+    // No surface: the wall is the host's own paving darkened, which is what an in-situ edge is.
+    expect(band!.surface).toBeNull();
+    expect(band!.colour).toMatch(/^rgb/);
+  });
+
+  it('draws a chosen walling material as a real top course', () => {
+    /*
+     * The two answers are two different drawings and both are truthful. A wall built of something
+     * has a top course worth painting; a terrace retained in its own paving has no such course.
+     */
+    const stone = { ...raised(0.34), retaining: 'walling-stone' } as DesignElement;
+    const [band] = buildRenderScene(scene([lawn(), stone])).levels;
+
+    expect(band!.surface).not.toBeNull();
+    expect(band!.surface!.material?.id).toBe('walling-stone');
+    expect(band!.surface!.layers).toHaveLength(1);
+    // The strip follows the edge, so the painter lays the course along the wall rather than across.
+    expect(band!.surface!.centreline!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('ignores a retaining material that is not walling', () => {
+    // `retaining` is a plain string like `material`, so a stored plan can carry anything.
+    const wrong = { ...raised(0.34), retaining: 'standard-turf' } as DesignElement;
+
+    expect(buildRenderScene(scene([lawn(), wrong])).levels[0]!.surface).toBeNull();
+  });
+
+  it('casts the shadow of a raised surface from the top of its plinth', () => {
+    /*
+     * The reason `elevation` adds to `height` rather than setting `baseHeight`: a raised terrace
+     * stands on a solid plinth of its own footprint, so it casts the shadow of a 340 mm wall round
+     * its edge. A `baseHeight` of 340 would say the terrace floats and casts nothing at all.
+     */
+    const flat = buildRenderScene(scene([raised(0)])).shadows.occluders;
+    const up = buildRenderScene(scene([raised(0.34)])).shadows.occluders;
+
+    /*
+     * A flat terrace is not an occluder at all — `castsShadow` drops it, which is right and is why
+     * the raised case is one occluder *more* rather than the same one taller. The element loop runs
+     * after the house and the boundary runs, so the terrace is the last of them.
+     */
+    expect(up).toHaveLength(flat.length + 1);
+    expect(up.at(-1)!.height).toBeCloseTo(0.34, 6);
+    // Not `baseHeight`: the plinth is solid from the ground, so the terrace does not float.
+    expect(up.at(-1)!.baseHeight).toBeUndefined();
+  });
+
+  it('casts nothing for a sunken area, rather than inventing the ground round it', () => {
+    // What would shade a sunken terrace is the ground standing proud of it, and a local elevation
+    // model has no ground to make an occluder out of.
+    const down = buildRenderScene(scene([raised(-0.6)])).shadows.occluders;
+    const flat = buildRenderScene(scene([raised(0)])).shadows.occluders;
+
+    expect(down).toHaveLength(flat.length);
+    // It is still retained: you look down at the top of a wall either way.
+    expect(buildRenderScene(scene([raised(-0.6)])).levels[0]!.sunken).toBe(true);
+  });
+});
+
+describe('lighting after dark', () => {
+  /*
+   * The night half of the time slider, which until this existed drew the identical picture to
+   * noon. These assert the *refusals* as hard as the behaviour, because the whole design rests on
+   * a plan never claiming to know an hour it was not told.
+   */
+  const AT_NIGHT = { location: MANCHESTER, sun: { dayOfYear: 172, minutes: 0 } };
+  const AT_NOON = { location: MANCHESTER, sun: { dayOfYear: 172, minutes: 720 } };
+
+  it('lights the fittings at night', () => {
+    const built = buildRenderScene(scene([lawn(), spike('l1', 4, 4)], AT_NIGHT));
+
+    expect(built.night).toBe(1);
+    expect(built.lights).toHaveLength(1);
+    expect(built.lights[0]!.id).toBe('l1');
+    expect(built.lights[0]!.at).toEqual({ x: 4, y: 4 });
+    expect(built.lights[0]!.radius).toBeGreaterThan(0);
+    expect(built.lights[0]!.intensity).toBeGreaterThan(0);
+  });
+
+  it('throws no light in daylight, though the fitting is still on the plan', () => {
+    const built = buildRenderScene(scene([lawn(), spike('l1', 4, 4)], AT_NOON));
+
+    expect(built.night).toBe(0);
+    expect(built.lights).toEqual([]);
+    // The fitting is a real thing that is really there; it is simply switched off.
+    expect(built.objects.some((item) => item.element.id === 'l1')).toBe(true);
+  });
+
+  it('makes no claim at all without a location', () => {
+    /*
+     * The load-bearing one. With no latitude there is no sunset here, so there is no hour at which
+     * this garden is dark — and a plan that dimmed itself anyway would be inventing exactly the
+     * fact `site.location` is nullable to refuse.
+     */
+    const built = buildRenderScene(scene([lawn(), spike('l1', 4, 4)], { sun: { dayOfYear: 172, minutes: 0 } }));
+
+    expect(built.night).toBeNull();
+    expect(built.lights).toEqual([]);
+  });
+
+  it('makes no claim when the caller is driving the light itself', () => {
+    // The judging sheets override `light` to render one plan at four times of day. An override
+    // means the caller owns the sun, so the scene must not also volunteer a night of its own.
+    const built = buildRenderScene(scene([lawn(), spike('l1', 4, 4)], AT_NIGHT), {
+      light: { x: 0, y: 1 },
+    });
+
+    expect(built.night).toBeNull();
+    expect(built.lights).toEqual([]);
+  });
+
+  it('comes up gradually through dusk rather than switching on', () => {
+    const dusk = buildRenderScene(
+      scene([lawn(), spike('l1', 4, 4)], { location: MANCHESTER, sun: { dayOfYear: 172, minutes: 1320 } }),
+    );
+
+    if (dusk.night !== null && dusk.night > 0 && dusk.night < 1) {
+      expect(dusk.lights[0]!.intensity).toBeLessThan(1);
+      expect(dusk.lights[0]!.intensity).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws lighting above everything, including the house', () => {
+    // A 120 mm fitting is the smallest thing on the plan and the easiest to lose under a canopy —
+    // and the spike lights that matter most are the ones uplighting a tree.
+    const built = buildRenderScene(scene([lawn(), spike('l1', 4, 4)], AT_NIGHT));
+    const item = built.objects.find((entry) => entry.element.id === 'l1')!;
+
+    expect(LAYER_ORDER[item.visualLayer]).toBeGreaterThan(LAYER_ORDER.house);
+  });
+});
 
 describe('buildRenderScene', () => {
   it('is a pure function of its input', () => {

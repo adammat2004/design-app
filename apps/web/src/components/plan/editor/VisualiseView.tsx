@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { boundingBox, type Point } from '@garden-studio/schema';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type Point } from '@garden-studio/schema';
+import { Maximize2, Minus, Plus, Sprout } from 'lucide-react';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { buildRenderScene } from '@/lib/render/build-scene';
+import { fitPresentation, presentationExtent, zoomPresentation } from '@/lib/render/viewport';
 import { SceneRenderer, type ViewSize, type ViewTransform } from '@/lib/render/pixi/renderer';
-import { drawOverlay, type PlanContext } from '@/lib/materials/render-plan';
-import type { MakeCanvas, PatternCanvas } from '@/lib/materials/render-surface-pattern';
-import { getAssetVariants } from '@/lib/materials/assets/registry';
+import { drawBrowserOverlay } from '@/lib/render/draw-browser-overlay';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
@@ -36,9 +36,6 @@ import { useAssetVersion } from '@/lib/materials/assets/use-assets';
  * and has to survive a reload.
  */
 const ZOOM_STEP = 1.12;
-const MIN_PX_PER_METRE = 4;
-const MAX_PX_PER_METRE = 400;
-const FIT_PADDING = 0.9;
 
 export function VisualiseView() {
   const boundaryDraft = useBoundaryStore((state) => state.present);
@@ -54,9 +51,15 @@ export function VisualiseView() {
   const [sized, setSized] = useState(false);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<ViewTransform | null>(null);
+  const [fitMode, setFitMode] = useState<'garden' | 'plot' | 'manual'>('garden');
+  const [size, setSize] = useState<ViewSize>({ width: 0, height: 0 });
   const drag = useRef<{ x: number; y: number; centre: Point } | null>(null);
 
-  const boundary = draftPolygon(boundaryDraft);
+  const boundary = useMemo(() => draftPolygon(boundaryDraft), [boundaryDraft]);
+  const planScene = useMemo(() => ({ boundary, house: boundaryDraft.house, elements, site: boundaryDraft }),
+    [boundary, boundaryDraft, elements]);
+  const scene = useMemo(() => buildRenderScene(planScene, { view: 'visualise', maturity }),
+    [planScene, maturity]);
 
   /*
    * Mount the WebGL context once, and tear it down properly — a leaked context is a lost tab.
@@ -121,28 +124,21 @@ export function VisualiseView() {
 
   /* Fit the plot once there is something to fit and somewhere to fit it into. */
   useEffect(() => {
-    if (!ready || view || boundary.length < 3) return;
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    const box = boundingBox(boundary);
-    const scale = Math.min(
-      (wrapper.clientWidth / Math.max(box.width, 0.001)) * FIT_PADDING,
-      (wrapper.clientHeight / Math.max(box.length, 0.001)) * FIT_PADDING,
-    );
-
-    setView({
-      pxPerMetre: clamp(scale, MIN_PX_PER_METRE, MAX_PX_PER_METRE),
-      centre: { x: box.minX + box.width / 2, y: box.minY + box.length / 2 },
-    });
-  }, [ready, view, boundary]);
+    if (!ready || fitMode === 'manual' || boundary.length < 3 || size.width === 0 || size.height === 0) return;
+    const frame = requestAnimationFrame(() => setView(fitPresentation(presentationExtent(planScene, fitMode), size)));
+    return () => cancelAnimationFrame(frame);
+  }, [ready, fitMode, boundary, planScene, size]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
     const observer = new ResizeObserver(() => {
-      rendererRef.current?.resize(wrapper.clientWidth, wrapper.clientHeight);
+      const width = wrapper.clientWidth;
+      const height = wrapper.clientHeight;
+      if (width === 0 || height === 0) return;
+      rendererRef.current?.resize(width, height);
+      setSize((previous) => previous.width === width && previous.height === height ? previous : { width, height });
     });
     observer.observe(wrapper);
     return () => observer.disconnect();
@@ -165,10 +161,6 @@ export function VisualiseView() {
      */
     const frame = requestAnimationFrame(() => {
       try {
-        const scene = buildRenderScene(
-          { boundary, house: boundaryDraft.house, elements, site: boundaryDraft },
-          { view: 'visualise', maturity },
-        );
         /*
          * One measurement, both layers. Measured here rather than inside either of them: the
          * WebGL canvas and the 2D overlay must agree about where the middle of the view is, and
@@ -178,30 +170,35 @@ export function VisualiseView() {
         if (size.width === 0 || size.height === 0) return;
 
         renderer.render(scene, view, size);
-        drawOverlayCanvas(overlayRef.current, scene, boundaryDraft, view, size);
-      } catch {
+        drawBrowserOverlay(overlayRef.current, scene, boundaryDraft, view, size);
+      } catch (error) {
+        console.error('Garden presentation render failed', error);
         setFailed(true);
       }
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [boundary, boundaryDraft, elements, maturity, view, assetVersion, ready]);
+  }, [boundary, boundaryDraft, scene, view, assetVersion, ready, size]);
 
-  const onWheel = useCallback((event: React.WheelEvent) => {
-    event.preventDefault();
-    setView((current) => {
-      if (!current) return current;
-      const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-      return {
-        ...current,
-        pxPerMetre: clamp(current.pxPerMetre * factor, MIN_PX_PER_METRE, MAX_PX_PER_METRE),
-      };
-    });
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const box = wrapper.getBoundingClientRect();
+      setFitMode('manual');
+      setView((current) => current ? zoomPresentation(current, event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
+        { x: event.clientX - box.left - box.width / 2, y: event.clientY - box.top - box.height / 2 }) : current);
+    };
+    wrapper.addEventListener('wheel', wheel, { passive: false });
+    return () => wrapper.removeEventListener('wheel', wheel);
   }, []);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (!view) return;
+      if (event.button !== 0) return;
+      setFitMode('manual');
       (event.target as Element).setPointerCapture(event.pointerId);
       drag.current = { x: event.clientX, y: event.clientY, centre: view.centre };
     },
@@ -231,8 +228,10 @@ export function VisualiseView() {
     <div
       ref={wrapperRef}
       data-testid="visualise-canvas"
-      className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-garden-sage/40"
-      onWheel={onWheel}
+      data-scale={view?.pxPerMetre.toFixed(3)}
+      data-centre={view ? `${view.centre.x.toFixed(3)},${view.centre.y.toFixed(3)}` : ''}
+      data-plants={scene.plants.length}
+      className="relative min-h-0 flex-1 touch-none overflow-hidden rounded-lg bg-slate-50"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -252,6 +251,22 @@ export function VisualiseView() {
         aria-hidden
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
+      <div className="absolute right-4 bottom-4 flex items-center gap-2" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" onClick={() => { setFitMode('garden'); setView(fitPresentation(presentationExtent(planScene, 'garden'), size)); }}
+          className="flex items-center gap-1.5 rounded-lg border border-garden-line bg-white/95 px-3 py-2 text-xs shadow-sm">
+          <Sprout aria-hidden className="h-4 w-4" />Fit garden
+        </button>
+        <button type="button" onClick={() => { setFitMode('plot'); setView(fitPresentation(boundary, size)); }}
+          aria-label="Fit plot" title="Fit the whole property" className="rounded-lg border border-garden-line bg-white/95 p-2 shadow-sm">
+          <Maximize2 aria-hidden className="h-4 w-4" />
+        </button>
+        {([['Zoom out', 1 / ZOOM_STEP, Minus], ['Zoom in', ZOOM_STEP, Plus]] as const).map(([label, factor, Icon]) => (
+          <button key={label} type="button" aria-label={label} onClick={() => {
+            setFitMode('manual'); setView((current) => current ? zoomPresentation(current, factor, { x: 0, y: 0 }) : current);
+          }} className="rounded-lg border border-garden-line bg-white/95 p-2 shadow-sm"><Icon aria-hidden className="h-4 w-4" /></button>
+        ))}
+      </div>
+      <span className="pointer-events-none absolute bottom-5 left-4 hidden text-xs text-garden-muted sm:block">Drag to pan · Scroll to zoom</span>
       {failed ? (
         <p
           data-testid="visualise-failed"
@@ -262,54 +277,5 @@ export function VisualiseView() {
         </p>
       ) : null}
     </div>
-  );
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value));
-}
-
-const makeCanvas: MakeCanvas = (width, height) => {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas as unknown as PatternCanvas;
-};
-
-function drawOverlayCanvas(
-  canvas: HTMLCanvasElement | null,
-  scene: Parameters<typeof drawOverlay>[1],
-  site: Parameters<typeof drawOverlay>[2],
-  view: ViewTransform,
-  { width, height }: ViewSize,
-): void {
-  if (!canvas) return;
-
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
-
-  canvas.width = Math.round(width * ratio);
-  canvas.height = Math.round(height * ratio);
-
-  const context = canvas.getContext('2d');
-  if (!context) return;
-
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  context.clearRect(0, 0, width, height);
-
-  /*
-   * The world point the overlay's (0, 0) is, so it lines up with the WebGL canvas exactly. Both
-   * are placing `view.centre` in the middle of the same box, so the origin is one subtraction.
-   */
-  const rasterOrigin = {
-    x: view.centre.x - width / 2 / view.pxPerMetre,
-    y: view.centre.y - height / 2 / view.pxPerMetre,
-  };
-
-  drawOverlay(
-    context as unknown as PlanContext,
-    scene,
-    site,
-    { pxPerMetre: view.pxPerMetre, light: scene.light, assets: getAssetVariants, makeCanvas },
-    rasterOrigin,
   );
 }

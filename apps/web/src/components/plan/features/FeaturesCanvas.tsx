@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Circle, Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import { CircleAlert } from 'lucide-react';
-import type { Point } from '@garden-studio/schema';
+import { boundaryRuns, type Point } from '@garden-studio/schema';
 import { boundaryEdges, draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
 import {
@@ -34,15 +34,16 @@ import { zoneFill } from '@/lib/zone-colours';
 import { selectZones, useBoundaryStore } from '@/state/boundary-store';
 import { NUDGE, selectedFeatures, useFeaturesStore } from '@/state/features-store';
 import { CanvasChrome } from '../CanvasChrome';
-import { GateMarks } from '../GateMarks';
+import { GateMarks, gateGaps } from '../GateMarks';
 import { EdgeHitLines } from '../EdgeHitLines';
 import { HouseShape } from '../HouseShape';
 import { EditableVertices } from '../EditableVertices';
 import { ShapeHandles } from '../ShapeHandles';
-import { AlignmentLines, Label, SquareGrid } from '../canvas-primitives';
+import { AlignmentLines, FenceLine, Label, SquareGrid } from '../canvas-primitives';
 import { DRAG_THRESHOLD_PX, useCanvasViewport } from '../use-canvas-viewport';
 import { FeatureLabels } from './FeatureLabels';
 import { FeatureStatusPopover } from './FeatureStatusPopover';
+import { ScopeOverlay } from './ScopeOverlay';
 
 /**
  * Step 2's plan. The property from step 1 is drawn as locked background context — same green
@@ -118,7 +119,21 @@ export function FeaturesCanvas() {
   );
   const editing = features.find((feature) => feature.id === editingShapeId) ?? null;
   const editingVertices = editing ? featureVertices(editing) : null;
-  const drafting = mode === 'place' && (placement === 'polygon' || placement === 'polyline');
+  /*
+   * The redesign area traces a polygon with the same clicks a patio does, so it is drafting too —
+   * the store decides which draft the points belong to, and this only has to know that clicks are
+   * being collected.
+   */
+  const drafting =
+    mode === 'scope' || (mode === 'place' && (placement === 'polygon' || placement === 'polyline'));
+
+  /*
+   * What the in-progress draft is, which is not the same as the armed feature's placement: the
+   * redesign area traces a polygon and has no `placingKind` at all. Everything that draws or
+   * finishes a draft keys on this rather than on `placement`, or the area gets no dots, no preview
+   * and — the one that mattered — no way to close it.
+   */
+  const draftPlacement: Placement | null = mode === 'scope' ? 'polygon' : placement;
 
   /** Where the status popover hangs: on the one selection, or over the group's middle. */
   const popoverAnchor = useMemo(() => {
@@ -158,15 +173,20 @@ export function FeaturesCanvas() {
     if (!at) return;
 
     /*
-     * While placing, a plain click has to keep meaning "put a point here", so panning needs a
-     * gesture of its own: tap once more on the spot you just clicked and hold. The second press
-     * arms the pan and the click it belongs to is swallowed, leaving the part-drawn shape alone.
+     * While placing — or tracing the redesign area, which is the same gesture — a plain click has
+     * to keep meaning "put a point here", so panning needs a gesture of its own: tap once more on
+     * the spot you just clicked and hold. The second press arms the pan and the click it belongs to
+     * is swallowed, leaving the part-drawn shape alone.
+     *
+     * Scope mode has to be named here explicitly. Falling through to the branch below arms the pan
+     * on every press, and `handleStageClick` returns early while `panActive` — so every corner
+     * click was silently swallowed and the area could never be drawn.
      */
-    if (mode === 'place') {
+    if (mode === 'place' || mode === 'scope') {
       const doubleTapped = isDoubleTap(event);
       armPan(doubleTapped);
 
-      if (placement === 'rect' && !doubleTapped) {
+      if (mode === 'place' && placement === 'rect' && !doubleTapped) {
         rubberBandRef.current = { start: at, current: at };
         setRubberBand(rubberBandRef.current);
       }
@@ -401,6 +421,15 @@ export function FeaturesCanvas() {
                   lineJoin="round"
                 />
               ) : null}
+              {/* Each side as step 1 described it, so the picture does not change between steps. */}
+              {polygon.length >= 3 ? (
+                <FenceLine
+                  polygon={polygon}
+                  runs={boundaryRuns(boundaryDraft)}
+                  transform={transform}
+                  gaps={gateGaps(boundaryDraft)}
+                />
+              ) : null}
               <GateMarks site={boundaryDraft} transform={transform} />
 
               {zones.map((zone) => (
@@ -411,6 +440,18 @@ export function FeaturesCanvas() {
                   fill={zoneFill(zone.id)}
                 />
               ))}
+
+              {/*
+                Above the zone tints so it dims them, below the features and the house — which are
+                drawn in the later layers — so those stay legible inside and outside the area.
+              */}
+              <ScopeOverlay
+                zones={zones}
+                selectedZoneIds={boundaryDraft.selectedZoneIds}
+                boundary={polygon}
+                scopePolygon={boundaryDraft.scopePolygon}
+                transform={transform}
+              />
             </Layer>
 
             <Layer>
@@ -670,14 +711,22 @@ export function FeaturesCanvas() {
           />
         ) : null}
 
-        {drafting && placement && draftPoints.length >= minimumDraftPoints(placement) ? (
+        {drafting && draftPlacement && draftPoints.length >= minimumDraftPoints(draftPlacement) ? (
           <button
             type="button"
             data-testid="finish-feature"
-            onClick={() => useFeaturesStore.getState().finishDraft()}
+            onClick={() => {
+              const state = useFeaturesStore.getState();
+              if (mode === 'scope') state.finishScopeDraw();
+              else state.finishDraft();
+            }}
             className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-garden-forest px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-garden-green"
           >
-            {placement === 'polygon' ? 'Close shape' : 'Finish line'}
+            {mode === 'scope'
+              ? 'Use this area'
+              : draftPlacement === 'polygon'
+                ? 'Close shape'
+                : 'Finish line'}
           </button>
         ) : null}
 

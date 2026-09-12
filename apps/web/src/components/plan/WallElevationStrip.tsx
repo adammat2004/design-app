@@ -1,21 +1,24 @@
 'use client';
 
-import { useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import {
   canWallHold,
   houseWalls,
+  isDoor,
   OPENING_HEIGHTS,
   OPENING_LABELS,
+  openingSegment,
   STOREY_HEIGHT,
-  WALL_KIND_LABELS,
+  SwingSchema,
   wallLength,
   type Opening,
   type OpeningType,
-  type WallKind,
+  type Swing,
 } from '@garden-studio/schema';
 import { formatLength } from '@/lib/units';
-import { useBoundaryStore } from '@/state/boundary-store';
+import { selectedOpeningId, useBoundaryStore } from '@/state/boundary-store';
+import { SegmentTrack } from './segments/SegmentTrack';
+import { chipClass } from './segments/SideEditor';
 import { LengthInput } from './SideLengthsPanel';
 
 /**
@@ -35,123 +38,54 @@ import { LengthInput } from './SideLengthsPanel';
  * number. The vertical axis is illustrative only: blocks are drawn at their true height against a
  * storey, but sill height is typed rather than dragged, because dragging it would imply a precision
  * the model does not carry.
+ *
+ * Which wall it shows is a prop from `WallEditor`, and which opening is open for editing is the
+ * store's selection — so a door clicked on the plan and a door clicked here are the same click.
  */
 
 /** The types worth offering. Upstairs windows are recorded but not part of the common case. */
 const OFFERED: OpeningType[] = ['patio-door', 'back-door', 'front-door', 'window', 'garage-door'];
 
-/** Sliding snaps to this, in metres — fine enough to be exact, coarse enough to be steady. */
-const SLIDE_STEP = 0.05;
+const SWING_LABELS: Record<Swing, string> = {
+  none: 'Slides',
+  inward: 'Opens in',
+  outward: 'Opens out',
+};
 
-/**
- * Where along the wall a pointer is, in metres. Pure so it can be tested without a layout, and
- * used by the drag itself so the test covers the arithmetic that actually runs.
- */
-export function pointerOffset(
-  clientX: number,
-  trackLeft: number,
-  trackWidth: number,
-  wallLengthMetres: number,
-): number {
-  if (trackWidth <= 0) return 0;
-
-  const metres = ((clientX - trackLeft) / trackWidth) * wallLengthMetres;
-  return Math.round(metres / SLIDE_STEP) * SLIDE_STEP;
-}
-
-export function WallElevationStrip() {
+export function WallElevationStrip({ wallId }: { wallId: string }) {
   const draft = useBoundaryStore((state) => state.present);
   const unit = useBoundaryStore((state) => state.unit);
-  const selectedWallId = useBoundaryStore((state) => state.selectedWallId);
-  const selectWall = useBoundaryStore((state) => state.selectWall);
-  const setWallKind = useBoundaryStore((state) => state.setWallKind);
+  const openId = useBoundaryStore(selectedOpeningId);
+  const select = useBoundaryStore((state) => state.select);
   const addOpening = useBoundaryStore((state) => state.addOpening);
   const moveOpening = useBoundaryStore((state) => state.moveOpening);
   const setOpeningWidth = useBoundaryStore((state) => state.setOpeningWidth);
   const setOpeningSill = useBoundaryStore((state) => state.setOpeningSill);
+  const setOpeningSwing = useBoundaryStore((state) => state.setOpeningSwing);
+  const moveOpeningLive = useBoundaryStore((state) => state.moveOpeningLive);
+  const fitOpening = useBoundaryStore((state) => state.fitOpening);
   const removeOpening = useBoundaryStore((state) => state.removeOpening);
-
-  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
+  const beginGesture = useBoundaryStore((state) => state.beginGesture);
+  const endGesture = useBoundaryStore((state) => state.endGesture);
 
   const house = draft.house;
   if (!house) return null;
 
-  const walls = houseWalls(house);
-  const wall = walls.find((entry) => entry.id === selectedWallId) ?? null;
-
-  if (!wall) {
-    return (
-      <Panel>
-        <p data-testid="wall-strip-hint" className="text-[11px] leading-relaxed text-garden-muted">
-          Pick a wall on the plan to add doors and windows. They are optional — without them the
-          design still works, it just has less to go on.
-        </p>
-      </Panel>
-    );
-  }
+  const wall = houseWalls(house).find((entry) => entry.id === wallId) ?? null;
+  if (!wall) return null;
 
   const length = wallLength(house, wall.id) ?? 0;
   const openings = house.openings.filter((opening) => opening.wallId === wall.id);
-  const selected = openings.find((opening) => opening.id === selectedOpeningId) ?? null;
+  const placed = openings.filter((opening) => openingSegment(house, opening) !== null);
+  const unplaced = openings.filter((opening) => openingSegment(house, opening) === null);
+  const selected = openings.find((opening) => opening.id === openId) ?? null;
 
-  function offsetFromPointer(clientX: number): number {
-    const box = trackRef.current?.getBoundingClientRect();
-    if (!box) return 0;
-
-    return pointerOffset(clientX, box.left, box.width, length);
-  }
-
-  /*
-   * The move and up listeners go on the window rather than on the block, which is what keeps the
-   * drag alive when the pointer runs off the end of the track — the common case, since sliding a
-   * door to the corner of a wall means aiming past it. That also makes `setPointerCapture`
-   * redundant, which is just as well: it is one of the DOM APIs jsdom does not implement.
-   */
-  function startSlide(event: React.PointerEvent, opening: Opening) {
-    setSelectedOpeningId(opening.id);
-
-    const onMove = (moveEvent: PointerEvent) =>
-      moveOpening(opening.id, offsetFromPointer(moveEvent.clientX));
-
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  }
-
-  const wallIndex = walls.indexOf(wall);
+  const offered = OFFERED.filter((type) => canWallHold(wall.kind, type));
 
   return (
-    <Panel>
-      <div className="flex items-center justify-between gap-2">
-        <p data-testid="wall-heading" className="text-[11px] font-medium text-garden-ink">
-          {`Wall ${wallIndex + 1} · ${formatLength(length, unit)}`}
-        </p>
-        <select
-          data-testid="wall-kind"
-          aria-label="What sort of wall this is"
-          value={wall.kind}
-          onChange={(event) => setWallKind(wall.id, event.target.value as WallKind)}
-          className="rounded-md border border-garden-line bg-white px-1.5 py-0.5 text-[11px] text-garden-ink"
-        >
-          {Object.entries(WALL_KIND_LABELS).map(([kind, label]) => (
-            <option key={kind} value={kind}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/*
-        A party wall is the neighbour's house, and an attached garage takes only a garage door.
-        Saying so is most of the input work saved: a mid-terrace has two walls worth asking about.
-      */}
+    <div data-testid="wall-strip" className="space-y-2.5">
       <div className="flex flex-wrap gap-1">
-        {OFFERED.filter((type) => canWallHold(wall.kind, type)).map((type) => (
+        {offered.map((type) => (
           <button
             key={type}
             type="button"
@@ -162,66 +96,75 @@ export function WallElevationStrip() {
             {`+ ${OPENING_LABELS[type]}`}
           </button>
         ))}
-        {OFFERED.every((type) => !canWallHold(wall.kind, type)) ? (
+        {offered.length === 0 ? (
           <p data-testid="wall-holds-nothing" className="text-[11px] text-garden-muted">
             A party wall is your neighbour&rsquo;s house, so nothing opens onto the garden here.
           </p>
         ) : null}
       </div>
 
-      {/* The wall itself, seen from the garden. */}
-      <div>
-        <div
-          ref={trackRef}
-          data-testid="wall-track"
-          className="relative h-24 overflow-hidden rounded-md border border-garden-line bg-garden-sage/25"
-        >
-          {openings.map((opening) => {
-            const heightRatio = OPENING_HEIGHTS[opening.type] / STOREY_HEIGHT;
-            const bottomRatio = opening.sillHeight / STOREY_HEIGHT;
+      {/* The wall itself, seen from the garden. Blocks at their true height against a storey. */}
+      {offered.length > 0 ? (
+        <SegmentTrack
+          length={length}
+          unit={unit}
+          caption="This wall, seen from the garden"
+          testId="wall-track"
+          itemTestId={(id) => `opening-${id}`}
+          items={placed.map((opening) => ({
+            id: opening.id,
+            offset: opening.offsetAlongEdge,
+            width: opening.width,
+            label: OPENING_LABELS[opening.type],
+            selected: opening.id === openId,
+            heightRatio: OPENING_HEIGHTS[opening.type] / STOREY_HEIGHT,
+            bottomRatio: opening.sillHeight / STOREY_HEIGHT,
+          }))}
+          onSelect={(id) => select({ kind: 'opening', id })}
+          onGestureStart={beginGesture}
+          onMove={moveOpeningLive}
+          onGestureEnd={endGesture}
+        />
+      ) : null}
 
-            return (
+      {/*
+        An opening the wall has been resized out from under is kept in the document and drawn
+        nowhere — the same rule a gate follows. Said here, with the two honest answers.
+      */}
+      {unplaced.length > 0 ? (
+        <ul data-testid="unplaced-openings" className="space-y-1">
+          {unplaced.map((opening) => (
+            <li
+              key={opening.id}
+              data-testid={`unplaced-opening-${opening.id}`}
+              className="flex items-center gap-2 rounded-md border border-garden-warn/40 bg-garden-warn/5 px-2 py-1 text-[10px] text-garden-ink"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {`${OPENING_LABELS[opening.type]} · ${formatLength(opening.width, unit)} · off this wall`}
+              </span>
+              {opening.width <= length ? (
+                <button
+                  type="button"
+                  data-testid={`fit-opening-${opening.id}`}
+                  onClick={() => fitOpening(opening.id)}
+                  className="rounded-md border border-garden-line bg-white px-2 py-0.5 font-medium text-garden-forest hover:border-garden-green"
+                >
+                  Fit to wall
+                </button>
+              ) : null}
               <button
-                key={opening.id}
                 type="button"
-                data-testid={`opening-${opening.id}`}
-                data-selected={opening.id === selectedOpeningId}
-                aria-label={`${OPENING_LABELS[opening.type]} at ${formatLength(opening.offsetAlongEdge, unit)}`}
-                onPointerDown={(event) => startSlide(event, opening)}
-                style={{
-                  left: `${((opening.offsetAlongEdge - opening.width / 2) / Math.max(length, 1e-6)) * 100}%`,
-                  width: `${(opening.width / Math.max(length, 1e-6)) * 100}%`,
-                  height: `${heightRatio * 100}%`,
-                  bottom: `${bottomRatio * 100}%`,
-                }}
-                className={[
-                  'absolute cursor-ew-resize touch-none rounded-sm border-2',
-                  opening.id === selectedOpeningId
-                    ? 'border-garden-forest bg-garden-green/40'
-                    : 'border-garden-green bg-garden-green/20 hover:bg-garden-green/30',
-                ].join(' ')}
-              />
-            );
-          })}
-
-          {/* The ground the storey stands on, so the blocks read as being at a height. */}
-          <span aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-garden-muted" />
-        </div>
-
-        {/* The ruler, in the same metres as `offsetAlongEdge`. */}
-        <div
-          data-testid="wall-ruler"
-          className="mt-1 flex justify-between text-[9px] text-garden-muted"
-        >
-          <span>0</span>
-          <span>{formatLength(length / 2, unit)}</span>
-          <span>{formatLength(length, unit)}</span>
-        </div>
-
-        <p className="mt-1 text-center text-[10px] text-garden-muted">
-          This wall, seen from the garden
-        </p>
-      </div>
+                data-testid={`remove-unplaced-${opening.id}`}
+                aria-label={`Remove this ${OPENING_LABELS[opening.type].toLowerCase()}`}
+                onClick={() => removeOpening(opening.id)}
+                className="rounded p-0.5 text-garden-muted hover:text-garden-warn"
+              >
+                <Trash2 aria-hidden className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {selected ? (
         <div data-testid="opening-inspector" className="space-y-2 border-t border-garden-line pt-2">
@@ -233,15 +176,33 @@ export function WallElevationStrip() {
               type="button"
               data-testid="remove-opening"
               aria-label="Remove this opening"
-              onClick={() => {
-                removeOpening(selected.id);
-                setSelectedOpeningId(null);
-              }}
+              onClick={() => removeOpening(selected.id)}
               className="rounded p-1 text-garden-muted hover:bg-garden-warn/10 hover:text-garden-warn"
             >
               <Trash2 aria-hidden className="h-3.5 w-3.5" />
             </button>
           </div>
+
+          {/*
+            Hinged or sliding is the one thing about a door the generator acts on that the plan
+            cannot see: a hinged leaf sweeps an arc that has to stay clear, bifolds do not.
+          */}
+          {isDoor(selected) ? (
+            <div className="flex flex-wrap gap-1">
+              {SwingSchema.options.map((swing) => (
+                <button
+                  key={swing}
+                  type="button"
+                  data-testid={`opening-swing-${swing}`}
+                  aria-pressed={selected.swing === swing}
+                  onClick={() => setOpeningSwing(selected.id, swing)}
+                  className={chipClass(selected.swing === swing)}
+                >
+                  {SWING_LABELS[swing]}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {/*
             Typed as well as dragged: 900 mm is a standard door and typing it beats sliding to it.
@@ -252,6 +213,7 @@ export function WallElevationStrip() {
               label="Width of this opening"
               metres={selected.width}
               unit={unit}
+              readMetres={() => openingNow(selected.id)?.width ?? selected.width}
               onCommit={(width) => setOpeningWidth(selected.id, width)}
             />
           </Row>
@@ -261,6 +223,9 @@ export function WallElevationStrip() {
               label="Distance from the start of the wall to the centre of this opening"
               metres={selected.offsetAlongEdge}
               unit={unit}
+              readMetres={() =>
+                openingNow(selected.id)?.offsetAlongEdge ?? selected.offsetAlongEdge
+              }
               onCommit={(offset) => moveOpening(selected.id, offset)}
             />
           </Row>
@@ -271,38 +236,24 @@ export function WallElevationStrip() {
               label="Height of this opening's sill above the floor"
               metres={selected.sillHeight}
               unit={unit}
+              allowZero
               onCommit={(sill) => setOpeningSill(selected.id, sill)}
             />
           </Row>
         </div>
-      ) : openings.length > 0 ? (
+      ) : placed.length > 0 ? (
         <p className="text-[11px] text-garden-muted">
           Drag an opening along the wall, or click it to type its measurements.
         </p>
       ) : null}
-
-      <button
-        type="button"
-        data-testid="close-wall-strip"
-        onClick={() => {
-          selectWall(null);
-          setSelectedOpeningId(null);
-        }}
-        className="w-full rounded-lg border border-garden-line bg-white px-3 py-1.5 text-[11px] font-medium text-garden-ink hover:bg-garden-sage"
-      >
-        Done with this wall
-      </button>
-    </Panel>
+    </div>
   );
 }
 
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <section data-testid="wall-strip" className="space-y-2.5 border-t border-garden-line pt-4">
-      <h2 className="text-xs font-semibold text-garden-ink">Doors and windows</h2>
-      {children}
-    </section>
-  );
+function openingNow(openingId: string): Opening | undefined {
+  return useBoundaryStore
+    .getState()
+    .present.house?.openings.find((opening) => opening.id === openingId);
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

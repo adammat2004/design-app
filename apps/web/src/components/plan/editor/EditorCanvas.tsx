@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Circle, Group, Layer, Line, Stage } from 'react-konva';
 import { CircleAlert } from 'lucide-react';
 import {
@@ -53,6 +53,9 @@ import {
 } from '../canvas-primitives';
 import { useCanvasViewport } from '../use-canvas-viewport';
 import { ConceptLabels } from '../concepts/ConceptLabels';
+import { EditorScene } from './EditorScene';
+import { buildRenderScene } from '@/lib/render/build-scene';
+import { isStageDrag } from '../use-canvas-viewport';
 
 /**
  * Step 5's plan, and the one canvas in the wizard where a generated layout can be changed.
@@ -66,6 +69,8 @@ import { ConceptLabels } from '../concepts/ConceptLabels';
  * under accents under features — because that order is what guarantees no zone shows bare grid.
  */
 export function EditorCanvas() {
+  const [richReady, setRichReady] = useState(false);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const boundaryDraft = useBoundaryStore((state) => state.present);
   const unit = useBoundaryStore((state) => state.unit);
 
@@ -79,6 +84,10 @@ export function EditorCanvas() {
    */
   const allElements = usePlanEditorStore((state) => state.present.elements);
   const elements = useMemo(() => allElements.filter((element) => !element.hidden), [allElements]);
+  const maturity = usePlanEditorStore((state) => state.maturity);
+  const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
+    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'visualise', maturity }),
+  [boundaryDraft, elements, maturity]);
 
   /*
    * One sun for the whole drawing. `undefined` means the plan has never said where it is, and
@@ -132,6 +141,7 @@ export function EditorCanvas() {
     pointerInMetres,
   } = useCanvasViewport({
     getPolygon: () => draftPolygon(useBoundaryStore.getState().present),
+    fitPaddingRatio: 0.04,
   });
 
   /*
@@ -231,6 +241,8 @@ export function EditorCanvas() {
   return (
     <div
       data-testid="editor-canvas"
+      data-renderer={richReady ? 'rich' : 'technical'}
+      data-scale={transform.scale} data-offset-x={transform.offsetX + panOffset.x} data-offset-y={transform.offsetY + panOffset.y}
       className="relative h-full min-h-[420px] w-full overflow-hidden rounded-xl border border-garden-line bg-white"
     >
       <div
@@ -248,6 +260,9 @@ export function EditorCanvas() {
               : 'default',
         }}
       >
+        {canRender ? <EditorScene scene={richScene} site={boundaryDraft}
+          transform={{ ...transform, offsetX: transform.offsetX + panOffset.x, offsetY: transform.offsetY + panOffset.y }}
+          onReady={setRichReady} /> : null}
         {canRender ? (
           <Stage
             ref={stageRef}
@@ -258,7 +273,13 @@ export function EditorCanvas() {
             onClick={handleStageClick}
             onDragStart={handleStageDragStart}
             onMouseMove={handleStageMouseMove}
-            onDragEnd={handleStageDragEnd}
+            onDragMove={(event) => {
+              if (isStageDrag(event)) setPanOffset({ x: event.target.x(), y: event.target.y() });
+            }}
+            onDragEnd={(event) => {
+              if (isStageDrag(event)) setPanOffset({ x: 0, y: 0 });
+              handleStageDragEnd(event);
+            }}
             onWheel={handleWheel}
           >
             {/*
@@ -293,7 +314,7 @@ export function EditorCanvas() {
             ) : null}
 
             {/* The property from step 1, as locked background context. */}
-            <Layer listening={false}>
+            <Layer listening={false} visible={!richReady}>
               {polygon.length >= 3 ? (
                 <Line
                   points={polygonToKonvaPoints(polygon, transform)}
@@ -320,6 +341,7 @@ export function EditorCanvas() {
                 <ElementShape
                   key={`ground-${element.id}`}
                   part="ground"
+                  rich={richReady}
                   exclusions={exclusions.get(element.id)}
                   element={element}
                   transform={transform}
@@ -330,18 +352,19 @@ export function EditorCanvas() {
                 />
               ))}
 
-              <ShadowLayer
+              {!richReady ? <ShadowLayer
                 elements={settledElements}
                 house={boundaryDraft.house}
                 boundary={polygon}
                 site={boundaryDraft}
                 transform={transform}
-              />
+              /> : null}
 
               {passes.objects.map((element) => (
                 <ElementShape
                   key={`object-${element.id}`}
                   part={element.symbol === 'pergola' ? 'object' : 'all'}
+                  rich={richReady}
                   element={element}
                   transform={transform}
                   selected={element.id === selectedId}
@@ -357,7 +380,7 @@ export function EditorCanvas() {
               covered by the base fill that runs to the edge of the zone, which is every generated
               concept — so the garden would lose its edge exactly where it needs one.
             */}
-            <Layer listening={false}>
+            <Layer listening={false} visible={!richReady}>
               <FenceLine
                 polygon={polygon}
                 runs={boundaryRuns(boundaryDraft)}
@@ -368,7 +391,7 @@ export function EditorCanvas() {
             </Layer>
 
             <Layer>
-              {houseOutline && boundaryDraft.house ? (
+              {!richReady && houseOutline && boundaryDraft.house ? (
                 <>
                   <HouseShape
                     outline={houseOutline}
@@ -385,7 +408,7 @@ export function EditorCanvas() {
               ) : null}
 
               {/* Gates in the fence and the street, so a side path visibly goes somewhere. */}
-              <GateMarks site={boundaryDraft} transform={transform} />
+              {!richReady ? <GateMarks site={boundaryDraft} transform={transform} /> : null}
 
               <AlignmentLines
                 guides={alignments}
@@ -624,6 +647,7 @@ function ElementShape({
   light,
   part,
   exclusions,
+  rich = false,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
@@ -634,6 +658,7 @@ function ElementShape({
   light?: Point;
   part?: ElementPass;
   exclusions?: Point[][];
+  rich?: boolean;
 }) {
   /*
    * The one element whose outline is changing this frame.
@@ -690,7 +715,8 @@ function ElementShape({
         if (current) event.target.position(metresToPx(elementAnchor(current), transform));
       }}
     >
-      <ElementDrawing
+      {rich ? <Line points={relative(elementOutline(element))} closed fill="rgba(0,0,0,0)"
+        hitStrokeWidth={8} strokeWidth={0} /> : <ElementDrawing
         element={element}
         transform={transform}
         offsetPx={anchor}
@@ -698,7 +724,7 @@ function ElementShape({
         interacting={interacting}
         part={part}
         exclusions={exclusions}
-      />
+      />}
 
       {/*
         Selection is drawn *over* the element rather than by restyling it.

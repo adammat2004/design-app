@@ -132,11 +132,10 @@ test('a patio door added to the house survives a reload', async ({ page }) => {
   await clickPlan(page, 300, 200);
 
   // Offered, not applied — nothing is placed until the chip is taken.
-  await expect(page.getByTestId('openings-count')).toHaveText('None yet');
+  await expect(page.getByTestId('doors-status')).toContainText('No door onto the garden yet');
   await page.getByTestId('suggest-patio-door').click();
 
-  await expect(page.getByTestId('openings-count')).toContainText('1 placed');
-  await expect(page.getByTestId('openings-count')).toContainText('1 onto the garden');
+  await expect(page.getByTestId('doors-status')).toContainText('Garden door');
 
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
 
@@ -144,8 +143,7 @@ test('a patio door added to the house survives a reload', async ({ page }) => {
   await page.goto(planUrl);
 
   // Back on the plan, the wall the door names still exists, so it still resolves.
-  await page.getByTestId('canvas-mode-house').click();
-  await expect(page.getByTestId('openings-count')).toContainText('1 placed');
+  await expect(page.getByTestId('doors-status')).toContainText('Garden door');
 });
 
 test('an unknown plan id is a 404, and says so rather than blaming the server', async ({
@@ -207,7 +205,6 @@ test('a side gate and the street edge survive a reload', async ({ page }) => {
   // In house mode a plain click drops the default footprint where it lands.
   await clickPlan(page, 300, 200);
 
-  await page.getByTestId('sub-step-access').click();
   await expect(page.getByTestId('gates-count')).toHaveText('No gate');
 
   // Offered, not applied: the chips place nothing until they are taken.
@@ -223,7 +220,128 @@ test('a side gate and the street edge survive a reload', async ({ page }) => {
   await page.goto(planUrl);
 
   // Back on the plan, the fence the gate names still exists, so it still resolves.
-  await page.getByTestId('sub-step-access').click();
   await expect(page.getByTestId('gates-count')).toHaveText('1 gate');
   await expect(page.getByTestId('street-status')).toHaveText('Street side chosen');
+});
+
+/**
+ * The selection model, end to end.
+ *
+ * Everything about a side of the property is now edited by clicking that side, and everything
+ * about a wall by clicking that wall — so the thing worth proving through the whole stack is that
+ * the click reaches the right target, the panel is about it, and what is stated there survives the
+ * round trip into JSONB and back.
+ */
+test('a side of the plot can be described by clicking it, and it persists', async ({ page }) => {
+  await page.goto('/plan');
+  const planUrl = page.url();
+
+  await page.getByTestId('plot-preset-rectangle').click();
+  await page.getByTestId('plot-shape-continue').click();
+  await clickPlan(page, 300, 200);
+
+  // Placing the house lands in Select, which is where the property is described.
+  await expect(page.getByTestId('selected-house')).toBeVisible();
+
+  /*
+   * A real pointer click on the side itself. Konva shapes are not DOM, so there is no element to
+   * address — the side's own length chip *is* HTML and sits at the edge's midpoint, so its box
+   * gives the pixel to aim at whatever the fit-on-load frame turned out to be. (The headless
+   * canvas is only about 420 px tall, so a hard-coded offset would miss.)
+   */
+  const chip = await page.getByTestId('edge-label-0').boundingBox();
+  if (!chip) throw new Error('The first side has no length chip to aim at.');
+  await page.mouse.click(chip.x + chip.width / 2, chip.y + chip.height / 2);
+
+  await expect(page.getByTestId('side-editor')).toBeVisible();
+  await expect(page.getByTestId('side-heading')).toContainText('Side A → B');
+
+  await page.getByTestId('side-kind-hedge').click();
+  await page.getByTestId('add-gate-pedestrian').click();
+
+  await expect(page.getByTestId('side-gates')).toContainText('Gate');
+  await expect(page.getByTestId('gates-count')).toHaveText('1 gate');
+
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+
+  await page.goto('about:blank');
+  await page.goto(planUrl);
+
+  // The corner the side starts at still exists, so both the hedge and the gate still resolve.
+  await expect(page.getByTestId('gates-count')).toHaveText('1 gate');
+
+  /*
+   * Reached by keyboard this time. Every selectable thing on the plan has a real button in the
+   * off-screen list, which is how the canvas is usable without a mouse at all; focusing one
+   * selects it.
+   */
+  await page.getByTestId('side-A').focus();
+  await expect(page.getByTestId('side-kind-hedge')).toHaveAttribute('aria-pressed', 'true');
+});
+
+/**
+ * Dragging a gate along its fence, which is the one thing about this feature no unit test can
+ * reach: Konva's hit-testing decides whether the pointer grabbed the gate's body or one of its
+ * end handles, and that only happens in a browser at a real zoom. It has already been worth it —
+ * the first version of the handle let the end grabs swallow the middle of a 900 mm gate, so every
+ * drag silently resized it instead of moving it.
+ */
+test('a gate can be dragged along its fence, and one undo puts it back', async ({ page }) => {
+  await page.goto('/plan');
+
+  await page.getByTestId('plot-preset-rectangle').click();
+  await page.getByTestId('plot-shape-continue').click();
+  await clickPlan(page, 300, 200);
+
+  const chip = await page.getByTestId('edge-label-0').boundingBox();
+  if (!chip) throw new Error('The first side has no length chip to aim at.');
+  await page.mouse.click(chip.x + chip.width / 2, chip.y + chip.height / 2);
+
+  await page.getByTestId('add-gate-pedestrian').click();
+  const before = await page.getByTestId('gate-offset').inputValue();
+  const width = await page.getByTestId('gate-width').inputValue();
+
+  // The side runs across the top of the plot, so the gate sits on it at the chip's own position.
+  const y = chip.y + chip.height / 2;
+  await page.mouse.move(chip.x + chip.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(chip.x + chip.width / 2 - 60, y, { steps: 10 });
+  await page.mouse.up();
+
+  // It moved along the fence, and a move is not a resize.
+  expect(Number(await page.getByTestId('gate-offset').inputValue())).toBeLessThan(Number(before));
+  await expect(page.getByTestId('gate-width')).toHaveValue(width);
+
+  // One entry for the whole gesture, and the gate is still what the panel is about afterwards.
+  await page.getByTestId('canvas-tool-undo').click();
+  await expect(page.getByTestId('gate-offset')).toHaveValue(before);
+});
+
+/**
+ * The house twin of the test above: a wall is selected, classified and given a window, and the
+ * window is still on that wall after a round trip through JSONB.
+ */
+test('a wall of the house can be given a window, and it persists', async ({ page }) => {
+  await page.goto('/plan');
+  const planUrl = page.url();
+
+  await page.getByTestId('plot-preset-rectangle').click();
+  await page.getByTestId('plot-shape-continue').click();
+  await clickPlan(page, 300, 200);
+
+  await page.getByTestId('select-wall-w0').focus();
+  await expect(page.getByTestId('wall-editor')).toBeVisible();
+  await expect(page.getByTestId('wall-heading')).toContainText('Wall 1');
+
+  await page.getByTestId('add-opening-window').click();
+  await expect(page.getByTestId('opening-inspector')).toBeVisible();
+
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+
+  await page.goto('about:blank');
+  await page.goto(planUrl);
+
+  await page.getByTestId('select-wall-w0').focus();
+  await expect(page.getByTestId('wall-track')).toBeVisible();
+  await expect(page.getByTestId('wall-editor')).toContainText('Window');
 });

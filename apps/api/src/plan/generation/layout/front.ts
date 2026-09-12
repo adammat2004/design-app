@@ -27,6 +27,22 @@ const HEDGE_DEPTH = 0.6;
 /** The shallowest front garden worth laying out. Below this it is a doorstep. */
 const MIN_FRONT_DEPTH = 2.5;
 
+/**
+ * A front garden gets a lawn only when it is a garden: deep enough that the lawn is a panel rather
+ * than a verge, and big enough to be worth mowing. Below either it is gravel, whatever the budget —
+ * paving would claim a driveway the plan does not capture yet.
+ */
+export const FRONT_LAWN_FLOOR = { depth: 4, area: 25 };
+
+export function frontWantsLawn(
+  depth: number | null,
+  area: number,
+  lawnAllowed: boolean,
+): boolean {
+  if (!lawnAllowed || depth === null) return false;
+  return depth >= FRONT_LAWN_FLOOR.depth && area >= FRONT_LAWN_FLOOR.area;
+}
+
 export function frontGarden(
   frame: DesignFrame,
   room: LocalBox,

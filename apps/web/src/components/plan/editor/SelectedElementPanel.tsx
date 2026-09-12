@@ -11,7 +11,8 @@ import {
 } from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { elementAnchor, elementArea, isLocked, type DesignElement } from '@/lib/concepts';
-import { materialsFor } from '@/lib/materials';
+import { canBeEdged, EDGING_MATERIALS, materialsFor, WALLING_MATERIALS } from '@/lib/materials';
+import { MIN_LEVEL_CHANGE } from '@garden-studio/schema';
 import { formatArea } from '@/lib/units';
 import { ZONE_ORDER } from '@/lib/zones';
 import { useBoundaryStore } from '@/state/boundary-store';
@@ -258,6 +259,55 @@ function ElementDetails({
             onChange={(event) => store.getState().setMaterial(element.id, event.target.value)}
           >
             {materialsFor(element.category).map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {!plant && canBeEdged(element.category) ? (
+        /*
+         * Offered on the four ground-covering categories only, and "Spade cut" is the default
+         * rather than a product: a border has a cut edge for nothing, and every entry below it is
+         * something somebody has to buy and lay. Where the course actually goes is not asked —
+         * `plan/edging.ts` derives that from the outline, leaving out the sides against the fence
+         * and the house.
+         */
+        <Field label="Edging">
+          <select
+            data-testid="element-edging"
+            aria-label="Edging"
+            value={element.edging ?? ''}
+            className={inputClass}
+            onChange={(event) => store.getState().setEdging(element.id, event.target.value)}
+          >
+            <option value="">Spade cut (none)</option>
+            {EDGING_MATERIALS.map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {!plant && Math.abs(element.elevation ?? 0) >= MIN_LEVEL_CHANGE ? (
+        /*
+         * Only where there is a level change to retain, because without one there is no wall: the
+         * face is derived from the edge of a raised element. Offering it on a flat surface would be
+         * a control that silently does nothing, which is how `elevation` itself spent its first
+         * year on this screen.
+         */
+        <Field label="Retaining wall">
+          <select
+            data-testid="element-retaining"
+            aria-label="Retaining wall"
+            value={element.retaining ?? ''}
+            className={inputClass}
+            onChange={(event) => store.getState().setRetaining(element.id, event.target.value)}
+          >
+            <option value="">Upstand in the same material</option>
+            {WALLING_MATERIALS.map((material) => (
               <option key={material.id} value={material.id}>
                 {material.label}
               </option>

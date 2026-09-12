@@ -68,6 +68,17 @@ describe('render-only planting', () => {
     expect(plantsOf([bed('bed-a', 2)])).toEqual(plantsOf([bed('bed-a', 2)]));
   });
 
+  it('has a middle storey in deep beds, without changing the document or crowding narrow transitions', () => {
+    const deep = bed('deep', 2);
+    const before = JSON.stringify(deep);
+    const shrubs = plantsOf([deep]).filter((p) => p.visualLayer === 'shrub');
+    expect(shrubs.length).toBeGreaterThan(3);
+    expect(shrubs.every((p) => p.spread >= 0.8 && p.height >= 0.7)).toBe(true);
+    expect(JSON.stringify(deep)).toBe(before);
+    const narrow = bed('narrow', 2, { shape: { kind: 'rect', centre: { x: 3, y: 5 }, width: 0.6, depth: 6, rotation: 0 } });
+    expect(plantsOf([narrow]).filter((p) => p.visualLayer === 'shrub')).toHaveLength(0);
+  });
+
   /*
    * The prompt's explicit requirement, and the one the whole spatial-hash design exists to give:
    * changing one bed must not visually reshuffle any other.

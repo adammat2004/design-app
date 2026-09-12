@@ -1,4 +1,4 @@
-import type { Point } from '@garden-studio/schema';
+import { rotatePoint, type Point } from '@garden-studio/schema';
 
 /**
  * The property drawn as a building and an enclosure rather than as two outlines.
@@ -101,4 +101,101 @@ export function fenceShadeBands(
   }
 
   return bands;
+}
+
+/* ---------------------------------------------------------------- openings in a line */
+
+/** How many segments make a swung leaf's arc read as a curve. */
+export const SWING_ARC_STEPS = 12;
+
+/** How far either side of the boundary an open gap's end ticks run, in metres. */
+export const OPEN_GAP_TICK = 0.35;
+
+/**
+ * A leaf standing open, and the quarter circle it swings through, in world metres.
+ *
+ * Shared by the Konva canvases and the plan composer. It was written twice — once as `SwingArc`
+ * and once inline in `drawAccess` — and the copies had already begun to differ: the composer
+ * always swung the leaf from the first end of the segment, so a door and the same door on an
+ * exported PNG could hinge on opposite sides. One function, one answer.
+ *
+ * Returns world metres rather than pixels for the reason `useSurfacePattern` does: metres are the
+ * frame the two backends agree on, and a function that returned pixels could only serve one.
+ */
+export interface SwingGeometry {
+  hinge: Point;
+  /** The leaf's far end, shown open. */
+  open: Point;
+  /** The arc, as a polyline from shut to open. */
+  arc: Point[];
+}
+
+export function swingGeometry(
+  hinge: Point,
+  closedTowards: Point,
+  normal: Point,
+  inward: boolean,
+): SwingGeometry | null {
+  const dx = closedTowards.x - hinge.x;
+  const dy = closedTowards.y - hinge.y;
+  const radius = Math.hypot(dx, dy);
+  if (radius < 1e-6) return null;
+
+  const closed = { x: dx / radius, y: dy / radius };
+  const open = inward ? { x: -normal.x, y: -normal.y } : normal;
+
+  // Which way round the circle takes the leaf from shut to open, in this y-down frame.
+  const turn = closed.x * open.y - closed.y * open.x >= 0 ? 90 : -90;
+
+  const arc: Point[] = [];
+  for (let step = 0; step <= SWING_ARC_STEPS; step += 1) {
+    const direction = rotatePoint(closed, { x: 0, y: 0 }, (turn * step) / SWING_ARC_STEPS);
+    arc.push({ x: hinge.x + direction.x * radius, y: hinge.y + direction.y * radius });
+  }
+
+  return { hinge, open: arc[arc.length - 1]!, arc };
+}
+
+/**
+ * What is hung in a gap in the boundary, which is the whole difference between the three kinds.
+ *
+ * A pedestrian gate is one leaf on a hinge. A driveway is a pair, each half the opening and hung
+ * at opposite ends — the drawing convention for a double gate, and what stops a 3 m opening
+ * reading as a very wide garden gate. An open gap has nothing hung in it at all, so it gets none:
+ * drawing a leaf there would claim a gate the user said was absent.
+ */
+export function gateSwings(
+  segment: [Point, Point],
+  inward: Point,
+  kind: 'pedestrian' | 'vehicle' | 'open',
+): SwingGeometry[] {
+  if (kind === 'open') return [];
+
+  const outward = { x: -inward.x, y: -inward.y };
+
+  if (kind === 'vehicle') {
+    const middle = {
+      x: (segment[0].x + segment[1].x) / 2,
+      y: (segment[0].y + segment[1].y) / 2,
+    };
+
+    return [
+      swingGeometry(segment[0], middle, outward, true),
+      swingGeometry(segment[1], middle, outward, true),
+    ].filter((swing): swing is SwingGeometry => swing !== null);
+  }
+
+  const swing = swingGeometry(segment[0], segment[1], outward, true);
+  return swing ? [swing] : [];
+}
+
+/**
+ * The two short ticks that mark where an enclosure stops at an open gap. Square to the boundary
+ * and crossing it, so the break reads as deliberate rather than as a fence that ran out.
+ */
+export function openGapTicks(segment: [Point, Point], inward: Point): [Point, Point][] {
+  return [segment[0], segment[1]].map((end) => [
+    { x: end.x - inward.x * OPEN_GAP_TICK, y: end.y - inward.y * OPEN_GAP_TICK },
+    { x: end.x + inward.x * OPEN_GAP_TICK, y: end.y + inward.y * OPEN_GAP_TICK },
+  ]);
 }

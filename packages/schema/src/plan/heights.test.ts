@@ -3,11 +3,34 @@ import { ElementCategorySchema } from './concepts.js';
 import { MaterialIdSchema } from './materials.js';
 import {
   CATEGORY_HEIGHTS,
+  EAVES_BY_STOREYS,
+  HOUSE_HEIGHT,
   MATERIAL_HEIGHTS,
   MIN_SHADOW_HEIGHT,
   castsShadow,
   heightFor,
+  houseHeight,
 } from './heights.js';
+
+describe('houseHeight', () => {
+  it('is the eaves line for the house’s storeys', () => {
+    expect(houseHeight({ storeys: 1 })).toBe(EAVES_BY_STOREYS[1]);
+    expect(houseHeight({ storeys: 3 })).toBe(EAVES_BY_STOREYS[3]);
+  });
+
+  it('defaults to two storeys, which is the six metres every plan drew with before', () => {
+    // A fixture or a hand-built house never goes through `.parse()`, so the Zod default alone
+    // would look applied and never fire.
+    expect(houseHeight({})).toBe(HOUSE_HEIGHT);
+    expect(houseHeight(null)).toBe(HOUSE_HEIGHT);
+    expect(HOUSE_HEIGHT).toBe(6);
+  });
+
+  it('never returns nothing for a storey count outside the table', () => {
+    expect(houseHeight({ storeys: 7 })).toBe(EAVES_BY_STOREYS[3]);
+    expect(houseHeight({ storeys: 0 })).toBe(EAVES_BY_STOREYS[1]);
+  });
+});
 
 describe('heightFor', () => {
   it('prefers an explicit height over everything else', () => {

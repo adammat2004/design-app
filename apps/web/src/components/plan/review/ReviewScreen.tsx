@@ -35,6 +35,9 @@ export function ReviewScreen() {
 
   const elements = usePlanEditorStore((state) => state.present.elements);
   const unit = useBoundaryStore((state) => state.unit);
+  /* Edging against the fence or the house is not laid, so it must not be ordered. */
+  const boundary = useBoundaryStore((state) => state.present.vertices);
+  const house = useBoundaryStore((state) => state.present.house);
   const projectName = useBoundaryStore((state) => state.projectName);
   const brief = useBriefStore((state) => state.present);
   const concept = useConceptsStore(chosenConcept);
@@ -86,7 +89,12 @@ export function ReviewScreen() {
 
         <section className="rounded-xl border border-garden-line bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-xs font-semibold text-garden-forest">Schedule of materials</h2>
-          <ScheduleTable elements={elements} unit={unit} />
+          <ScheduleTable
+            elements={elements}
+            unit={unit}
+            boundary={boundary}
+            house={house}
+          />
           <p className="mt-3 text-[10px] leading-relaxed text-garden-muted">
             Areas are measured from the drawn shapes. Ground cover is the full zone with everything
             else laid over it, so the two groups overlap and should not be added together. Slab and

@@ -149,3 +149,35 @@ export function lightDirection(site: SiteSection): Point | null {
 
   return { x: -cast.direction.x, y: -cast.direction.y };
 }
+
+/**
+ * The altitude at which the sky is fully dark for drawing purposes: the end of civil twilight.
+ *
+ * A real threshold rather than a chosen one. Civil twilight is the standard definition of the
+ * point at which outdoor activity needs artificial light, which is precisely the question a
+ * lighting layer is asking.
+ */
+export const CIVIL_TWILIGHT_DEGREES = -6;
+
+/**
+ * How dark it is: 0 in daylight, 1 once civil twilight has ended, ramping between.
+ *
+ * `null` with no location, and that is the same refusal `shadowCast` and `lightDirection` make —
+ * without a latitude there is no such thing as sunset here, and a plan that dimmed itself on a
+ * guess would be making exactly the claim `site.location` is nullable to avoid. A caller that gets
+ * `null` draws no lighting at all and keeps the conventional drawing light.
+ *
+ * A **ramp** rather than a boolean, because the alternative is visibly wrong: switching the whole
+ * garden from noon to midnight in one step of a slider whose step is fifteen minutes reads as a
+ * bug, and dusk is the hour a lit garden actually looks its best. Between the two thresholds this
+ * is the honest in-between state — the sun is down, the sky is not yet dark, and the fittings are
+ * on.
+ */
+export function nightFraction(site: SiteSection): number | null {
+  const position = solarPosition(site);
+  if (!position) return null;
+  if (position.altitude >= 0) return 0;
+  if (position.altitude <= CIVIL_TWILIGHT_DEGREES) return 1;
+
+  return position.altitude / CIVIL_TWILIGHT_DEGREES;
+}

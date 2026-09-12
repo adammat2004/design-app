@@ -109,12 +109,27 @@ describe('planSchedule', () => {
   });
 
   it('counts slabs for paving, which is a real product with real dimensions', () => {
-    // 600 x 600 on a 10 mm joint, so a shade under three per square metre.
+    // 400 x 400 on an 8 mm joint, so a shade under six per square metre.
+    const [line] = planSchedule([surface(100, 'concrete')]);
+
+    expect(line!.unitLabel).toBe('slabs');
+    expect(line!.units).toBeGreaterThan(570);
+    expect(line!.units).toBeLessThan(610);
+  });
+
+  it('counts a patio pack by its mean unit', () => {
+    /*
+     * A pack has no single module, so it cannot be counted the way a grid is — but its members are
+     * real product dimensions and a pack is sold by the area it covers, so the mean unit is a fact
+     * somebody can order from. That is the line `isCountable` draws, and it is why a scatter still
+     * gets nothing: its density is a *drawn* one.
+     */
     const [line] = planSchedule([surface(100, 'stone-pavers')]);
 
     expect(line!.unitLabel).toBe('slabs');
-    expect(line!.units).toBeGreaterThan(250);
-    expect(line!.units).toBeLessThan(290);
+    // Mean unit 0.46 x 0.385 m, so a shade over five and a half per square metre.
+    expect(line!.units).toBeGreaterThan(540);
+    expect(line!.units).toBeLessThan(590);
   });
 
   it('counts boards for decking', () => {
@@ -184,6 +199,84 @@ describe('planSchedule', () => {
 
   it('has nothing to say about an empty plan', () => {
     expect(planSchedule([])).toEqual([]);
+  });
+});
+
+describe('edging in the schedule', () => {
+  /*
+   * The one product on the plan sold by the metre. It has no elements of its own — a run is derived
+   * from the outline of the bed it follows — so the schedule reaches it through `edgingRuns` rather
+   * than through the element loop, and these pin that it arrives with the right unit.
+   */
+  const PLOT = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 20 },
+    { x: 0, y: 20 },
+  ];
+
+  const edgedBed = (edging: string): DesignElement =>
+    ({
+      id: 'b1',
+      category: 'planting-bed',
+      role: 'fill',
+      fillKind: 'accent',
+      material: 'mixed-border',
+      zone: 'back',
+      edging,
+      shape: {
+        kind: 'polygon',
+        cornerRadius: 0,
+        points: [
+          { x: 5, y: 5 },
+          { x: 9, y: 5 },
+          { x: 9, y: 8 },
+          { x: 5, y: 8 },
+        ],
+      },
+    }) as DesignElement;
+
+  it('reports edging in metres and nothing else in metres at all', () => {
+    const lines = planSchedule([edgedBed('brick-edging')], { boundary: PLOT });
+
+    const edge = lines.find((line) => line.materialId === 'brick-edging')!;
+    expect(edge.lengthM).toBeCloseTo(14, 6);
+    expect(edge.units).toBe(14);
+    expect(edge.unitLabel).toBe('m');
+    // No area: a course of bricks on edge is a length, and 0 m² would be a different claim.
+    expect(edge.areaSqm).toBe(0);
+
+    const bed = lines.find((line) => line.materialId === 'mixed-border')!;
+    expect(bed.lengthM).toBeNull();
+  });
+
+  it('leaves the side against the fence out of the order', () => {
+    // The whole reason the runs are derived rather than drawn: a course buried in the fence line
+    // is edging nobody can see, and it would otherwise be ordered and paid for.
+    const border = {
+      ...edgedBed('brick-edging'),
+      shape: {
+        kind: 'polygon',
+        cornerRadius: 0,
+        points: [
+          { x: 0, y: 5 },
+          { x: 4, y: 5 },
+          { x: 4, y: 9 },
+          { x: 0, y: 9 },
+        ],
+      },
+    } as DesignElement;
+
+    const lines = planSchedule([border], { boundary: PLOT });
+    expect(lines.find((line) => line.materialId === 'brick-edging')!.lengthM).toBeCloseTo(12, 6);
+  });
+
+  it('says nothing about edging when no surface carries any', () => {
+    const lines = planSchedule([edgedBed('brick-edging')], { boundary: PLOT });
+    const plain = planSchedule([surface(20, 'standard-turf')], { boundary: PLOT });
+
+    expect(lines.some((line) => line.unitLabel === 'm')).toBe(true);
+    expect(plain.some((line) => line.unitLabel === 'm')).toBe(false);
   });
 });
 

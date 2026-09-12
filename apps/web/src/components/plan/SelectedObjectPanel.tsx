@@ -4,25 +4,40 @@ import { House, MousePointer2, RotateCcw } from 'lucide-react';
 import { vertexLabel } from '@/lib/boundary-geometry';
 import { houseArea, houseSize } from '@/lib/house';
 import { formatArea } from '@/lib/units';
-import { useBoundaryStore } from '@/state/boundary-store';
+import { selectedEdgeVertexId, selectedWallId, useBoundaryStore } from '@/state/boundary-store';
+import { SideEditor } from './segments/SideEditor';
+import { WallEditor } from './segments/WallEditor';
 import { LengthInput } from './SideLengthsPanel';
+
+/** How many floors a house can be said to have here. Bigger is a block of flats, not a house. */
+const STOREY_OPTIONS = [1, 2, 3];
 
 /**
  * Two-way bound properties for whatever is selected. Dragging on the canvas writes here;
  * typing here moves the shape — the same pattern the side lengths use.
+ *
+ * The one panel for every kind of selection: a corner, the house, a side of the property (or a
+ * gate in it), a wall of the house (or a door in it). Each is its own editor; this only routes.
  */
 export function SelectedObjectPanel() {
   const selection = useBoundaryStore((state) => state.selection);
   const draft = useBoundaryStore((state) => state.present);
   const unit = useBoundaryStore((state) => state.unit);
+  const edgeVertexId = useBoundaryStore(selectedEdgeVertexId);
+  const wallId = useBoundaryStore(selectedWallId);
   const setHouseSize = useBoundaryStore((state) => state.setHouseSize);
   const setHouseRotation = useBoundaryStore((state) => state.setHouseRotation);
+  const setStoreys = useBoundaryStore((state) => state.setStoreys);
 
   return (
     <section className="rounded-xl border border-garden-line bg-white p-4 shadow-sm">
       <h2 className="text-xs font-semibold text-garden-ink">Selected object</h2>
 
-      {selection?.kind === 'house' && draft.house ? (
+      {edgeVertexId ? (
+        <SideEditor key={edgeVertexId} edgeVertexId={edgeVertexId} />
+      ) : wallId ? (
+        <WallEditor key={wallId} wallId={wallId} />
+      ) : selection?.kind === 'house' && draft.house ? (
         <div data-testid="selected-house" className="mt-3 space-y-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100">
@@ -72,6 +87,32 @@ export function SelectedObjectPanel() {
           <Field label="Rotation">
             <RotationField degrees={draft.house.rotation} onChange={setHouseRotation} />
           </Field>
+
+          {/*
+            Storeys rather than a height in metres: the question a user can answer, and all the
+            shadow and the roof need. See `HouseFootprint.storeys`.
+          */}
+          <Field label="Storeys">
+            <span className="flex gap-1" role="group" aria-label="How many floors the house has">
+              {STOREY_OPTIONS.map((storeys) => (
+                <button
+                  key={storeys}
+                  type="button"
+                  data-testid={`house-storeys-${storeys}`}
+                  aria-pressed={draft.house?.storeys === storeys}
+                  onClick={() => setStoreys(storeys)}
+                  className={[
+                    'flex-1 rounded-md border px-2 py-1 text-sm font-medium transition-colors',
+                    draft.house?.storeys === storeys
+                      ? 'border-garden-forest bg-garden-forest text-white'
+                      : 'border-garden-line bg-white text-garden-ink hover:border-garden-green',
+                  ].join(' ')}
+                >
+                  {storeys}
+                </button>
+              ))}
+            </span>
+          </Field>
         </div>
       ) : selection?.kind === 'vertex' ? (
         <VertexFields id={selection.id} />
@@ -81,7 +122,7 @@ export function SelectedObjectPanel() {
           className="mt-3 text-[11px] leading-relaxed text-garden-muted"
         >
           <MousePointer2 aria-hidden className="mr-1 inline h-3.5 w-3.5" />
-          Select a corner or the house to edit its measurements.
+          Select a corner, a side of the plot, the house or one of its walls to edit it.
         </p>
       )}
     </section>

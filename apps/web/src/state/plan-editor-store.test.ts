@@ -620,25 +620,25 @@ describe('the labels toggle', () => {
    * `ephemeralState()`, shared by the test reset and the hydrator: miss it and the setting survives
    * a reload it was never meant to survive.
    */
-  it('starts on, because a plan you cannot read is a picture', () => {
-    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+  it('starts off so the garden remains legible without global labels', () => {
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
   });
 
   it('toggles', () => {
     usePlanEditorStore.getState().toggleLabels();
-    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
 
     usePlanEditorStore.getState().toggleLabels();
-    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
   });
 
   it('does not survive a reload, which is the edit point that gets missed', () => {
     usePlanEditorStore.getState().toggleLabels();
-    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
 
     hydratePlanEditorStore({ elements: [], seededFrom: null, pristine: null }, Date.now());
 
-    expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
+    expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
   });
 });
 

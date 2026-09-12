@@ -14,6 +14,7 @@ import {
   type PatternRequest,
 } from './pattern-cache';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
+import { resolveLayers } from './layers';
 
 const MATERIAL = resolvePattern('stone-pavers');
 if (!MATERIAL) throw new Error('stone-pavers must have a pattern manifest for these tests');
@@ -71,6 +72,26 @@ describe('zoom bucketing', () => {
 });
 
 describe('the pattern cache', () => {
+  it('honours soil-only scene stacks and never serves a baked bed in their place', () => {
+    const bedMaterial = resolvePattern('mixed-border')!;
+    const element = { category: 'planting-bed' as const, plantingStyle: 'cottage' as const };
+    const base = request({ material: bedMaterial, element, pxPerMetre: 64 });
+    const full = getSurfacePattern(base, makeCanvas)!;
+    const layers = resolveLayers(bedMaterial, element).filter((layer) => !layer.planting);
+    const soil = getSurfacePattern({ ...base, layers }, makeCanvas)!;
+    const png = (raster: typeof soil) =>
+      (raster.canvas as unknown as { toBuffer(format: 'image/png'): Buffer }).toBuffer('image/png');
+    expect(png(soil).equals(png(full))).toBe(false);
+    expect(getSurfacePattern({ ...base, layers }, makeCanvas)).toBe(soil);
+    expect(getSurfacePattern(base, makeCanvas)).toBe(full);
+  });
+
+  it('invalidates when the element planting style changes without a separate style hint', () => {
+    const base = request({ element: { category: 'planting-bed', plantingStyle: 'cottage' } });
+    const next = { ...base, element: { ...base.element!, plantingStyle: 'contemporary' as const } };
+    expect(patternKey(base)).not.toBe(patternKey(next));
+  });
+
   it('draws once and serves the same raster afterwards', () => {
     const first = getSurfacePattern(request(), makeCanvas);
     const second = getSurfacePattern(request(), makeCanvas);

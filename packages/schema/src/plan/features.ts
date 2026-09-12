@@ -118,6 +118,66 @@ export const MIN_FEATURE_SIDE = 0.3;
 /** How far the corner-rounding control goes, in metres. */
 export const MAX_CORNER_RADIUS = 3;
 
+export interface FeatureDefinition {
+  label: string;
+  placement: Placement;
+  /** Point radius, rect size, or strip width, depending on the placement. */
+  size: { radius?: number; width?: number; depth?: number };
+}
+
+/**
+ * How each kind is drawn, and how big one starts.
+ *
+ * Here rather than in the web app because the *server* needs the same answer: the garden
+ * assistant places a shed from a sentence, and a shed it invents a size for is a different shed
+ * from the one the palette drops. One table, one default, no drift — the same argument
+ * `geometryOutline` makes about tessellation.
+ *
+ * `label` is the palette's own wording and the assistant's; which kinds the palette *offers*, and
+ * in what order, stays a screen decision (`apps/web/src/lib/features.ts`).
+ */
+export const FEATURE_DEFINITIONS: Record<FeatureKind, FeatureDefinition> = {
+  tree: { label: 'Tree', placement: 'point', size: { radius: 1.5 } },
+  shed: { label: 'Shed', placement: 'rect', size: { width: 2.5, depth: 2 } },
+  patio: { label: 'Patio/Deck', placement: 'polygon', size: {} },
+  path: { label: 'Path', placement: 'polyline', size: { width: 1 } },
+  fence: { label: 'Fence', placement: 'polyline', size: { width: 0.2 } },
+  /*
+   * A point on the boundary rather than a run along it: what matters about a gate is where you get
+   * through, and the radius is about the width of one. Wide enough for a wheelie bin, which is the
+   * measurement the utility route will care about.
+   */
+  gate: { label: 'Side gate', placement: 'point', size: { radius: 0.45 } },
+  water: { label: 'Water feature', placement: 'point', size: { radius: 0.6 } },
+  steps: { label: 'Steps', placement: 'rect', size: { width: 1.5, depth: 0.8 } },
+  planting: { label: 'Planting bed', placement: 'polygon', size: {} },
+  other: { label: 'Other', placement: 'point', size: { radius: 0.5 } },
+};
+
+/** The fewest clicks that make a shape: a polygon needs three, a line needs two. */
+export function minimumDraftPoints(placement: Placement): number {
+  return placement === 'polygon' ? 3 : 2;
+}
+
+/**
+ * "Patio", then "Patio 2" — the plainest thing that stays unique, since the user renames anything
+ * they care about anyway.
+ *
+ * Beside `FEATURE_DEFINITIONS` and here for the same reason: the garden assistant names what it
+ * places, and a second naming rule on the server would have "Shed 2" mean one thing when drawn and
+ * another when described.
+ */
+export function defaultFeatureName(kind: FeatureKind, existing: PlacedFeature[]): string {
+  const base = FEATURE_DEFINITIONS[kind].label;
+  const taken = new Set(existing.map((feature) => feature.name));
+
+  if (!taken.has(base)) return base;
+
+  let suffix = 2;
+  while (taken.has(`${base} ${suffix}`)) suffix += 1;
+  return `${base} ${suffix}`;
+}
+
 /* ---------------------------------------------------------------- derived reads */
 
 /**

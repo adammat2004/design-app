@@ -1,7 +1,7 @@
 import type { Point } from '../geometry/primitives.js';
 import type { BoundaryRun } from './boundary-styles.js';
 import { elementOutline, type DesignElement } from './concepts.js';
-import { castsShadow, heightFor, HOUSE_HEIGHT, MIN_SHADOW_HEIGHT } from './heights.js';
+import { castsShadow, heightFor, houseHeight, MIN_SHADOW_HEIGHT } from './heights.js';
 import { isTreeSymbol, resolveSymbol } from './symbols.js';
 import { rectToPolygon } from '../geometry/shapes.js';
 import { housePolygon, type HouseFootprint } from './site.js';
@@ -114,7 +114,7 @@ export function shadowRings(geometry: ShadowGeometry): Point[][] {
  *
  * The house is included and comes first, because it is usually the largest shadow in the garden
  * and the reason the seating is where it is. It is not a `DesignElement`, so its height comes
- * from `HOUSE_HEIGHT` rather than the manifest.
+ * from `houseHeight` — its storeys — rather than the manifest.
  *
  * Hidden elements are skipped: `hidden` means the user has taken it out of the drawing, and a
  * thing you cannot see casting a shadow you can is the kind of unexplainable artifact that makes
@@ -140,7 +140,7 @@ export function shadowOccluders(
 
   if (house) {
     const outline = housePolygon(house);
-    if (outline.length >= 3) occluders.push({ outline, height: HOUSE_HEIGHT });
+    if (outline.length >= 3) occluders.push({ outline, height: houseHeight(house) });
   }
 
   for (const run of boundaries) {
@@ -224,8 +224,20 @@ export function shadowOccluders(
     const outline = elementOutline(element);
     if (outline.length < 3) continue;
 
-    const height = heightFor(element);
     const symbol = resolveSymbol(element);
+    /*
+     * A raised surface stands on a plinth of its own footprint, so its top is its elevation plus
+     * whatever it is in itself — and the plinth is solid from the ground up, which is why this adds
+     * to `height` rather than setting `baseHeight`. That distinction is the whole of it: a raised
+     * terrace at 450 mm casts the shadow of a 450 mm wall round its edge, where a `baseHeight` of
+     * 450 would say the terrace floats and casts nothing at all.
+     *
+     * A **sunken** area casts nothing. The thing that would shade it is the ground standing proud
+     * around it, and a local elevation model has no ground to make an occluder out of — so the
+     * honest answer is no shadow rather than an invented one.
+     */
+    const raised = Math.max(0, element.elevation ?? 0);
+    const height = heightFor(element) + raised;
     occluders.push({
       outline,
       height,

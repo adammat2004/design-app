@@ -7,8 +7,9 @@ import { formatArea } from '@/lib/units';
 import { useBoundaryStore } from '@/state/boundary-store';
 
 /**
- * Progress *within* step 1: draw the plot, then put the house in it. Distinct from the
- * three-step indicator in the top bar, which tracks the wizard as a whole.
+ * Progress *within* step 1: draw the plot, then put the house in it, then — optionally — describe
+ * the property. Distinct from the three-step indicator in the top bar, which tracks the wizard as
+ * a whole.
  */
 export function SubStepChecklist() {
   const draft = useBoundaryStore((state) => state.present);
@@ -19,11 +20,12 @@ export function SubStepChecklist() {
   const totalArea = polygonArea(draftPolygon(draft));
   const houseDone = draft.house !== null;
 
-  // Done when the two things the generator cannot guess are stated: a way out, and the street.
-  // A gate is optional — not every garden has one, and no gate is a true answer.
+  // Ticked when the two things the generator cannot guess are stated: a way out, and the street.
+  // A gate is optional — not every garden has one, and no gate is a true answer. None of it gates
+  // Continue: a plan with only a boundary and a house is a plan the generator can design.
   const hasGardenDoor = gardenDoors(draft.house).length > 0;
   const hasStreet = streetEdge(draft) !== null;
-  const accessDone = hasGardenDoor && hasStreet;
+  const detailsDone = hasGardenDoor && hasStreet;
 
   return (
     <ol data-testid="sub-steps" className="space-y-2">
@@ -56,19 +58,19 @@ export function SubStepChecklist() {
       />
       <SubStep
         number={3}
-        testId="sub-step-access"
-        title="Access"
+        testId="sub-step-details"
+        title="Property details"
         detail={
-          accessDone
+          detailsDone
             ? `Doors and street set${draft.gates.length > 0 ? ' · gate placed' : ''}`
             : !hasGardenDoor
-              ? 'Add the door you step out of, the side gate and the street'
-              : 'Which fence faces the street?'
+              ? 'Optional — click a side or a wall to add fences, gates and doors'
+              : 'Optional — which side faces the street?'
         }
-        done={accessDone}
-        active={mode === 'access'}
+        done={detailsDone}
+        active={mode === 'select'}
         disabled={!houseDone}
-        onClick={() => setMode('access')}
+        onClick={() => setMode('select')}
       />
     </ol>
   );

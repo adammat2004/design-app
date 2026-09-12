@@ -173,6 +173,7 @@ export function EditorToolbar({
         ))}
       </ToolbarGroup>
 
+      {view === 'plan' ? <>
       <ToolbarGroup>
         {TOOLS.map((tool) => (
           <ToolbarButton
@@ -216,7 +217,7 @@ export function EditorToolbar({
               title="Back to the concept as generated, discarding your edits"
               onClick={resetToConcept}
             />
-            <DownloadPlanButton />
+            <DownloadPlanButton view="visualise" />
           </ToolbarGroup>
         </div>
       </details>
@@ -321,6 +322,7 @@ export function EditorToolbar({
           </div>
         ) : null}
       </div>
+      </> : <span className="ml-auto text-xs text-garden-muted">Garden presentation</span>}
     </div>
   );
 }

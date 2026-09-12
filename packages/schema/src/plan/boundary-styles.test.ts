@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOUNDARY_HEIGHTS, DEFAULT_BOUNDARY_KIND } from './boundary-style.js';
 import {
   boundaryRuns,
+  inheritBoundaryStyle,
   kindForEdge,
   pruneBoundaryStyles,
   setBoundaryStyle,
@@ -146,5 +147,27 @@ describe('pruneBoundaryStyles', () => {
     expect(pruneBoundaryStyles(styles, [{ id: 'v0' }, { id: 'v1' }])).toEqual([
       { edgeVertexId: 'v0', kind: 'wall' },
     ]);
+  });
+});
+
+describe('inheritBoundaryStyle', () => {
+  /**
+   * The user described the side; a corner put in it does not change what is built along it. This
+   * reverses the module's original note, which had the new half take the default — the default is
+   * also a guess, and the worse one, because it draws a change where the user made none.
+   */
+  it('gives a split side’s new half the same kind and height', () => {
+    const styles = [{ edgeVertexId: 'v1', kind: 'wall' as const, height: 2.1 }];
+
+    expect(inheritBoundaryStyle(styles, 'v1', 'v9')).toEqual([
+      { edgeVertexId: 'v1', kind: 'wall', height: 2.1 },
+      { edgeVertexId: 'v9', kind: 'wall', height: 2.1 },
+    ]);
+  });
+
+  it('leaves a side with nothing stored as two sides with nothing stored', () => {
+    const styles = [{ edgeVertexId: 'v0', kind: 'hedge' as const }];
+
+    expect(inheritBoundaryStyle(styles, 'v1', 'v9')).toBe(styles);
   });
 });

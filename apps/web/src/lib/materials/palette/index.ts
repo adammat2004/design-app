@@ -94,6 +94,17 @@ const CATEGORY_BY_MATERIAL: Record<string, ElementCategory> = Object.fromEntries
   ),
 );
 
+/**
+ * An edging course is filed as `paved-area`, and it is the true answer rather than a fallback.
+ *
+ * `EDGING_MATERIALS` sits outside `MATERIALS` because edging is not an `ElementCategory` — a run is
+ * derived from the outline of the bed it follows, so there is no element to categorise. But the
+ * *manifest entry* still has to say something, because the painters read it: `resolveLayers` checks
+ * for `planting-bed` before it looks for a layered stack, and `edgeFor` reads it to decide whether
+ * to cut an edge. A brick course laid on edge is paving by every property either of them cares
+ * about — and `CATEGORY_EDGES['paved-area']` is null, so an edging run correctly gets no edging of
+ * its own.
+ */
 function categoryOf(id: MaterialId): ElementCategory {
-  return CATEGORY_BY_MATERIAL[id]!;
+  return CATEGORY_BY_MATERIAL[id] ?? 'paved-area';
 }

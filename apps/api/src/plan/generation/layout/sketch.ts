@@ -1,4 +1,6 @@
 import { clipToHalfPlane, type DesiredFeature, type GardenBrief } from '@garden-studio/schema';
+import { MIN_FILL_SIDE } from '../fill-limits.js';
+import { hostFloor } from '../furnishings.js';
 
 /**
  * What a template hands back: the plan in the frame's own metres, before anything is fitted.
@@ -46,6 +48,12 @@ export interface Slot {
   anchor: LocalPoint;
   /** The most room the slot has, so a footprint is scaled to what will fit before fitting. */
   maxSize: { width: number; depth: number };
+  /**
+   * The least the thing in this slot may be and still be the thing that was asked for. `fitInSlot`
+   * refuses rather than shrink below it: a pergola nothing can sit under is not a pergola, and the
+   * card should say the feature was not included rather than draw one in name only.
+   */
+  minSize?: { width: number; depth: number };
   /** Turn the footprint a quarter so its long side runs along `v` rather than `u`. */
   turn?: boolean;
 }
@@ -163,7 +171,84 @@ export function clamp(value: number, min: number, max: number): number {
 
 /** How deep the planting round the edges is. Never under `MIN_FILL_SIDE`, or it drops out. */
 export function borderDepth(scale: number): number {
-  return clamp(1.5 * scale, 1.2, 2.5);
+  return clamp(1.5 * scale, MIN_FILL_SIDE, 2.5);
+}
+
+/* ---------------------------------------------------------------- the floors */
+
+/**
+ * The sizes below which a thing stops being the thing, derived rather than declared.
+ *
+ * ```
+ *   FURNISHINGS.seating[0] = sofa-set 3.0 × 2.4 ─► + 2 × MARGIN ─► TERRACE_FLOOR 3.6 × 3.0
+ *   smallest FURNISHINGS.pergola = dining-set-4 2.4 × 2.4 ─► + 2 × MARGIN ─► PERGOLA_FLOOR 3.0 × 3.0
+ * ```
+ *
+ * A terrace is a room for a table: the thing it exists to hold sets its floor, and the floor
+ * moves if the furnishing list does. The share cap below never overrides it — the first version
+ * capped the terrace at a third of the room with no floor, and a three-metre garden got a
+ * one-metre terrace across the whole width of the house.
+ */
+export const TERRACE_FLOOR = hostFloor('seating', 'primary');
+export const PERGOLA_FLOOR = hostFloor('pergola', 'smallest');
+
+/** The terrace never takes more than this share of the room's depth, above its floor. */
+export const TERRACE_MAX_SHARE = 0.35;
+
+/**
+ * A lawn narrower than this anywhere is a strip you mow, not a panel you use; smaller than the
+ * area, a rug. Below either the room is a courtyard and the ground is paved or gravelled instead.
+ */
+export const LAWN_FLOOR = { minDimension: 2.5, area: 12 };
+
+/** The lawn runs to within this of the gate-side fence: a mowing edge, not a border. */
+export const MOWING_STRIP = 0.35;
+
+/** A sketched bed is never thinner than the sliver guard would throw away. */
+export const BED_MIN_DEPTH = MIN_FILL_SIDE;
+
+/** The terrace's floor, capped by the room: a narrow room still gets a terrace, a narrower one. */
+export function terraceFloor(room: Room): { width: number; depth: number } {
+  return {
+    width: Math.max(0, Math.min(TERRACE_FLOOR.width, room.vMax - room.vMin - 0.4)),
+    depth: Math.max(0, Math.min(TERRACE_FLOOR.depth, room.uMax - Math.max(room.uMin, 0))),
+  };
+}
+
+export function lawnViable(width: number, depth: number): boolean {
+  return (
+    width >= LAWN_FLOOR.minDimension &&
+    depth >= LAWN_FLOOR.minDimension &&
+    width * depth >= LAWN_FLOOR.area
+  );
+}
+
+/**
+ * The planted gap between the terrace and the lawn: a stride at most, and nothing at all when the
+ * room cannot spare it after a minimum lawn and a minimum rear bed.
+ */
+export function lawnGap(scale: number, roomDepth: number, terraceEnd: number): number {
+  return clamp(roomDepth - terraceEnd - LAWN_FLOOR.minDimension - BED_MIN_DEPTH, 0, 0.6 * scale);
+}
+
+/** Where the lawn starts, out from the wall. */
+export function lawnStart(scale: number, roomDepth: number, terraceEnd: number): number {
+  return terraceEnd + lawnGap(scale, roomDepth, terraceEnd);
+}
+
+/**
+ * The rear border's depth: everything beyond a minimum lawn, up to twice the border depth. One
+ * function, read by the lawn's far edge and by the rear bed alike — they used to be `2b` and `b`
+ * in two files, and the difference showed as a band of base turf between the lawn and the bed.
+ */
+export function rearBedDepth(scale: number, roomDepth: number, terraceEnd: number): number {
+  const start = lawnStart(scale, roomDepth, terraceEnd);
+  return clamp(roomDepth - start - LAWN_FLOOR.minDimension, BED_MIN_DEPTH, 2 * borderDepth(scale));
+}
+
+/** Where the lawn ends and the rear bed begins. */
+export function lawnEnd(scale: number, roomDepth: number, terraceEnd: number): number {
+  return roomDepth - rearBedDepth(scale, roomDepth, terraceEnd);
 }
 
 /**
@@ -186,31 +271,51 @@ export function behindTerrace(
 }
 
 /**
- * The terrace's depth out from the door: a room for a table, never most of the garden. Grows with
- * the square root of the scale — a terrace on a big plot is bigger, not proportionally bigger —
- * and never past a third of the room, so the lawn stays the largest thing in it. At 4 × scale it
- * took 5.7 m of a 16 m garden and, with the border and the shed's bay, left the lawn 3 m deep.
+ * The terrace's depth out from the door: a room for a table, never most of the garden.
+ *
+ * Grows with the square root of the scale — a terrace on a big plot is bigger, not proportionally
+ * bigger — and never past a third of the room, so the lawn stays the largest thing in it. But the
+ * share cap sits *above* the floor, never below it: the floor is the table, and the only thing
+ * that can cap the table is the room itself. A three-metre-deep garden gets a three-metre terrace
+ * and no lawn, which is what a three-metre-deep garden is.
+ *
+ * ```
+ *   want   = clamp(3.6 √scale, floor, 5.5)
+ *   capped = min(want, 0.35 × roomDepth)
+ *   depth  = max(capped, min(floor, roomDepth))
+ * ```
  */
 export function terraceDepth(scale: number, roomDepth: number): number {
-  return Math.min(clamp(3.6 * Math.sqrt(scale), 2.4, 5), 0.35 * roomDepth);
+  const want = clamp(3.6 * Math.sqrt(scale), TERRACE_FLOOR.depth, 5.5);
+  const capped = Math.min(want, TERRACE_MAX_SHARE * roomDepth);
+  return Math.max(capped, Math.min(TERRACE_FLOOR.depth, roomDepth));
 }
 
-/** The terrace's width along the wall: the house's width, or a good table's worth. */
+/**
+ * The terrace's width along the wall: the house's width, or a good table's worth, never under
+ * the floor — and the floor is capped by the room exactly as the depth's is, so a room 3.7 m wide
+ * still gets a terrace rather than a refusal.
+ */
 export function terraceWidth(request: SketchRequest, room: Room): number {
   const roomWidth = room.vMax - room.vMin;
+  const floor = terraceFloor(room).width;
   return clamp(
     Math.max(request.houseWallLength, 5.2 * request.scale),
-    3.6,
-    Math.max(3.6, roomWidth - 0.8),
+    floor,
+    Math.max(floor, roomWidth - 0.8),
   );
 }
 
 /**
- * A room too shallow for a terrace, a border and something between them is a courtyard: the
- * terrace takes it, and the far room is whatever is left.
+ * A room that cannot hold a viable lawn behind its terrace is a courtyard: the terrace takes it,
+ * and the far room is whatever is left. "Viable" is `LAWN_FLOOR`, measured on the strip left after
+ * the terrace, the gap and the rear bed, and across the room less one border and a mowing edge.
  */
-export function isCourtyard(scale: number, roomDepth: number): boolean {
-  return roomDepth < terraceDepth(scale, roomDepth) + borderDepth(scale) + 1.5;
+export function isCourtyard(scale: number, roomDepth: number, roomWidth: number): boolean {
+  const T = terraceDepth(scale, roomDepth);
+  const depth = lawnEnd(scale, roomDepth, T) - lawnStart(scale, roomDepth, T);
+  const width = roomWidth - borderDepth(scale) - MOWING_STRIP;
+  return !lawnViable(width, depth);
 }
 
 /**
@@ -218,11 +323,18 @@ export function isCourtyard(scale: number, roomDepth: number): boolean {
  * at least as wide as the door itself. `v` is measured from the door, so 0 is the door's centre.
  */
 export function terraceRect(request: SketchRequest, room: Room): LocalRect {
-  const depth = terraceDepth(request.scale, room.uMax - room.uMin);
+  const depth = terraceDepth(request.scale, room.uMax - Math.max(room.uMin, 0));
   const width = terraceWidth(request, room);
-  const half = width / 2;
+  const [v0, v1] = clampToRoom(width, room, (request.doorWidth ?? 0) / 2);
+  return { u0: Math.max(room.uMin, 0), u1: Math.max(room.uMin, 0) + depth, v0, v1 };
+}
 
-  // Shift the terrace along the wall so it stays inside the room, but never off the door.
+/**
+ * A span of `width` centred on the door, shifted along the wall so it stays inside the room, but
+ * never off the door. Shared by every template that places a terrace, symmetric or not.
+ */
+export function clampToRoom(width: number, room: Room, doorHalf: number): [number, number] {
+  const half = width / 2;
   let v0 = -half;
   let v1 = half;
   if (v0 < room.vMin + 0.2) {
@@ -235,11 +347,37 @@ export function terraceRect(request: SketchRequest, room: Room): LocalRect {
     v0 -= shift;
     v1 -= shift;
   }
-  const doorHalf = (request.doorWidth ?? 0) / 2;
-  v0 = Math.min(v0, -doorHalf);
-  v1 = Math.max(v1, doorHalf);
+  return [Math.min(v0, -doorHalf), Math.max(v1, doorHalf)];
+}
 
-  return { u0: Math.max(room.uMin, 0), u1: Math.max(room.uMin, 0) + depth, v0, v1 };
+/** The terrace's own slot: its rectangle as the ceiling, the room-capped floor as the floor. */
+export function terraceSlot(terrace: LocalRect, room: Room): Slot {
+  return {
+    id: 'terrace',
+    kind: 'terrace',
+    anchor: rectCentre(terrace),
+    maxSize: rectSize(terrace),
+    minSize: terraceFloor(room),
+  };
+}
+
+/**
+ * The slot at the end of the terrace, along the wall: the dining pergola. Its depth is never less
+ * than the pergola's own floor, so a shallow terrace does not starve the pergola beside it — which
+ * is how a one-metre terrace used to come with a one-and-a-half-metre pergola.
+ */
+export function terraceEndSlot(terrace: LocalRect, side: 'left' | 'right', scale: number): Slot {
+  const T = terrace.u1 - terrace.u0;
+  return {
+    id: 'terrace-end',
+    kind: 'terrace-end',
+    anchor: {
+      u: terrace.u0 + T / 2,
+      v: side === 'left' ? terrace.v0 - 1.9 * scale : terrace.v1 + 1.9 * scale,
+    },
+    maxSize: { width: 3.6 * scale, depth: Math.max(PERGOLA_FLOOR.depth, T) },
+    minSize: PERGOLA_FLOOR,
+  };
 }
 
 export function rectCentre(rect: LocalRect): LocalPoint {

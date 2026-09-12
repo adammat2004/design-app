@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import {
   boundaryPolygon,
   boundingBox,
   lightDirection,
+  nightFraction,
   readPlanDocument,
   shadowCast,
   type PlanDocument,
@@ -41,7 +42,9 @@ const OUT_DIR = join(HERE, '..', '.plan-preview');
 const FIXTURES = join(HERE, 'fixtures');
 const PUBLIC_ASSETS = join(HERE, '..', 'public', 'assets');
 
-const FIXTURE_NAMES = ['suburban', 'l-shape', 'courtyard', 'reference'] as const;
+// `target` last and deliberately: it is `target_design.png` traced by hand, not generator output,
+// and the sheet exists to compare the generated plans against it.
+const FIXTURE_NAMES = ['suburban', 'l-shape', 'courtyard', 'reference', 'small', 'wide', 'narrow', 'formal', 'naturalistic', 'entertaining', 'target'] as const;
 
 /** The editor's default zoom, and one close enough to read the slabs. */
 const ZOOMS: [number, string][] = [
@@ -101,6 +104,32 @@ function renderPlan(
     options,
   );
 
+  return canvas.toBuffer('image/png');
+}
+
+/** Same-sized judging frames reveal whether improvements survive different plot proportions. */
+async function compositionSheet(): Promise<Buffer> {
+  const columns = 6;
+  const cellWidth = 360;
+  const cellHeight = 460;
+  // Rows from the fixture count, so adding one does not silently fall off the bottom of the sheet.
+  const rows = Math.ceil(FIXTURE_NAMES.length / columns);
+  const canvas = createCanvas(columns * cellWidth, rows * cellHeight);
+  const context = canvas.getContext('2d');
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  for (const [index, name] of FIXTURE_NAMES.entries()) {
+    const x = (index % columns) * cellWidth;
+    const y = Math.floor(index / columns) * cellHeight;
+    const prefix = String(index + 1).padStart(2, '0');
+    const image = await loadImage(join(OUT_DIR, `${prefix}-${name}-close-visualise.png`));
+    const scale = Math.min((cellWidth - 24) / image.width, (cellHeight - 48) / image.height);
+    context.drawImage(image, x + (cellWidth - image.width * scale) / 2,
+      y + 38 + (cellHeight - 48 - image.height * scale) / 2, image.width * scale, image.height * scale);
+    context.fillStyle = '#243d31';
+    context.font = 'bold 16px sans-serif';
+    context.fillText(`${prefix} · ${name}`, x + 18, y + 26);
+  }
   return canvas.toBuffer('image/png');
 }
 
@@ -182,7 +211,90 @@ function shadowHours(document: PlanDocument): Buffer {
   return canvas.toBuffer('image/png');
 }
 
+/**
+ * The same garden through dusk into night, which is the sheet the lighting layer is judged by.
+ *
+ * Four hours rather than two, because the interesting thing about a lighting scheme is the *ramp*:
+ * the fittings have to come up before the garden is black, or the transition reads as a switch
+ * being thrown. The hours below straddle sunset at the fixture's own latitude, so the second and
+ * third frames are the ones to look at.
+ */
+function lightingHours(document: PlanDocument): Buffer {
+  const px = 18;
+  const pad = 10;
+  const caption = 18;
+  const cols = 2;
+  const rows = 2;
+
+  const base = sceneOf(document);
+  if (!base.site.location) {
+    throw new Error('the lighting sheet needs a fixture with a location');
+  }
+
+  const box = boundingBox(base.boundary);
+  const plotW = Math.ceil(box.width * px);
+  const plotH = Math.ceil(box.length * px);
+
+  const width = cols * plotW + (cols + 1) * pad;
+  const height = rows * (plotH + caption) + (rows + 1) * pad;
+
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d');
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, width, height);
+
+  /*
+   * Straddling sunset in *solar* time, which is the axis `sunInstant` reads `minutes` on — solar
+   * noon is 12:00 exactly, so at the fixture's latitude on day 172 the sun sets around 20:20 and
+   * civil twilight ends around 21:05. Clock hours picked by eye landed all three of the last
+   * frames past the end of the ramp, which is the sheet showing four pictures of the same night.
+   */
+  const hours: [string, number][] = [
+    ['20:00', 1200],
+    ['20:30', 1230],
+    ['20:50', 1250],
+    ['21:30', 1290],
+  ];
+
+  hours.forEach(([label, minutes], index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const ox = pad + col * (plotW + pad);
+    const oy = pad + row * (plotH + caption + pad) + caption;
+
+    const site = { ...base.site, sun: { ...base.site.sun, minutes } };
+    const scene: PlanScene = { ...base, site };
+    const dark = nightFraction(site);
+
+    context.save();
+    context.translate(ox, oy);
+    /*
+     * `light` is deliberately not passed. An explicit light means the caller owns the sun, and
+     * `buildRenderScene` answers `null` for the night in that case — so overriding it here would
+     * render the one sheet that exists to show the night with the night switched off.
+     */
+    drawPlan(
+      context as unknown as PlanContext,
+      scene,
+      { pxPerMetre: px, makeCanvas, assets: getAssetVariants },
+      { x: box.minX, y: box.minY },
+    );
+    context.restore();
+
+    context.fillStyle = '#1a231c';
+    context.font = 'bold 13px sans-serif';
+    context.fillText(
+      `${label}  ·  darkness ${dark === null ? 'unknown' : dark.toFixed(2)}`,
+      ox,
+      oy - 6,
+    );
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
 async function main(): Promise<void> {
+
   await preloadAssets(nodeAssetLoader(PUBLIC_ASSETS));
   console.log(`Assets ${assetVersion()}`);
 
@@ -215,6 +327,8 @@ async function main(): Promise<void> {
   });
 
   write('04-shadow-hours', shadowHours(loadFixture('suburban')));
+  write('04-lighting-hours', lightingHours(loadFixture('suburban')));
+  write('00-composition-sheet', await compositionSheet());
 
   console.log(`Wrote ${written.length} PNGs to ${OUT_DIR}`);
   if (existsSync(beforeDir)) console.log(`Previous run kept in ${beforeDir} for comparison`);

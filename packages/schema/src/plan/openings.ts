@@ -5,6 +5,7 @@ import {
   pointInPolygon,
   type Point,
 } from '../geometry/primitives.js';
+import { clampOffset, spanFits, spanOnSegment, spansOverlap } from './along-edge.js';
 import {
   isGardenDoor,
   isGroundWindow,
@@ -63,20 +64,7 @@ export function openingSegment(house: HouseFootprint, opening: Opening): [Point,
   const wall = wallSegment(house, opening.wallId);
   if (!wall) return null;
 
-  const [start, end] = wall;
-  const length = edgeLength(start, end);
-  const half = opening.width / 2;
-  const from = opening.offsetAlongEdge - half;
-  const to = opening.offsetAlongEdge + half;
-
-  if (from < -MIN_WALL_LENGTH || to > length + MIN_WALL_LENGTH) return null;
-
-  const unit = { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
-
-  return [
-    { x: start.x + unit.x * from, y: start.y + unit.y * from },
-    { x: start.x + unit.x * to, y: start.y + unit.y * to },
-  ];
+  return spanOnSegment(wall, opening.offsetAlongEdge, opening.width);
 }
 
 export function openingCentre(house: HouseFootprint, opening: Opening): Point | null {
@@ -198,16 +186,15 @@ export function fitsOnWall(house: HouseFootprint, candidate: Opening): boolean {
   const wall = houseWalls(house).find((entry) => entry.id === candidate.wallId);
   if (!wall || !canWallHold(wall.kind, candidate.type)) return false;
 
-  const [from, to] = openingSpan(candidate);
-  if (from < -MIN_WALL_LENGTH || to > length + MIN_WALL_LENGTH) return false;
+  if (!spanFits(length, candidate.offsetAlongEdge, candidate.width)) return false;
 
-  return openingsOnWall(house, candidate.wallId)
-    .filter((other) => other.id !== candidate.id)
-    .every((other) => {
-      const [otherFrom, otherTo] = openingSpan(other);
+  const span = openingSpan(candidate);
+  return (
+    openingsOnWall(house, candidate.wallId)
+      .filter((other) => other.id !== candidate.id)
       // Touching is fine; sharing any width is not.
-      return to <= otherFrom + MIN_WALL_LENGTH || from >= otherTo - MIN_WALL_LENGTH;
-    });
+      .every((other) => !spansOverlap(span, openingSpan(other)))
+  );
 }
 
 /** The nearest offset that keeps an opening of this width wholly on the wall. */
@@ -220,11 +207,8 @@ export function clampOffsetToWall(
   const length = wallLength(house, wallId);
   if (length === null) return null;
 
-  const half = width / 2;
   // A wall too short for the opening has no offset that works; centring is the least wrong answer.
-  if (width > length) return length / 2;
-
-  return Math.min(length - half, Math.max(half, desired));
+  return clampOffset(length, width, desired);
 }
 
 /**

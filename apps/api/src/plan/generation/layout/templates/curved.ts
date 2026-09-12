@@ -3,10 +3,12 @@ import {
   behindTerrace,
   borderDepth,
   isCourtyard,
-  rectCentre,
-  rectSize,
+  lawnEnd,
+  lawnStart,
   roomBehind,
+  terraceEndSlot,
   terraceRect,
+  terraceSlot,
   type LayoutSketch,
   type LocalPoint,
   type Room,
@@ -38,7 +40,7 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
 
   const gate = request.gateSide ?? 'right';
   const gateSign = gate === 'right' ? 1 : -1;
-  const courtyard = isCourtyard(s, D);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
 
   // The part of the room behind the terrace: on an L-plot, the deep limb alone.
   const deep = roomBehind(room, T + 0.4);
@@ -46,16 +48,19 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
   const farV = (metres: number) => (gate === 'right' ? deep.vMin + metres : deep.vMax - metres);
 
   /*
-   * The lawn: an ellipse filling the room inside the border, with a two-lobed wave on its radius.
-   * The wave's phase is fixed so the bulge lands on the far-from-gate side at the back — where the
-   * far room wants the space — and the pinch on the gate side, where the utility corner wants a
-   * deeper bay. Clamped to clear the terrace by a stride.
+   * The lawn: an ellipse filling the room between the terrace gap and the rear bed, with a
+   * two-lobed wave on its radius. The wave's phase is fixed so the bulge lands on the
+   * far-from-gate side at the back — where the far room wants the space — and the pinch on the
+   * gate side, where the utility corner wants a deeper bay. Clamped to clear the terrace by a
+   * stride.
    */
   let lawn: LayoutSketch['lawn'] = null;
   if (!courtyard) {
-    const cu = (T + 0.6 * s + (D - b)) / 2;
+    const start = lawnStart(s, D, T);
+    const end = lawnEnd(s, D, T);
+    const cu = (start + end) / 2;
     const cv = (deep.vMin + deep.vMax) / 2;
-    const a = (D - b - (T + 0.6 * s)) / 2;
+    const a = (end - start) / 2;
     const bb = (deep.vMax - deep.vMin - 2 * b) / 2;
     const phase = gate === 'right' ? Math.PI / 4 : -Math.PI / 4 + Math.PI;
 
@@ -75,7 +80,7 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
   const lawnFar = behindTerrace(T + 0.4, D - b, 3.6 * s);
 
   const slots: Slot[] = [
-    { id: 'terrace', kind: 'terrace', anchor: rectCentre(terrace), maxSize: rectSize(terrace) },
+    terraceSlot(terrace, room),
     {
       id: 'beside-terrace',
       kind: 'beside-terrace',
@@ -83,12 +88,7 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
       maxSize: { width: 3.2 * s, depth: 1.5 * s },
       turn: true,
     },
-    {
-      id: 'terrace-end',
-      kind: 'terrace-end',
-      anchor: { u: T / 2, v: gate === 'right' ? terrace.v0 - 1.9 * s : terrace.v1 + 1.9 * s },
-      maxSize: { width: 3.6 * s, depth: Math.max(2.4, T) },
-    },
+    terraceEndSlot(terrace, gate === 'right' ? 'left' : 'right', s),
   ];
 
   if (!courtyard) {

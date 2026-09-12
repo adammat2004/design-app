@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ArrowLeft, Leaf, Sparkles } from 'lucide-react';
+import { ArrowRight, Leaf, Sparkles } from 'lucide-react';
 import { chosenConcept, useConceptsStore } from '@/state/concepts-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { PlanBottomBar } from '../PlanBottomBar';
@@ -23,6 +23,11 @@ export function EditorScreen() {
   const seedFrom = usePlanEditorStore((state) => state.seedFrom);
   const [sidebar, setSidebar] = useState<'add' | 'layers'>('add');
   const [view, setView] = useState<'plan' | 'visualise'>('plan');
+  const [visualiseOpened, setVisualiseOpened] = useState(false);
+  const changeView = (next: 'plan' | 'visualise') => {
+    if (next === 'visualise') setVisualiseOpened(true);
+    setView(next);
+  };
 
   /*
    * Load the chosen concept, and reload it if the user goes back and chooses a different one.
@@ -35,40 +40,28 @@ export function EditorScreen() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center gap-6 border-b border-garden-line bg-white px-5 py-3">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-garden-ink">
+      <header className="flex min-h-14 shrink-0 items-center gap-4 border-b border-garden-line bg-white px-4 sm:px-5">
+        <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-garden-ink">
           <Leaf aria-hidden className="h-6 w-6 text-garden-green" />
-          Garden Studio
+          <span className="hidden sm:inline">Garden Studio</span>
         </Link>
-        <Link href="/" className="text-xs text-garden-muted hover:text-garden-green">
-          Projects
-        </Link>
-      </header>
-      <div className="flex shrink-0 items-center gap-5 border-b border-garden-line bg-white px-5 py-3">
-        <Link
-          href={planHref('concepts')}
-          className="flex items-center gap-2 text-xs text-garden-muted"
-        >
-          <ArrowLeft aria-hidden className="h-4 w-4" />
-          Back to concepts
-        </Link>
-        <div className="min-w-0 border-l border-garden-line pl-5">
-          <div className="flex items-center gap-3">
-            <h1
-              data-testid="editor-concept-name"
-              className="truncate text-lg font-semibold text-garden-ink"
-            >
-              {concept?.name ?? 'Garden editor'}
-            </h1>
-            <span className="rounded bg-garden-sage px-2 py-1 text-[11px] text-garden-green">
-              Editing
-            </span>
-          </div>
-          <p className="text-xs text-garden-muted">Shape your garden, one detail at a time.</p>
+        <div className="flex min-w-0 items-center gap-2 border-l border-garden-line pl-4 text-xs">
+          <Link href="/projects" className="text-garden-muted hover:text-garden-green">Projects</Link>
+          <span className="text-garden-line">/</span>
+          <h1 data-testid="editor-concept-name" className="truncate font-medium text-garden-ink">{concept?.name ?? 'Garden editor'}</h1>
         </div>
-      </div>
+        <nav aria-label="Design steps" className="ml-auto hidden h-14 items-stretch gap-5 text-xs lg:flex">
+          {([['map', 'Map'], ['features', 'Features'], ['brief', 'Brief'], ['concepts', 'Concepts'], ['editor', 'Design'], ['review', 'Review']] as const).map(([step, label]) => (
+            <Link key={step} href={planHref(step)} aria-current={step === 'editor' ? 'step' : undefined}
+              className={`flex items-center border-b-2 px-1 ${step === 'editor' ? 'border-garden-forest font-medium text-garden-forest' : 'border-transparent text-garden-muted hover:text-garden-green'}`}>
+              {label}
+            </Link>
+          ))}
+        </nav>
+        <Link href={planHref('concepts')} className="ml-auto shrink-0 text-xs text-garden-muted lg:hidden">Concepts</Link>
+      </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white lg:flex-row lg:overflow-hidden">
-        <aside className="border-b border-garden-line lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-72">
+        <aside data-testid="editor-catalogue" className={view === 'visualise' ? 'hidden' : "border-b border-garden-line lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-64"}>
           <div
             className="flex border-b border-garden-line"
             role="tablist"
@@ -110,7 +103,7 @@ export function EditorScreen() {
         <main className="flex min-h-[540px] min-w-0 flex-1 flex-col gap-2 bg-slate-50 p-3 lg:min-h-0">
           {concept ? (
             <>
-              <EditorToolbar view={view} setView={setView} />
+              <EditorToolbar view={view} setView={changeView} />
               <div className="min-h-[420px] flex-1 lg:min-h-0">
                 {/*
                   Both mounted, one hidden. The canvas measures itself on mount and eases its zoom
@@ -121,7 +114,7 @@ export function EditorScreen() {
                 <div className={view === 'plan' ? 'h-full' : 'hidden'}>
                   <EditorCanvasLoader />
                 </div>
-                {view === 'visualise' ? <VisualisePanel /> : null}
+                {visualiseOpened ? <div className={view === 'visualise' ? 'h-full' : 'hidden'}><VisualisePanel /></div> : null}
               </div>
             </>
           ) : (
@@ -134,7 +127,7 @@ export function EditorScreen() {
           not fit a conversation, and squeezing the chat into it would make every message three
           words wide.
         */}
-        <aside className="flex flex-col gap-4 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-72 lg:shrink-0 lg:overflow-y-auto xl:w-80">
+        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col gap-4 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-64 lg:shrink-0 lg:overflow-y-auto xl:w-72"}>
           <SelectedElementPanel />
           {concept ? <AssistantPanel /> : null}
         </aside>

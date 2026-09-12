@@ -37,7 +37,15 @@ export interface CandidateRequest {
   /** How far a centre must sit from the free region's edge, in metres. */
   inradius: number;
   houseCentre: Point | null;
-  affinity: 'near-house' | 'far-from-house' | 'any';
+  /**
+   * How candidates are ordered. `near-point` orders by distance to `reference` instead of to the
+   * house — what the garden assistant needs, because "the back-left corner" is a place to prefer,
+   * not a place to use: the sampler still decides what is actually free, and `geometryIsLegal`
+   * still decides what is allowed.
+   */
+  affinity: 'near-house' | 'far-from-house' | 'any' | 'near-point';
+  /** Required by `near-point`, ignored otherwise. */
+  reference?: Point;
   /** Positive integer. `ST_GeneratePoints` is deterministic for a given seed. */
   seed: number;
   /** How many points to sample. More candidates, more variety, one query either way. */
@@ -79,15 +87,27 @@ export class PlacementService {
             sql`, `,
           )}]))`;
 
-    const houseGeom: SQL = request.houseCentre
-      ? sql`ST_MakePoint(${request.houseCentre.x}::float8, ${request.houseCentre.y}::float8)`
+    /*
+     * What distance is measured against. The column is still called `house_distance` because for
+     * three of the four affinities it is exactly that; `near-point` swaps the reference and leaves
+     * the rest of the query — the difference, the erosion, the seeded sample — untouched.
+     */
+    const anchor =
+      request.affinity === 'near-point'
+        ? (request.reference ?? request.houseCentre)
+        : request.houseCentre;
+
+    const houseGeom: SQL = anchor
+      ? sql`ST_MakePoint(${anchor.x}::float8, ${anchor.y}::float8)`
       : sql`ST_MakePoint(0::float8, 0::float8)`;
 
     /*
      * `ORDER BY` is interpolated as raw SQL because it is a keyword, not a value — and it is
      * chosen from a closed set here rather than from anything a caller can type.
      */
-    const direction = sql.raw(request.affinity === 'near-house' ? 'ASC' : 'DESC');
+    const direction = sql.raw(
+      request.affinity === 'near-house' || request.affinity === 'near-point' ? 'ASC' : 'DESC',
+    );
 
     const rows = await this.db.execute<CandidateRow>(sql`
       WITH zone AS (

@@ -1,6 +1,8 @@
 import {
   cellSize,
+  distanceToEdge,
   MM_PER_METRE,
+  moduleRandom,
   samplePlanting,
   scatterForm,
   type DesignElement,
@@ -72,7 +74,9 @@ export function buildPlants(
   const factors = MATURITY[maturity];
   const plants: RenderPlant[] = [];
 
-  layers.forEach((layer, index) => {
+  const understorey = understoreyLayer(bed, layers);
+  const visualLayers = understorey ? [...layers, understorey] : layers;
+  visualLayers.forEach((layer, index) => {
     if (!layer.planting) return;
 
     const query = layer.assets?.sprites;
@@ -84,7 +88,7 @@ export function buildPlants(
      * the stack. `layerSeed` is not called here only because it is the same two-line rule and
      * importing the painter's module for it would tie the scene to the backend.
      */
-    const seed = index === 0 ? bed.id : `${bed.id}#${index}`;
+    const seed = layer === understorey ? `${bed.id}:understorey` : index === 0 ? bed.id : `${bed.id}#${index}`;
 
     /*
      * Density is the *only* thing maturity is allowed to change about the sampling, and it goes
@@ -114,6 +118,9 @@ export function buildPlants(
 
       // Clamped into the material's own band before maturity scales it, as the painter does.
       const drawn = Math.min(maxSize, Math.max(minSize, placement.spread));
+      // Keep this middle-height layer in genuine planting bays. Narrow transition beds retain
+      // their low infill, and real structural plants keep their own exclusion space.
+      if (layer === understorey && distanceToEdge(placement.at, outline) < drawn * 0.45) continue;
       const spread = drawn * factors.crown;
 
       /*
@@ -125,7 +132,8 @@ export function buildPlants(
       const band = layer.planting.heightBand;
       const height = (band.min + (band.max - band.min) * t) * factors.crown;
 
-      const asset = query ? chooseAsset(query, placement.variant) : null;
+      const familyChoice = moduleRandom(`${seed}:family`, Math.floor(placement.at.x / 2.4), Math.floor(placement.at.y / 2.4))();
+      const asset = query ? chooseAsset(query, placement.variant, familyChoice) : null;
 
       plants.push({
         id: `${bed.id}:${layer.planting.role}:${col},${row}`,
@@ -162,18 +170,30 @@ export function buildPlants(
 function chooseAsset(
   query: TaxonQuery,
   unitInterval: number,
+  familyChoice: number,
 ): { assetId: AssetId; variant: number } | null {
-  const choices: { assetId: AssetId; variant: number }[] = [];
+  // Species repeat in short drifts, while individuals retain their own crown variant.
+  const families = assetsMatching(query).filter((id) => catalogueVariants(id).length > 0);
+  if (!families.length) return null;
+  const assetId = families[Math.min(families.length - 1, Math.floor(familyChoice * families.length))]!;
+  const variants = catalogueVariants(assetId);
+  const entry = variants[Math.min(variants.length - 1, Math.floor(unitInterval * variants.length))]!;
+  return { assetId, variant: entry.variant };
+}
 
-  for (const assetId of assetsMatching(query)) {
-    for (const entry of catalogueVariants(assetId)) {
-      choices.push({ assetId, variant: entry.variant });
-    }
-  }
-
-  if (choices.length === 0) return null;
-  const index = Math.min(choices.length - 1, Math.floor(unitInterval * choices.length));
-  return choices[index]!;
+/** Presentation-only middle storey. Never fed back to the structural sampler or schedule. */
+function understoreyLayer(bed: DesignElement, layers: SurfaceLayer[]): SurfaceLayer | null {
+  const reference = layers.find((layer) => layer.planting);
+  if (!reference || bed.material === 'ground-cover') return null;
+  const planting: PlantingLayer = {
+    role: 'backdrop', taxon: { type: 'shrub' }, heightBand: { min: 0.7, max: 1.6 },
+    spread: { min: 0.8, max: 1.45 }, share: 0.28, clustering: 0.8, edgeAffinity: -0.55,
+  };
+  return {
+    entry: { ...reference.entry, pattern: { patternType: 'scatter', density: 1 / cellSize(planting) ** 2,
+      sizeRange: { min: 800, max: 1450 }, lobes: 9, form: 'blob' } },
+    assets: { sprites: { group: 'vegetation', type: 'shrub' } }, planting,
+  };
 }
 
 function taxonType(layer: PlantingLayer): string {

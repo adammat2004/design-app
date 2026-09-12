@@ -5,6 +5,7 @@ import {
   Columns3,
   Droplets,
   Grid2x2,
+  Lightbulb,
   Sprout,
   Square,
   Trees,
@@ -28,6 +29,7 @@ const ICONS: Record<ElementCategory, LucideIcon> = {
   structure: Trees,
   'water-feature': Droplets,
   furniture: Armchair,
+  lighting: Lightbulb,
   'existing-feature': Trees,
 };
 

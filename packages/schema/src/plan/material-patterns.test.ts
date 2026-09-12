@@ -6,17 +6,24 @@ import {
   type DesignElement,
 } from './concepts.js';
 import { readPlanDocument } from './document.js';
-import { MATERIALS } from './materials.js';
+import { EDGING_MATERIALS, MATERIALS, WALLING_MATERIALS } from './materials.js';
 import {
   MATERIAL_PATTERNS,
   MM_PER_METRE,
+  PATTERN_TYPES,
+  PatternTypeSchema,
   hasPattern,
+  isCountable,
+  isModular,
   materialPattern,
   modulePitchMetres,
+  packMeanUnitMetres,
   scatterForm,
   bondFor,
   bondOffset,
+  unitsPerSquareMetre,
   waterSurface,
+  type MaterialPattern,
 } from './material-patterns.js';
 
 const element = (overrides: Partial<DesignElement> = {}): DesignElement =>
@@ -122,12 +129,27 @@ describe('backwards compatibility', () => {
 });
 
 describe('the pattern manifest', () => {
-  it('describes 600 × 600 slab paving, laid random coursed', () => {
+  it('describes riven sandstone as the mixed pack it is sold as', () => {
+    /*
+     * A single 600 × 600 square on a `random` bond before. The bond was doing the work the sizes
+     * should have: random coursing gives the varying vertical joint that is the signature of laid
+     * stone, but with one unit size a patio still read as a chequerboard however small the module.
+     */
     expect(materialPattern('stone-pavers')).toEqual({
-      patternType: 'grid',
-      moduleSize: { w: 600, h: 600 },
+      patternType: 'pack',
+      courses: [300, 450],
+      lengths: [300, 450, 600],
       jointWidth: 10,
-      bond: 'random',
+    });
+  });
+
+  it('quotes a garden slab, not a utility flag', () => {
+    // 900 × 600 before, which is a real product and the wrong one: the coarsest thing the app drew.
+    expect(materialPattern('concrete')).toEqual({
+      patternType: 'grid',
+      moduleSize: { w: 400, h: 400 },
+      jointWidth: 8,
+      bond: 'running',
     });
   });
 
@@ -183,19 +205,50 @@ describe('the pattern manifest', () => {
   });
 
   it('only names materials that exist in the catalogue', () => {
-    const known = new Set(Object.values(MATERIALS).flatMap((list) => list.map((m) => m.id)));
+    /*
+     * The catalogue is in two halves and both count. `EDGING_MATERIALS` is deliberately outside
+     * `MATERIALS` because edging is not an `ElementCategory` — a run is derived from the outline of
+     * the bed it follows, so there is no element to give a category to. It is still a real product
+     * with a real pattern, so a pattern naming one is not an orphan.
+     */
+    const known = new Set([
+      ...Object.values(MATERIALS).flatMap((list) => list.map((m) => m.id)),
+      ...EDGING_MATERIALS.map((m) => m.id),
+      ...WALLING_MATERIALS.map((m) => m.id),
+    ]);
 
     for (const id of Object.keys(MATERIAL_PATTERNS)) {
-      expect(known.has(id as never), `${id} is not in MATERIALS`).toBe(true);
+      expect(known.has(id as never), `${id} is in neither half of the catalogue`).toBe(true);
     }
   });
 
   it('quotes its dimensions in millimetres and converts once', () => {
-    const pattern = materialPattern('stone-pavers')!;
+    const pattern = materialPattern('porcelain')!;
 
-    // 600 mm slab on a 10 mm joint is a 0.61 m pitch — what a costing pass divides an area by.
-    expect(modulePitchMetres(pattern)).toEqual({ x: 0.61, y: 0.61 });
+    // 600 mm tile on a 5 mm joint is a 0.605 m pitch — what a costing pass divides an area by.
+    expect(modulePitchMetres(pattern as never)).toEqual({ x: 0.605, y: 0.605 });
     expect(MM_PER_METRE).toBe(1000);
+  });
+
+  it('gives a pack a mean unit where a grid has a pitch', () => {
+    const pack = materialPattern('stone-pavers')! as Extract<
+      MaterialPattern,
+      { patternType: 'pack' }
+    >;
+
+    // Lengths 0.31/0.46/0.61 average 0.46; courses 0.31/0.46 average 0.385.
+    const unit = packMeanUnitMetres(pack);
+    expect(unit.x).toBeCloseTo(0.46, 6);
+    expect(unit.y).toBeCloseTo(0.385, 6);
+
+    /*
+     * Countable but not modular, and the distinction is the point: a pack has no single pitch, so
+     * it cannot answer `modulePitchMetres` — but its members are real product dimensions and it is
+     * sold by the area it covers, so its mean unit is a fact somebody can order from.
+     */
+    expect(isCountable(pack)).toBe(true);
+    expect(isModular(pack)).toBe(false);
+    expect(unitsPerSquareMetre(pack)).toBeCloseTo(1 / (unit.x * unit.y), 6);
   });
 });
 
@@ -276,7 +329,12 @@ describe('the bond', () => {
 
   it('takes the stated bond when there is one', () => {
     expect(
-      bondFor({ patternType: 'grid', moduleSize: { w: 600, h: 600 }, jointWidth: 10, bond: 'third' }),
+      bondFor({
+        patternType: 'grid',
+        moduleSize: { w: 600, h: 600 },
+        jointWidth: 10,
+        bond: 'third',
+      }),
     ).toBe('third');
   });
 
@@ -293,7 +351,12 @@ describe('the bond', () => {
   });
 
   it('repeats a third bond every three courses', () => {
-    expect([0, 1, 2, 3].map((row) => bondOffset('third', row, never))).toEqual([0, 1 / 3, 2 / 3, 0]);
+    expect([0, 1, 2, 3].map((row) => bondOffset('third', row, never))).toEqual([
+      0,
+      1 / 3,
+      2 / 3,
+      0,
+    ]);
   });
 
   /**
@@ -342,5 +405,27 @@ describe('the water surface', () => {
   it('falls back to what the ripple spacing meant', () => {
     expect(waterSurface({ patternType: 'water', rippleSpacing: 0 })).toBe('reflective');
     expect(waterSurface({ patternType: 'water', rippleSpacing: 200 })).toBe('planted');
+  });
+});
+
+describe('PatternTypeSchema', () => {
+  /*
+   * Derived from the union's discriminator rather than hand-written. This enum listed four types
+   * while the union had grown to seven, so anything validating a manifest entry's type against it
+   * would have rejected `hedge`, `pads` and `water` — patterns the renderer draws every day.
+   */
+  it('covers every member of the pattern union', () => {
+    expect([...PATTERN_TYPES].sort()).toEqual(
+      ['board', 'grid', 'hedge', 'pack', 'pads', 'scatter', 'stripe', 'water'].sort(),
+    );
+  });
+
+  it('parses the type of every entry in the manifest', () => {
+    for (const [id, pattern] of Object.entries(MATERIAL_PATTERNS)) {
+      expect(
+        { id, parsed: PatternTypeSchema.safeParse(pattern.patternType).success },
+        `${id} draws as ${pattern.patternType}`,
+      ).toEqual({ id, parsed: true });
+    }
   });
 });

@@ -10,7 +10,15 @@ import { defaultMaterial } from '@/lib/materials';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { CatalogueThumbnail } from './CatalogueThumbnail';
 
-const GROUPS = ['all', 'structures', 'surfaces', 'planting', 'furniture', 'features'] as const;
+const GROUPS = [
+  'all',
+  'structures',
+  'surfaces',
+  'planting',
+  'furniture',
+  'lighting',
+  'features',
+] as const;
 type GroupId = (typeof GROUPS)[number];
 const GROUP_LABELS: Record<GroupId, string> = {
   all: 'All',
@@ -18,6 +26,7 @@ const GROUP_LABELS: Record<GroupId, string> = {
   surfaces: 'Surfaces',
   planting: 'Planting',
   furniture: 'Furniture',
+  lighting: 'Lighting',
   features: 'Features',
 };
 const groupFor = (category: ElementCategory, symbol?: SymbolId): GroupId => {
@@ -29,6 +38,7 @@ const groupFor = (category: ElementCategory, symbol?: SymbolId): GroupId => {
   if (category === 'structure') return 'structures';
   if (category === 'planting-bed' || category === 'lawn') return 'planting';
   if (category === 'furniture') return 'furniture';
+  if (category === 'lighting') return 'lighting';
   if (category === 'water-feature') return 'features';
   return 'surfaces';
 };
@@ -48,7 +58,14 @@ export function AddFeaturePalette() {
     symbol?: SymbolId;
     plantId?: string;
   }[] = [
-    ...ADDABLE_CATEGORIES.filter((category) => category !== 'furniture').map((category) => ({
+    /*
+     * The two categories a user never places as a bare shape. Furniture and lighting are always a
+     * *symbol* — "a dining set", "a bollard" — so offering "Furniture" and "Lighting" as blank
+     * rectangles alongside the real things would be two buttons that draw a nameless box.
+     */
+    ...ADDABLE_CATEGORIES.filter(
+      (category) => category !== 'furniture' && category !== 'lighting',
+    ).map((category) => ({
       id: category,
       label: CATEGORY_COLOURS[category].label,
       category,

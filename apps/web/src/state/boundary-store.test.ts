@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  BOUNDARY_HEIGHTS,
+  boundaryRuns,
   DEFAULT_RECTANGLE_PLOT,
+  fitsOnEdge,
   fitsOnWall,
+  gateCentre,
   houseWalls,
+  kindForEdge,
   openingCentre,
   rectanglePlotOutline,
 } from '@garden-studio/schema';
@@ -12,6 +17,8 @@ import type { ZoneId } from '@/lib/zones';
 import {
   effectiveZoneIds,
   resetBoundaryStoreForTests,
+  selectedEdgeVertexId,
+  selectedWallId,
   selectZones,
   useBoundaryStore,
 } from './boundary-store';
@@ -802,12 +809,54 @@ describe('walls and openings', () => {
     expect(openingCentre(houseNow(), opening)).not.toBeNull();
   });
 
-  it('remembers which wall the strip is showing, outside the undo history', () => {
+  it('selects a wall, outside the undo history', () => {
     store().selectWall('w1');
-    expect(store().selectedWallId).toBe('w1');
+    expect(store().selection).toEqual({ kind: 'wall', wallId: 'w1' });
+    expect(selectedWallId(store())).toBe('w1');
 
     store().selectWall(null);
-    expect(store().selectedWallId).toBeNull();
+    expect(store().selection).toBeNull();
+  });
+
+  it('resolves the wall of a selected opening, so the plan and the strip agree', () => {
+    store().addOpening(wallIds()[1]!, 'window');
+    const [opening] = houseNow().openings;
+
+    // Adding one selects it, and its wall is the one the editor is about.
+    expect(store().selection).toEqual({ kind: 'opening', id: opening!.id });
+    expect(selectedWallId(store())).toBe(wallIds()[1]);
+  });
+
+  it('drops a selected opening the wall’s new kind cannot hold', () => {
+    store().addOpening(wallIds()[0]!, 'patio-door');
+    const [opening] = houseNow().openings;
+    expect(store().selection).toEqual({ kind: 'opening', id: opening!.id });
+
+    store().setWallKind(wallIds()[0]!, 'party');
+
+    expect(houseNow().openings).toEqual([]);
+    expect(store().selection).toBeNull();
+  });
+
+  it('pulls an opening a resize has pushed off its wall back onto it', () => {
+    store().addOpening(wallIds()[0]!, 'patio-door');
+    const [opening] = houseNow().openings;
+    // The top wall is 8 m; shrinking the house to 3 m leaves a 2.4 m door at 4 m hanging off it.
+    store().setHouseSize({ width: 3 });
+    expect(openingCentre(houseNow(), houseNow().openings[0]!)).toBeNull();
+
+    store().fitOpening(opening!.id);
+
+    expect(openingCentre(houseNow(), houseNow().openings[0]!)).not.toBeNull();
+  });
+
+  it('sets how a door opens, which is the one thing about it the plan cannot show', () => {
+    store().addOpening(wallIds()[0]!, 'back-door');
+    const [opening] = houseNow().openings;
+
+    store().setOpeningSwing(opening!.id, 'outward');
+
+    expect(houseNow().openings[0]!.swing).toBe('outward');
   });
 
   it('is one undo entry per opening', () => {
@@ -1077,40 +1126,120 @@ describe('undo, redo and reset', () => {
   });
 });
 
-describe('access: gates and the street', () => {
+describe('the property: gates, the street and what each side is made of', () => {
+  /** The vertex the nth edge starts at — what the store keys everything on. */
+  const edgeId = (index: number) => store().present.vertices[index]!.id;
+
+  /** Places a gate `offset` metres along the nth side, as clicking that side does. */
+  const gateOn = (index: number, offset: number) =>
+    store().addGate(edgeId(index), 'pedestrian', offset);
+
   beforeEach(() => {
     drawPlot();
     placeHouse();
-    store().setMode('access');
   });
 
-  it('needs a closed plot before it can be entered', () => {
-    resetBoundaryStoreForTests();
-    store().addVertexAt({ x: 0, y: 0 });
-    store().setMode('access');
-    expect(store().mode).toBe('boundary');
+  it('lands the user in Select once the house is placed', () => {
+    // Every next move — drag the house, click a wall, click a side — is a selection.
+    expect(store().mode).toBe('select');
+    expect(store().selection).toEqual({ kind: 'house' });
   });
 
-  it('places a gate on the edge clicked, measured from the edge start', () => {
-    // Edge 1 runs v2 (20,0) → v3 (20,16); a click 6 m down it.
-    store().setAccessTool('gate');
-    store().addGateOnEdge(1, { x: 20.2, y: 6 });
+  it('places a gate on the side asked for, measured from its start corner', () => {
+    // Edge 1 runs v2 (20,0) → v3 (20,16); six metres down it.
+    gateOn(1, 6);
 
     const [gate] = store().present.gates;
-    expect(gate?.edgeVertexId).toBe(store().present.vertices[1]!.id);
+    expect(gate?.edgeVertexId).toBe(edgeId(1));
     expect(gate?.offsetAlongEdge).toBeCloseTo(6);
     expect(gate?.width).toBeCloseTo(0.9);
-    // Placing one disarms the tool, so the next click on the fence does nothing surprising.
-    expect(store().accessTool).toBeNull();
+    expect(gate?.kind).toBe('pedestrian');
+    // Selected on arrival, so its side's editor opens with it expanded.
+    expect(store().selection).toEqual({ kind: 'gate', id: gate!.id });
+  });
+
+  it('puts a gate at the first place it fits when no offset is given', () => {
+    store().addGate(edgeId(1));
+
+    // Centre first, which is where a person would put a single gate.
+    expect(store().present.gates[0]?.offsetAlongEdge).toBeCloseTo(8);
+  });
+
+  it('gives a driveway its own width, and a car’s worth of it', () => {
+    store().addGate(edgeId(0), 'vehicle');
+
+    const [gate] = store().present.gates;
+    expect(gate?.kind).toBe('vehicle');
+    expect(gate?.width).toBeCloseTo(3);
+  });
+
+  it('carries an untyped width with the kind, and keeps a typed one', () => {
+    store().addGate(edgeId(1), 'pedestrian', 6);
+    const [gate] = store().present.gates;
+
+    store().setGateKind(gate!.id, 'vehicle');
+    expect(store().present.gates[0]!.width).toBeCloseTo(3);
+
+    store().setGateWidth(gate!.id, 2.2);
+    store().setGateKind(gate!.id, 'pedestrian');
+    // Typed, so it survives — the user said 2.2 m and nothing here knows better.
+    expect(store().present.gates[0]!.width).toBeCloseTo(2.2);
+  });
+
+  it('refuses a width below what a person fits through', () => {
+    gateOn(1, 6);
+    const [gate] = store().present.gates;
+
+    store().setGateWidth(gate!.id, 0.2);
+
+    expect(store().present.gates[0]!.width).toBeCloseTo(0.9);
+  });
+
+  it('slides a gate along its side, clamped to stay on it', () => {
+    gateOn(1, 6);
+    const [gate] = store().present.gates;
+
+    store().setGateOffset(gate!.id, 99);
+
+    // A 0.9 m gate on a 16 m side stops with its edge against the corner.
+    expect(store().present.gates[0]!.offsetAlongEdge).toBeCloseTo(15.55);
   });
 
   it('refuses a gate through another gate, and keeps the history clean', () => {
-    store().addGateOnEdge(1, { x: 20, y: 6 });
+    gateOn(1, 6);
     const before = store().past.length;
-    store().addGateOnEdge(1, { x: 20, y: 6.3 });
+    gateOn(1, 6.3);
 
     expect(store().present.gates).toHaveLength(1);
     expect(store().past.length).toBe(before);
+  });
+
+  it('says what each side is made of, and how tall it stands', () => {
+    const side = edgeId(0);
+    store().setBoundaryKind(side, 'wall');
+    expect(kindForEdge(store().present, side)).toBe('wall');
+
+    store().setBoundaryHeight(side, 2.4);
+    expect(boundaryRuns(store().present)[0]!.height).toBeCloseTo(2.4);
+
+    // A typed height is a fact about that side, not about its kind, so it survives the change.
+    store().setBoundaryKind(side, 'hedge');
+    expect(boundaryRuns(store().present)[0]!.height).toBeCloseTo(2.4);
+
+    // Back to the kind's own default, which stores nothing rather than a number.
+    store().setBoundaryHeight(side, null);
+    expect(boundaryRuns(store().present)[0]!.height).toBeCloseTo(BOUNDARY_HEIGHTS.hedge);
+  });
+
+  it('keeps a no-op tap on a side out of the undo history', () => {
+    const side = edgeId(0);
+    store().setBoundaryKind(side, 'wall');
+    const depth = store().past.length;
+
+    store().setBoundaryKind(side, 'wall');
+    store().setBoundaryHeight(side, null);
+
+    expect(store().past.length).toBe(depth);
   });
 
   it('takes the suggested gate on the wider return, behind the back wall', () => {
@@ -1122,7 +1251,7 @@ describe('access: gates and the street', () => {
   });
 
   it('removes a gate, and undo brings it back', () => {
-    store().addGateOnEdge(1, { x: 20, y: 6 });
+    gateOn(1, 6);
     const [gate] = store().present.gates;
     store().removeGate(gate!.id);
     expect(store().present.gates).toHaveLength(0);
@@ -1131,7 +1260,7 @@ describe('access: gates and the street', () => {
   });
 
   it('re-homes a gate when a corner is inserted before it on its edge', () => {
-    store().addGateOnEdge(1, { x: 20, y: 10 });
+    gateOn(1, 10);
     store().insertVertexOnEdge(1, { x: 20, y: 4 });
 
     const [gate] = store().present.gates;
@@ -1140,40 +1269,313 @@ describe('access: gates and the street', () => {
     expect(gate?.offsetAlongEdge).toBeCloseTo(6);
   });
 
-  it('drops a gate whose edge is deleted with its corner', () => {
+  it('keeps a gate where it was when a redundant corner on its side is deleted', () => {
+    // The corner at (20, 8) sits on the straight right-hand side; taking it out leaves the side
+    // exactly where it was, so the gate at (20, 12) has no reason to go anywhere.
     store().insertVertexOnEdge(1, { x: 20, y: 8 });
-    store().addGateOnEdge(2, { x: 20, y: 12 });
+    store().addGate(edgeId(2), 'pedestrian', 4);
     const corner = store().present.vertices[2]!;
     expect(store().present.gates[0]?.edgeVertexId).toBe(corner.id);
+
+    store().deleteVertex(corner.id);
+
+    const [gate] = store().present.gates;
+    expect(gate?.edgeVertexId).toBe(store().present.vertices[1]!.id);
+    expect(gate?.offsetAlongEdge).toBeCloseTo(12);
+    expect(gateCentre(store().present, gate!)).toEqual({ x: 20, y: 12 });
+  });
+
+  it('drops a gate when the corner its side turned on is deleted', () => {
+    // A real bend: the corner sticks out to (24, 8). The straight side that replaces the two
+    // bent ones does not pass through the gate, and there is nowhere honest to put it.
+    store().insertVertexOnEdge(1, { x: 24, y: 8 });
+    store().addGate(edgeId(2), 'pedestrian', 4);
+    const corner = store().present.vertices[2]!;
+    expect(store().present.gates).toHaveLength(1);
 
     store().deleteVertex(corner.id);
     expect(store().present.gates).toHaveLength(0);
   });
 
+  it('nudges a gate whole onto one half when a corner is inserted through it', () => {
+    gateOn(1, 10);
+    store().insertVertexOnEdge(1, { x: 20, y: 10.2 });
+
+    const [gate] = store().present.gates;
+    // Centre 10 is before the cut at 10.2, so the first half keeps it — clamped flush to the
+    // new corner rather than left straddling it.
+    expect(gate?.edgeVertexId).toBe(store().present.vertices[1]!.id);
+    expect(gate?.offsetAlongEdge).toBeCloseTo(10.2 - 0.45);
+    expect(fitsOnEdge(store().present, gate!)).toBe(true);
+  });
+
+  it('gives both halves of a split side the side’s kind', () => {
+    const side = store().present.vertices[1]!;
+    store().setBoundaryKind(side.id, 'hedge');
+    store().insertVertexOnEdge(1, { x: 20, y: 8 });
+
+    const inserted = store().present.vertices[2]!;
+    expect(kindForEdge(store().present, side.id)).toBe('hedge');
+    expect(kindForEdge(store().present, inserted.id)).toBe('hedge');
+  });
+
+  it('keeps a gate the same distance from corner A when the closing edge is shortened', () => {
+    // The closing edge runs v4 (0,16) → v1 (0,0); a gate 4 m from A is 12 m from v4. Editing that
+    // side moves v4, so the stored offset has to move with it or the gate slides up the fence.
+    store().addGate(edgeId(3), 'pedestrian', 12);
+    store().setEdgeLength(3, 8);
+
+    const [gate] = store().present.gates;
+    expect(store().present.vertices[3]).toMatchObject({ x: 0, y: 8 });
+    expect(gate?.offsetAlongEdge).toBeCloseTo(4);
+    expect(gateCentre(store().present, gate!)).toEqual({ x: 0, y: 4 });
+  });
+
+  it('scales a gate along its fence with the plot, and keeps its width', () => {
+    gateOn(1, 6);
+    store().scalePlot(0.1);
+
+    const [gate] = store().present.gates;
+    expect(gate?.offsetAlongEdge).toBeCloseTo(0.6);
+    expect(gate?.width).toBeCloseTo(0.9);
+    expect(gateCentre(store().present, gate!)).not.toBeNull();
+  });
+
   it('sets and clears the street edge, and takes the suggestion', () => {
-    store().setStreetEdge(2);
-    expect(store().present.streetEdgeVertexId).toBe(store().present.vertices[2]!.id);
+    store().setStreetEdge(edgeId(2));
+    expect(store().present.streetEdgeVertexId).toBe(edgeId(2));
     store().setStreetEdge(null);
     expect(store().present.streetEdgeVertexId).toBeNull();
 
     store().setSuggestedStreetEdge();
     // The house faces +y, so the street is the bottom fence, v3 → v4.
+    expect(store().present.streetEdgeVertexId).toBe(edgeId(2));
+  });
+
+  it('moves the street edge onto the merged side when a redundant corner is deleted', () => {
+    // The bottom fence still faces the street after the corner in the middle of it goes.
+    store().insertVertexOnEdge(2, { x: 10, y: 16 });
+    const corner = store().present.vertices[3]!;
+    store().setStreetEdge(edgeId(3));
+    store().deleteVertex(corner.id);
     expect(store().present.streetEdgeVertexId).toBe(store().present.vertices[2]!.id);
   });
 
-  it('forgets a street edge whose corner is deleted', () => {
-    store().insertVertexOnEdge(2, { x: 10, y: 16 });
+  it('forgets a street edge whose corner was a real bend', () => {
+    store().insertVertexOnEdge(2, { x: 10, y: 22 });
     const corner = store().present.vertices[3]!;
-    store().setStreetEdge(3);
+    store().setStreetEdge(edgeId(3));
     store().deleteVertex(corner.id);
     expect(store().present.streetEdgeVertexId).toBeNull();
   });
 
-  it('keeps the armed tool out of the undo history', () => {
-    const before = store().past.length;
-    store().setAccessTool('street');
-    expect(store().past.length).toBe(before);
-    store().setMode('boundary');
-    expect(store().accessTool).toBeNull();
+  it('forgets a gate that has been removed, so the panel is never about nothing', () => {
+    gateOn(1, 6);
+    const [gate] = store().present.gates;
+    expect(store().selection).toEqual({ kind: 'gate', id: gate!.id });
+
+    store().removeGate(gate!.id);
+
+    expect(store().selection).toBeNull();
+  });
+
+  it('resolves the side of a selected gate, so the plan and the panel agree', () => {
+    gateOn(1, 6);
+    expect(selectedEdgeVertexId(store())).toBe(edgeId(1));
+
+    store().select({ kind: 'edge', edgeVertexId: edgeId(0) });
+    expect(selectedEdgeVertexId(store())).toBe(edgeId(0));
+  });
+
+  it('leaves a gate off its side rather than moving it, and can fit it back on', () => {
+    gateOn(1, 14);
+    const [gate] = store().present.gates;
+    // The right side runs 16 m; typing it down to 8 leaves the gate hanging off the end.
+    store().setEdgeLength(1, 8);
+    expect(gateCentre(store().present, store().present.gates[0]!)).toBeNull();
+    expect(store().present.gates).toHaveLength(1);
+
+    store().fitGate(gate!.id);
+
+    expect(gateCentre(store().present, store().present.gates[0]!)).not.toBeNull();
+  });
+
+  /*
+   * The trap `sameGeometry` used to be: it compared vertices and the house outline only, so a
+   * gesture that moved nothing else ended on "nothing changed" and left no way to undo it.
+   */
+  it('earns an undo entry for a gesture that only moved a gate', () => {
+    gateOn(1, 6);
+    const [gate] = store().present.gates;
+    const depth = store().past.length;
+
+    store().beginGesture();
+    store().setGateOffset(gate!.id, 9);
+    store().endGesture();
+
+    expect(store().past.length).toBeGreaterThan(depth);
+    store().undo();
+    expect(store().present.gates[0]!.offsetAlongEdge).toBeCloseTo(6);
+  });
+
+  it('records no entry for a gesture that ends where it started', () => {
+    gateOn(1, 6);
+    const depth = store().past.length;
+
+    store().beginGesture();
+    store().endGesture();
+
+    expect(store().past.length).toBe(depth);
+  });
+
+  describe('dragging on the plan', () => {
+    const houseNow = () => store().present.house!;
+    const wallOf = (index: number) => houseWalls(houseNow())[index]!.id;
+
+    /*
+     * Undoing a drag used to close the panel the drag happened in, because undo cleared the
+     * selection outright. The correction then vanished from under the user along with the thing
+     * being corrected.
+     */
+    it('keeps the gate selected through an undo of its own drag', () => {
+      gateOn(1, 6);
+      const gate = store().present.gates[0]!;
+
+      store().beginGesture();
+      store().moveGateLive(gate.id, 9);
+      store().endGesture();
+      store().undo();
+
+      expect(store().selection).toEqual({ kind: 'gate', id: gate.id });
+      expect(store().present.gates[0]!.offsetAlongEdge).toBeCloseTo(6);
+    });
+
+    it('lets go of a selection undo has taken away', () => {
+      gateOn(1, 6);
+      const gate = store().present.gates[0]!;
+      store().select({ kind: 'gate', id: gate.id });
+
+      // Undoing the *add* leaves nothing for the panel to be about.
+      store().undo();
+
+      expect(store().present.gates).toEqual([]);
+      expect(store().selection).toBeNull();
+    });
+
+    it('slides a gate with no history of its own, one entry for the gesture', () => {
+      gateOn(1, 6);
+      const gate = store().present.gates[0]!;
+      const depth = store().past.length;
+
+      store().beginGesture();
+      store().moveGateLive(gate.id, 7);
+      store().moveGateLive(gate.id, 8);
+      store().moveGateLive(gate.id, 9);
+      expect(store().past.length).toBe(depth);
+
+      store().endGesture();
+
+      expect(store().present.gates[0]!.offsetAlongEdge).toBeCloseTo(9);
+      expect(store().past.length).toBe(depth + 1);
+    });
+
+    it('keeps a slid gate on its side rather than letting it run off the end', () => {
+      gateOn(1, 6);
+      const gate = store().present.gates[0]!;
+
+      store().moveGateLive(gate.id, 99);
+
+      // A 0.9 m gate on a 16 m side stops with its edge against the corner.
+      expect(store().present.gates[0]!.offsetAlongEdge).toBeCloseTo(15.55);
+      expect(gateCentre(store().present, store().present.gates[0]!)).not.toBeNull();
+    });
+
+    /*
+     * The gesture that distinguishes a resize from a move: the end under the pointer follows it,
+     * the other end does not budge.
+     */
+    it('moves only the end being dragged', () => {
+      store().addGate(edgeId(1), 'vehicle', 8);
+      const gate = store().present.gates[0]!;
+      // 3 m wide centred on 8: from 6.5, to 9.5.
+
+      store().resizeGateLive(gate.id, 'from', 5);
+
+      const resized = store().present.gates[0]!;
+      expect(resized.width).toBeCloseTo(4.5);
+      expect(resized.offsetAlongEdge).toBeCloseTo(7.25);
+      // The far end is exactly where it was.
+      expect(resized.offsetAlongEdge + resized.width / 2).toBeCloseTo(9.5);
+    });
+
+    it('stops dead at the narrowest a gate can be, rather than vanishing', () => {
+      store().addGate(edgeId(1), 'vehicle', 8);
+      const gate = store().present.gates[0]!;
+
+      store().resizeGateLive(gate.id, 'from', 9.4);
+
+      // Refused: the last legal width stays on screen.
+      expect(store().present.gates[0]!.width).toBeCloseTo(3);
+    });
+
+    it('slides a door along its wall and resizes one end of it', () => {
+      store().addOpening(wallOf(0), 'patio-door');
+      const opening = houseNow().openings[0]!;
+      const depth = store().past.length;
+
+      store().beginGesture();
+      store().moveOpeningLive(opening.id, 2);
+      store().endGesture();
+
+      expect(houseNow().openings[0]!.offsetAlongEdge).toBeCloseTo(2);
+      expect(store().past.length).toBe(depth + 1);
+
+      // 2.4 m wide centred on 2: from 0.8, to 3.2. Dragging `to` out to 5 widens it to 4.2.
+      store().resizeOpeningLive(opening.id, 'to', 5);
+      expect(houseNow().openings[0]!.width).toBeCloseTo(4.2);
+      expect(houseNow().openings[0]!.offsetAlongEdge).toBeCloseTo(2.9);
+    });
+
+    it('will not drag a door through the one next to it', () => {
+      store().addOpening(wallOf(0), 'back-door');
+      store().addOpening(wallOf(0), 'window');
+      const [door, window] = houseNow().openings;
+      const before = houseNow().openings.map((opening) => opening.offsetAlongEdge);
+
+      // Straight at the neighbour: `fitsOnWall` refuses, so the frame is dropped.
+      store().moveOpeningLive(window!.id, door!.offsetAlongEdge);
+
+      expect(houseNow().openings.map((opening) => opening.offsetAlongEdge)).toEqual(before);
+    });
+  });
+});
+
+describe('house storeys', () => {
+  beforeEach(() => {
+    drawPlot();
+    placeHouse();
+  });
+
+  it('defaults to two, which is the six metres every plan drew with', () => {
+    expect(store().present.house!.storeys).toBe(2);
+  });
+
+  it('takes one to three and refuses the rest', () => {
+    store().setStoreys(1);
+    expect(store().present.house!.storeys).toBe(1);
+
+    store().setStoreys(4);
+    store().setStoreys(0);
+    store().setStoreys(1.5);
+    expect(store().present.house!.storeys).toBe(1);
+  });
+
+  it('is one undo entry, and a no-op records none', () => {
+    const depth = store().past.length;
+    store().setStoreys(3);
+    expect(store().past.length).toBe(depth + 1);
+
+    store().setStoreys(3);
+    expect(store().past.length).toBe(depth + 1);
   });
 });

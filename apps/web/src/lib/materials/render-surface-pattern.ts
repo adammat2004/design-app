@@ -25,6 +25,7 @@ import { layerSeed, resolveLayers } from './layers';
 import { samplePlanting } from './planting/sample';
 import { tintSprites, tintTexture } from './sprite-tint';
 import {
+  drawnJointPx,
   MIN_CUT_EDGE_PX,
   MIN_DRAWN_MODULE_PX,
   MIN_TEXTURED_TILE_PX,
@@ -94,6 +95,26 @@ const TONE_JITTER = 0.03;
  */
 const COURSE_HASH_COL = -99991;
 
+/**
+ * The same idea for a pack's course *heights*, on its own reserved column.
+ *
+ * Distinct from `COURSE_HASH_COL` so a pack's height walk and a grid's bond offset never draw from
+ * the same stream: they are different questions about the same row index, and sharing a generator
+ * would tie a course's height to a bond it does not have.
+ */
+const PACK_COURSE_COL = -99989;
+
+/**
+ * Guards on the two walks a pack does, in courses and in units per course.
+ *
+ * A walking sweep has no closed form for where it ends, so it needs a stop. These are far past any
+ * real surface — a 300 mm course would have to cross 180 m of garden to reach the limit — and exist
+ * so a degenerate pattern (a zero-length list slipping through, a surface with a broken outline)
+ * cannot spin rather than draw.
+ */
+const PACK_MAX_COURSES = 600;
+const PACK_MAX_UNITS = 600;
+
 /** How strongly the water photograph shows over the body colour that decides pond from pool. */
 const WATER_TEXTURE_ALPHA = 0.6;
 
@@ -120,6 +141,8 @@ export interface PatternCanvas {
  */
 export interface PatternContext {
   fillStyle: string;
+  /** Optional Canvas filter support; the shadow compositor keeps a crisp fallback. */
+  filter?: string;
   /**
    * Stroking is used for exactly one thing: the cut edge where a surface meets whatever it sits
    * on. Because the context is already clipped to the outline, a stroke centred on that outline
@@ -192,6 +215,8 @@ export interface PatternAnchor {
  * against a real canvas in Node without mounting anything. A plain value object keeps that.
  */
 export interface DrawPass {
+  /** The scene's resolved stack. Visualise supplies soil only, with foliage drawn separately. */
+  layers?: import('./layers').SurfaceLayer[];
   /** World-space crowns and objects that leave gaps in a bed. */
   exclusions?: Point[][];
   /** Pixels per metre this pass draws at. */
@@ -331,11 +356,8 @@ export function renderSurfacePattern(
     anchor,
     seed,
     {
+      ...pass,
       pxPerMetre: scale,
-      light: pass.light,
-      assets: pass.assets,
-      makeCanvas,
-      centreline: pass.centreline,
     },
     originMetres,
   );
@@ -393,9 +415,11 @@ export function drawSurfacePattern(
   context.fillStyle = material.jointColour;
   context.fill();
 
+  const layers = pass.layers ?? resolveLayers(material, pass.element);
+  const ground = layers[0]?.entry ?? material;
   if (cappedTier(tierFor(material.pattern, pxPerMetre), pass.maxTier) === 'mass') {
     // One averaged tone, and no thousand-fill sweep to produce something nobody can resolve.
-    context.fillStyle = averageTone(material.palette);
+    context.fillStyle = averageTone(ground.palette);
     context.fill();
     context.restore();
     return;
@@ -421,8 +445,6 @@ export function drawSurfacePattern(
    * arguments the single call used to take. That is the point: the plumbing lands first, gated on
    * the byte-identical test, and the stacks arrive one material at a time afterwards.
    */
-  const layers = resolveLayers(material, pass.element);
-
   for (let i = 0; i < layers.length; i += 1) {
     const { entry: layer, assets: override } = layers[i]!;
 
@@ -723,6 +745,20 @@ function paint(
     case 'grid':
     case 'board':
       paintModules(
+        context,
+        material,
+        pattern,
+        outline,
+        origin,
+        rotation,
+        seed,
+        pxPerMetre,
+        light,
+        assets,
+      );
+      return;
+    case 'pack':
+      paintPack(
         context,
         material,
         pattern,
@@ -1068,6 +1104,22 @@ function paintModules(
   // At least a whole pixel, or the bevel is drawn at a fraction of one and simply does not appear.
   const bevel = Math.max(1, Math.round(modulePx * MODULE_BEVEL_RATIO));
 
+  /*
+   * The joint, drawn. Same argument as the bevel on the line above, and `drawnJointPx` carries it:
+   * a true 10 mm joint is a fifth of a pixel at plan zoom, so it never appears and the slabs either
+   * side merge into one apparent unit.
+   *
+   * The **pitch stays exact** — module positions, module counts and the schedule's slab counts are
+   * all still the manifest's arithmetic. Only the gap is a convention, so the module is derived by
+   * taking the drawn joint off the pitch rather than by scaling `moduleSize`.
+   */
+  const pitchXPx = pitchX * pxPerMetre;
+  const pitchYPx = pitchY * pxPerMetre;
+  const jointXPx = drawnJointPx(joint * pxPerMetre, pitchXPx);
+  const jointYPx = drawnJointPx(joint * pxPerMetre, pitchYPx);
+  const drawnWidth = Math.max(1, pitchXPx - jointXPx);
+  const drawnHeight = Math.max(1, pitchYPx - jointYPx);
+
   const range = gridRange(outline, origin, rotation, pitchX, pitchY);
   /*
    * An offset course reaches a whole module further left than its own column bounds suggest, so
@@ -1093,10 +1145,10 @@ function paintModules(
         seed,
         palette: material.palette,
         // Half a joint of inset per side, so the gap *between* two modules is one full joint.
-        x: (col * pitchX + offset + joint / 2) * pxPerMetre,
-        y: (row * pitchY + joint / 2) * pxPerMetre,
-        width: moduleWidth * pxPerMetre,
-        height: moduleHeight * pxPerMetre,
+        x: (col * pitchX + offset) * pxPerMetre + jointXPx / 2,
+        y: row * pitchY * pxPerMetre + jointYPx / 2,
+        width: drawnWidth,
+        height: drawnHeight,
         shaded,
         bevel,
         faces: assets.faces,
@@ -1767,7 +1819,7 @@ function paintStripes(
         1,
         (tone.r + tone.g + tone.b) / (lightest.r + lightest.g + lightest.b),
       );
-      const grey = Math.round(ratio * 255);
+      const grey = Math.round((0.78 + ratio * 0.22) * 255);
       context.globalCompositeOperation = 'multiply';
       context.fillStyle = rgbToCss({ r: grey, g: grey, b: grey });
       context.fillRect(-span, row * band * pxPerMetre, span * 2, band * pxPerMetre);
@@ -1777,6 +1829,30 @@ function paintStripes(
 
     context.fillStyle = rgbToCss(tone);
     context.fillRect(-span, row * band * pxPerMetre, span * 2, band * pxPerMetre);
+  }
+
+  if (assets.texture) {
+    // Continuous low-frequency ground variation. The opaque turf has already replaced what
+    // was below it, so overlapping lawns apply exactly the same treatment once per draw.
+    const cell = 0.2;
+    const macroRange = gridRange(outline, origin, total, cell, cell);
+    for (let row = macroRange.minRow; row <= macroRange.maxRow; row++) {
+      for (let col = macroRange.minCol; col <= macroRange.maxCol; col++) {
+        const x = (col + 0.5) * cell;
+        const y = (row + 0.5) * cell;
+        const variation =
+          0.5 +
+          0.3 * Math.sin(x / 2.7 + 0.7 * Math.sin(y / 4.1)) +
+          0.2 * Math.cos(y / 3.2 - x / 5.3);
+        context.fillStyle = `rgba(30,49,12,${(variation * 0.075).toFixed(4)})`;
+        context.fillRect(
+          col * cell * pxPerMetre,
+          row * cell * pxPerMetre,
+          cell * pxPerMetre,
+          cell * pxPerMetre,
+        );
+      }
+    }
   }
 }
 
@@ -1837,6 +1913,171 @@ function gridRange(
     minRow: Math.floor(minV / pitchY),
     maxRow: Math.ceil(maxV / pitchY),
   };
+}
+
+/** The extent of an outline in pattern space, in metres. What a walking sweep needs instead of a range. */
+function patternExtent(
+  outline: Point[],
+  origin: Point,
+  rotation: number,
+): { minU: number; maxU: number; minV: number; maxV: number } {
+  const radians = (rotation * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  let minU = Infinity;
+  let maxU = -Infinity;
+  let minV = Infinity;
+  let maxV = -Infinity;
+
+  for (const point of outline) {
+    const dx = point.x - origin.x;
+    const dy = point.y - origin.y;
+    const u = dx * cos + dy * sin;
+    const v = -dx * sin + dy * cos;
+    if (u < minU) minU = u;
+    if (u > maxU) maxU = u;
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+
+  return { minU, maxU, minV, maxV };
+}
+
+/** A deterministic index into a size list, from a hash of the coordinates that identify a unit. */
+function packPick(sizes: number[], seed: string, a: number, b: number): number {
+  return sizes[Math.floor(moduleRandom(seed, a, b)() * sizes.length) % sizes.length]!;
+}
+
+/**
+ * Every course the surface crosses, walked outward from the pattern origin.
+ *
+ * Course heights vary, so a course index is a **cumulative sum** rather than `floor(v / pitch)`.
+ * The walk starts at `v = 0` — the plan origin — and goes both ways, so two abutting patios cross
+ * the same course boundaries and a vertex drag renumbers nothing. That is the same guarantee the
+ * grid gets from dividing; it just has to be walked for.
+ */
+function packCourses(
+  pattern: Extract<MaterialPattern, { patternType: 'pack' }>,
+  seed: string,
+  minV: number,
+  maxV: number,
+): { index: number; top: number; height: number }[] {
+  const heights = pattern.courses.map((mm) => mm / MM_PER_METRE);
+  const joint = pattern.jointWidth / MM_PER_METRE;
+  const courses: { index: number; top: number; height: number }[] = [];
+
+  const heightAt = (index: number) =>
+    heights[
+      Math.floor(moduleRandom(seed, PACK_COURSE_COL, index)() * heights.length) % heights.length
+    ]! + joint;
+
+  // Forward from the origin.
+  let top = 0;
+  for (let index = 0; top <= maxV && index < PACK_MAX_COURSES; index += 1) {
+    const height = heightAt(index);
+    if (top + height >= minV) courses.push({ index, top, height });
+    top += height;
+  }
+  // And backward, so a surface above the origin is covered too.
+  let bottom = 0;
+  for (let index = -1; bottom >= minV && index > -PACK_MAX_COURSES; index -= 1) {
+    const height = heightAt(index);
+    bottom -= height;
+    if (bottom <= maxV) courses.push({ index, top: bottom, height });
+  }
+
+  return courses;
+}
+
+/**
+ * A patio pack: courses of varying height, laid with units of varying length.
+ *
+ * The grid painter's twin, and it differs in exactly one way — it walks where the grid divides,
+ * because neither the course boundaries nor the unit boundaries fall at a constant pitch. Both
+ * walks are anchored at the plan origin and take their sizes from the course and unit index, so
+ * every guarantee the grid has survives: two abutting patios line up, and nothing repaints when a
+ * neighbour moves.
+ */
+function paintPack(
+  context: PatternContext,
+  material: MaterialManifestEntry,
+  pattern: Extract<MaterialPattern, { patternType: 'pack' }>,
+  outline: Point[],
+  origin: Point,
+  rotation: number,
+  seed: string,
+  pxPerMetre: number,
+  light: Point,
+  assets: SurfaceAssets,
+): void {
+  if (assets.texture) {
+    tileTexture(
+      context,
+      assets.texture,
+      assets.tilePx,
+      outline,
+      origin,
+      rotation,
+      pxPerMetre,
+      1,
+      assets.textureVariants,
+    );
+  }
+
+  const joint = pattern.jointWidth / MM_PER_METRE;
+  const meanCourse =
+    pattern.courses.reduce((total, course) => total + course, 0) / pattern.courses.length;
+  const coursePx = (meanCourse / MM_PER_METRE) * pxPerMetre;
+  const shaded = shadesAt(coursePx);
+  const bevel = Math.max(1, Math.round(coursePx * MODULE_BEVEL_RATIO));
+
+  const extent = patternExtent(outline, origin, rotation);
+  const courses = packCourses(pattern, seed, extent.minV, extent.maxV);
+
+  for (const course of courses) {
+    const pitchYPx = course.height * pxPerMetre;
+    const jointYPx = drawnJointPx(joint * pxPerMetre, pitchYPx);
+
+    /*
+     * Each course starts its own length walk at the origin. The hash takes the course index, so
+     * two courses diverge from their first unit and the vertical joints never line up — which is
+     * what a `random` bond was approximating with one unit size.
+     */
+    let left = 0;
+    let unit = 0;
+    // Back up to the first unit that reaches the surface, so a course starts off-screen-left.
+    while (left > extent.minU && unit > -PACK_MAX_UNITS) {
+      unit -= 1;
+      left -= packPick(pattern.lengths, seed, course.index, unit) / MM_PER_METRE + joint;
+    }
+
+    for (let guard = 0; left <= extent.maxU && guard < PACK_MAX_UNITS * 2; guard += 1) {
+      const length = packPick(pattern.lengths, seed, course.index, unit) / MM_PER_METRE + joint;
+      const pitchXPx = length * pxPerMetre;
+      const jointXPx = drawnJointPx(joint * pxPerMetre, pitchXPx);
+
+      drawModule(context, {
+        light,
+        col: unit,
+        row: course.index,
+        seed,
+        palette: material.palette,
+        x: left * pxPerMetre + jointXPx / 2,
+        y: course.top * pxPerMetre + jointYPx / 2,
+        width: Math.max(1, pitchXPx - jointXPx),
+        height: Math.max(1, pitchYPx - jointYPx),
+        bevel,
+        shaded,
+        faces: assets.faces,
+        // A pack's units are already mixed in shape, so a quarter turn is the grain's own choice.
+        grainAlong: false,
+      });
+
+      left += length;
+      unit += 1;
+    }
+  }
 }
 
 /* ---------------------------------------------------------------- helpers */

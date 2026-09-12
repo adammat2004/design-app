@@ -1,5 +1,7 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import {
+  EDGING_MATERIALS,
+  WALLING_MATERIALS,
   MATERIALS,
   MATERIAL_PATTERNS,
   type ElementCategory,
@@ -23,9 +25,11 @@ describe('resolvePattern', () => {
     expect(entry).toMatchObject({
       id: 'stone-pavers',
       category: 'paved-area',
+      // Riven sandstone is sold and laid as a mixed pack, so that is what it is modelled as.
       pattern: {
-        patternType: 'grid',
-        moduleSize: { w: 600, h: 600 },
+        patternType: 'pack',
+        courses: [300, 450],
+        lengths: [300, 450, 600],
         jointWidth: 10,
       },
     });
@@ -61,6 +65,18 @@ describe('resolvePattern', () => {
     for (const id of Object.keys(MATERIAL_PATTERNS) as MaterialId[]) {
       const entry = resolvePattern(id);
       if (!entry) continue;
+
+      /*
+       * Edging and walling are the exceptions, and deliberate ones: both lists sit outside
+       * `MATERIALS` because neither is an `ElementCategory` — an edging run and a retaining face are
+       * derived from the outline they follow, so there is no element to categorise. `categoryOf`
+       * files them as `paved-area`, which is what a brick course on edge and the top course of a
+       * wall actually are by every property the painters read.
+       */
+      if ([...EDGING_MATERIALS, ...WALLING_MATERIALS].some((material) => material.id === id)) {
+        expect(entry.category, id).toBe('paved-area');
+        continue;
+      }
 
       expect(MATERIALS[entry.category].some((material) => material.id === id)).toBe(true);
     }

@@ -1,7 +1,8 @@
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { Point } from '@garden-studio/schema';
-import { getAssetVariants } from '../../materials/assets/registry';
+import { assetVersion, getAssetVariants } from '../../materials/assets/registry';
 import { CONTACT_SHADOW_SPRITE } from '../../materials/assets/material-assets';
+import { PRESENTATION_SHADOW_SOFTNESS } from '../../materials/render-shadow-layer';
 import { getSurfacePattern } from '../../materials/pattern-cache';
 import { getShadowLayer } from '../../materials/shadow-cache';
 import type { MakeCanvas, PatternCanvas } from '../../materials/render-surface-pattern';
@@ -75,6 +76,8 @@ export class SceneRenderer {
   private world = new Container();
   private layers = new Map<VisualLayer, Container>();
   private textures = new Map<string, Texture>();
+  private surfaceTextures = new Map<PatternCanvas, Texture>();
+  private usedSurfaces = new Set<PatternCanvas>();
   /**
    * The plot's edge, created once and redrawn.
    *
@@ -93,7 +96,7 @@ export class SceneRenderer {
       width,
       height,
       antialias: true,
-      backgroundColor: PLOT_GROUND,
+      backgroundColor: '#f8fafc',
       /*
        * Capped rather than taken from the display. A garden of a few thousand sprites at 3× on a
        * high-density laptop is a lot of fill for no visible gain, and the raster cache is already
@@ -123,6 +126,8 @@ export class SceneRenderer {
   destroy(): void {
     for (const texture of this.textures.values()) texture.destroy(true);
     this.textures.clear();
+    for (const texture of this.surfaceTextures.values()) texture.destroy(true);
+    this.surfaceTextures.clear();
     this.layers.clear();
 
     /*
@@ -151,7 +156,10 @@ export class SceneRenderer {
     const app = this.app;
     if (!app) return;
 
-    for (const container of this.layers.values()) container.removeChildren();
+    for (const container of this.layers.values()) {
+      for (const child of container.removeChildren()) child.destroy({ children: true });
+    }
+    this.usedSurfaces.clear();
 
     /*
      * The viewport in CSS pixels, taken from the caller rather than from the renderer.
@@ -171,6 +179,8 @@ export class SceneRenderer {
 
     this.drawGround(scene, view, toPx);
     this.drawSurfaces(scene, view, toPx);
+    this.drawLevels(scene, toPx);
+    this.drawWalling(scene, view, toPx);
     this.drawShadows(scene, view, toPx);
     this.drawPlants(scene, view, toPx);
 
@@ -184,6 +194,12 @@ export class SceneRenderer {
     this.mask.fill({ color: 0xffffff });
 
     app.render();
+    // Keep only textures used by this frame; CPU rasters remain in the bounded shared LRU.
+    for (const [canvas, texture] of this.surfaceTextures) {
+      if (this.usedSurfaces.has(canvas)) continue;
+      texture.destroy(true);
+      this.surfaceTextures.delete(canvas);
+    }
   }
 
   private drawGround(
@@ -219,12 +235,14 @@ export class SceneRenderer {
         cast,
         boundary: scene.boundary,
         pxPerMetre: view.pxPerMetre,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        softnessMetres: PRESENTATION_SHADOW_SOFTNESS,
       },
       makeCanvas,
     );
     if (!raster) return;
 
-    const sprite = new Sprite(Texture.from(raster.canvas as unknown as HTMLCanvasElement));
+    const sprite = new Sprite(this.rasterTexture(raster.canvas));
     const at = toPx(raster.originMetres);
     sprite.x = at.x;
     sprite.y = at.y;
@@ -233,12 +251,57 @@ export class SceneRenderer {
     this.layers.get('surface')!.addChild(sprite);
   }
 
+  /**
+   * The retaining faces of everything off grade.
+   *
+   * A `Graphics` fill rather than a raster, matching the Canvas2D backend: at 340 mm a wall top is
+   * a couple of pixels across, so a pattern inside it would spend a texture upload on something
+   * that lands as one tone. Between the surfaces and the shadows, because a wall is ground the
+   * shadows fall on.
+   */
+  private drawLevels(scene: RenderScene, toPx: (point: Point) => Point): void {
+    if (scene.levels.length === 0) return;
+
+    const layer = this.layers.get('surface')!;
+
+    for (const level of scene.levels) {
+      // A wall with a material of its own is drawn by `drawWalling`; filling under it would be
+      // paint nobody sees, and the two would disagree at the edge where anti-aliasing lets it show.
+      if (level.surface) continue;
+
+      const band = new Graphics();
+      tracePolygon(band, level.outline, toPx);
+      band.fill({ color: level.colour });
+      layer.addChild(band);
+    }
+  }
+
+  /** The retaining walls that were given a material of their own, rasterised like any surface. */
+  private drawWalling(
+    scene: RenderScene,
+    view: ViewTransform,
+    toPx: (point: Point) => Point,
+  ): void {
+    for (const level of scene.levels) {
+      if (!level.surface?.material) continue;
+
+      const sprite = this.surfaceSprite(level.surface, scene, view);
+      if (!sprite) continue;
+
+      const at = toPx(sprite.originMetres);
+      sprite.node.x = at.x;
+      sprite.node.y = at.y;
+      sprite.node.scale.set(view.pxPerMetre / sprite.pxPerMetre);
+      this.layers.get('surface')!.addChild(sprite.node);
+    }
+  }
+
   private drawSurfaces(
     scene: RenderScene,
     view: ViewTransform,
     toPx: (point: Point) => Point,
   ): void {
-    for (const item of [...scene.ground, ...scene.objects]) {
+    for (const item of scene.ground) {
       const surface = item.surface;
       if (!surface?.material) continue;
 
@@ -251,7 +314,29 @@ export class SceneRenderer {
       /* The raster was drawn at its bucket's scale, which is up to √2 off the live zoom. */
       sprite.node.scale.set(view.pxPerMetre / sprite.pxPerMetre);
 
-      this.layers.get(item.visualLayer)!.addChild(sprite.node);
+      // A pergola's deck receives shadows even though its overhead beams are a structure.
+      this.layers.get(item.element.fillKind === 'base' ? 'base' : 'surface')!.addChild(sprite.node);
+    }
+
+    /*
+     * The edging courses, on the `surface` layer with the accents.
+     *
+     * Rasterised through the same shared cache as every other surface, so a brick course in
+     * Visualise is the identical picture the plan view and the export draw — which is the whole
+     * reason Pixi is a compositor here rather than a second painter.
+     */
+    for (const surface of scene.edging) {
+      if (!surface.material) continue;
+
+      const sprite = this.surfaceSprite(surface, scene, view);
+      if (!sprite) continue;
+
+      const at = toPx(sprite.originMetres);
+      sprite.node.x = at.x;
+      sprite.node.y = at.y;
+      sprite.node.scale.set(view.pxPerMetre / sprite.pxPerMetre);
+
+      this.layers.get('surface')!.addChild(sprite.node);
     }
   }
 
@@ -273,6 +358,9 @@ export class SceneRenderer {
         exclusions: surface.exclusions ?? undefined,
         centreline: surface.centreline ?? undefined,
         element: surface.element,
+        layers: surface.layers,
+        assetVersion: assetVersion(),
+        pixelRatio: Math.min(2, window.devicePixelRatio || 1),
       },
       makeCanvas,
     );
@@ -284,14 +372,7 @@ export class SceneRenderer {
      * pixels. `Texture.from` on the same canvas returns the same texture, so this map only has to
      * stop us re-uploading.
      */
-    const key = `${surface.elementId}:${raster.pxPerMetre}:${raster.widthPx}x${raster.heightPx}`;
-    let texture = this.textures.get(key);
-    if (!texture) {
-      texture = Texture.from(raster.canvas as unknown as HTMLCanvasElement);
-      this.textures.set(key, texture);
-    } else {
-      texture.source.update();
-    }
+    const texture = this.rasterTexture(raster.canvas);
 
     return {
       node: new Sprite(texture),
@@ -380,8 +461,20 @@ export class SceneRenderer {
   private cachedTexture(key: string, source: HTMLCanvasElement): Texture {
     let texture = this.textures.get(key);
     if (!texture) {
-      texture = Texture.from(source);
+      // Each renderer owns its GPU textures. The editor and Visualise share CPU images,
+      // but retiring a texture in one view must never destroy the other view's texture.
+      texture = Texture.from(source, true);
       this.textures.set(key, texture);
+    }
+    return texture;
+  }
+
+  private rasterTexture(canvas: PatternCanvas): Texture {
+    this.usedSurfaces.add(canvas);
+    let texture = this.surfaceTextures.get(canvas);
+    if (!texture) {
+      texture = Texture.from(canvas as unknown as HTMLCanvasElement, true);
+      this.surfaceTextures.set(canvas, texture);
     }
     return texture;
   }

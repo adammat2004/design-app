@@ -145,3 +145,38 @@ export function rectNormal(rect: RectShape, local: Point): Point {
   const sin = Math.sin(radians);
   return { x: local.x * cos - local.y * sin, y: local.x * sin + local.y * cos };
 }
+
+/**
+ * A flight of steps, as the lines between its treads.
+ *
+ * The tread count is **not a parameter**: it comes from `stepFlight`, which divides the element's
+ * own `elevation` into whole risers. So a flight that climbs 450 mm draws three nosings and one
+ * that climbs 900 draws five, and neither can disagree with the level change it serves — there is
+ * no count stored anywhere to go stale.
+ *
+ * Returned as the nosing lines rather than as filled treads, which is how a flight is drawn on a
+ * plan: the treads are the paving either side of them, and a run of alternating filled rectangles
+ * reads as decking. `descending` is the direction of travel down the flight, so the nosings run
+ * across it — a flight always steps down away from the thing it serves.
+ */
+export function stepNosings(rect: RectShape, risers: number): Point[][] {
+  if (risers < 1) return [];
+
+  const at = frame(rect);
+  const hw = rect.width / 2;
+  const hd = rect.depth / 2;
+  const lines: Point[][] = [];
+
+  /*
+   * `risers` risers means `risers` nosings, counted from the top edge and *excluding* the bottom
+   * one: the last nosing is the edge of the flight itself, which the element's own outline already
+   * draws. Drawing it again doubles a line on a boundary that is often also a retaining face.
+   */
+  for (let i = 0; i < risers; i += 1) {
+    const t = i / risers;
+    const y = -hd + rect.depth * t;
+    lines.push([at(-hw, y), at(hw, y)]);
+  }
+
+  return lines;
+}

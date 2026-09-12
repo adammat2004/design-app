@@ -1,6 +1,6 @@
 {
-  "version": "5a0999207197",
-  "generatedAt": "2026-09-05T20:48:02.136Z",
+  "version": "5a28c64ec789",
+  "generatedAt": "2026-09-12T14:36:46.727Z",
   "assets": [
     {
       "id": "face-concrete-slab",
@@ -43,6 +43,58 @@
       "meanColour": "#a76129"
     },
     {
+      "id": "face-edging-brick",
+      "variant": 1,
+      "file": "textures/face-edging-brick-1.webp",
+      "widthPx": 256,
+      "heightPx": 512,
+      "meanColour": "#ab5833",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:33:33.410Z",
+        "promptHash": "5fab22b82d8f"
+      }
+    },
+    {
+      "id": "face-edging-brick",
+      "variant": 2,
+      "file": "textures/face-edging-brick-2.webp",
+      "widthPx": 256,
+      "heightPx": 512,
+      "meanColour": "#b46d48",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:33:42.220Z",
+        "promptHash": "320b377f9dd0"
+      }
+    },
+    {
+      "id": "face-edging-setts",
+      "variant": 1,
+      "file": "textures/face-edging-setts-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#777a7d",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:34:59.010Z",
+        "promptHash": "98937ad18f53"
+      }
+    },
+    {
+      "id": "face-edging-setts",
+      "variant": 2,
+      "file": "textures/face-edging-setts-2.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#80858a",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:35:15.527Z",
+        "promptHash": "c104ace2191d"
+      }
+    },
+    {
       "id": "face-hardwood",
       "variant": 1,
       "file": "textures/face-hardwood-1.webp",
@@ -51,12 +103,64 @@
       "meanColour": "#754120"
     },
     {
+      "id": "face-hardwood",
+      "variant": 2,
+      "file": "textures/face-hardwood-2.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#693a1d",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:03:26.785Z",
+        "promptHash": "b1035da514bd"
+      }
+    },
+    {
+      "id": "face-kerb-concrete",
+      "variant": 1,
+      "file": "textures/face-kerb-concrete-1.webp",
+      "widthPx": 768,
+      "heightPx": 256,
+      "meanColour": "#b2b1b0",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:34:04.895Z",
+        "promptHash": "1ef1800a9bf6"
+      }
+    },
+    {
+      "id": "face-kerb-concrete",
+      "variant": 2,
+      "file": "textures/face-kerb-concrete-2.webp",
+      "widthPx": 768,
+      "heightPx": 256,
+      "meanColour": "#aeaca7",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:34:15.942Z",
+        "promptHash": "1844ba3b13cd"
+      }
+    },
+    {
       "id": "face-painted-timber",
       "variant": 1,
       "file": "textures/face-painted-timber-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#b0bba8"
+    },
+    {
+      "id": "face-painted-timber",
+      "variant": 2,
+      "file": "textures/face-painted-timber-2.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#9ea59e",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:03:41.165Z",
+        "promptHash": "28d99697ef0b"
+      }
     },
     {
       "id": "face-porcelain-tile",
@@ -75,12 +179,51 @@
       "meanColour": "#c7c3bc"
     },
     {
+      "id": "face-sleeper-timber",
+      "variant": 1,
+      "file": "textures/face-sleeper-timber-1.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#887971",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:35:33.382Z",
+        "promptHash": "7897b3ce56b3"
+      }
+    },
+    {
+      "id": "face-sleeper-timber",
+      "variant": 2,
+      "file": "textures/face-sleeper-timber-2.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#8a837f",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:35:47.158Z",
+        "promptHash": "8337cefbce7d"
+      }
+    },
+    {
       "id": "face-softwood",
       "variant": 1,
       "file": "textures/face-softwood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#c7bcaa"
+    },
+    {
+      "id": "face-softwood",
+      "variant": 2,
+      "file": "textures/face-softwood-2.webp",
+      "widthPx": 1024,
+      "heightPx": 683,
+      "meanColour": "#c0b696",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:02:53.840Z",
+        "promptHash": "cb502ef8131d"
+      }
     },
     {
       "id": "face-stepping-stone",
@@ -137,6 +280,84 @@
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#c4bdb2"
+    },
+    {
+      "id": "face-stone-setts",
+      "variant": 1,
+      "file": "textures/face-stone-setts-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#8b8882",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:02:17.480Z",
+        "promptHash": "fd69ea17e6af"
+      }
+    },
+    {
+      "id": "face-stone-setts",
+      "variant": 2,
+      "file": "textures/face-stone-setts-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#7a7d7b",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:02:18.595Z",
+        "promptHash": "3f4faf267b06"
+      }
+    },
+    {
+      "id": "face-stone-setts",
+      "variant": 3,
+      "file": "textures/face-stone-setts-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#797876",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:03:09.516Z",
+        "promptHash": "28baba405c5d"
+      }
+    },
+    {
+      "id": "face-walling-stone",
+      "variant": 1,
+      "file": "textures/face-walling-stone-1.webp",
+      "widthPx": 768,
+      "heightPx": 256,
+      "meanColour": "#a39d85",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:36:08.410Z",
+        "promptHash": "2f0ac5f0ad71"
+      }
+    },
+    {
+      "id": "face-walling-stone",
+      "variant": 2,
+      "file": "textures/face-walling-stone-2.webp",
+      "widthPx": 768,
+      "heightPx": 256,
+      "meanColour": "#a8a294",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:36:28.430Z",
+        "promptHash": "7bfe3c06a07b"
+      }
+    },
+    {
+      "id": "face-walling-stone",
+      "variant": 3,
+      "file": "textures/face-walling-stone-3.webp",
+      "widthPx": 768,
+      "heightPx": 256,
+      "meanColour": "#a6a393",
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-12T14:36:46.707Z",
+        "promptHash": "dd3669eb589b"
+      }
     },
     {
       "id": "furniture-bbq",
@@ -256,6 +477,20 @@
       "opaqueRadiusRatio": 1.467
     },
     {
+      "id": "fx-light-pool",
+      "variant": 1,
+      "file": "sprites/fx-light-pool-1.webp",
+      "widthPx": 256,
+      "heightPx": 256,
+      "meanColour": "#ffecc6",
+      "opaqueRadiusRatio": 0.436,
+      "provenance": {
+        "model": "procedural",
+        "generatedAt": "2026-09-10T18:53:22.956Z",
+        "promptHash": "eb63df2fb6fd"
+      }
+    },
+    {
       "id": "fx-soft-shadow",
       "variant": 1,
       "file": "sprites/fx-soft-shadow-1.webp",
@@ -318,6 +553,118 @@
         "model": "gpt-image-2 (medium)",
         "generatedAt": "2026-09-05T18:10:42.253Z",
         "promptHash": "edfac0a2d331"
+      }
+    },
+    {
+      "id": "light-bollard",
+      "variant": 1,
+      "file": "sprites/light-bollard-1.webp",
+      "widthPx": 192,
+      "heightPx": 192,
+      "meanColour": "#313232",
+      "opaqueRadiusRatio": 1.001,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:55:10.762Z",
+        "promptHash": "20cc99ca371c"
+      }
+    },
+    {
+      "id": "light-bollard",
+      "variant": 2,
+      "file": "sprites/light-bollard-2.webp",
+      "widthPx": 192,
+      "heightPx": 192,
+      "meanColour": "#786148",
+      "opaqueRadiusRatio": 1.005,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:55:12.873Z",
+        "promptHash": "6a7ab2128589"
+      }
+    },
+    {
+      "id": "light-recessed",
+      "variant": 1,
+      "file": "sprites/light-recessed-1.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#868583",
+      "opaqueRadiusRatio": 1.003,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:56:04.964Z",
+        "promptHash": "b91ba67c1312"
+      }
+    },
+    {
+      "id": "light-recessed",
+      "variant": 2,
+      "file": "sprites/light-recessed-2.webp",
+      "widthPx": 128,
+      "heightPx": 128,
+      "meanColour": "#897351",
+      "opaqueRadiusRatio": 1.005,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:56:03.924Z",
+        "promptHash": "e16192697935"
+      }
+    },
+    {
+      "id": "light-spike",
+      "variant": 1,
+      "file": "sprites/light-spike-1.webp",
+      "widthPx": 192,
+      "heightPx": 192,
+      "meanColour": "#5b5b5b",
+      "opaqueRadiusRatio": 0.998,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:54:22.601Z",
+        "promptHash": "827d8edf4242"
+      }
+    },
+    {
+      "id": "light-spike",
+      "variant": 2,
+      "file": "sprites/light-spike-2.webp",
+      "widthPx": 192,
+      "heightPx": 192,
+      "meanColour": "#7f7e7c",
+      "opaqueRadiusRatio": 1,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:54:22.737Z",
+        "promptHash": "c58c77a0bebd"
+      }
+    },
+    {
+      "id": "light-wall",
+      "variant": 1,
+      "file": "sprites/light-wall-1.webp",
+      "widthPx": 256,
+      "heightPx": 140,
+      "meanColour": "#383839",
+      "opaqueRadiusRatio": 1.903,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:56:44.644Z",
+        "promptHash": "5eee5780c901"
+      }
+    },
+    {
+      "id": "light-wall",
+      "variant": 2,
+      "file": "sprites/light-wall-2.webp",
+      "widthPx": 256,
+      "heightPx": 140,
+      "meanColour": "#9f9c9a",
+      "opaqueRadiusRatio": 1.903,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T18:56:43.444Z",
+        "promptHash": "01c52bce15b6"
       }
     },
     {
@@ -840,6 +1187,34 @@
       }
     },
     {
+      "id": "plant-shrub-topiary",
+      "variant": 1,
+      "file": "sprites/plant-shrub-topiary-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#415e25",
+      "opaqueRadiusRatio": 1.014,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:05:07.354Z",
+        "promptHash": "8a4c65eeeb97"
+      }
+    },
+    {
+      "id": "plant-shrub-topiary",
+      "variant": 2,
+      "file": "sprites/plant-shrub-topiary-2.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#3d532e",
+      "opaqueRadiusRatio": 1.008,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:05:24.121Z",
+        "promptHash": "508b619c5d0f"
+      }
+    },
+    {
       "id": "play-raised-bed",
       "variant": 1,
       "file": "sprites/play-raised-bed-1.webp",
@@ -1074,6 +1449,34 @@
       "opaqueRadiusRatio": 0.998
     },
     {
+      "id": "tree-conifer",
+      "variant": 3,
+      "file": "sprites/tree-conifer-3.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#374c31",
+      "opaqueRadiusRatio": 1.118,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:04:17.221Z",
+        "promptHash": "35d5a684beef"
+      }
+    },
+    {
+      "id": "tree-conifer",
+      "variant": 4,
+      "file": "sprites/tree-conifer-4.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#394933",
+      "opaqueRadiusRatio": 1.069,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:04:30.975Z",
+        "promptHash": "1d4f7825a0f6"
+      }
+    },
+    {
       "id": "tree-fruit",
       "variant": 1,
       "file": "sprites/tree-fruit-1.webp",
@@ -1099,6 +1502,43 @@
         "model": "gpt-image-2 (medium)",
         "generatedAt": "2026-09-05T18:09:07.634Z",
         "promptHash": "4444e57b0ad6"
+      }
+    },
+    {
+      "id": "tree-japanese-maple",
+      "variant": 1,
+      "file": "sprites/tree-japanese-maple-1.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#6d2c33",
+      "opaqueRadiusRatio": 1.04
+    },
+    {
+      "id": "tree-japanese-maple",
+      "variant": 2,
+      "file": "sprites/tree-japanese-maple-2.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#8d2a32",
+      "opaqueRadiusRatio": 1.09,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:05:58.087Z",
+        "promptHash": "5110ca028e1c"
+      }
+    },
+    {
+      "id": "tree-japanese-maple",
+      "variant": 3,
+      "file": "sprites/tree-japanese-maple-3.webp",
+      "widthPx": 768,
+      "heightPx": 768,
+      "meanColour": "#893333",
+      "opaqueRadiusRatio": 1.07,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-10T15:09:18.106Z",
+        "promptHash": "422f8c67aea4"
       }
     },
     {
@@ -1170,15 +1610,6 @@
         "generatedAt": "2026-09-05T18:07:03.265Z",
         "promptHash": "27526a4ea326"
       }
-    },
-    {
-      "id": "tree-japanese-maple",
-      "variant": 1,
-      "file": "sprites/tree-japanese-maple-1.webp",
-      "widthPx": 768,
-      "heightPx": 768,
-      "meanColour": "#6d2c33",
-      "opaqueRadiusRatio": 1.04
     }
   ]
 }

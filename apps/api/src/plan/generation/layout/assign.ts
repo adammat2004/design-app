@@ -44,15 +44,11 @@ export function assignSlots(
   const unassigned: DesiredFeature[] = [];
 
   for (const feature of features) {
-    const wanted = slotPreferences(feature);
-    const slot = [...free.values()].find((candidate) => wanted.includes(candidate.kind));
-
-    // Preference order first, then whatever is left in that order.
-    const preferred = wanted
+    // In preference order: the first free slot of the first kind on the list that has one.
+    const chosen = slotPreferences(feature)
       .map((kind) => [...free.values()].find((candidate) => candidate.kind === kind))
       .find((candidate) => candidate !== undefined);
 
-    const chosen = preferred ?? slot;
     if (!chosen) {
       unassigned.push(feature);
       continue;

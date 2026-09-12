@@ -43,9 +43,38 @@ export const ElementCategorySchema = z.enum([
    * selection, but no area anyone would schedule and no material anyone would lay.
    */
   'furniture',
+  /**
+   * Light fittings: a spike uplight in a bed, a bollard beside a path, a light in a step.
+   *
+   * **Not `furniture`, and the distinction is load-bearing rather than tidy.** Furniture is
+   * *hosted*: a dining set sits on the terrace, and `concepts.service.test.ts` pins that as an
+   * invariant — every furniture element must lie wholly inside exactly one built feature. Lighting
+   * is the opposite by nature. A spike light stands in a planting bed, which is a `fill`; a bollard
+   * runs beside a path, which is a polyline; a wall light is on the house, which is not an element
+   * at all. Every one of those is zero hosts, so calling a light "furniture" would have meant
+   * weakening the rule that keeps a dining set on its patio.
+   *
+   * Shares furniture's other properties, and `COUNTED_CATEGORIES` is where that is said once: an
+   * outline for placing and selecting, no area anyone would schedule, counted in items rather than
+   * square metres, and no weight in the cost index.
+   */
+  'lighting',
   'existing-feature',
 ]);
 export type ElementCategory = z.infer<typeof ElementCategorySchema>;
+
+/**
+ * Categories measured in items rather than in square metres.
+ *
+ * `elementArea` of a dining set is 2.4 m² and of a bollard about 0.02 m², and neither is a
+ * quantity anyone orders — the honest line is "1 item". Said once here so the schedule, the cost
+ * index and the coverage sampler cannot disagree about which categories those are.
+ */
+export const COUNTED_CATEGORIES: ElementCategory[] = ['furniture', 'lighting'];
+
+export function isCounted(category: ElementCategory): boolean {
+  return COUNTED_CATEGORIES.includes(category);
+}
 
 /** Whether this element is something the brief asked for, or ground cover under it. */
 export const ElementRoleSchema = z.enum(['feature', 'fill']);
@@ -104,7 +133,37 @@ export const DesignElementSchema = z.object({
       rotation: z.number().default(0),
     })
     .optional(),
-  /** Metres above grade. Carried for costing later; nothing renders differently because of it. */
+  /**
+   * What this surface is edged with, or absent for the spade cut every border has for free.
+   *
+   * **A field on the host rather than an element of its own, and that is the whole design.** An
+   * edging run is a function of the outline it follows, so storing the run would mean two things
+   * that can disagree the moment the bed is dragged — and keeping them in step would put a
+   * dependency graph inside the editor's move, resize and rotate actions. `plan/edging.ts` derives
+   * the runs instead, exactly as `computeZones` derives zones and `openingSegment` derives a door.
+   *
+   * A `MaterialId` from `EDGING_MATERIALS`, which is deliberately not in `MATERIALS`: there is no
+   * category here to key it on. Only the four ground-covering categories may carry one — see
+   * `canBeEdged`.
+   */
+  edging: z.string().optional(),
+  /**
+   * What this surface is retained in, where it does not sit on grade.
+   *
+   * A `MaterialId` from `WALLING_MATERIALS`, and meaningless without an `elevation` — the wall is
+   * derived from the edge of the raised element, so with nothing raised there is no wall to build.
+   * Absent is the default and a real answer: a plain upstand in the element's own paving, darkened,
+   * which is what an in-situ concrete edge looks like. Same shape and same reasoning as `edging`.
+   */
+  retaining: z.string().optional(),
+  /**
+   * Metres above grade, positive up.
+   *
+   * **Drawn since `PLAN_DOCUMENT_VERSION` 3.** It was carried for costing and rendered by nothing;
+   * now a raised element grows a retaining face (`plan/levels.ts`) and casts its shadow from the
+   * top of the plinth it stands on. There is no ground model behind it — a level change is local to
+   * the element that states one, and nothing anywhere infers a slope.
+   */
   elevation: z.number().optional(),
   /**
    * How tall the thing itself is, in metres. **Not `elevation`** — that is where its base sits,

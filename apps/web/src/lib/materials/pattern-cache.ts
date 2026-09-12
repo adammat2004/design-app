@@ -77,6 +77,8 @@ function rasterBytes(entry: CacheEntry): number {
 }
 
 export interface PatternRequest {
+  /** A resolved scene stack must never collide with the editor's full planting texture. */
+  layers?: import('./layers').SurfaceLayer[];
   exclusions?: Point[][];
   /** The surface's own id, which is also what makes its tones differ from its neighbour's. */
   elementId: string;
@@ -205,9 +207,10 @@ export function patternKey(request: PatternRequest): string {
     light,
     request.assetVersion ?? 'none',
     hashString(JSON.stringify(request.exclusions ?? [])).toString(36),
+    request.layers ? hashString(JSON.stringify(request.layers)).toString(36) : 'resolved-by-material',
     zoomBucket(request.pxPerMetre),
     request.pixelRatio ?? 1,
-    request.plantingStyle ?? '',
+    request.plantingStyle ?? request.element?.plantingStyle ?? '',
   ].join(':');
 }
 
@@ -256,6 +259,7 @@ export function getSurfacePattern(
       centreline: request.centreline,
       element: request.element,
       exclusions: request.exclusions,
+      layers: request.layers,
     },
   );
 

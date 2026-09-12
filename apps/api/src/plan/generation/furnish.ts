@@ -1,7 +1,9 @@
 import {
   geometryClearsHouse,
   geometryIsLegal,
+  geometryOutline,
   polygonContainsPolygon,
+  polygonsIntersect,
   SYMBOLS,
   type DesignElement,
   type DesiredFeature,
@@ -9,8 +11,11 @@ import {
   type Point,
   type SymbolId,
 } from '@garden-studio/schema';
-import { FURNISHINGS, HOST_SYMBOLS, materialFor } from './archetypes.js';
+import { materialFor } from './archetypes.js';
 import type { DesignConstraints } from './constraints.js';
+import { FURNISHINGS, HOST_SYMBOLS, MARGIN } from './furnishings.js';
+
+export { hostFloor, MARGIN } from './furnishings.js';
 
 /**
  * Puts a thing inside the feature the brief asked for.
@@ -26,9 +31,6 @@ import type { DesignConstraints } from './constraints.js';
  * caller like everything else, and the concept test's disjointness rule is relaxed for it alone:
  * furniture is *supposed* to overlap the surface it stands on.
  */
-
-/** Clear surface kept round an item, so a table does not touch the edge of its patio. */
-const MARGIN = 0.3;
 
 export interface FurnishOptions {
   /** Which concept this is; picks the first choice from the feature's list. */
@@ -85,6 +87,62 @@ export function furnish(
   }
 
   return null;
+}
+
+/** A restrained group of independently editable objects, fitted to the actual room. */
+export function furnishRoom(
+  host: DesignElement,
+  feature: DesiredFeature,
+  options: FurnishOptions,
+): DesignElement[] {
+  const primary = furnish(host, feature, options);
+  if (!primary) return [];
+  const items = [primary];
+  const hostRing = geometryOutline(host.shape);
+  const add = (symbol: SymbolId, shape: PlanGeometry) => {
+    const outline = geometryOutline(shape);
+    if (!polygonContainsPolygon(hostRing, outline) || !geometryIsLegal(shape, options.boundary) ||
+      !geometryClearsHouse(shape, options.houseRing) ||
+      items.some((item) => polygonsIntersect(outline, geometryOutline(item.shape)))) return;
+    items.push({
+      id: options.nextId(), category: 'furniture', role: 'feature', zone: host.zone,
+      name: SYMBOLS[symbol].label, symbol, shape, height: SYMBOLS[symbol].height,
+      material: materialFor('furniture', options.constraints, options.index),
+    });
+  };
+
+  if (feature === 'firePit' && host.shape.kind === 'point' && host.shape.radius >= 1.8) {
+    // Two seats facing the bowl, with a clear entry on either side of the circle.
+    for (const sign of [-1, 1]) {
+      const offset = host.shape.radius - 0.65;
+      if (offset - 0.3 < 0.85) continue;
+      add('bench', { kind: 'rect', centre: { x: host.shape.at.x, y: host.shape.at.y + sign * offset },
+        width: 1.6, depth: 0.6, rotation: sign === 1 ? 180 : 0 });
+    }
+  }
+
+  if ((feature === 'seating' || feature === 'pergola') && host.shape.kind === 'rect') {
+    const hostShape = host.shape;
+    const radians = hostShape.rotation * Math.PI / 180;
+    const at = (x: number, y: number) => ({
+      x: hostShape.centre.x + x * Math.cos(radians) - y * Math.sin(radians),
+      y: hostShape.centre.y + x * Math.sin(radians) + y * Math.cos(radians),
+    });
+    if (primary.symbol === 'lounger' && hostShape.width >= 3.4 && hostShape.depth >= 2.8) {
+      // A pair has a purpose; an isolated lounger in the middle of a generous room does not.
+      if (primary.shape.kind === 'rect') {
+        const second = { ...primary.shape, centre: at(1.05, 0) };
+        add('lounger', second);
+      }
+    }
+    if (options.constraints.budget !== 'low') {
+      for (const sign of [-1, 1]) {
+        add('planter', { kind: 'rect', centre: at(sign * (hostShape.width / 2 - 0.65), hostShape.depth / 2 - 0.65),
+          width: 0.6, depth: 0.6, rotation: hostShape.rotation });
+      }
+    }
+  }
+  return items;
 }
 
 /**

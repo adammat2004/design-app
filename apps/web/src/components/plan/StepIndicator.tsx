@@ -15,7 +15,7 @@ import { Check } from 'lucide-react';
  */
 export const PLAN_STEPS = [
   { number: 1, label: 'Map dimensions', step: 'map' },
-  { number: 2, label: 'Existing features', step: 'features' },
+  { number: 2, label: 'Existing garden', step: 'features' },
   { number: 3, label: 'Your vision', step: 'brief' },
   { number: 4, label: 'Design concepts', step: 'concepts' },
   { number: 5, label: 'Editor', step: 'editor' },

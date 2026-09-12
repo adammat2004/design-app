@@ -1,5 +1,6 @@
 import type { ElementCategory } from './concepts.js';
 import type { MaterialId } from './materials.js';
+import { DEFAULT_STOREYS } from './site.js';
 import { resolveSymbol, SYMBOLS } from './symbols.js';
 
 /**
@@ -40,6 +41,13 @@ export const CATEGORY_HEIGHTS: Record<ElementCategory, number> = {
   structure: 2.2,
   /** Table height. A symbol nearly always says more — see `SYMBOLS` — and wins when it does. */
   furniture: 0.75,
+  /*
+   * A spike light, which is the commonest fitting and the middle of the four. Every light carries
+   * a symbol in practice and the symbol wins, so this is only the answer for a fitting placed with
+   * none — and it is deliberately above `MIN_SHADOW_HEIGHT` rather than below it, because a light
+   * that silently stopped casting would be indistinguishable from one that failed to draw.
+   */
+  lighting: 0.3,
   /** Unknown by definition — it is whatever was already there. A conservative middle. */
   'existing-feature': 1,
 };
@@ -106,18 +114,37 @@ export function heightFor(element: {
 export const MIN_SHADOW_HEIGHT = 0.15;
 
 /**
+ * The eaves line for a house of so many storeys, in metres.
+ *
+ * A table rather than `storeys × STOREY_HEIGHT` because a house is not a stack of rooms: a
+ * bungalow's eaves sit at about three metres, a two-storey house at six, and a third floor adds
+ * less than the second because it is often in the roof. Six for two storeys is the value every
+ * plan drew with before `storeys` existed, so the default changes nothing.
+ */
+export const EAVES_BY_STOREYS: Record<1 | 2 | 3, number> = { 1: 3, 2: 6, 3: 8.7 };
+
+/**
  * How tall the house is treated as, in metres.
  *
- * A constant rather than a manifest lookup because the house is not a `DesignElement` — it is the
- * building the garden is attached to, and the plan records its footprint, not its storeys. Six
- * metres is a two-storey eaves line, which is the shadow that matters: it is the largest single
- * shadow in most gardens and usually the reason the seating is where it is.
+ * The house is not a `DesignElement`, so its height does not come from the manifest: it comes
+ * from the one vertical fact the plan records about the building, `HouseFootprint.storeys`. That
+ * is the shadow that matters — the largest single shadow in most gardens and usually the reason
+ * the seating is where it is.
  *
- * Deliberately not user-editable yet. Guessing 6 m is honest — a house is roughly this tall — in
- * a way that guessing a latitude is not, because the answer varies by a metre or two rather than
- * by the entire hemisphere.
+ * Tolerates an absent `storeys` for the reason `patternAnchor` and `scatterForm` do: fixtures and
+ * hand-built houses never go through `.parse()`, so a Zod default alone would look applied and
+ * never fire.
  */
-export const HOUSE_HEIGHT = 6;
+export function houseHeight(house: { storeys?: number | undefined } | null | undefined): number {
+  const storeys = house?.storeys ?? DEFAULT_STOREYS;
+  return EAVES_BY_STOREYS[Math.min(3, Math.max(1, Math.round(storeys))) as 1 | 2 | 3];
+}
+
+/**
+ * The two-storey eaves line, kept for callers that have no house to ask — the property symbols
+ * and the roof both say why six metres is an honest guess where a latitude would not be.
+ */
+export const HOUSE_HEIGHT = EAVES_BY_STOREYS[DEFAULT_STOREYS as 2];
 
 /**
  * Whether this element should be handed to the shadow pass at all.
@@ -125,11 +152,19 @@ export const HOUSE_HEIGHT = 6;
  * The occluder set is small on purpose — trees, hedges, the fence, the house, structures — which
  * is what makes a separate shadow layer cheap. Surfaces are flat and drop out here rather than
  * being projected to a zero-length shadow and discarded later.
+ *
+ * **`elevation` counts towards that, and leaving it out was a real bug.** A terrace is flat, so
+ * `heightFor` is 0 and it dropped out here — which meant a terrace raised 340 mm was filtered away
+ * before anything downstream could give it the plinth it stands on, and the raised edge cast
+ * nothing at all. A raised surface is a wall as far as the sun is concerned, whatever it is in
+ * itself. Negative elevations are excluded for the reason `shadowOccluders` gives: a sunken area
+ * is shaded by ground this model does not have.
  */
 export function castsShadow(element: {
   category: ElementCategory;
   material?: string | undefined;
   height?: number | undefined;
+  elevation?: number | undefined;
 }): boolean {
-  return heightFor(element) >= MIN_SHADOW_HEIGHT;
+  return heightFor(element) + Math.max(0, element.elevation ?? 0) >= MIN_SHADOW_HEIGHT;
 }

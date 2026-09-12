@@ -173,6 +173,14 @@ describe('shadowOccluders', () => {
     expect(occluders[0]!.outline.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('casts a shorter shadow from a bungalow than from the default two storeys', () => {
+    const bungalow = { ...rectangleHouse({ x: 10, y: 4 }, 8, 6), storeys: 1 };
+    const [occluder] = shadowOccluders([], bungalow);
+
+    expect(occluder!.height).toBeLessThan(HOUSE_HEIGHT);
+    expect(occluder!.height).toBeGreaterThanOrEqual(MIN_SHADOW_HEIGHT);
+  });
+
   it('leaves out everything that lies flat on the ground', () => {
     // Paving, gravel, lawn and water are all at or below grade. Dropping them here is what keeps
     // the occluder set small enough for a separate shadow layer to be cheap.

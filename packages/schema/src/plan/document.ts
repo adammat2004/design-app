@@ -22,7 +22,7 @@ import { UnitSchema } from './units.js';
  * before/after strings in the user's own units.
  */
 
-export const PLAN_DOCUMENT_VERSION = 2;
+export const PLAN_DOCUMENT_VERSION = 3;
 
 export const PlanDocumentSchema = z.object({
   version: z.number().int().positive().default(PLAN_DOCUMENT_VERSION),
@@ -60,6 +60,18 @@ const MIGRATIONS: Record<number, (document: unknown) => unknown> = {
    * point is not that these particular ids are meaningful, it is that from now on they are stable.
    * `site.orientation` needs nothing here: it is an addition with a default, so Zod fills it.
    */
+  /**
+   * 2 → 3: `elevation` starts being drawn.
+   *
+   * A no-op, and deliberately one. Nothing about the document's *shape* changes — `elevation` has
+   * been on `DesignElement` since long before this — but its **meaning** does: it was documented as
+   * "carried for costing later; nothing renders differently because of it", and from here a raised
+   * element draws a retaining face and casts its shadow from the top of it. A stored v2 plan with
+   * `elevation: 0.45` on a terrace meant the same thing it means now, so there is nothing to
+   * rewrite; the version is bumped so the change has a date rather than because a row needs help.
+   */
+  2: (document) => document,
+
   1: (document) => {
     const root = document as { site?: { house?: { outline?: unknown[] } | null } } | null;
     const house = root?.site?.house;

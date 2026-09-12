@@ -35,6 +35,12 @@ export const OpeningTypeSchema = z.enum([
 ]);
 export type OpeningType = z.infer<typeof OpeningTypeSchema>;
 
+/**
+ * Narrower than this and it is not an opening anybody builds — a 400 mm window is the smallest
+ * thing in a catalogue. The floor a resize on the plan stops at.
+ */
+export const MIN_OPENING_WIDTH = 0.4;
+
 /** Hinged doors sweep an arc that has to stay clear; sliding and bifold ones do not. */
 export const SwingSchema = z.enum(['none', 'inward', 'outward']);
 export type Swing = z.infer<typeof SwingSchema>;

@@ -49,8 +49,16 @@ export const MIN_DRAWN_UNIT_PX = 1.4;
  *
  * At three or four pixels a highlight and a shadow are a pixel each and read as noise — they make
  * the surface look dithered rather than lit. The flat tone alone is more honest.
+ *
+ * **Nine, not twelve.** Twelve was set when the smallest paving unit in the catalogue was 600 mm,
+ * which is 15.6 px at the zoom a plan is read at. Now that a slab may be 400 mm — 10.4 px there —
+ * twelve would take the light off every terrace on every concept card and leave the paving finer
+ * but flatter, which is the opposite of the point. Nine is the line that keeps a 400 mm slab and a
+ * coursed pack lit at plan zoom while leaving a 300 mm sett flat, which is right: you do not see a
+ * chamfer on a sett from that far away. It is still well clear of the three-or-four-pixel case this
+ * constant exists to defend against.
  */
-export const MIN_SHADED_PX = 12;
+export const MIN_SHADED_PX = 9;
 
 /**
  * Below this many pixels a symbol is drawn as a dot rather than as itself.
@@ -77,6 +85,23 @@ export function tierFor(pattern: MaterialPattern, pxPerMetre: number): DetailTie
         (Math.min(pattern.moduleSize.w, pattern.moduleSize.h) / MM_PER_METRE) * pxPerMetre;
       if (smallest < MIN_DRAWN_MODULE_PX) return 'mass';
       return shadesAt(smallest) ? 'detail' : 'units';
+    }
+
+    /*
+     * A pack is judged on its **mean course**, not on its smallest member.
+     *
+     * `Math.min` is right for a grid, where every unit is the same and the smallest dimension is
+     * the one that stops reading. A pack mixes sizes on purpose, so the smallest member would drag
+     * a whole terrace to a flat tone on the strength of the one course in it that is short. The
+     * tier is documented above as what is worth *attempting* for a surface, and a coursed pack's
+     * grain is its coursing.
+     */
+    case 'pack': {
+      const mean =
+        pattern.courses.reduce((total, course) => total + course, 0) / pattern.courses.length;
+      const coursePx = (mean / MM_PER_METRE) * pxPerMetre;
+      if (coursePx < MIN_DRAWN_MODULE_PX) return 'mass';
+      return shadesAt(coursePx) ? 'detail' : 'units';
     }
 
     /*
@@ -142,6 +167,45 @@ export const MIN_TEXTURED_TILE_PX = 8;
  * becoming clutter is that a surface which has fallen to the `mass` tier draws no edge at all.
  */
 export const MIN_CUT_EDGE_PX = 0.9;
+
+/**
+ * The thinnest a joint between two modules is drawn, in pixels — and the most of a module it may
+ * take.
+ *
+ * **This reverses the decision that a sub-pixel joint is fine.** A 10 mm joint on a 600 mm slab is
+ * 0.21 px at the zoom a whole plan is read at and 0.51 px close up: it never lands as a line, only
+ * as a faint blend, so neighbouring slabs merge and a dozen of them read as about five. That is
+ * the exact complaint — "the slabs are way too big" — about a surface whose slabs are the size the
+ * manifest says. Measuring a shipped render bears it out: the true pitch is 58 px and the eye
+ * reads nearly 90.
+ *
+ * The floor is the same answer the bevel three lines from the joint code already gives ("at least
+ * a whole pixel, or the bevel is drawn at a fraction of one and simply does not appear"), and the
+ * same answer as `MIN_CUT_EDGE_PX` above. The joint was the one drawn line with no floor, and that
+ * asymmetry was the defect.
+ *
+ * **`MAX_JOINT_SHARE` is why this stays honest.** Joints are drawn as the background showing
+ * between modules, so an unbounded floor would swallow a small unit: a 200 mm sett at plan zoom has
+ * a 5.5 px pitch, and a whole pixel of that is 18% against a real 4.8% — the surface would read as
+ * a grey mesh rather than as stone. Capped, the convention overstates the gap on small units and
+ * never dominates them.
+ *
+ * Note what is *not* floored: the pitch. Where each module sits, how many there are, and the counts
+ * the schedule orders from are all still exactly `(moduleSize + jointWidth) / 1000`. Only the gap
+ * drawn between them is a convention, in the way the bevel is.
+ */
+export const MIN_JOINT_PX = 1;
+export const MAX_JOINT_SHARE = 0.12;
+
+/**
+ * How wide to draw the joint between two modules a `pitchPx` apart, given its true width.
+ *
+ * Exact in the middle of the range, floored below it, capped above — so a joint is visible at every
+ * zoom without ever eating its module.
+ */
+export function drawnJointPx(trueJointPx: number, pitchPx: number): number {
+  return Math.min(Math.max(trueJointPx, MIN_JOINT_PX), pitchPx * MAX_JOINT_SHARE);
+}
 
 /** Whether something this many pixels across is worth lighting. */
 export function shadesAt(sizePx: number): boolean {

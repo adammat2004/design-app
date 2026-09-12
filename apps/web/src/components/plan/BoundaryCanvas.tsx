@@ -4,7 +4,18 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import { Plus } from 'lucide-react';
-import type { BoundaryVertex, Point } from '@garden-studio/schema';
+import {
+  boundaryEdgeByVertexId,
+  boundaryRuns,
+  gateSegment,
+  gatesOnEdge,
+  houseWalls,
+  openingSegment,
+  openingsOnWall,
+  wallSegment,
+  type BoundaryVertex,
+  type Point,
+} from '@garden-studio/schema';
 import {
   boundaryEdges,
   draftPolygon,
@@ -28,16 +39,23 @@ import {
   type CanvasTransform,
 } from '@/lib/canvas-transform';
 import { formatArea, formatLength, type Unit } from '@/lib/units';
-import { selectZones, useBoundaryStore } from '@/state/boundary-store';
+import {
+  selectedEdgeVertexId,
+  selectedWallId,
+  selectZones,
+  useBoundaryStore,
+} from '@/state/boundary-store';
+import { AttachmentHandle } from './segments/AttachmentHandle';
 import { CanvasChrome } from './CanvasChrome';
 import { EdgeHitLines } from './EdgeHitLines';
-import { GateMarks } from './GateMarks';
+import { GateMarks, gateGaps } from './GateMarks';
 import { EditableVertices } from './EditableVertices';
 import { HouseOpenings } from './HouseOpenings';
 import { HouseShape } from './HouseShape';
 import { ShadowLayer } from './ShadowLayer';
 import {
   AlignmentLines,
+  FenceLine,
   Label,
   MeasurementGuides,
   SizeAnchor,
@@ -55,7 +73,6 @@ export function BoundaryCanvas() {
   const mode = useBoundaryStore((state) => state.mode);
   const boundaryTool = useBoundaryStore((state) => state.boundaryTool);
   const houseTool = useBoundaryStore((state) => state.houseTool);
-  const accessTool = useBoundaryStore((state) => state.accessTool);
   const unit = useBoundaryStore((state) => state.unit);
   const selection = useBoundaryStore((state) => state.selection);
   const hoveredEdgeIndex = useBoundaryStore((state) => state.hoveredEdgeIndex);
@@ -64,7 +81,6 @@ export function BoundaryCanvas() {
   const rightAngleSnap = useBoundaryStore((state) => state.rightAngleSnap);
   const reflowEdgeIndex = useBoundaryStore((state) => state.reflowEdgeIndex);
   const sizeAnchorVisible = useBoundaryStore((state) => state.sizeAnchorVisible);
-  const selectedWallId = useBoundaryStore((state) => state.selectedWallId);
   const measurement = useBoundaryStore((state) => state.measurement);
 
   const {
@@ -289,8 +305,7 @@ export function BoundaryCanvas() {
     const at = pointerInMetres();
     if (!at) return;
 
-    const { insertVertexOnEdge, setBoundaryTool, select, addGateOnEdge, setStreetEdge } =
-      useBoundaryStore.getState();
+    const { insertVertexOnEdge, setBoundaryTool, select } = useBoundaryStore.getState();
     const edge = edges[edgeIndex];
 
     if (mode === 'boundary' && boundaryTool === 'add-point') {
@@ -299,13 +314,14 @@ export function BoundaryCanvas() {
       return;
     }
 
-    // Access mode: the fence is the thing being clicked, for a gate or for the street.
-    if (mode === 'access' && accessTool === 'gate') {
-      addGateOnEdge(edgeIndex, closestPointOnSegment(at, edge.start, edge.end));
-      return;
-    }
-    if (mode === 'access' && accessTool === 'street') {
-      setStreetEdge(edgeIndex);
+    /*
+     * Otherwise the side itself is what was clicked, and its editor opens. Keyed on the vertex the
+     * edge starts at rather than on the index it happens to have: an index goes stale the moment a
+     * corner is inserted, and the store speaks ids everywhere.
+     */
+    const startVertex = draft.vertices[edgeIndex];
+    if (draft.closed && startVertex) {
+      select({ kind: 'edge', edgeVertexId: startVertex.id });
       return;
     }
 
@@ -360,6 +376,22 @@ export function BoundaryCanvas() {
       return;
     }
 
+    // Delete takes away what is hung on the property; a side or a wall is geometry and stays.
+    if (state.selection?.kind === 'gate' && (event.key === 'Delete' || event.key === 'Backspace')) {
+      event.preventDefault();
+      state.removeGate(state.selection.id);
+      return;
+    }
+
+    if (
+      state.selection?.kind === 'opening' &&
+      (event.key === 'Delete' || event.key === 'Backspace')
+    ) {
+      event.preventDefault();
+      state.removeOpening(state.selection.id);
+      return;
+    }
+
     if (state.selection?.kind !== 'vertex') return;
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -379,6 +411,48 @@ export function BoundaryCanvas() {
     !panActive && !!house && (mode === 'select' || (mode === 'house' && houseTool === 'move'));
   const vertexDraggable =
     !panActive && mode !== 'house' && !(mode === 'boundary' && boundaryTool === 'draw');
+
+  /*
+   * A side is clickable wherever clicking one means something: in Select, which is where the
+   * property is described, and in Boundary mode, where the Add point tool needs the same target.
+   * Not while drawing, and not in House mode, where a stray click on a fence should not open a
+   * panel about it.
+   */
+  const edgesListening = !panActive && (mode === 'select' || mode === 'boundary');
+  const edgeVertexId = selectedEdgeVertexId({ selection, present: draft });
+  const selectedEdgeIndex = edgeVertexId
+    ? draft.vertices.findIndex((vertex) => vertex.id === edgeVertexId)
+    : -1;
+  const wallId = selectedWallId({ selection, present: draft });
+
+  /*
+   * What is draggable right now, resolved through the same functions that draw it — so a gate that
+   * does not currently resolve has no handle, exactly as it has no mark. Both lists are empty
+   * unless a side or a wall is being edited.
+   */
+  const gateHandles = useMemo(() => {
+    if (!edgeVertexId) return [];
+    const parent = boundaryEdgeByVertexId(draft, edgeVertexId);
+    if (!parent) return [];
+
+    return gatesOnEdge(draft, edgeVertexId).flatMap((gate) => {
+      const segment = gateSegment(draft, gate);
+      return segment
+        ? [{ gate, segment, parent: [parent.start, parent.end] as [Point, Point] }]
+        : [];
+    });
+  }, [draft, edgeVertexId]);
+
+  const openingHandles = useMemo(() => {
+    if (!house || !wallId) return [];
+    const parent = wallSegment(house, wallId);
+    if (!parent) return [];
+
+    return openingsOnWall(house, wallId).flatMap((opening) => {
+      const segment = openingSegment(house, opening);
+      return segment ? [{ opening, segment, parent }] : [];
+    });
+  }, [house, wallId]);
 
   return (
     <div
@@ -400,7 +474,7 @@ export function BoundaryCanvas() {
         style={{
           cursor: panActive
             ? 'grabbing'
-            : drawingCursor(mode, boundaryTool, houseTool, draft.closed, accessTool !== null),
+            : drawingCursor(mode, boundaryTool, houseTool, draft.closed),
         }}
       >
         {canRender ? (
@@ -474,6 +548,20 @@ export function BoundaryCanvas() {
                 />
               ) : null}
 
+              {/*
+                What each side is made of, drawn where it is set. This used to be step 5's alone,
+                so a hedge chosen here changed nothing on the screen it was chosen on. Only once
+                the plot is a plot: a half-drawn outline has edges but not yet sides.
+              */}
+              {draft.closed ? (
+                <FenceLine
+                  polygon={polygon}
+                  runs={boundaryRuns(draft)}
+                  transform={transform}
+                  gaps={gateGaps(draft)}
+                />
+              ) : null}
+
               {/* Each zone tinted its own colour, faintly, so the panel swatches mean something. */}
               {zones.map((zone) => (
                 <Line
@@ -505,12 +593,9 @@ export function BoundaryCanvas() {
               <EdgeHitLines
                 edges={edges}
                 transform={transform}
-                hoveredIndex={
-                  mode === 'boundary' || (mode === 'access' && accessTool) ? hoveredEdgeIndex : null
-                }
-                listening={
-                  !panActive && (mode === 'boundary' || (mode === 'access' && !!accessTool))
-                }
+                hoveredIndex={edgesListening ? hoveredEdgeIndex : null}
+                selectedIndex={selectedEdgeIndex}
+                listening={edgesListening}
                 onEdgeClick={handleEdgeClick}
                 onHoverChange={(index) => useBoundaryStore.getState().hoverEdge(index)}
                 testIdPrefix="boundary-edge"
@@ -611,17 +696,99 @@ export function BoundaryCanvas() {
                 <HouseOpenings
                   house={house}
                   transform={transform}
-                  selectedWallId={selectedWallId}
+                  selectedWallId={wallId}
+                  selectedOpeningId={selection?.kind === 'opening' ? selection.id : null}
                   onSelectWall={
-                    mode === 'house'
-                      ? (wallId) => useBoundaryStore.getState().selectWall(wallId)
+                    mode === 'select' || mode === 'house'
+                      ? (id) => useBoundaryStore.getState().selectWall(id)
+                      : undefined
+                  }
+                  onSelectOpening={
+                    mode === 'select'
+                      ? (id) => useBoundaryStore.getState().select({ kind: 'opening', id })
                       : undefined
                   }
                 />
               ) : null}
 
               {/* Gates in the fence and the street beyond it, wherever the plan is drawn. */}
-              {draft.closed ? <GateMarks site={draft} transform={transform} /> : null}
+              {draft.closed ? (
+                <GateMarks
+                  site={draft}
+                  transform={transform}
+                  selectedGateId={selection?.kind === 'gate' ? selection.id : null}
+                  onSelectGate={
+                    mode === 'select'
+                      ? (id) => useBoundaryStore.getState().select({ kind: 'gate', id })
+                      : undefined
+                  }
+                />
+              ) : null}
+
+              {/*
+                Handles for what is hung on the side or the wall being edited — not for every gate
+                and door on the plan, which would put a dozen grab targets over a drawing whose
+                whole job is to be read. Selecting the side is what asks for them.
+              */}
+              {mode === 'select'
+                ? gateHandles.map(({ gate, segment, parent }) => (
+                    <AttachmentHandle
+                      key={gate.id}
+                      testId={`gate-handle-${gate.id}`}
+                      segment={segment}
+                      parent={parent}
+                      transform={transform}
+                      listening={!panActive}
+                      selected={selection?.kind === 'gate' && selection.id === gate.id}
+                      onSelect={() =>
+                        useBoundaryStore.getState().select({ kind: 'gate', id: gate.id })
+                      }
+                      onGestureStart={() => {
+                        useBoundaryStore.getState().beginGesture();
+                        setDragging(true);
+                      }}
+                      onMove={(offset) => useBoundaryStore.getState().moveGateLive(gate.id, offset)}
+                      onResize={(end, at) =>
+                        useBoundaryStore.getState().resizeGateLive(gate.id, end, at)
+                      }
+                      onGestureEnd={() => {
+                        useBoundaryStore.getState().endGesture();
+                        setDragging(false);
+                      }}
+                    />
+                  ))
+                : null}
+
+              {mode === 'select'
+                ? openingHandles.map(({ opening, segment, parent }) => (
+                    <AttachmentHandle
+                      key={opening.id}
+                      testId={`opening-handle-${opening.id}`}
+                      segment={segment}
+                      parent={parent}
+                      transform={transform}
+                      listening={!panActive}
+                      selected={selection?.kind === 'opening' && selection.id === opening.id}
+                      onSelect={() =>
+                        useBoundaryStore.getState().select({ kind: 'opening', id: opening.id })
+                      }
+                      onGestureStart={() => {
+                        useBoundaryStore.getState().beginGesture();
+                        setDragging(true);
+                      }}
+                      onMove={(offset) =>
+                        useBoundaryStore.getState().moveOpeningLive(opening.id, offset)
+                      }
+                      onResize={(end, at) =>
+                        useBoundaryStore.getState().resizeOpeningLive(opening.id, end, at)
+                      }
+                      onGestureEnd={() => {
+                        useBoundaryStore.getState().endGesture();
+                        setDragging(false);
+                      }}
+                    />
+                  ))
+                : null}
 
               {rubberBand ? (
                 <Rect
@@ -811,11 +978,57 @@ export function BoundaryCanvas() {
       </div>
 
       {/*
-        Konva shapes cannot take DOM focus, so the corners and the house get a parallel list
-        of real buttons. This is how the canvas is reachable by keyboard at all. Focusing one
-        selects it, so tabbing walks the highlight round the plan.
+        Konva shapes cannot take DOM focus — they are not DOM at all — so everything selectable on
+        the plan gets a parallel list of real buttons. This is how the canvas is reachable by
+        keyboard, and focusing one selects it, so tabbing walks the highlight round the plan.
+
+        The sides and the walls are here for the same reason the corners are: they became things
+        you select, and a thing you can only reach by clicking a particular pixel is a thing a
+        keyboard user cannot reach at all.
       */}
       <ul className="sr-only">
+        {draft.closed
+          ? draft.vertices.map((vertex, index) => {
+              const to = (index + 1) % draft.vertices.length;
+
+              return (
+                <li key={`side-${vertex.id}`}>
+                  <button
+                    type="button"
+                    data-testid={`side-${vertexLabel(index)}`}
+                    aria-pressed={vertex.id === edgeVertexId}
+                    onFocus={() =>
+                      useBoundaryStore.getState().select({ kind: 'edge', edgeVertexId: vertex.id })
+                    }
+                    onClick={() =>
+                      useBoundaryStore.getState().select({ kind: 'edge', edgeVertexId: vertex.id })
+                    }
+                    onKeyDown={handleKeyDown}
+                  >
+                    {`Side ${vertexLabel(index)} to ${vertexLabel(to)}`}
+                  </button>
+                </li>
+              );
+            })
+          : null}
+
+        {house
+          ? houseWalls(house).map((wall, index) => (
+              <li key={`wall-${wall.id}`}>
+                <button
+                  type="button"
+                  data-testid={`select-wall-${wall.id}`}
+                  aria-pressed={wall.id === wallId}
+                  onFocus={() => useBoundaryStore.getState().selectWall(wall.id)}
+                  onClick={() => useBoundaryStore.getState().selectWall(wall.id)}
+                  onKeyDown={handleKeyDown}
+                >
+                  {`House wall ${index + 1}`}
+                </button>
+              </li>
+            ))
+          : null}
+
         {draft.vertices.map((vertex, index) => (
           <li key={vertex.id}>
             <button
@@ -854,10 +1067,8 @@ function drawingCursor(
   boundaryTool: string,
   houseTool: string,
   closed: boolean,
-  accessArmed = false,
 ): string {
   if (mode === 'measure') return 'crosshair';
-  if (mode === 'access' && accessArmed) return 'crosshair';
   if (mode === 'boundary' && boundaryTool === 'draw' && !closed) return 'crosshair';
   if (mode === 'house' && (houseTool === 'rectangle' || houseTool === 'custom')) return 'crosshair';
   return 'default';

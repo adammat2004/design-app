@@ -2,7 +2,6 @@
 
 import { Move, Pentagon, RotateCw, SquareDashed, Trash2 } from 'lucide-react';
 import { useBoundaryStore, type HouseTool } from '@/state/boundary-store';
-import { OpeningsPanel } from './OpeningsPanel';
 
 /** Shapes create the footprint; edit tools change one that already exists. */
 const SHAPE_TOOLS: HouseTool[] = ['rectangle', 'custom'];
@@ -104,10 +103,14 @@ export function HouseToolsPanel() {
             Remove house
           </button>
         ) : null}
-      </section>
 
-      {/* Optional refinement, attached to the house rather than given a screen of its own. */}
-      <OpeningsPanel />
+        {/* Doors and windows are edited on the wall they are in: click one on the plan. */}
+        {hasHouse ? (
+          <p className="text-[11px] leading-relaxed text-garden-muted">
+            Click a wall of the house on the plan to add its doors and windows.
+          </p>
+        ) : null}
+      </section>
     </>
   );
 }

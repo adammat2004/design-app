@@ -18,11 +18,15 @@ import type { MaterialId } from './materials.js';
 /**
  * How units are laid out across a surface.
  *
- * Four cases cover twenty of the twenty-seven materials, which is the whole point of the union:
- * a new material should be a manifest entry, not a new renderer.
+ * A handful of cases cover almost every material, which is the whole point of the union: a new
+ * material should be a manifest entry, not a new renderer.
+ *
+ * Declared *after* `MaterialPatternSchema` and derived from its discriminator, so the two cannot
+ * drift. Hand-written, it listed four types while the union had grown to seven — `hedge`, `pads`
+ * and `water` were missing, and anything validating a pattern type against this enum would have
+ * rejected a manifest entry the renderer draws every day. Derived, adding `pack` cost nothing.
  */
-export const PatternTypeSchema = z.enum(['grid', 'board', 'scatter', 'stripe']);
-export type PatternType = z.infer<typeof PatternTypeSchema>;
+export type PatternType = MaterialPattern['patternType'];
 
 /**
  * How the courses are set out relative to each other.
@@ -78,6 +82,29 @@ export const MaterialPatternSchema = z.discriminatedUnion('patternType', [
    * with its butt joints in line is a deck laid wrong.
    */
   z.object({ patternType: z.literal('board'), ...moduleFields }),
+
+  /**
+   * A patio pack: courses of varying height, laid with units of varying length.
+   *
+   * This is how riven sandstone and limestone are actually sold and laid — a pack of four or five
+   * sizes, set in courses — and `grid`'s single `moduleSize` cannot express it. The `random` bond
+   * was standing in for the variety: it gives a continuously varying vertical joint line, which is
+   * the *signature* of coursed stone, but every unit is still identical, so a patio read as a
+   * regular chequerboard however small the module got.
+   *
+   * Both walks start at the plan origin and take their sizes from the course and unit index, so
+   * two abutting patios share course lines and unit boundaries exactly as a grid does, and a
+   * vertex drag renumbers nothing. `bondOffset` has no part in it: each course draws its own first
+   * length from its own index, so the vertical joints diverge from the first unit.
+   */
+  z.object({
+    patternType: z.literal('pack'),
+    /** Course heights in millimetres. The grain of coursed stone. */
+    courses: z.array(z.number().positive()).min(1),
+    /** Unit lengths in millimetres, walked along each course. */
+    lengths: z.array(z.number().positive()).min(1),
+    jointWidth: z.number().nonnegative(),
+  }),
 
   /**
    * Individual things sitting on a ground: planting, bark, gravel, chippings.
@@ -207,6 +234,13 @@ export const MaterialPatternSchema = z.discriminatedUnion('patternType', [
 ]);
 export type MaterialPattern = z.infer<typeof MaterialPatternSchema>;
 
+/** Every pattern type in the union, in declaration order. Derived, so it cannot go stale. */
+export const PATTERN_TYPES = MaterialPatternSchema.options.map(
+  (option) => option.shape.patternType.value,
+) as PatternType[];
+
+export const PatternTypeSchema = z.enum(PATTERN_TYPES as [PatternType, ...PatternType[]]);
+
 /** The two patterns made of countable units, which is what a takeoff can divide an area by. */
 export type ModularPattern = Extract<MaterialPattern, { patternType: 'grid' | 'board' }>;
 
@@ -224,21 +258,50 @@ export const MM_PER_METRE = 1000;
 export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
   /* ---- paved-area ---- */
   /*
-   * Random coursed, which is how riven sandstone and limestone are actually laid — and the single
-   * change that stops a patio reading as a tiled bathroom floor. A square module on a random bond
-   * still gives a continuously varying vertical joint line, which is the signature.
+   * A riven sandstone patio pack: two course heights, three lengths, random coursed.
+   *
+   * It was a single 600 mm square on a `random` bond, and the bond was doing the work the sizes
+   * should have — random coursing gives the continuously varying vertical joint that is the
+   * signature of laid stone, but with one unit size a patio still read as a chequerboard. A pack
+   * of four to five sizes is how riven sandstone is actually sold and laid, and it is what makes
+   * the surface read as stone rather than as tiling.
    */
   'stone-pavers': {
-    patternType: 'grid',
-    moduleSize: { w: 600, h: 600 },
+    patternType: 'pack',
+    courses: [300, 450],
+    lengths: [300, 450, 600],
     jointWidth: 10,
-    bond: 'random',
   },
-  /** A rectangular flag on a half bond: the ordinary municipal and driveway paving. */
+  /**
+   * A 400 mm square flag on a half bond: the ordinary garden paving slab.
+   *
+   * **900 × 600 before, and that was the single coarsest thing the app drew.** It is a real
+   * product — a big utility flag — but it is not what a garden is paved in, and `materialFor`
+   * hands it to two of the three medium-budget concepts, so the largest module in the catalogue
+   * was the default look. On a 7 × 3.3 m terrace it gave about forty slabs, which reads as a yard
+   * rather than a patio; at 400 mm the same terrace is a hundred and thirty-six.
+   */
   concrete: {
     patternType: 'grid',
-    moduleSize: { w: 900, h: 600 },
+    moduleSize: { w: 400, h: 400 },
     jointWidth: 8,
+    bond: 'running',
+  },
+  /**
+   * The fine unit: setts for paths and drives.
+   *
+   * A path is where the coarse catalogue showed worst — a 1.05 m route paved in 900 mm flags is
+   * barely one slab wide, which no real path is. Setts are what paths and drives are actually laid
+   * in, and at 300 mm a path reads as three or four units across.
+   *
+   * Square rather than the 200 × 100 of block paving, deliberately: a 100 mm side is 2.6 px at the
+   * zoom a plan is read at, under `MIN_DRAWN_MODULE_PX`, so block paving would collapse to flat
+   * colour there — the opposite of the point. A square sett survives the whole zoom range.
+   */
+  'stone-setts': {
+    patternType: 'grid',
+    moduleSize: { w: 300, h: 300 },
+    jointWidth: 10,
     bond: 'running',
   },
   /*
@@ -269,6 +332,60 @@ export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
    * every other butt joint in exactly the same place down the whole deck, which reads as a
    * repeating error rather than as a laid floor.
    */
+  /*
+   * ---- edging ----
+   *
+   * Real product dimensions, like every other entry, and no new pattern type: a brick soldier
+   * course and a kerb run are a `grid`, a sleeper is a `board`. `steel-edging` has no entry at all
+   * and draws as flat colour — a 3 mm blade has no face to photograph and no module to count, which
+   * is the same answer `powder-coated-steel` gets and for the same reason.
+   *
+   * `bond` is `stack` throughout, which is not laziness: an edging course is one module wide, so
+   * there is no second row for a bond to offset against.
+   */
+  'brick-edging': {
+    patternType: 'grid',
+    moduleSize: { w: 102, h: 215 },
+    jointWidth: 10,
+    bond: 'stack',
+  },
+  'concrete-kerb': {
+    patternType: 'grid',
+    moduleSize: { w: 450, h: 150 },
+    jointWidth: 6,
+    bond: 'stack',
+  },
+  'sett-edging': {
+    patternType: 'grid',
+    moduleSize: { w: 100, h: 100 },
+    jointWidth: 8,
+    bond: 'stack',
+  },
+  'timber-sleeper': {
+    patternType: 'board',
+    moduleSize: { w: 2400, h: 200 },
+    jointWidth: 6,
+    bond: 'stack',
+  },
+  /*
+   * ---- walling: the top course of a retaining wall ----
+   *
+   * A wall seen from above is its top course, so these are coursed like paving rather than run like
+   * an edging. `rendered-block` has no entry: a rendered wall is a smooth band of one colour, which
+   * is the flat-fill path and the honest drawing.
+   */
+  'walling-stone': {
+    patternType: 'grid',
+    moduleSize: { w: 300, h: 100 },
+    jointWidth: 12,
+    bond: 'running',
+  },
+  'brick-walling': {
+    patternType: 'grid',
+    moduleSize: { w: 215, h: 102 },
+    jointWidth: 10,
+    bond: 'running',
+  },
   'timber-decking': {
     patternType: 'board',
     moduleSize: { w: 3600, h: 145 },
@@ -384,9 +501,22 @@ export function hasPattern(id: string | undefined): boolean {
   return materialPattern(id) !== null;
 }
 
-/** Whether a pattern is made of countable units. Narrows for `modulePitchMetres`. */
+/** Whether a pattern is laid on one repeating module. Narrows for `modulePitchMetres`. */
 export function isModular(pattern: MaterialPattern): pattern is ModularPattern {
   return pattern.patternType === 'grid' || pattern.patternType === 'board';
+}
+
+/**
+ * Whether a pattern is made of units somebody can order.
+ *
+ * Wider than `isModular`, and the distinction is the pack: it has no single module, so it cannot
+ * answer `modulePitchMetres`, but its members are real product dimensions and its mean unit is a
+ * fact — so it is counted. A scatter is neither, because its density is a drawn one.
+ */
+export function isCountable(
+  pattern: MaterialPattern,
+): pattern is ModularPattern | Extract<MaterialPattern, { patternType: 'pack' }> {
+  return isModular(pattern) || pattern.patternType === 'pack';
 }
 
 /**
@@ -409,8 +539,35 @@ export function modulePitchMetres(pattern: ModularPattern): { x: number; y: numb
  * Roughly how many units cover a square metre. The scatter equivalent of `modulePitchMetres`, and
  * the number a planting schedule is written in.
  */
+/**
+ * The mean unit of a pack, in metres, joint included.
+ *
+ * A pack has no single pitch, so this is what stands in for one wherever a grid would use
+ * `modulePitchMetres`: the average over every course height and every length the pack contains.
+ */
+export function packMeanUnitMetres(pattern: Extract<MaterialPattern, { patternType: 'pack' }>): {
+  x: number;
+  y: number;
+} {
+  const joint = pattern.jointWidth / MM_PER_METRE;
+  const mean = (values: number[]) =>
+    values.reduce((total, value) => total + value, 0) / values.length / MM_PER_METRE + joint;
+  return { x: mean(pattern.lengths), y: mean(pattern.courses) };
+}
+
 export function unitsPerSquareMetre(pattern: MaterialPattern): number | null {
   if (pattern.patternType === 'scatter') return pattern.density;
+  /*
+   * A pack gets a count, and a scatter does not, and the difference is the whole rule: a pack's
+   * members are real product dimensions, so the mean unit is a fact about a thing you can order —
+   * a pack is *sold* by the area it covers. A planting density is a drawn density chosen so a bed
+   * reads as planted, and multiplying it by an area would turn a drawing convention into a
+   * shopping list.
+   */
+  if (pattern.patternType === 'pack') {
+    const unit = packMeanUnitMetres(pattern);
+    return 1 / (unit.x * unit.y);
+  }
   /*
    * `pads` has no answer here, and that is not an omission. Pads march in single file along a
    * path, so what they cover is a *length* rather than an area — a takeoff wants "eighteen stones",

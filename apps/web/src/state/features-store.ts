@@ -1,7 +1,12 @@
 'use client';
 
 import { create } from 'zustand';
-import type { FeaturesSection, Point } from '@garden-studio/schema';
+import {
+  scopeRing,
+  type FeaturesSection,
+  type GardenChange,
+  type Point,
+} from '@garden-studio/schema';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
 import {
@@ -49,7 +54,13 @@ import { useBoundaryStore } from './boundary-store';
  * outline, and the unit that snapping works in), never the reverse.
  */
 
-export type FeaturesMode = 'select' | 'place' | 'measure';
+/**
+ * `scope` is the odd one out and deliberately so: it draws a polygon that is *not* a feature. The
+ * ring it produces belongs to the site (`site.scopePolygon`, owned by the boundary store), but the
+ * gesture that draws it is a step-2 gesture, so it reuses this store's `draftPoints` rather than
+ * opening a second click pipeline on the same canvas.
+ */
+export type FeaturesMode = 'select' | 'place' | 'measure' | 'scope';
 
 /** Clicking this close to the first point closes a polygon, in metres. Matches the boundary. */
 export const CLOSE_DISTANCE = 0.6;
@@ -67,6 +78,11 @@ export const NUDGE = 0.1;
  */
 const FENCE_CLASH = 'That goes over the property boundary.';
 
+/** An assistant change naming a feature that has since been deleted, or renamed by an undo. */
+const MISSING_CLASH = 'That feature is no longer on the plan.';
+
+const SCOPE_CLASH = 'That redesign area needs to be a simple shape inside the property.';
+
 let featureCounter = 0;
 function nextFeatureId(): string {
   featureCounter += 1;
@@ -75,6 +91,12 @@ function nextFeatureId(): string {
 
 export interface FeaturesDraft {
   features: PlacedFeature[];
+}
+
+/** What an assistant batch actually did. Refusals are reported, never thrown. */
+export interface ApplyFeaturesOutcome {
+  applied: string[];
+  refused: { changeId: string; reason: string }[];
 }
 
 function initialDraft(): FeaturesDraft {
@@ -116,6 +138,19 @@ interface FeaturesState {
   placeRectangle: (centre: Point, width: number, depth: number) => void;
   addDraftPoint: (point: Point) => void;
   finishDraft: () => void;
+
+  /** Arms the redesign-area tool; the next clicks trace its outline. */
+  startScopeDraw: () => void;
+  /** Closes the traced outline and hands it to the boundary store, or refuses it. */
+  finishScopeDraw: () => void;
+
+  /**
+   * Applies a batch of assistant changes as **one** undo entry.
+   *
+   * Returns what landed and what was refused rather than throwing: a sentence that asks for four
+   * things, three of which fit, should place the three and say so.
+   */
+  applyAssistantChanges: (changes: GardenChange[]) => ApplyFeaturesOutcome;
 
   moveFeatureLive: (id: string, anchor: Point) => void;
   nudgeSelection: (dx: number, dy: number) => void;
@@ -337,10 +372,15 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
     },
 
     addDraftPoint: (raw) => {
-      const { placingKind, draftPoints } = get();
-      if (!placingKind) return;
+      const { mode, placingKind, draftPoints } = get();
 
-      const placement = FEATURE_DEFINITIONS[placingKind].placement;
+      /*
+       * The redesign area traces a polygon with the same clicks a patio does — same snapping, same
+       * close-on-the-first-point gesture — so it shares this path rather than opening a second
+       * click pipeline on the same canvas. It has no `placingKind` because it is not a feature.
+       */
+      const placement =
+        mode === 'scope' ? 'polygon' : placingKind && FEATURE_DEFINITIONS[placingKind].placement;
       if (placement !== 'polygon' && placement !== 'polyline') return;
 
       const point = snapped(raw);
@@ -354,7 +394,8 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
         draftPoints.length >= minimumDraftPoints('polygon') &&
         Math.hypot(point.x - first.x, point.y - first.y) <= CLOSE_DISTANCE
       ) {
-        get().finishDraft();
+        if (mode === 'scope') get().finishScopeDraw();
+        else get().finishDraft();
         return;
       }
 
@@ -396,6 +437,120 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
      * would have moved by. That is all-or-nothing: if any member would end up illegal the frame
      * is dropped, so relative positions can never drift apart.
      */
+    startScopeDraw: () =>
+      set({
+        mode: 'scope',
+        placingKind: null,
+        draftPoints: [],
+        selectedIds: [],
+        editingShapeId: null,
+        measurement: null,
+        clash: null,
+      }),
+
+    finishScopeDraw: () => {
+      const { draftPoints } = get();
+      if (draftPoints.length < 3) return;
+
+      /*
+       * Checked here as well as in the boundary store's own action, so the refusal can be shown on
+       * the canvas the user drew it on. `scopeRing` is the single rule both ask — the store, the
+       * PostGIS validator and the generator cannot disagree about what a usable area is.
+       */
+      const site = useBoundaryStore.getState().present;
+      if (scopeRing({ ...site, scopePolygon: draftPoints }) === null) {
+        set({ clash: SCOPE_CLASH, draftPoints: [] });
+        return;
+      }
+
+      useBoundaryStore.getState().setScopePolygon(draftPoints);
+      set({ mode: 'select', draftPoints: [], clash: null });
+    },
+
+    /*
+     * Many mutations, one undo entry — the same bracket `plan-editor-store.applyProposal` uses, and
+     * for the same reason. `beginGesture` snapshots `present`; every change below writes `present`
+     * directly with a raw `set` rather than through `commit`, which would push an entry of its own;
+     * `endGesture` folds the whole batch into one. Four features from one sentence are one Undo.
+     *
+     * Legality is re-checked here against the *live* boundary rather than trusted from the server.
+     * The plan can have moved under the request — the user can drag a fence while the assistant is
+     * thinking — and the store is the guarantee, the server a courtesy.
+     */
+    applyAssistantChanges: (changes) => {
+      const outcome: ApplyFeaturesOutcome = { applied: [], refused: [] };
+      if (changes.length === 0) return outcome;
+
+      const boundary = boundaryNow();
+      get().beginGesture();
+
+      for (const change of changes) {
+        const draft = get().present;
+
+        if (change.kind === 'add') {
+          // A fresh local id: the server's is scoped to a request that never touched this store.
+          const feature: PlacedFeature = { ...change.next, id: nextFeatureId() };
+
+          if (!featureIsLegal(feature, boundary)) {
+            outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
+            continue;
+          }
+
+          set({ present: { ...draft, features: [...draft.features, feature] } });
+          outcome.applied.push(change.id);
+          continue;
+        }
+
+        const existing = draft.features.find((candidate) => candidate.id === change.featureId);
+        if (!existing) {
+          outcome.refused.push({ changeId: change.id, reason: MISSING_CLASH });
+          continue;
+        }
+
+        if (change.kind === 'delete') {
+          set({
+            present: {
+              ...draft,
+              features: draft.features.filter((candidate) => candidate.id !== existing.id),
+            },
+          });
+          outcome.applied.push(change.id);
+          continue;
+        }
+
+        // Identity is the store's, never the proposal's — a change may not rename an id.
+        const merged: PlacedFeature = { ...existing, ...change.next, id: existing.id };
+
+        // A status or a rename moves no geometry, so it is not asked to clear the fence again.
+        const movesGeometry = change.kind !== 'status';
+        if (movesGeometry && !featureIsLegal(merged, boundary)) {
+          outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
+          continue;
+        }
+
+        set({
+          present: {
+            ...draft,
+            features: draft.features.map((candidate) =>
+              candidate.id === existing.id ? merged : candidate,
+            ),
+          },
+        });
+        outcome.applied.push(change.id);
+      }
+
+      get().endGesture();
+
+      /*
+       * Anything the assistant placed is something on the plan, so "nothing to add" can no longer
+       * be true. Clearing it here rather than in the panel keeps the flag from contradicting the
+       * canvas whichever route put a feature there.
+       */
+      if (outcome.applied.length > 0) set({ skipped: false, selectedIds: [] });
+
+      return outcome;
+    },
+
     moveFeatureLive: (id, rawAnchor) => {
       const state = get();
       const feature = state.present.features.find((candidate) => candidate.id === id);

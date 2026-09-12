@@ -3,6 +3,7 @@ import {
   geometryOutline,
   housePolygon,
   polygonToWkt,
+  scopeRing,
   type PlanDocument,
   type PlanGeometry,
   type ValidationResult,
@@ -50,6 +51,22 @@ export class GeometryValidationService {
       });
 
       return { valid: false, violations };
+    }
+
+    /*
+     * The custom redesign area, checked structurally for the same reason the boundary is: a ring
+     * that crosses itself has a perfectly ordinary vertex list and a shoelace area that is quietly
+     * wrong, so nothing downstream would report it. `scopeRing` is the one rule — it answers null
+     * for "no area drawn" as well as "not a usable area", so the violation is raised only when the
+     * document actually carries a polygon.
+     */
+    if (document.site.scopePolygon !== null && scopeRing(document.site) === null) {
+      violations.push({
+        code: 'invalid_scope_polygon',
+        targetIds: [],
+        section: 'site',
+        message: describeViolation('invalid_scope_polygon', [], new Map()),
+      });
     }
 
     const house = document.site.house;
@@ -172,6 +189,7 @@ function sectionFor(code: ViolationCode): ValidationViolation['section'] {
     case 'boundary_not_closed':
     case 'invalid_boundary':
     case 'house_outside_boundary':
+    case 'invalid_scope_polygon':
       return 'site';
     case 'feature_outside_boundary':
     case 'features_overlap':
@@ -195,6 +213,8 @@ function describeViolation(
       return 'The property boundary is not a valid shape — its outline crosses itself.';
     case 'house_outside_boundary':
       return 'The house is not fully inside the property boundary.';
+    case 'invalid_scope_polygon':
+      return 'The redesign area is not a valid shape — its outline crosses itself, is too small, or leaves the property.';
     case 'feature_outside_boundary':
       return `The ${label(targetIds[0] ?? '')} is not fully inside the property boundary.`;
     case 'features_overlap':

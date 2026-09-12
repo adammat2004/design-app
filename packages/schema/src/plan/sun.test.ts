@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { SiteSectionSchema, type SiteSection } from './site.js';
-import { lightDirection, MAX_SHADOW_RATIO, shadowCast, solarPosition, sunInstant } from './sun.js';
+import {
+  lightDirection,
+  MAX_SHADOW_RATIO,
+  nightFraction,
+  shadowCast,
+  solarPosition,
+  sunInstant,
+} from './sun.js';
 
 /**
  * These assert *physics*, not whatever the library happens to return.
@@ -169,6 +176,41 @@ describe('shadowCast', () => {
       siteAt(MANCHESTER, { dayOfYear: SOLSTICE, minutes: atFortyFive!.minutes }),
     )!;
     expect(cast.lengthPerMetre).toBeCloseTo(1, 1);
+  });
+});
+
+describe('nightFraction', () => {
+  it('is null without a location, so no plan ever dims itself on a guess', () => {
+    // The same refusal `lightDirection` makes, and for the same reason: there is no latitude that
+    // is true of anywhere, so there is no hour at which an unlocated garden is dark.
+    expect(nightFraction(siteAt(null))).toBeNull();
+  });
+
+  it('is zero while the sun is up', () => {
+    expect(nightFraction(siteAt(MANCHESTER))).toBe(0);
+  });
+
+  it('is one in the middle of the night', () => {
+    expect(nightFraction(siteAt(MANCHESTER, { dayOfYear: SOLSTICE, minutes: 0 }))).toBe(1);
+  });
+
+  it('ramps through dusk rather than switching', () => {
+    /*
+     * The property that matters, and it is about the control rather than the ephemeris: the time
+     * slider steps in fifteen minutes, so a boolean would take the whole garden from noon to
+     * midnight in one step. Walking the evening minute by minute, darkness may only ever increase
+     * and must pass strictly through the middle rather than jumping the gap.
+     */
+    const evening = [];
+    for (let minutes = 900; minutes <= 1439; minutes += 15) {
+      evening.push(nightFraction(siteAt(MANCHESTER, { dayOfYear: SOLSTICE, minutes }))!);
+    }
+
+    for (let i = 1; i < evening.length; i += 1) {
+      expect(evening[i]).toBeGreaterThanOrEqual(evening[i - 1]!);
+    }
+    expect(evening.some((value) => value > 0 && value < 1)).toBe(true);
+    expect(evening.at(-1)).toBe(1);
   });
 });
 

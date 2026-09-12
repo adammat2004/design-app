@@ -201,12 +201,11 @@ export function sideReturn(
   side: 'left' | 'right',
 ): Point[] {
   if (boundary.length < 3) return [];
-  const { width, depth } = houseSize(house);
+  const { width } = houseSize(house);
   const right = directionFromDegrees(house.rotation);
-  const back = directionFromDegrees(270 + house.rotation);
   const sign = side === 'right' ? 1 : -1;
 
-  let strip = clipToHalfPlane(
+  const beside = clipToHalfPlane(
     boundary,
     {
       x: house.centre.x + right.x * sign * (width / 2),
@@ -214,18 +213,31 @@ export function sideReturn(
     },
     { x: right.x * sign, y: right.y * sign },
   );
-  // Level with the house: between its front wall and its back wall.
-  strip = clipToHalfPlane(
-    strip,
+  const strip = houseBand(beside, house);
+  return polygonArea(strip) < 0.5 ? [] : strip;
+}
+
+/**
+ * The part of `polygon` level with the house: between the planes of its front and back walls.
+ * One clip, shared by the side return and the zone-role classifier, so "beside the house" means
+ * the same thing to both.
+ */
+export function houseBand(polygon: Point[], house: HouseFootprint): Point[] {
+  if (polygon.length < 3) return [];
+  const { depth } = houseSize(house);
+  const back = directionFromDegrees(270 + house.rotation);
+
+  let band = clipToHalfPlane(
+    polygon,
     { x: house.centre.x + back.x * (depth / 2), y: house.centre.y + back.y * (depth / 2) },
     { x: -back.x, y: -back.y },
   );
-  strip = clipToHalfPlane(
-    strip,
+  band = clipToHalfPlane(
+    band,
     { x: house.centre.x - back.x * (depth / 2), y: house.centre.y - back.y * (depth / 2) },
     back,
   );
-  return polygonArea(strip) < 0.5 ? [] : strip;
+  return band;
 }
 
 /* ---------------------------------------------------------------- local extents */

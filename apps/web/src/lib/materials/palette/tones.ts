@@ -49,6 +49,66 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
     palette: ['#e7e8e4', '#eaebe7', '#e3e4e0', '#e5e6e1'],
     jointColour: '#c3c5bf',
   },
+  /**
+   * Setts are riven and weathered, so they vary more than a cast slab and sit darker — which is
+   * also what keeps a sett path reading as a path rather than as a narrow patio.
+   */
+  'stone-setts': {
+    palette: ['#c9cac2', '#d2d3ca', '#c1c2ba', '#cdcdc4', '#c5c7bd'],
+    jointColour: '#9b9e95',
+  },
+  /*
+   * ---- edging ----
+   *
+   * Narrower spreads than a paving palette, deliberately. An edging run is one module wide, so
+   * every unit in it sits directly beside its neighbours with nothing between to break the
+   * comparison up — a spread wide enough to read as pleasant variation on a patio reads as a badly
+   * sorted pallet on a line of bricks.
+   *
+   * `steel-edging` has no entry, because it has no pattern: `MATERIAL_FILLS` carries its one dark
+   * line and `resolvePattern` returns null, which is the flat-fill path.
+   */
+  /*
+   * The joint is darker than the brick, not the pale mortar a wall elevation would show.
+   *
+   * Worth stating because it looks wrong written down. Seen from *above*, an edging course's
+   * perpends are a 10 mm gap you look down into rather than a face you look at — a recess, like
+   * every other joint in this file — and pointing on a course set into soil weathers dark within a
+   * season. A buff mortar tone here also breaks the rule `palette.test.ts` holds for every modular
+   * pattern, and that rule is protecting something real: a joint lighter than its units stops
+   * reading as a joint.
+   */
+  'brick-edging': {
+    palette: ['#a86b52', '#a4674e', '#ac6f56', '#a06450'],
+    jointColour: '#6d5548',
+  },
+  'concrete-kerb': {
+    palette: ['#c3c2bc', '#c7c6c0', '#bfbeb8'],
+    jointColour: '#a3a29c',
+  },
+  'sett-edging': {
+    palette: ['#9a9c95', '#9fa199', '#95978f', '#a2a49c'],
+    jointColour: '#7e8079',
+  },
+  'timber-sleeper': {
+    palette: ['#8a7150', '#8f7655', '#856c4b'],
+    jointColour: '#6b563d',
+  },
+  /*
+   * ---- walling ----
+   *
+   * A wall's top course, so the joint is real mortar between real blocks and the spread can be
+   * wider than an edging's: a coursed stone wall is *meant* to vary block to block, which is most
+   * of what tells it from blockwork.
+   */
+  'walling-stone': {
+    palette: ['#b9b2a2', '#c1b9a8', '#b2ab9c', '#bdb5a5', '#aaa495'],
+    jointColour: '#8f897c',
+  },
+  'brick-walling': {
+    palette: ['#a86b52', '#a4674e', '#ac6f56', '#a06450'],
+    jointColour: '#6d5548',
+  },
   /** The gap is grass, not mortar, so the background is the lawn it is set into. */
   'stepping-stones': {
     palette: ['#dcdcd5', '#d6d7d0', '#e0e0d9'],

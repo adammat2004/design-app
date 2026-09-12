@@ -32,7 +32,13 @@ export const SymbolIdSchema = z.enum([
   'swing',
   'slide',
   'trampoline',
+  /* ---- lighting ---- */
+  'light-spike',
+  'light-bollard',
+  'light-recessed',
+  'light-wall',
   /* ---- structures: drawn, not photographed ---- */
+  'steps',
   'pergola',
   'shed',
   'gazebo',
@@ -167,6 +173,54 @@ export const SYMBOLS: Record<SymbolId, SymbolSpec> = {
     label: 'Trampoline',
     footprint: { kind: 'point', radius: 1.5 },
     height: 0.9,
+  },
+  /*
+   * A flight of steps, and the one symbol whose *drawing* depends on a field rather than only on
+   * its footprint: the tread count comes from `elevation` through `stepFlight`, so a flight that
+   * climbs 450 mm draws three treads and one that climbs 900 draws five. Nothing is stored — see
+   * `plan/levels.ts` for why a stored count is a count that can disagree with its own rise.
+   *
+   * `height` is 0 because a flight does not stand up off the ground; it *is* the ground, on its way
+   * somewhere else. What it casts comes from its elevation, like every other raised surface.
+   */
+  steps: {
+    category: 'structure',
+    label: 'Steps',
+    footprint: { kind: 'rect', width: 1.5, depth: 1.2 },
+    height: 0,
+  },
+  /*
+   * The four fittings, and why `height` is the fitting rather than where it is mounted.
+   *
+   * `height` feeds `projectShadow` alone, so it has to be how tall the *object* is: a wall light
+   * mounted at two metres is a 120 mm box on a wall, not a two-metre block, and giving it its
+   * mounting height would have every downlight throw a shadow the size of a wheelie bin. Two of
+   * the four therefore sit under `MIN_SHADOW_HEIGHT` (0.15) and cast nothing at all, which is
+   * correct: a light recessed into a tread has no daytime presence to speak of.
+   */
+  'light-spike': {
+    category: 'lighting',
+    label: 'Spike uplight',
+    footprint: { kind: 'point', radius: 0.06 },
+    height: 0.3,
+  },
+  'light-bollard': {
+    category: 'lighting',
+    label: 'Bollard light',
+    footprint: { kind: 'point', radius: 0.08 },
+    height: 0.6,
+  },
+  'light-recessed': {
+    category: 'lighting',
+    label: 'Recessed light',
+    footprint: { kind: 'point', radius: 0.04 },
+    height: 0.02,
+  },
+  'light-wall': {
+    category: 'lighting',
+    label: 'Wall light',
+    footprint: { kind: 'rect', width: 0.22, depth: 0.12 },
+    height: 0.12,
   },
   pergola: {
     category: 'structure',
@@ -306,6 +360,24 @@ export function isTreeSymbol(id: SymbolId): boolean {
   return TREE_SYMBOLS.includes(id);
 }
 
+/**
+ * Every light fitting, in the order a picker should offer them.
+ *
+ * Ordered by how a scheme is actually specified rather than by size: the uplights that do the
+ * looking first, then the bollards that make a path walkable, then the two that are built into
+ * something.
+ */
+export const LIGHT_SYMBOLS: SymbolId[] = [
+  'light-spike',
+  'light-bollard',
+  'light-recessed',
+  'light-wall',
+];
+
+export function isLightSymbol(id: string | undefined): boolean {
+  return id !== undefined && (LIGHT_SYMBOLS as string[]).includes(id);
+}
+
 export const SYMBOL_IDS = SymbolIdSchema.options;
 
 /** The symbol on an element, or `null` when it carries none or one this list no longer knows. */
@@ -344,4 +416,9 @@ export const ADDABLE_SYMBOLS: SymbolId[] = [
   'swing',
   'slide',
   'trampoline',
+  /* Lighting last: it is the layer a scheme is finished with, not started from. */
+  'light-spike',
+  'light-bollard',
+  'light-recessed',
+  'light-wall',
 ];

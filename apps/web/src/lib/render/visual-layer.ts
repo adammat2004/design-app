@@ -26,6 +26,7 @@ export const LAYER_ORDER: Record<VisualLayer, number> = {
   specimen: 9,
   tree: 10,
   house: 11,
+  lighting: 12,
 };
 
 /**
@@ -47,6 +48,8 @@ export function layerForElement(element: DesignElement): VisualLayer {
       return 'structure';
     case 'furniture':
       return 'furniture';
+    case 'lighting':
+      return 'lighting';
     case 'existing-feature':
       /*
        * Grouped with furniture rather than given a layer of its own, and the reason is the

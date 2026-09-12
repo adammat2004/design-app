@@ -6,13 +6,14 @@ import { useFeaturesStore } from '@/state/features-store';
 
 /** Same shape as step 1's tip, following whatever the user is in the middle of. */
 export function FeaturesTipCallout() {
+  const mode = useFeaturesStore((state) => state.mode);
   const placingKind = useFeaturesStore((state) => state.placingKind);
   const drafting = useFeaturesStore((state) => state.draftPoints.length > 0);
   const selectedCount = useFeaturesStore((state) => state.selectedIds.length);
   const editing = useFeaturesStore((state) => state.editingShapeId !== null);
   const total = useFeaturesStore((state) => state.present.features.length);
 
-  const tip = chooseTip({ placingKind, drafting, selectedCount, editing, total });
+  const tip = chooseTip({ mode, placingKind, drafting, selectedCount, editing, total });
 
   return (
     <section
@@ -40,18 +41,27 @@ export function FeaturesTipCallout() {
 }
 
 function chooseTip({
+  mode,
   placingKind,
   drafting,
   selectedCount,
   editing,
   total,
 }: {
+  mode: string;
   placingKind: string | null;
   drafting: boolean;
   selectedCount: number;
   editing: boolean;
   total: number;
 }): string {
+  // The redesign area draws with the same gesture but is not a feature, so it is said first.
+  if (mode === 'scope') {
+    return drafting
+      ? 'Keep clicking the corners of the area you want redesigned, then click the first point again to close it.'
+      : 'Click the corners of the part of the garden you want redesigned.';
+  }
+
   if (drafting) {
     return 'Keep clicking to trace the shape, then use Finish — or click back on the first point to close it.';
   }
@@ -81,7 +91,9 @@ function chooseTip({
     return 'Use the Keep, Remove or Replace buttons on the plan, or double-click the shape to reshape it.';
   }
 
-  if (total === 0) return 'Zoom in for precise placement. Only map what is actually there today.';
+  if (total === 0) {
+    return 'Only map what matters — a mature tree, a shed, a patio you are keeping. The rest can go.';
+  }
 
   return 'Drag across empty space to select several at once. Hold space to pan, scroll to zoom.';
 }

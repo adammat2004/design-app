@@ -121,6 +121,32 @@ export function setBoundaryStyle(
 }
 
 /**
+ * Both halves of a split side keep what the side was.
+ *
+ * Called after a corner is inserted. The user described *this side* as a wall, and putting a
+ * corner in it does not change what is built there — it is now two pieces of the same wall. The
+ * module header used to say the new half should take the default, on the grounds that applying a
+ * wall the user never described would be a guess; but the default is also a guess (a fence), and
+ * a worse one, because it draws a change in the garden where the user made none. This reverses
+ * that note.
+ *
+ * A side with no stored entry stays that way on both halves: there is nothing to inherit.
+ */
+export function inheritBoundaryStyle(
+  styles: BoundaryEdgeStyle[],
+  edgeVertexId: string,
+  insertedVertexId: string,
+): BoundaryEdgeStyle[] {
+  const parent = styles.find((style) => style.edgeVertexId === edgeVertexId);
+  if (!parent) return styles;
+
+  return [
+    ...styles.filter((style) => style.edgeVertexId !== insertedVertexId),
+    { ...parent, edgeVertexId: insertedVertexId },
+  ];
+}
+
+/**
  * Drops styles whose edge has gone.
  *
  * Called after a vertex is deleted. Without it a style would sit in the document for an edge that

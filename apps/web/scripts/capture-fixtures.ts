@@ -42,6 +42,21 @@ interface Case {
   brief: GardenBrief;
   /** Manchester by default, so the sheets can show real shadows. */
   location?: { latitude: number; longitude: number } | null;
+  /**
+   * How many floors, where it is worth judging. Defaults to two — the six-metre eaves every plan
+   * drew with before storeys existed — so only a fixture that deliberately wants a different
+   * shadow says otherwise.
+   */
+  storeys?: number;
+  /**
+   * A driveway in the street frontage, as metres along the *first* boundary edge.
+   *
+   * One fixture has one, which is what puts a vehicle opening on a judging sheet at all: it is
+   * drawn as a pair of leaves rather than one, it keeps a car's depth clear inside it, and
+   * `sidePathGate` must not start the side path there. None of that is visible on a sheet where
+   * every opening is a 900 mm gate.
+   */
+  drive?: { offsetAlongEdge: number; width: number };
 }
 
 const MANCHESTER = { latitude: 53.4, longitude: -2.98 };
@@ -51,6 +66,8 @@ const CASES: Case[] = [
     name: 'suburban',
     plot: rectanglePlotOutline({ width: 18, depth: 26 }),
     house: { centre: { x: 9, y: 6.5 }, width: 9, depth: 7, rotation: 180 },
+    // The one fixture with a drive in the frontage, and the side gate beside it.
+    drive: { offsetAlongEdge: 4, width: 3 },
     brief: {
       purpose: 'A family garden with somewhere to eat outside and space for the kids.',
       desiredFeatures: ['seating', 'pergola', 'play', 'firePit', 'storage'],
@@ -66,6 +83,12 @@ const CASES: Case[] = [
     name: 'l-shape',
     plot: lShapePlotOutline({ width: 22, depth: 20, returnWidth: 9, returnDepth: 8 }),
     house: { centre: { x: 7, y: 6 }, width: 10, depth: 7, rotation: 180 },
+    /*
+     * The one bungalow. Its eaves are three metres rather than six, so the shadow it throws is
+     * half the length — which is the only way `houseHeight` is visible on a sheet at all, every
+     * other fixture taking the two-storey default.
+     */
+    storeys: 1,
     brief: {
       purpose: 'Somewhere to entertain, with a veg patch tucked out of the way.',
       desiredFeatures: ['seating', 'outdoorKitchen', 'vegPatch', 'water'],
@@ -122,6 +145,7 @@ async function capture(item: Case): Promise<void> {
   const house = {
     ...rectangleHouse(item.house.centre, item.house.width, item.house.depth),
     rotation: item.house.rotation ?? 0,
+    ...(item.storeys === undefined ? {} : { storeys: item.storeys }),
   };
 
   // Doors, a side gate and the street edge, inferred the way the access panel offers them: the
@@ -136,6 +160,8 @@ async function capture(item: Case): Promise<void> {
     sun: { dayOfYear: 172, minutes: 900 },
     gates: [],
     streetEdgeVertexId: null,
+    // The judging sheets measure whole gardens, so no fixture clips itself to a redesign area.
+    scopePolygon: null,
     /*
      * A different kind on each side, so the judging sheets actually exercise the boundary
      * renderers rather than showing four fences and telling us nothing. Nothing infers these —
@@ -147,6 +173,24 @@ async function capture(item: Case): Promise<void> {
       kind: BOUNDARY_CYCLE[index % BOUNDARY_CYCLE.length]!,
     })),
   });
+
+  /*
+   * The drive goes on after the inference, not before it: `suggestedAccess` only fills gaps, and
+   * a drive already sitting in `gates` would stop it offering the side gate — which is exactly the
+   * pair this fixture exists to show together.
+   */
+  if (item.drive) {
+    site.gates = [
+      ...site.gates,
+      {
+        id: `g${site.gates.length + 1}`,
+        edgeVertexId: 'v0',
+        offsetAlongEdge: item.drive.offsetAlongEdge,
+        width: item.drive.width,
+        kind: 'vehicle',
+      },
+    ];
+  }
 
   let revision = created.revision;
 

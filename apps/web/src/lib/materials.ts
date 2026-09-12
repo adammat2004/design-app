@@ -6,8 +6,11 @@
  * the canvas and the panels keep importing `materialFill` from where they always have.
  */
 export {
+  EDGING_MATERIALS,
   MATERIALS,
+  WALLING_MATERIALS,
   MaterialIdSchema,
+  canBeEdged,
   canTake,
   cheaperAlternative,
   defaultMaterial,

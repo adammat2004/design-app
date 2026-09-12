@@ -1,7 +1,14 @@
 'use client';
 
 import { Fragment } from 'react';
-import { planSchedule, type DesignElement, type ScheduleLine } from '@garden-studio/schema';
+import {
+  housePolygon,
+  planSchedule,
+  type DesignElement,
+  type HouseFootprint,
+  type Point,
+  type ScheduleLine,
+} from '@garden-studio/schema';
 import { formatArea, type Unit } from '@/lib/units';
 
 /**
@@ -17,8 +24,26 @@ import { formatArea, type Unit } from '@/lib/units';
  * glance, and a border really planted at one would close up in a season. So a bed gets its area and
  * a dash, and the dash is the honest answer rather than a gap in the work.
  */
-export function ScheduleTable({ elements, unit }: { elements: DesignElement[]; unit: Unit }) {
-  const lines = planSchedule(elements);
+export function ScheduleTable({
+  elements,
+  unit,
+  boundary,
+  house,
+}: {
+  elements: DesignElement[];
+  unit: Unit;
+  /*
+   * What edging may not lie along. Passed rather than defaulted, because the difference is a real
+   * quantity: a border's fence side is a third of its perimeter, and a schedule that ordered it
+   * would be ordering a course that is never laid and never seen.
+   */
+  boundary?: Point[];
+  house?: HouseFootprint | null;
+}) {
+  const lines = planSchedule(elements, {
+    boundary,
+    house: house ? housePolygon(house) : undefined,
+  });
 
   if (lines.length === 0) {
     return (
@@ -81,7 +106,14 @@ function ScheduleRow({ line, unit }: { line: ScheduleLine; unit: Unit }) {
       <td className="py-1.5 pr-3">
         <span className="block text-xs font-medium text-garden-ink">{line.label}</span>
         <span className="block text-[10px] text-garden-muted">
-          {line.elementCount === 1 ? '1 area' : `${line.elementCount} areas`}
+          {/* Edging is runs, not areas — it has no elements of its own and no square metres. */}
+          {line.lengthM !== null
+            ? line.elementCount === 1
+              ? '1 run'
+              : `${line.elementCount} runs`
+            : line.elementCount === 1
+              ? '1 area'
+              : `${line.elementCount} areas`}
         </span>
       </td>
       <td className="py-1.5 pr-3 text-right text-xs whitespace-nowrap text-garden-ink">

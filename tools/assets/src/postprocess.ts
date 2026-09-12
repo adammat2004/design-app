@@ -276,6 +276,51 @@ export async function softShadowDisc(sizePx: { w: number; h: number }): Promise<
   };
 }
 
+/**
+ * The pool of light a fitting throws, as arithmetic.
+ *
+ * A different curve from `softShadowDisc`, and deliberately so. A contact shadow has an edge — the
+ * object sits on the ground and the shadow stops — so it is opaque to 40% out and then falls. A
+ * beam has no edge at all: it is brightest at the middle and never quite reaches nothing, which is
+ * why this is an inverse-square-ish falloff over the whole radius rather than a plateau and a ramp.
+ * Drawn with a hard rim instead, a light pool reads as a painted circle on the lawn.
+ *
+ * Warm white, because 2700 K is what garden lighting is. The colour is baked into the pixels
+ * rather than tinted at draw time for the reason `tintTexture` exists: the pools of two fittings
+ * overlap constantly, and anything applied per-draw over an overlap is applied twice.
+ */
+export async function lightPoolDisc(sizePx: { w: number; h: number }): Promise<Processed> {
+  const { w: width, h: height } = sizePx;
+  const data = Buffer.alloc(width * height * 4);
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) / 2;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const d = Math.min(1, Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius);
+      // Bright core, long tail, and exactly zero at the rim so tiles of it never show an edge.
+      const falloff = (1 - d) * (1 - d) * (1 - d * 0.5);
+      const i = (y * width + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 236;
+      data[i + 2] = 198;
+      data[i + 3] = Math.round(Math.max(0, Math.min(1, falloff)) * 255);
+    }
+  }
+
+  const image = { data, width, height };
+  const webp = await fromRaw(image).webp({ lossless: true }).toBuffer();
+
+  return {
+    webp,
+    widthPx: width,
+    heightPx: height,
+    meanColour: '#ffecc6',
+    opaqueRadiusRatio: opaqueRadiusRatio(image),
+  };
+}
+
 /* ---------------------------------------------------------------- stats */
 
 function meanColour(image: Raw): string {

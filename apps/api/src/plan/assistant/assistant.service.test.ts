@@ -3,6 +3,7 @@ import { PlanDocumentSchema, type AssistantIntentEnvelope } from '@garden-studio
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantService } from './assistant.service.js';
 import type { IntentService } from './intent.service.js';
+import { AssistantRateLimit } from './rate-limit.js';
 import type { PlannerService } from './planner.service.js';
 
 /**
@@ -43,7 +44,12 @@ function service(fakes: Fakes = {}): AssistantService {
     plan: vi.fn(fakes.plan ?? (async () => ({ changes: [], unplaceable: [] }))),
   } as unknown as PlannerService;
 
-  return new AssistantService(intent, planner);
+  /*
+   * A real limiter rather than a fake: it is the thing under test in half of these cases, and it is
+   * a fresh instance per call, so each test gets its own budget. Now shared with the garden
+   * assistant — see `rate-limit.ts`.
+   */
+  return new AssistantService(intent, planner, new AssistantRateLimit());
 }
 
 /** The status of the exception a call threw, or null if it resolved. */

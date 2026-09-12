@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { Sparkles } from 'lucide-react';
 import { MATURITY_LABELS, MATURITY_ORDER } from '@/lib/render/maturity';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
@@ -29,28 +28,6 @@ function clockLabel(minutes: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
-/**
- * The Visualise tab: the same plan, large and clean.
- *
- * ## What this is, and what it is not
- *
- * The tab has sat in the toolbar greyed out since the editor was built, promising a photorealistic
- * view that is a whole architecture away — a scene hash, a camera model, a provider abstraction and
- * somebody's API budget. That is real work and it is planned; it is not what makes the tab worth
- * having today.
- *
- * What is worth having today is the plan **without the editor on top of it**. Every canvas in the
- * wizard is an editing surface: handles, guides, a grid, a selection outline, chips naming things.
- * They are all correct and they are all in the way when the question is "does my garden look
- * right". This draws through `drawPlan` — the same composer the concept cards and the PNG export
- * use, so it is the same picture at a larger size with none of the furniture.
- *
- * ## Why it is honest to ship it as "Visualise"
- *
- * Because it says what it is. The empty-state copy names the photorealistic view as *coming*, and
- * nothing here is labelled or shaped as an AI render. When the generative layer lands it fills this
- * panel rather than adding a concept — which is the whole reason for building the shell first.
- */
 export function VisualisePanel() {
   const sun = useBoundaryStore((state) => state.present.sun);
   const hasLocation = useBoundaryStore((state) => state.present.location !== null);
@@ -61,23 +38,10 @@ export function VisualisePanel() {
   return (
     <div
       data-testid="visualise-panel"
-      className="flex h-full min-h-0 flex-col gap-3 rounded-xl border border-garden-line bg-white p-4 shadow-sm"
+      className="flex h-full min-h-0 flex-col gap-2"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-garden-forest">
-            <Sparkles aria-hidden className="h-4 w-4 text-garden-green" />
-            Your garden, grown in
-          </h2>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-garden-muted">
-            The same plan, planted densely and lit by the sun rather than by the drawing convention.
-            Drag to pan, scroll to zoom. Nothing here changes the design.
-          </p>
-        </div>
-        <DownloadPlanButton variant="primary" view="visualise" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <h2 className="sr-only">Your garden, grown in</h2>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-garden-forest">Planting</span>
           <div
@@ -127,9 +91,10 @@ export function VisualisePanel() {
           </label>
         ) : (
           <p className="text-xs text-garden-muted">
-            Set a location in step 1 to light the garden by the real sun.
+            Presentation lighting
           </p>
         )}
+        <div className="ml-auto"><DownloadPlanButton view="visualise" /></div>
       </div>
 
       <VisualiseView />

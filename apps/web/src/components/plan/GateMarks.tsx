@@ -1,18 +1,25 @@
 'use client';
 
 import { Group, Line, Text } from 'react-konva';
+import type Konva from 'konva';
 import {
   boundaryPolygon,
   resolvedGates,
   streetEdge,
   streetOutward,
   midpoint,
+  type Gate,
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
 import { COLOUR } from '@/lib/canvas-colours';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
-import { STREET_KERB_OFFSET, STREET_LABEL_OFFSET } from '@/lib/materials/symbols/property';
+import {
+  gateSwings,
+  openGapTicks,
+  STREET_KERB_OFFSET,
+  STREET_LABEL_OFFSET,
+} from '@/lib/materials/symbols/property';
 import { SwingArc } from './HouseOpenings';
 
 /**
@@ -31,18 +38,23 @@ export function GateMarks({
   site,
   transform,
   paper = '#ffffff',
+  selectedGateId = null,
+  onSelectGate,
 }: {
   site: Pick<SiteSection, 'vertices' | 'gates' | 'streetEdgeVertexId' | 'house'>;
   transform: CanvasTransform;
   /** What the fence line is drawn over, so the gap reads as an absence. */
   paper?: string;
+  selectedGateId?: string | null;
+  /** Omitted on screens where the property is context rather than something being described. */
+  onSelectGate?: (gateId: string) => void;
 }) {
   const gates = resolvedGates(site);
   const street = streetEdge(site);
   const outward = streetOutward(site);
 
   return (
-    <Group listening={false}>
+    <Group listening={!!onSelectGate}>
       {street && outward ? (
         <StreetMarker segment={street} outward={outward} transform={transform} />
       ) : null}
@@ -50,28 +62,98 @@ export function GateMarks({
       {gates.map(({ gate, segment, inward }) => {
         const from = metresToPx(segment[0], transform);
         const to = metresToPx(segment[1], transform);
+        const selected = gate.id === selectedGateId;
 
         return (
-          <Group key={gate.id}>
+          <Group
+            key={gate.id}
+            onClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
+              if (!onSelectGate) return;
+              event.cancelBubble = true;
+              onSelectGate(gate.id);
+            }}
+            onMouseDown={(event: Konva.KonvaEventObject<MouseEvent>) => {
+              if (onSelectGate) event.cancelBubble = true;
+            }}
+          >
             {/* The gap: the fence painted out for the width of the gate. */}
             <Line
               data-testid={`gate-mark-${gate.id}`}
+              data-selected={selected}
               points={[from.x, from.y, to.x, to.y]}
-              stroke={paper}
-              strokeWidth={6}
+              stroke={selected ? COLOUR.handle : paper}
+              strokeWidth={selected ? 8 : 6}
+              opacity={selected ? 0.55 : 1}
               lineCap="butt"
+              hitStrokeWidth={16}
             />
-            <SwingArc
-              hinge={segment[0]}
-              closedTowards={segment[1]}
-              normal={{ x: -inward.x, y: -inward.y }}
-              inward
+            <GateLeaves
+              gate={gate}
+              segment={segment}
+              inward={inward}
               transform={transform}
               stroke={COLOUR.fencePost}
             />
           </Group>
         );
       })}
+    </Group>
+  );
+}
+
+/**
+ * What is hung in the gap, which is the whole difference between the three kinds.
+ *
+ * A pedestrian gate is one leaf on a hinge and sweeps an arc. A driveway is a pair of leaves, each
+ * half the opening, hung at opposite ends — the drawing convention for a double gate, and what
+ * makes a 3 m opening read as a drive rather than as a very wide garden gate. An open gap has
+ * nothing hung in it at all: a pair of short ticks square to the boundary mark where the enclosure
+ * stops, and nothing else, because drawing a leaf there would claim a gate the user said was absent.
+ */
+function GateLeaves({
+  gate,
+  segment,
+  inward,
+  transform,
+  stroke,
+}: {
+  gate: Gate;
+  segment: [Point, Point];
+  inward: Point;
+  transform: CanvasTransform;
+  stroke: string;
+}) {
+  if (gate.kind === 'open') {
+    return (
+      <Group>
+        {openGapTicks(segment, inward).map((tick, index) => {
+          const a = metresToPx(tick[0], transform);
+          const b = metresToPx(tick[1], transform);
+
+          return (
+            <Line
+              key={index}
+              data-testid={`gate-tick-${gate.id}-${index}`}
+              points={[a.x, a.y, b.x, b.y]}
+              stroke={stroke}
+              strokeWidth={1.5}
+              dash={[4, 3]}
+            />
+          );
+        })}
+      </Group>
+    );
+  }
+
+  /*
+   * One leaf or two, decided by `gateSwings` — the same function the composer asks, so a driveway
+   * on screen and the same driveway on an exported PNG are hung the same way round.
+   */
+  return (
+    <Group>
+      {gateSwings(segment, inward, gate.kind).map((swing, index) => (
+        <SwingArc key={index} swing={swing} transform={transform} stroke={stroke} />
+      ))}
     </Group>
   );
 }

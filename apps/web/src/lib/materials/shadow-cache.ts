@@ -38,6 +38,7 @@ export interface ShadowRequest {
   pxPerMetre: number;
   /** Device pixels per CSS pixel — see `PatternRequest.pixelRatio`, same rule and same reason. */
   pixelRatio?: number;
+  softnessMetres?: number;
 }
 
 /**
@@ -71,6 +72,7 @@ export function shadowLayerKey(request: ShadowRequest): string {
     hashString(occluders).toString(36),
     hashString(ring(request.boundary)).toString(36),
     sun,
+    request.softnessMetres ?? 0,
     zoomBucket(request.pxPerMetre),
     request.pixelRatio ?? 1,
   ].join(':');
@@ -94,6 +96,7 @@ export function getShadowLayer(
     // shade is as sharp as the things casting it; `useShadowLayer` divides it back out.
     pxPerMetre: bucketScale(bucket) * (request.pixelRatio ?? 1),
     makeCanvas,
+    softnessMetres: request.softnessMetres,
   });
 
   if (!raster) return null;

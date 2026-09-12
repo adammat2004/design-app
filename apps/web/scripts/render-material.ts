@@ -50,13 +50,28 @@ if (!MATERIAL) throw new Error('stone-pavers has no pattern manifest — nothing
  * matters — the user picks between them from a dropdown.
  */
 const SHOWCASE: MaterialId[] = [
+  /*
+   * Every material that has a pattern, and it has to stay that way.
+   *
+   * `stone-setts`, `hardwearing-turf` and `painted-timber` were missing for as long as this list
+   * existed, and `stone-setts` is the one that mattered: it is what `circulationFor` gives every
+   * access route and what `front.ts` forces on every front path, so it was simultaneously the
+   * most-drawn paving in the app and the only one with no photograph behind it — and the sheet
+   * that exists to catch exactly that could not show it. A material absent from here is a material
+   * nobody is looking at.
+   *
+   * The four with no pattern entry — `powder-coated-steel`, the three furniture materials and
+   * `existing` — are absent because they draw as flat colour and there is nothing to judge.
+   */
   'stone-pavers',
   'porcelain',
   'concrete',
+  'stone-setts',
   'stepping-stones',
   'timber-decking',
   'gravel-paving',
   'standard-turf',
+  'hardwearing-turf',
   'artificial-turf',
   'wildflower',
   'mixed-border',
@@ -70,6 +85,7 @@ const SHOWCASE: MaterialId[] = [
   'slate-chippings',
   'softwood',
   'hardwood',
+  'painted-timber',
   'naturalistic-pond',
   'formal-pool',
   'rill',

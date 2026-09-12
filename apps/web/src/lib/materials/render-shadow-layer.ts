@@ -57,6 +57,9 @@ export interface ShadowRaster {
  */
 const MAX_RASTER_PX = 4096;
 
+/** A restrained presentation penumbra, in metres; never changes the solar projection. */
+export const PRESENTATION_SHADOW_SOFTNESS = 0.06;
+
 /**
  * Rasterises every cast shadow on the plan into one image.
  *
@@ -71,7 +74,7 @@ export function renderShadowLayer(
   occluders: ShadowOccluder[],
   cast: ShadowCast,
   boundary: Point[],
-  pass: DrawPass & { makeCanvas: MakeCanvas },
+  pass: DrawPass & { makeCanvas: MakeCanvas; softnessMetres?: number },
 ): ShadowRaster | null {
   if (occluders.length === 0 || boundary.length < 3) return null;
 
@@ -90,6 +93,22 @@ export function renderShadowLayer(
   const originMetres = { x: box.minX, y: box.minY };
 
   drawShadowLayer(context, occluders, cast, boundary, { pxPerMetre: scale }, originMetres);
+
+  if (pass.softnessMetres && pass.softnessMetres > 0) {
+    const softened = pass.makeCanvas(widthPx, heightPx);
+    const softenedContext = softened.getContext('2d');
+    if (softenedContext && typeof softenedContext.filter === 'string') {
+      // Blur the opaque union once: overlapping occluders still cannot double-darken.
+      tracePath(softenedContext, boundary, (p) => ({
+        x: (p.x - originMetres.x) * scale, y: (p.y - originMetres.y) * scale,
+      }));
+      softenedContext.clip();
+      softenedContext.filter = `blur(${pass.softnessMetres * scale}px)`;
+      softenedContext.drawImage(canvas, 0, 0, widthPx, heightPx);
+      softenedContext.filter = 'none';
+      return { canvas: softened, originMetres, pxPerMetre: scale, widthPx, heightPx };
+    }
+  }
 
   return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
 }

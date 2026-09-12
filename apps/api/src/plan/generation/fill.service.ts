@@ -24,11 +24,10 @@ type PartRow = {
   area: number;
 };
 
-/** Below this a region is a sliver, not a bed. */
-export const MIN_FILL_AREA = 1.2;
-
-/** And below this it is a sliver in one direction even if its area passes. */
-export const MIN_FILL_SIDE = 1.2;
+// The sliver limits live in a leaf module so the pure sketch layer can respect them without
+// importing the database driver. Re-exported here for the callers that always found them here.
+import { MIN_FILL_AREA, MIN_FILL_SIDE } from './fill-limits.js';
+export { MIN_FILL_AREA, MIN_FILL_SIDE };
 
 /** How far an accent is pulled in from its neighbours, so the base layer reads as a margin. */
 const INSET = 0.4;
@@ -327,21 +326,22 @@ export class FillService {
   }
 
   /**
-   * A shape clipped to a room, as one ring, or `null` if nothing usable survives.
+   * A shape clipped to another, as one ring, or `null` if nothing usable survives.
    *
-   * The curved template's lawn is sketched as a clean curve and then has to live inside an
-   * L-shaped or irregular room; a TypeScript containment check says whether it does, and this
-   * is what happens when it does not. Pulled in by `inset` so it clears the room's edge.
+   * Named for the operation rather than for its first caller: the curved template's lawn is
+   * sketched as a clean curve and then has to live inside an L-shaped or irregular room, and the
+   * garden room itself has to live inside whatever redesign area the user drew. Same intersection,
+   * same sliver guards, same "largest piece" answer. Pulled in by `inset` so it clears the edge.
    */
-  async clipToRoom(shape: Point[], room: Point[], inset = 0): Promise<Point[] | null> {
-    if (shape.length < 3 || room.length < 3) return null;
+  async clipTo(shape: Point[], clip: Point[], inset = 0): Promise<Point[] | null> {
+    if (shape.length < 3 || clip.length < 3) return null;
 
     const rows = await this.db.execute<PartRow>(sql`
       WITH clipped AS MATERIALIZED (
         SELECT (ST_Dump(
           ST_Intersection(
             ST_MakeValid(ST_GeomFromText(${polygonToWkt(shape)}::text)),
-            ST_MakeValid(ST_GeomFromText(${polygonToWkt(room)}::text))
+            ST_MakeValid(ST_GeomFromText(${polygonToWkt(clip)}::text))
           )
         )).geom AS geom
       ),
@@ -365,6 +365,104 @@ export class FillService {
 
     const first = rows[0];
     return first ? exteriorRing(first.ring) : null;
+  }
+
+  /**
+   * Every ring clipped to `scope`, bucketed by input index, largest piece first.
+   *
+   * One query for all of them rather than one each: the scope geometry is parsed and validated
+   * once, and four zones become one round trip instead of four.
+   *
+   * Returns *every* surviving piece rather than the largest, which is the difference from
+   * `clipTo` and is deliberate. A zone cut by a U-shaped redesign area is genuinely two gardens,
+   * and keeping only the bigger one would leave the other with no base fill under it — bare graph
+   * paper inside the area the user asked to have designed, which is the exact fault the scope
+   * feature exists to prevent.
+   */
+  async clipRingsTo(rings: Point[][], scope: Point[], inset = 0): Promise<Point[][][]> {
+    const buckets: Point[][][] = rings.map(() => []);
+    if (scope.length < 3) return buckets;
+
+    const usable = rings
+      .map((ring, index) => ({ ring, index }))
+      .filter((entry) => entry.ring.length >= 3);
+    if (usable.length === 0) return buckets;
+
+    const subjects = sql.join(
+      usable.map(
+        (entry) =>
+          sql`(${entry.index}::int, ST_MakeValid(ST_GeomFromText(${polygonToWkt(entry.ring)}::text)))`,
+      ),
+      sql`, `,
+    );
+
+    const rows = await this.db.execute<PartRow & { idx: number }>(sql`
+      WITH scope AS MATERIALIZED (
+        SELECT ST_MakeValid(ST_GeomFromText(${polygonToWkt(scope)}::text)) AS geom
+      ),
+      subject (idx, geom) AS (VALUES ${subjects}),
+      cut AS MATERIALIZED (
+        SELECT subject.idx, (ST_Dump(ST_Intersection(subject.geom, scope.geom))).geom AS geom
+        FROM subject, scope
+      ),
+      eroded AS MATERIALIZED (
+        SELECT cut.idx, (ST_Dump(
+          ${
+            inset > 0
+              ? sql`ST_Buffer(cut.geom, ${-inset}::float8, ${BUFFER_QUAD_SEGMENTS}::int)`
+              : sql`cut.geom`
+          }
+        )).geom AS geom
+        FROM cut
+        WHERE ST_GeometryType(cut.geom) = 'ST_Polygon'
+      ),
+      sized AS MATERIALIZED (
+        SELECT eroded.idx, eroded.geom
+        FROM eroded
+        WHERE ST_GeometryType(eroded.geom) = 'ST_Polygon'
+          AND ST_Area(eroded.geom) >= ${MIN_FILL_AREA}::float8
+          -- The same minimum-width test accentRegions uses: a 0.3 x 5 m offcut is not a garden.
+          AND NOT ST_IsEmpty(
+            ST_Buffer(eroded.geom, ${-MIN_FILL_SIDE / 2}::float8, ${BUFFER_QUAD_SEGMENTS}::int)
+          )
+      ),
+      tidy AS MATERIALIZED (
+        /*
+         * Clamped back inside the scope as the last step, exactly as borderRegions clamps to the
+         * plot and for the same reason: ST_SimplifyPreserveTopology preserves topology but *not*
+         * containment, and a vertex nudged a centimetre outward is a centimetre of garden the
+         * user said not to touch.
+         */
+        SELECT sized.idx,
+          ST_Intersection(
+            ST_SimplifyPreserveTopology(sized.geom, ${SIMPLIFY_TOLERANCE}::float8),
+            scope.geom
+          ) AS geom
+        FROM sized, scope
+      )
+      SELECT tidy.idx::int AS idx,
+             ST_AsGeoJSON(tidy.geom)::text AS ring,
+             ST_Area(tidy.geom)::float8 AS area
+      FROM tidy
+      WHERE NOT ST_IsEmpty(tidy.geom)
+        AND ST_GeometryType(tidy.geom) = 'ST_Polygon'
+        /*
+         * Defensive, in the style borderRegions uses. Two simple rings cannot intersect to a shape
+         * with a hole, so this can only fire if the scope ring was not simple — and exteriorRing
+         * would then silently hand back the whole outer ring and paint over the very ground the
+         * user excluded. Refuse rather than trust.
+         */
+        AND ST_NumInteriorRings(tidy.geom) = 0
+        AND ST_Area(tidy.geom) >= ${MIN_FILL_AREA}::float8
+      ORDER BY idx, area DESC
+    `);
+
+    for (const row of rows) {
+      const ring = exteriorRing(row.ring);
+      if (ring) buckets[row.idx]?.push(ring);
+    }
+
+    return buckets;
   }
 }
 

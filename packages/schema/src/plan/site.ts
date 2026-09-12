@@ -9,6 +9,7 @@ import {
   type Point,
 } from '../geometry/primitives.js';
 import { rectangleOutline } from '../geometry/shapes.js';
+import { scaleOffsets } from './along-edge.js';
 import { BoundaryEdgeStyleSchema } from './boundary-style.js';
 import { GateSchema } from './gate.js';
 import { OpeningSchema } from './opening.js';
@@ -78,8 +79,20 @@ export const HouseFootprintSchema = z.object({
   centre: PointSchema,
   /** Degrees clockwise about the centre, matching `rectToPolygon` and Konva. */
   rotation: z.number(),
+  /**
+   * How many floors the house has. The one vertical fact captured about the building.
+   *
+   * Storeys rather than a height in metres, because that is the question a user can answer, and
+   * nothing here needs better than the eaves line it implies: the shadow the house throws, the
+   * roof drawn over it, and one day a wall to extrude. Per-house rather than per-wall, because a
+   * single-storey extension is a footprint question and can be a per-wall override later without
+   * disturbing this. Defaults to two, which is the six-metre eaves every stored plan already had.
+   */
+  storeys: z.number().int().min(1).max(3).default(2),
 });
 export type HouseFootprint = z.infer<typeof HouseFootprintSchema>;
+
+export const DEFAULT_STOREYS = 2;
 
 /**
  * Where on Earth the plot is.
@@ -168,6 +181,20 @@ export const SiteSectionSchema = z.object({
    * cannot drift apart.
    */
   boundaryStyles: z.array(BoundaryEdgeStyleSchema).default([]),
+  /**
+   * A custom redesign area the user drew on step 2, as a simple ring in plan metres, or `null`.
+   *
+   * `null` is not "the whole plot": it means the scope is the ticked zones and the generator skips
+   * its clip entirely, which is what keeps every stored plan generating byte-identically. Offered
+   * rather than inferred, the same rule `site.location` follows — an area nobody drew is an area
+   * nobody stated.
+   *
+   * An addition with a default, so **no `PLAN_DOCUMENT_VERSION` bump is needed**, exactly as
+   * `boundaryStyles` above. The resolvers live in `scope.ts`, split off for the same cycle reason
+   * `opening.ts` and `gate.ts` are: `scope.ts` needs `GardenZone` from `zones.ts`, which needs the
+   * house footprint from here.
+   */
+  scopePolygon: z.array(PointSchema).min(3).nullable().default(null),
 });
 export type SiteSection = z.infer<typeof SiteSectionSchema>;
 
@@ -241,7 +268,14 @@ export function houseWalls(house: HouseFootprint): HouseWall[] {
 export function rectangleHouse(centre: Point, width: number, depth: number): HouseFootprint {
   const outline = identifyOutline(rectangleOutline(width, depth));
 
-  return { outline, walls: defaultWalls(outline), openings: [], centre, rotation: 0 };
+  return {
+    outline,
+    walls: defaultWalls(outline),
+    openings: [],
+    centre,
+    rotation: 0,
+    storeys: DEFAULT_STOREYS,
+  };
 }
 
 /** The boundary polygon, stripped of the vertex ids the editor carries around. */
@@ -283,6 +317,11 @@ export function houseArea(house: HouseFootprint | null): number {
  * `houseFitsInside` and silently refuses the rescale.
  *
  * Rotation is untouched: scaling is uniform, so angles are preserved.
+ *
+ * The openings travel too — their offsets, not their widths. A door stored 4.5 m along a wall that
+ * is now 0.9 m long would simply stop resolving, and the user who tapped "scale down" to fix a plot
+ * drawn ten times too big would find every door gone. A door is still a door's width afterwards;
+ * it is the wall that was wrong.
  */
 export function scaleHouseAbout(
   house: HouseFootprint,
@@ -294,6 +333,7 @@ export function scaleHouseAbout(
     // Spread, so the vertex ids survive a rescale along with everything else attached to them.
     outline: house.outline.map((point) => ({ ...point, x: point.x * factor, y: point.y * factor })),
     centre: scalePointAbout(house.centre, centre, factor),
+    openings: scaleOffsets(house.openings, factor),
   };
 }
 

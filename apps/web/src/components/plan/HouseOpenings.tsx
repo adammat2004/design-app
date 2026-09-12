@@ -6,15 +6,17 @@ import {
   houseWalls,
   openingNormal,
   openingSegment,
-  rotatePoint,
   wallSegment,
   type HouseFootprint,
   type Opening,
-  type Point,
 } from '@garden-studio/schema';
 import { COLOUR } from '@/lib/canvas-colours';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
-import { WALL_THICKNESS } from '@/lib/materials/symbols/property';
+import {
+  swingGeometry,
+  WALL_THICKNESS,
+  type SwingGeometry,
+} from '@/lib/materials/symbols/property';
 
 /**
  * The openings, drawn where the design happens.
@@ -32,20 +34,22 @@ import { WALL_THICKNESS } from '@/lib/materials/symbols/property';
  * under it — draws nothing at all rather than being clamped somewhere plausible.
  */
 
-/** How many segments make the swing arc read as a curve. */
-const ARC_STEPS = 12;
-
 export function HouseOpenings({
   house,
   transform,
   selectedWallId = null,
+  selectedOpeningId = null,
   onSelectWall,
+  onSelectOpening,
 }: {
   house: HouseFootprint;
   transform: CanvasTransform;
   selectedWallId?: string | null;
+  selectedOpeningId?: string | null;
   /** Omitted on screens where the house is context rather than something being edited. */
   onSelectWall?: (wallId: string) => void;
+  /** Omitted likewise; given, an opening can be picked out of the wall it is in. */
+  onSelectOpening?: (openingId: string) => void;
 }) {
   const walls = houseWalls(house);
 
@@ -65,6 +69,7 @@ export function HouseOpenings({
               <Line
                 key={`hit-${wall.id}`}
                 data-testid={`wall-${wall.id}`}
+                data-selected={isSelected}
                 points={[from.x, from.y, to.x, to.y]}
                 stroke={isSelected ? COLOUR.handle : 'transparent'}
                 strokeWidth={isSelected ? 5 : 14}
@@ -82,7 +87,14 @@ export function HouseOpenings({
         : null}
 
       {house.openings.map((opening) => (
-        <OpeningMark key={opening.id} house={house} opening={opening} transform={transform} />
+        <OpeningMark
+          key={opening.id}
+          house={house}
+          opening={opening}
+          transform={transform}
+          selected={opening.id === selectedOpeningId}
+          onSelect={onSelectOpening}
+        />
       ))}
     </Group>
   );
@@ -92,10 +104,14 @@ function OpeningMark({
   house,
   opening,
   transform,
+  selected = false,
+  onSelect,
 }: {
   house: HouseFootprint;
   opening: Opening;
   transform: CanvasTransform;
+  selected?: boolean;
+  onSelect?: ((openingId: string) => void) | undefined;
 }) {
   const segment = openingSegment(house, opening);
   const normal = openingNormal(house, opening);
@@ -119,90 +135,100 @@ function OpeningMark({
 
   // Upstairs openings are drawn faintly: they are real, but nothing walks out of one.
   const upstairs = opening.floorLevel > 0;
+  const glazed = opening.type === 'window' || opening.type === 'upper-window';
+
+  /*
+   * A window is not a hole you walk through, so it is not drawn as one: the wall carries on past it
+   * and the glazing is a pair of fine lines across the band. Drawn as a gap, every window read as a
+   * doorway on the plan — which is exactly the thing a reader would act on.
+   */
+  const gapWidth = Math.max(3, WALL_THICKNESS * transform.scale + 1);
+
+  const swing =
+    opening.swing === 'none' ? null : swingGeometry(start, end, normal, opening.swing === 'inward');
 
   return (
-    <Group listening={false} opacity={upstairs ? 0.35 : 1}>
+    <Group
+      listening={!!onSelect}
+      opacity={upstairs ? 0.35 : 1}
+      onClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
+        if (!onSelect) return;
+        event.cancelBubble = true;
+        onSelect(opening.id);
+      }}
+      onMouseDown={(event: Konva.KonvaEventObject<MouseEvent>) => {
+        if (onSelect) event.cancelBubble = true;
+      }}
+    >
       {/*
         The gap. Drawn over the wall in the house's own fill so it reads as an absence rather than
         as another line laid on top of the building.
       */}
+      {glazed ? null : (
+        <Line
+          data-testid={`opening-mark-${opening.id}`}
+          points={[gapFrom.x, gapFrom.y, gapTo.x, gapTo.y]}
+          stroke={COLOUR.houseFill}
+          strokeWidth={gapWidth}
+          lineCap="butt"
+          hitStrokeWidth={Math.max(gapWidth, 14)}
+        />
+      )}
       <Line
-        data-testid={`opening-mark-${opening.id}`}
-        points={[gapFrom.x, gapFrom.y, gapTo.x, gapTo.y]}
-        stroke={COLOUR.houseFill}
-        strokeWidth={Math.max(3, WALL_THICKNESS * transform.scale + 1)}
-        lineCap="butt"
-      />
-      <Line
+        data-testid={glazed ? `opening-mark-${opening.id}` : undefined}
+        data-selected={selected}
         points={[from.x, from.y, to.x, to.y]}
-        stroke={COLOUR.handle}
-        strokeWidth={2.5}
+        stroke={selected ? COLOUR.stroke : COLOUR.handle}
+        strokeWidth={selected ? 4 : 2.5}
         lineCap="butt"
+        hitStrokeWidth={14}
       />
-
-      {opening.swing !== 'none' ? (
-        <SwingArc
-          hinge={start}
-          closedTowards={end}
-          normal={normal}
-          inward={opening.swing === 'inward'}
-          transform={transform}
+      {/* The second pane line, half a wall in, which is what makes a window read as glazed. */}
+      {glazed ? (
+        <Line
+          points={[gapFrom.x, gapFrom.y, gapTo.x, gapTo.y]}
+          stroke={selected ? COLOUR.stroke : COLOUR.handle}
+          strokeWidth={Math.max(1, 1.5)}
+          lineCap="butt"
+          listening={false}
         />
       ) : null}
+
+      {swing ? <SwingArc swing={swing} transform={transform} /> : null}
     </Group>
   );
 }
 
 /**
- * The quarter circle a hinged door sweeps, with its leaf shown open.
+ * The quarter circle a hinged leaf sweeps, with the leaf shown open.
  *
  * Rendered so the threshold keep-clear reads as a consequence of something visible rather than an
  * arbitrary exclusion zone. It is deliberately **not** a separate constraint: for an ordinary door
  * the arc sits well inside the 1.8 m threshold rectangle that already keeps beds out of the way, so
  * counting it twice would shrink the garden for no gain.
- */
-/**
- * A door leaf standing open and the quarter arc it swings through. Exported for `GateMarks`,
- * which draws a gate in the fence the same way: same convention, different hinge.
+ *
+ * **It is handed the geometry rather than working it out.** The same arc was computed here and
+ * again inside the composer's `drawAccess`, and the two had already diverged — the composer always
+ * hinged on the segment's first end, so a gate and the same gate on an exported PNG could open from
+ * opposite sides. `swingGeometry` decides; this and the composer both draw. Exported for
+ * `GateMarks`, which hangs one leaf or two by the same convention.
  */
 export function SwingArc({
-  hinge,
-  closedTowards,
-  normal,
-  inward,
+  swing,
   transform,
   stroke = COLOUR.houseStroke,
 }: {
-  hinge: Point;
-  closedTowards: Point;
-  normal: Point;
-  inward: boolean;
+  swing: SwingGeometry;
   transform: CanvasTransform;
   stroke?: string;
 }) {
-  const dx = closedTowards.x - hinge.x;
-  const dy = closedTowards.y - hinge.y;
-  const radius = Math.hypot(dx, dy);
-  if (radius < 1e-6) return null;
+  const points = swing.arc.flatMap((point) => {
+    const at = metresToPx(point, transform);
+    return [at.x, at.y];
+  });
 
-  const closed = { x: dx / radius, y: dy / radius };
-  const open = inward ? { x: -normal.x, y: -normal.y } : normal;
-
-  // Which way round the circle takes the leaf from shut to open, in this y-down frame.
-  const turn = closed.x * open.y - closed.y * open.x >= 0 ? 90 : -90;
-
-  const points: number[] = [];
-  for (let step = 0; step <= ARC_STEPS; step += 1) {
-    const direction = rotatePoint(closed, { x: 0, y: 0 }, (turn * step) / ARC_STEPS);
-    const at = metresToPx(
-      { x: hinge.x + direction.x * radius, y: hinge.y + direction.y * radius },
-      transform,
-    );
-    points.push(at.x, at.y);
-  }
-
-  const hingePx = metresToPx(hinge, transform);
-  const openPx = { x: points[points.length - 2]!, y: points[points.length - 1]! };
+  const hingePx = metresToPx(swing.hinge, transform);
+  const openPx = metresToPx(swing.open, transform);
 
   return (
     <>

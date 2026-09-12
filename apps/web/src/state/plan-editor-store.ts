@@ -174,6 +174,10 @@ interface PlanEditorState {
 
   renameElement: (id: string, name: string) => void;
   setMaterial: (id: string, materialId: string) => void;
+  /** `''` clears it back to the spade cut every border has for free. */
+  setEdging: (id: string, materialId: string) => void;
+  /** `''` clears it back to a plain upstand in the element's own paving. */
+  setRetaining: (id: string, materialId: string) => void;
   setZone: (id: string, zone: ZoneId) => void;
   setElevation: (id: string, metres: number) => void;
   toggleHidden: (id: string) => void;
@@ -234,6 +238,8 @@ const NEW_ELEMENT_SIZE: Record<ElementCategory, { width: number; depth: number }
   structure: { width: 2.5, depth: 2 },
   'water-feature': { width: 1.5, depth: 1.5 },
   furniture: { width: 2.4, depth: 2.4 },
+  /* Only ever a fallback: every light carries a symbol, and `SYMBOLS` gives the real footprint. */
+  lighting: { width: 0.2, depth: 0.2 },
   'existing-feature': { width: 2, depth: 2 },
 };
 
@@ -398,11 +404,11 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     placingSymbol: null,
     placingPlantId: null,
     snapEnabled: true,
-    gridVisible: true,
+    gridVisible: false,
     maturity: 'mature',
-    labelsVisible: true,
+    labelsVisible: false,
     zonesVisible: false,
-    dimensionsVisible: true,
+    dimensionsVisible: false,
     alignments: [],
     measurement: null,
     clash: null,
@@ -592,6 +598,40 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       commitElement(id, (element) => ({ ...element, material: materialId }), {
         checkGeometry: false,
       }),
+
+    /*
+     * Like `setMaterial`, this is accepted on a locked base fill: edging the lawn is a real
+     * decision and it cannot open a gap in the ground. `''` clears it back to the spade cut, which
+     * is why the field is deleted rather than set to an empty string — an empty `edging` would be a
+     * material id nothing can resolve, where absent has a meaning.
+     */
+    setEdging: (id, materialId) =>
+      commitElement(
+        id,
+        (element) => {
+          const next = { ...element };
+          if (materialId) next.edging = materialId;
+          else delete next.edging;
+          return next;
+        },
+        { checkGeometry: false },
+      ),
+
+    /**
+     * The wall a raised surface is held back by. `''` clears it to the plain upstand, which is the
+     * default and a real answer — see `WALLING_MATERIALS`.
+     */
+    setRetaining: (id, materialId) =>
+      commitElement(
+        id,
+        (element) => {
+          const next = { ...element };
+          if (materialId) next.retaining = materialId;
+          else delete next.retaining;
+          return next;
+        },
+        { checkGeometry: false },
+      ),
 
     setZone: (id, zone) =>
       commitElement(id, (element) => ({ ...element, zone }), { checkGeometry: false }),
@@ -928,11 +968,11 @@ function ephemeralState() {
     placingSymbol: null as SymbolId | null,
     placingPlantId: null as string | null,
     snapEnabled: true,
-    gridVisible: true,
+    gridVisible: false,
     maturity: 'mature' as Maturity,
-    labelsVisible: true,
+    labelsVisible: false,
     zonesVisible: false,
-    dimensionsVisible: true,
+    dimensionsVisible: false,
     alignments: [] as AlignmentGuide[],
     measurement: null,
     clash: null as string | null,

@@ -682,3 +682,172 @@ describe('zone re-derivation', () => {
     expect(zoneAt(featureAnchor(store().present.features[0]), zones())?.id).toBe('back');
   });
 });
+
+describe('assistant changes', () => {
+  /** What the planner would return for "add a shed" — a complete, already-legal feature. */
+  function addChange(id: string, at: { x: number; y: number }) {
+    return {
+      id,
+      kind: 'add' as const,
+      featureId: null,
+      label: 'shed',
+      next: {
+        id: `server-${id}`,
+        kind: 'shed' as const,
+        name: 'Shed',
+        geometry: { kind: 'rect' as const, centre: at, width: 2.5, depth: 2, rotation: 0 },
+        status: 'keep' as const,
+        replaceWith: null,
+      },
+      previous: null,
+    };
+  }
+
+  beforeEach(() => {
+    mapProperty();
+  });
+
+  /*
+   * The headline requirement: a sentence that adds four things is one Undo, not four. The gesture
+   * bracket is what does it, and this is the test that fails if a future edit routes the batch
+   * through `commit` instead of writing `present` directly.
+   */
+  it('folds a whole batch into one undo entry', () => {
+    const before = store().past.length;
+
+    store().applyAssistantChanges([
+      addChange('c1', { x: 3, y: 3 }),
+      addChange('c2', { x: 7, y: 3 }),
+      addChange('c3', { x: 3, y: 13 }),
+      addChange('c4', { x: 7, y: 13 }),
+    ]);
+
+    expect(store().present.features).toHaveLength(4);
+    expect(store().past.length).toBe(before + 1);
+
+    store().undo();
+    expect(store().present.features).toHaveLength(0);
+  });
+
+  it('gives every added feature a local id rather than the server’s', () => {
+    store().applyAssistantChanges([addChange('c1', { x: 3, y: 3 })]);
+
+    expect(store().present.features[0].id).toMatch(/^f\d+$/);
+  });
+
+  // Three that fit and one that does not should place the three and say so about the fourth.
+  it('applies what fits and reports what does not, without throwing', () => {
+    const outcome = store().applyAssistantChanges([
+      addChange('good', { x: 5, y: 5 }),
+      addChange('over-the-fence', { x: 19.8, y: 8 }),
+    ]);
+
+    expect(outcome.applied).toEqual(['good']);
+    expect(outcome.refused).toHaveLength(1);
+    expect(outcome.refused[0].changeId).toBe('over-the-fence');
+    expect(store().present.features).toHaveLength(1);
+  });
+
+  it('refuses a change naming a feature that is no longer there', () => {
+    const outcome = store().applyAssistantChanges([
+      { ...addChange('c1', { x: 5, y: 5 }), kind: 'delete' as const, featureId: 'f99' },
+    ]);
+
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.refused[0].changeId).toBe('c1');
+  });
+
+  it('keeps the store’s own id when a change edits an existing feature', () => {
+    const id = placeTree({ x: 5, y: 5 });
+
+    store().applyAssistantChanges([
+      {
+        id: 'c1',
+        kind: 'status',
+        featureId: id,
+        label: 'Tree',
+        next: { ...store().present.features[0], id: 'server-x', status: 'remove' },
+        previous: store().present.features[0],
+      },
+    ]);
+
+    expect(store().present.features[0].id).toBe(id);
+    expect(store().present.features[0].status).toBe('remove');
+  });
+
+  // "Nothing to add" cannot stay true once something has been added, whichever route added it.
+  it('clears the skip flag when it places anything', () => {
+    store().setSkipped(true);
+    store().applyAssistantChanges([addChange('c1', { x: 5, y: 5 })]);
+
+    expect(store().skipped).toBe(false);
+  });
+
+  it('earns no undo entry at all when every change is refused', () => {
+    const before = store().past.length;
+    store().applyAssistantChanges([addChange('c1', { x: 19.8, y: 8 })]);
+
+    expect(store().past.length).toBe(before);
+    expect(store().skipped).toBe(false);
+  });
+});
+
+describe('the redesign area', () => {
+  beforeEach(() => {
+    mapProperty();
+  });
+
+  it('commits a traced outline to the site, where the generator reads it', () => {
+    store().startScopeDraw();
+    store().addDraftPoint({ x: 4, y: 10 });
+    store().addDraftPoint({ x: 16, y: 10 });
+    store().addDraftPoint({ x: 16, y: 15 });
+    store().addDraftPoint({ x: 4, y: 15 });
+    store().finishScopeDraw();
+
+    expect(useBoundaryStore.getState().present.scopePolygon).toHaveLength(4);
+    expect(store().mode).toBe('select');
+  });
+
+  /*
+   * A bow tie has an ordinary vertex list and a quietly wrong area, so it has to be refused at the
+   * point of drawing — `scopeRing` is the one rule, and the store asks it rather than repeating it.
+   */
+  it('refuses a self-crossing outline and says so', () => {
+    store().startScopeDraw();
+    store().addDraftPoint({ x: 4, y: 10 });
+    store().addDraftPoint({ x: 16, y: 10 });
+    store().addDraftPoint({ x: 4, y: 15 });
+    store().addDraftPoint({ x: 16, y: 15 });
+    store().finishScopeDraw();
+
+    expect(useBoundaryStore.getState().present.scopePolygon).toBeNull();
+    expect(store().clash).not.toBeNull();
+  });
+
+  it('refuses an outline that leaves the property', () => {
+    store().startScopeDraw();
+    store().addDraftPoint({ x: 16, y: 10 });
+    store().addDraftPoint({ x: 26, y: 10 });
+    store().addDraftPoint({ x: 26, y: 15 });
+    store().addDraftPoint({ x: 16, y: 15 });
+    store().finishScopeDraw();
+
+    expect(useBoundaryStore.getState().present.scopePolygon).toBeNull();
+  });
+
+  // The outline was traced against a garden that no longer exists once the house moves.
+  it('is cleared when the house is replaced', () => {
+    store().startScopeDraw();
+    store().addDraftPoint({ x: 4, y: 10 });
+    store().addDraftPoint({ x: 16, y: 10 });
+    store().addDraftPoint({ x: 16, y: 15 });
+    store().addDraftPoint({ x: 4, y: 15 });
+    store().finishScopeDraw();
+    expect(useBoundaryStore.getState().present.scopePolygon).not.toBeNull();
+
+    useBoundaryStore.getState().placeHouseRectangle({ x: 10, y: 6 }, 8, 6);
+
+    expect(useBoundaryStore.getState().present.scopePolygon).toBeNull();
+  });
+});

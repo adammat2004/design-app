@@ -1,6 +1,7 @@
 import {
   rectToPolygon,
   resolveSymbol,
+  stepFlight,
   type DesignElement,
   type Point,
 } from '@garden-studio/schema';
@@ -27,6 +28,7 @@ import {
   raisedBedRails,
   rectNormal,
   shedRoof,
+  stepNosings,
   type RectShape,
 } from './structures';
 
@@ -81,7 +83,7 @@ export function drawSymbol(
       drawPergola(context, shape, pxPerMetre, toPx);
       return true;
     case 'shed':
-      drawShed(context, element, shape, light, toPx);
+      drawShed(context, element, shape, light, toPx, pxPerMetre);
       return true;
     case 'gazebo':
       drawGazebo(context, element, shape, light, toPx);
@@ -89,10 +91,16 @@ export function drawSymbol(
     case 'raised-bed':
       drawRaisedBed(context, shape, toPx);
       return true;
+    case 'steps':
+      drawSteps(context, element, shape, pxPerMetre, toPx);
+      return true;
     default:
       return false;
   }
 }
+
+/** A nosing is a shadow line in the paving, not a painted stripe. */
+const STEP_NOSING = 'rgba(40, 46, 42, 0.55)';
 
 function drawContactShadow(
   context: SymbolContext,
@@ -174,6 +182,7 @@ function drawShed(
   shape: RectShape,
   light: Point,
   toPx: (point: Point) => Point,
+  pxPerMetre: number,
 ): void {
   const { lit, unlit } = roofTones(element);
 
@@ -192,6 +201,35 @@ function drawShed(
   context.fillStyle = secondLit ? lit : unlit;
   fillRing(context, roof.slopes[1], toPx);
   context.globalAlpha = 1;
+
+  // Roofing courses and a narrow eave band give the two slopes physical scale.
+  // These are drawn inside the existing footprint and retain the selected timber tones.
+  context.save();
+  context.beginPath();
+  rectToPolygon(shape).forEach((point, index) => {
+    const p = toPx(point);
+    if (index === 0) context.moveTo(p.x, p.y);
+    else context.lineTo(p.x, p.y);
+  });
+  context.closePath();
+  context.clip();
+  const centre = toPx(shape.centre);
+  context.translate(centre.x, centre.y);
+  context.rotate(shape.rotation * Math.PI / 180);
+  if (shape.width < shape.depth) context.rotate(Math.PI / 2);
+  const width = Math.max(shape.width, shape.depth) * pxPerMetre;
+  const depth = Math.min(shape.width, shape.depth) * pxPerMetre;
+  const course = 0.18 * pxPerMetre;
+  for (let y = -depth / 2; y < depth / 2; y += course) {
+    context.fillStyle = 'rgba(38,43,38,0.17)';
+    context.fillRect(-width / 2, y, width, Math.max(0.5, 0.012 * pxPerMetre));
+    context.fillStyle = 'rgba(245,240,225,0.12)';
+    context.fillRect(-width / 2, y + 0.018 * pxPerMetre, width, Math.max(0.4, 0.008 * pxPerMetre));
+  }
+  context.fillStyle = 'rgba(30,37,31,0.36)';
+  context.fillRect(-width / 2, -depth / 2, width, 0.055 * pxPerMetre);
+  context.fillRect(-width / 2, depth / 2 - 0.055 * pxPerMetre, width, 0.055 * pxPerMetre);
+  context.restore();
 
   const a = toPx(roof.ridge[0]);
   const b = toPx(roof.ridge[1]);
@@ -249,4 +287,44 @@ function drawRaisedBed(
   fillRing(context, rails.outer, toPx);
   context.fillStyle = CATEGORY_COLOURS['planting-bed'].fill;
   fillRing(context, rails.inner, toPx);
+}
+
+/**
+ * A flight of steps: its nosings, and nothing else.
+ *
+ * The paving is already there — a flight is a `paved-area`-shaped thing drawn over whatever surface
+ * it sits on — so all this adds is the lines that say how far it climbs. The count comes from
+ * `stepFlight` reading the element's own `elevation`, so a flight and the level change it serves
+ * cannot disagree.
+ *
+ * Returns without drawing when the element has no elevation, which is not a failure: a flight on
+ * the flat is a landing, and a landing has no nosings.
+ */
+function drawSteps(
+  context: SymbolContext,
+  element: DesignElement,
+  shape: RectShape,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  const flight = stepFlight(element.elevation ?? 0);
+  if (!flight) return;
+
+  /*
+   * A hairline that holds up at every zoom, the same convention the fence posts use. A nosing is a
+   * line on a drawing rather than an object with a width, so it is quoted in pixels — and below one
+   * pixel it would disappear entirely, which for the one mark that says "these are steps" is worse
+   * than being slightly heavy.
+   */
+  context.lineWidth = Math.max(1, pxPerMetre * 0.012);
+  context.strokeStyle = STEP_NOSING;
+
+  for (const line of stepNosings(shape, flight.risers)) {
+    const a = toPx(line[0]!);
+    const b = toPx(line[1]!);
+    context.beginPath();
+    context.moveTo(a.x, a.y);
+    context.lineTo(b.x, b.y);
+    context.stroke();
+  }
 }

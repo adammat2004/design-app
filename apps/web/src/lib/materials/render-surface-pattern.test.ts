@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
-import { MM_PER_METRE, type MaterialPattern, type Point } from '@garden-studio/schema';
+import {
+  isCountable,
+  isModular,
+  MM_PER_METRE,
+  packMeanUnitMetres,
+  unitsPerSquareMetre,
+  type MaterialPattern,
+  type Point,
+} from '@garden-studio/schema';
 import { resolvePattern, type MaterialManifestEntry } from './palette';
 import { hexToRgb } from './light';
 import { drawSurfacePattern, type PatternContext } from './render-surface-pattern';
+import { drawnJointPx, MAX_JOINT_SHARE, MIN_JOINT_PX } from './lod';
 
 /**
  * The renderer's tests run against a real 2D context from `@napi-rs/canvas`.
@@ -17,10 +26,14 @@ import { drawSurfacePattern, type PatternContext } from './render-surface-patter
  * joint, used wherever the assertion is about *structure* — where the courses fall, how wide the
  * joint is, whether the grid stays anchored.
  *
- * That split is not a convenience. The shipped palette is a narrow spread of pale greys, and at a
- * realistic zoom a 10 mm joint on a 600 mm slab is well under one pixel — it never lands as a pure
- * colour, only as a slight darkening of its neighbours. A test that thresholded those pixels would
- * be measuring anti-aliasing, and would start failing the next time somebody tuned a hex.
+ * That split is not a convenience: the shipped palette is a narrow spread of pale greys, so a test
+ * that thresholded its pixels would be measuring anti-aliasing and would start failing the next
+ * time somebody tuned a hex.
+ *
+ * A third, `THIN_JOINT`, is the high-contrast colours at *true* product dimensions — a 10 mm joint
+ * on a 600 mm slab. That combination used to be untestable, because the joint drew at a fifth of a
+ * pixel and never landed as a colour at all. It is testable now precisely because it is floored,
+ * and pinning that is the point of it.
  */
 
 const SHIPPED = resolvePattern('stone-pavers');
@@ -39,6 +52,23 @@ const HIGH_CONTRAST: MaterialManifestEntry = {
   palette: ['#ffffff'],
   jointColour: '#000000',
 };
+
+/**
+ * The same high-contrast colours with a **real** 10 mm joint on a real 600 mm slab.
+ *
+ * The shipped palette cannot be thresholded — its tones are a narrow spread by design — so the
+ * joint floor is asserted on a fixture whose joint colour is black and whose slab is white, at the
+ * true product dimensions. That is what makes "a 0.21 px joint still draws" a measurable claim.
+ */
+const THIN_JOINT: MaterialManifestEntry = {
+  ...shipped,
+  pattern: { patternType: 'grid', moduleSize: { w: 600, h: 600 }, jointWidth: 10, bond: 'stack' },
+  palette: ['#ffffff'],
+  jointColour: '#000000',
+};
+
+const THIN = THIN_JOINT.pattern as Extract<MaterialPattern, { patternType: 'grid' }>;
+const THIN_PITCH = (THIN.moduleSize.w + THIN.jointWidth) / MM_PER_METRE;
 
 const CONTRAST = HIGH_CONTRAST.pattern as Extract<MaterialPattern, { patternType: 'grid' }>;
 
@@ -99,7 +129,12 @@ function renderAll(
       options.material ?? shipped,
       { origin: options.origin ?? ORIGIN, rotation: options.rotation ?? 0 },
       surface.seed ?? options.seed ?? 'surface-a',
-      { pxPerMetre, light: options.light, maxTier: options.maxTier, centreline: options.centreline },
+      {
+        pxPerMetre,
+        light: options.light,
+        maxTier: options.maxTier,
+        centreline: options.centreline,
+      },
       rasterOrigin,
     );
   }
@@ -173,7 +208,22 @@ describe('drawSurfacePattern', () => {
     expect(runs).toBeLessThanOrEqual(expected + 1);
   });
 
-  it('keeps the joint the same real width as the zoom changes', () => {
+  /*
+   * This replaces "keeps the joint the same real width as the zoom changes", which the joint floor
+   * directly contradicts and which had to go. The old rule was dimensionally pure and produced a
+   * joint of a fifth of a pixel at the zoom a whole plan is read at — so it never drew, adjacent
+   * slabs merged, and a dozen of them read as about five. See `drawnJointPx` for the argument.
+   *
+   * What is pinned now is the *whole* rule rather than only its middle: exact where the true joint
+   * is comfortably over a pixel, floored below that, and capped so it can never swallow a small
+   * module. The floor and the cap are the two ends the old test could not express.
+   */
+  it('draws the joint at the width the rule gives, at every zoom', () => {
+    /*
+     * The fixture's joint is exaggerated to 100 mm so it can be counted — which makes it 14% of its
+     * own pitch, where a real 10 mm joint on a 600 mm slab is 1.6%. So the cap binds here and not on
+     * anything shipped, and this measures the rule through the pixels rather than restating it.
+     */
     const jointMetres = CONTRAST.jointWidth / MM_PER_METRE;
 
     for (const pxPerMetre of [40, 120]) {
@@ -184,7 +234,6 @@ describe('drawSurfacePattern', () => {
       });
 
       const scanY = Math.round((2 * CONTRAST_PITCH + CONTRAST_PITCH / 2) * pxPerMetre);
-
       /*
        * Joints straddle the grid lines, which fall at whole multiples of the pitch. Measured by
        * walking out from the centre for as long as the pixels stay joint-coloured, rather than by
@@ -198,10 +247,170 @@ describe('drawSurfacePattern', () => {
       for (let x = jointCentre - 1; isJoint(rendered, x, scanY); x -= 1) jointPixels += 1;
       for (let x = jointCentre + 1; isJoint(rendered, x, scanY); x += 1) jointPixels += 1;
 
-      // The point of the test: the joint is a real width, so its pixel width tracks the zoom.
-      expect(jointPixels).toBeGreaterThanOrEqual(jointMetres * pxPerMetre - 1);
-      expect(jointPixels).toBeLessThanOrEqual(jointMetres * pxPerMetre + 1);
+      const expected = drawnJointPx(jointMetres * pxPerMetre, CONTRAST_PITCH * pxPerMetre);
+      expect(jointPixels).toBeGreaterThanOrEqual(expected - 1);
+      expect(jointPixels).toBeLessThanOrEqual(expected + 1);
+      // And it still scales with the zoom: twice the zoom, twice the joint.
+      expect(expected).toBeCloseTo(CONTRAST_PITCH * pxPerMetre * MAX_JOINT_SHARE, 6);
     }
+  });
+
+  it('floors a sub-pixel joint so the modules either side stay separate', () => {
+    /*
+     * A real slab at the zoom a whole plan is read at: a 10 mm joint on a 600 mm module is 0.21 px.
+     * Before the floor nothing was drawn between two slabs and they merged into one apparent unit.
+     */
+    const pxPerMetre = 26;
+    expect((THIN.jointWidth / MM_PER_METRE) * pxPerMetre).toBeLessThan(1);
+
+    const rendered = render(rectangle, {
+      material: THIN_JOINT,
+      pxPerMetre,
+      size: { width: Math.ceil(8 * pxPerMetre), height: Math.ceil(6 * pxPerMetre) },
+    });
+
+    const scanY = Math.round((2 * THIN_PITCH + THIN_PITCH / 2) * pxPerMetre);
+    // Every grid line inside the surface carries a joint pixel; before the floor, none did.
+    for (const line of [3, 4, 5]) {
+      const at = Math.round(line * THIN_PITCH * pxPerMetre);
+      const found =
+        isJoint(rendered, at, scanY) ||
+        isJoint(rendered, at - 1, scanY) ||
+        isJoint(rendered, at + 1, scanY);
+      expect(found, `grid line ${line} has a drawn joint`).toBe(true);
+    }
+  });
+
+  describe('a patio pack', () => {
+    /*
+     * The pack walks its courses and its units rather than dividing, because neither falls at a
+     * constant pitch. Everything below is about that walk staying anchored to the plan origin —
+     * which is the guarantee a grid gets for free from `floor(v / pitch)` and a pack has to earn.
+     */
+    const PACK: MaterialManifestEntry = {
+      ...shipped,
+      pattern: {
+        patternType: 'pack',
+        courses: [300, 450],
+        lengths: [300, 450, 600],
+        jointWidth: 10,
+      },
+      palette: ['#ffffff', '#dddddd', '#bbbbbb'],
+      jointColour: '#000000',
+    };
+
+    it('is byte-identical for the same seed and inputs', () => {
+      const once = render(rectangle, { material: PACK });
+      const twice = render(rectangle, { material: PACK });
+      expect(once.buffer.equals(twice.buffer)).toBe(true);
+    });
+
+    it('lines two surfaces up across a shared edge', () => {
+      /*
+       * The same acceptance criterion as the grid's, and the one most at risk from a walking sweep:
+       * if either walk started from a surface's own corner instead of the plan origin, the two
+       * halves would take different course heights and different unit lengths, and the seam would
+       * be visible. Anchored at the origin they cannot.
+       */
+      const seed = 'shared-pack';
+      const pxPerMetre = 40;
+      const size = { width: 400, height: 240 };
+
+      const whole = render(
+        [
+          { x: 1, y: 1 },
+          { x: 9, y: 1 },
+          { x: 9, y: 5 },
+          { x: 1, y: 5 },
+        ],
+        { material: PACK, seed, pxPerMetre, size },
+      );
+
+      const halves = renderAll(
+        [
+          {
+            outline: [
+              { x: 1, y: 1 },
+              { x: 5, y: 1 },
+              { x: 5, y: 5 },
+              { x: 1, y: 5 },
+            ],
+          },
+          {
+            outline: [
+              { x: 5, y: 1 },
+              { x: 9, y: 1 },
+              { x: 9, y: 5 },
+              { x: 5, y: 5 },
+            ],
+          },
+        ],
+        { material: PACK, seed, pxPerMetre, size },
+      );
+
+      const seamPx = 5 * pxPerMetre;
+      let compared = 0;
+      for (let y = 0; y < size.height; y += 1) {
+        for (let x = 0; x < size.width; x += 1) {
+          if (Math.abs(x - seamPx) <= 1) continue;
+          expect(pixelAt(halves, x, y)).toEqual(pixelAt(whole, x, y));
+          compared += 1;
+        }
+      }
+      expect(compared).toBeGreaterThan(0);
+    });
+
+    it('mixes unit sizes, which is the whole reason it is not a grid', () => {
+      /*
+       * A grid on a random bond gives varying *joint positions* with one unit size. A pack varies
+       * the units themselves, so the runs of module colour along a scanline take several distinct
+       * lengths rather than one.
+       */
+      const pxPerMetre = 60;
+      const rendered = render(rectangle, {
+        material: PACK,
+        pxPerMetre,
+        size: { width: Math.ceil(8 * pxPerMetre), height: Math.ceil(6 * pxPerMetre) },
+      });
+
+      const runs = new Set<number>();
+      const scanY = Math.round(3 * pxPerMetre);
+      let run = 0;
+      for (let x = Math.round(1.5 * pxPerMetre); x < Math.round(6.5 * pxPerMetre); x += 1) {
+        if (isJoint(rendered, x, scanY)) {
+          if (run > 2) runs.add(Math.round(run / 6));
+          run = 0;
+        } else run += 1;
+      }
+      expect(runs.size).toBeGreaterThan(1);
+    });
+
+    it('counts by its mean unit, because a pack is a real product', () => {
+      const pattern = PACK.pattern as Extract<MaterialPattern, { patternType: 'pack' }>;
+      const unit = packMeanUnitMetres(pattern);
+      // Lengths 0.31/0.46/0.61 mean 0.46; courses 0.31/0.46 mean 0.385.
+      expect(unit.x).toBeCloseTo(0.46, 6);
+      expect(unit.y).toBeCloseTo(0.385, 6);
+      expect(unitsPerSquareMetre(pattern)).toBeCloseTo(1 / (0.46 * 0.385), 6);
+      expect(isCountable(pattern)).toBe(true);
+      // A pack has no single pitch, so it is not modular — that is what `isCountable` separates.
+      expect(isModular(pattern)).toBe(false);
+    });
+  });
+
+  it('caps the joint so it never swallows a small module', () => {
+    /*
+     * A 200 mm sett at plan zoom has a 5.5 px pitch. An unbounded 1 px floor would be 18% of it
+     * against a real 4.8%, and joints are the background, so the surface would read as a grey mesh
+     * rather than as stone. `MAX_JOINT_SHARE` is what stops that.
+     */
+    expect(drawnJointPx(0.26, 5.46)).toBeCloseTo(5.46 * MAX_JOINT_SHARE, 6);
+    expect(drawnJointPx(0.26, 5.46)).toBeLessThan(MIN_JOINT_PX);
+
+    // Comfortably large module: the floor applies and the cap does not bind.
+    expect(drawnJointPx(0.26, 10.66)).toBe(MIN_JOINT_PX);
+    // Genuinely wide joint: drawn exactly, neither floored nor capped.
+    expect(drawnJointPx(4, 40)).toBe(4);
   });
 
   it('lines two surfaces up across a shared edge', () => {
@@ -865,7 +1074,12 @@ describe('pads along a path', () => {
    * gives a surface.
    */
   it('is deterministic for the same path and seed', () => {
-    const options = { material: pads, pxPerMetre: 40, centreline, size: { width: 200, height: 420 } };
+    const options = {
+      material: pads,
+      pxPerMetre: 40,
+      centreline,
+      size: { width: 200, height: 420 },
+    };
     const first = renderAll([{ outline: strip }], options);
     const second = renderAll([{ outline: strip }], options);
 

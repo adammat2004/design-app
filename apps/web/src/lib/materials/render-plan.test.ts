@@ -5,6 +5,7 @@ import {
   rectangleHouse,
   SiteSectionSchema,
   type DesignElement,
+  type Opening,
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
@@ -145,6 +146,86 @@ describe('drawPlan', () => {
 
     // The house centre is house in both; a bed under it changes nothing.
     expect(at(withLawn, 10, 3)).toEqual(at(houseOnly, 10, 3));
+  });
+
+  /**
+   * The composer drew no openings at all until Phase 3, so a patio door was visible on step 1 and
+   * absent from every thumbnail, export and judging sheet of the same plan — the door being the
+   * single most layout-determining object in the drawing, and the sheets being what it is judged
+   * on. These pin that it draws them, and that a plan with none is byte-identical to before.
+   */
+  describe('openings', () => {
+    /** The house is 8 x 4 centred at (10, 3), so wall w0 runs along its top from x 6 to x 14. */
+    const door: Opening = {
+      id: 'o1',
+      wallId: 'w0',
+      offsetAlongEdge: 4,
+      width: 2.4,
+      type: 'patio-door' as const,
+      sillHeight: 0,
+      floorLevel: 0,
+      swing: 'none' as const,
+    };
+
+    /*
+     * The house has to be replaced on the *scene* as well as on the site: `buildRenderScene`
+     * resolves the building from `PlanScene.house`, and overriding only the site left every one
+     * of these comparing a plan with no openings against itself.
+     */
+    const withOpenings = (openings: Opening[]): PlanScene => {
+      const withDoors = { ...house, openings };
+      return {
+        boundary: plot,
+        house: withDoors,
+        elements: [lawn],
+        site: site({ house: withDoors }),
+      };
+    };
+
+    it('cuts a door into the wall band', () => {
+      const shut = render(withOpenings([]));
+      const open = render(withOpenings([door]));
+
+      expect(Buffer.from(open.pixels)).not.toEqual(Buffer.from(shut.pixels));
+    });
+
+    it('leaves a plan with no openings exactly as it was', () => {
+      const bare = render(withOpenings([]));
+      const same = render(scene([lawn]));
+
+      expect(Buffer.from(bare.pixels)).toEqual(Buffer.from(same.pixels));
+    });
+
+    /*
+     * A window is not a hole you walk through, so it is not drawn as one — the wall carries on
+     * past it. Drawn as a gap, every window read as a doorway.
+     */
+    it('draws a window differently from a door in the same place', () => {
+      const asDoor = render(withOpenings([door]));
+      const asWindow = render(
+        withOpenings([{ ...door, type: 'window' as const, sillHeight: 0.9 }]),
+      );
+
+      expect(Buffer.from(asWindow.pixels)).not.toEqual(Buffer.from(asDoor.pixels));
+    });
+
+    it('draws a hinged door’s swing, and a sliding one without', () => {
+      const sliding = render(withOpenings([door]));
+      const hinged = render(withOpenings([{ ...door, swing: 'outward' as const }]));
+
+      expect(Buffer.from(hinged.pixels)).not.toEqual(Buffer.from(sliding.pixels));
+    });
+
+    /*
+     * The rule `openings.ts` sets and the canvas already followed: an opening whose wall no longer
+     * holds it is left out rather than drawn hanging off the end of the building.
+     */
+    it('draws nothing for an opening that no longer fits its wall', () => {
+      const overrunning = render(withOpenings([{ ...door, offsetAlongEdge: 40 }]));
+      const none = render(withOpenings([]));
+
+      expect(Buffer.from(overrunning.pixels)).toEqual(Buffer.from(none.pixels));
+    });
   });
 
   it('casts shadows only when the plan knows where it is', () => {

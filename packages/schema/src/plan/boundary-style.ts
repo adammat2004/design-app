@@ -21,10 +21,10 @@ import { z } from 'zod';
  *
  * `edgeVertexId` names the boundary vertex the edge *starts* at, so a style survives the corner
  * being dragged and survives the whole plot being moved or rescaled — the same positional identity
- * `Gate.edgeVertexId` and `Opening.wallId` rely on, and it fails in the same one way: inserting a
- * corner renumbers nothing but does split an edge, so the new half takes the default rather than
- * inheriting. That is the honest outcome; silently applying a wall to a side the user never
- * described would be worse.
+ * `Gate.edgeVertexId` and `Opening.wallId` rely on. Inserting a corner renumbers nothing but does
+ * split an edge, and the new half **inherits** the side's style (`inheritBoundaryStyle`): the user
+ * described that side, and a corner in it does not change what is built along it. An earlier
+ * version of this note argued for the default instead; see the resolver for why that reversed.
  */
 
 export const BoundaryKindSchema = z.enum([

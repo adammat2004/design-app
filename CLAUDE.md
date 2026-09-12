@@ -47,14 +47,36 @@ house by `computeZones`, so storing them could only create something stale.
   ordinary layout patch afterwards.
 
 - **procedural surface materials**: surfaces draw as generated texture rather than a flat hex
-  (`apps/web/src/lib/materials/`). Five pattern types — `grid`, `board`, `scatter`, `stripe`,
-  `water` — cover twenty-six of the twenty-eight materials (all but `powder-coated-steel` and
-  `existing`), and the generator now assigns a
-  material to every element it places. `scatter` carries a `form` axis (`blob`, `tufted`,
+  (`apps/web/src/lib/materials/`). Eight pattern types — `grid`, `board`, `pack`, `scatter`,
+  `hedge`, `pads`, `water`, `stripe` — cover thirty-three of the forty-three materials (all but
+  `powder-coated-steel`, `steel-edging`, `rendered-block`, the three furniture materials, the three
+  lighting finishes and `existing`), and the generator assigns a material to every element it
+  places. `scatter` carries a `form` axis (`blob`, `tufted`,
   `clipped-mass`) so a grass is a different _shape_ from a shrub rather than a different shade. `pnpm --filter @garden-studio/web render:material` writes PNGs to a gitignored
   `.material-preview/` to look at; the contact sheet is the one to judge by.
-- **the plan reads as an enclosed garden**: a fence with posts round the boundary, feature chips
-  without zone labels, and a size badge on the selected shape.
+- **the garden can change level**: `DesignElement.elevation` is real at last — it was captured in
+  the editor and drawn by nothing. A raised surface gets a derived retaining face
+  (`plan/levels.ts`), casts from the top of its plinth, and is served by a flight of `steps` whose
+  treads are derived from the rise. The model is **local**: no ground surface, no inferred slope.
+  The generator lifts a terrace only on a formal or modern brief at a high budget, and never
+  without a flight down. A raised surface may name a `retaining` wall — coursed stone, brick or
+  rendered block, with real faces — or keep the plain upstand in its own paving.
+- **surfaces can be edged**: `DesignElement.edging` names a product from `EDGING_MATERIALS` —
+  steel, brick, sleeper, setts or kerb — and `plan/edging.ts` derives where the course actually
+  goes, leaving out the sides against the fence and the house and refusing a seam two beds share.
+  It is the first thing on the plan measured in **linear metres**, which is what `ScheduleLine
+  .lengthM` exists for. The generator edges beds where the style asks for one; the editor offers it
+  on any of the four ground-covering categories.
+- **the garden can be lit**: `lighting` is the ninth `ElementCategory` — four fittings
+  (`light-spike`, `light-bollard`, `light-recessed`, `light-wall`), three finishes, and a scheme the
+  generator composes from what it has already placed: an uplight at the foot of each tree and
+  bollards down the longer paths. After dark the plan washes over and each fitting throws a pool,
+  which is what finally makes the second half of Visualise's twenty-four-hour time slider mean
+  something — before this, 11 pm drew the identical picture to noon. Gated on `site.location` like
+  every other solar claim. `pnpm render:plan` writes `04-lighting-hours.png` to judge it by.
+- **the plan reads as an enclosed garden**: a boundary drawn per edge as one of five treatments —
+  fence with posts, walled with piers, hedge, railing, or an open dashed cadastral line — plus
+  feature chips without zone labels and a size badge on the selected shape.
 
 - **a generated concept contains a garden**: a planted border hugging the fence and up to five
   trees, on top of the base fills, accents and requested features.
@@ -72,14 +94,17 @@ house by `computeZones`, so storing them could only create something stale.
 - **a way back to a saved plan**: `/projects` lists them, and the landing page links to it.
 
 - **the plan draws with photographs and sprites**: slab and board faces, seamless tiles of gravel,
-  turf, bark and water, top-down plant and tree-canopy sprites, and furniture sprites, all generated
-  once by `tools/assets` with an image model and checked in under `apps/web/public/assets/` (82
-  files, ~9 MB). The app never calls an image model; a missing file means the procedural pattern
+  turf, bark and water, top-down plant and tree-canopy sprites, furniture, light fittings and the
+  faces of edging and walling products, all generated once by `tools/assets` with an image model and
+  checked in under `apps/web/public/assets/` (147 files across 68 families, ~30 MB;
+  `pnpm --filter @garden-studio/web audit:assets` is the check that the manifest and the disk
+  agree). The app never calls an image model; a missing file means the procedural pattern
   draws instead, so everything works with no key. See "Rendering with assets" below.
 - **furniture is a category**, `symbol` is a field, and the generator furnishes what it places: a
   lounge set on the seating patio, a dining set under the pergola, a barbecue in the outdoor
   kitchen, a bowl in the fire pit, a swing on the play area; a store is a `shed`, a veg patch a
-  `raised-bed`, a pergola a `pergola`. The editor's palette offers twelve pieces of furniture.
+  `raised-bed`, a pergola a `pergola`. The editor's palette offers twelve pieces of furniture and,
+  since lighting landed, four fittings.
 - **the house is drawn as a building**: a wall of real thickness round a floor, doors shown on
   steps 4 and 5 as well as step 1.
 - **concept cards show the real render**, drawn by the same composer as everything else, and the
@@ -90,6 +115,10 @@ house by `computeZones`, so storing them could only create something stale.
 - **step 1 captures how you get in and out**: patio and front doors, a side gate on a boundary
   edge, and which fence faces the street, all in an Access sub-step whose every inference is a
   one-tap chip. The generator reads all four.
+- **step 2 is "the existing garden", and only maps what matters**: a quick-add grid where one tap
+  arms and one tap places, a **Redesign area** tab beside it, an optional **Garden assistant** that
+  takes a description and puts features on the plan, and **Skip this step** as a first-class action
+  in the bottom bar. Continue has never been gated here and still is not. See "Step 2" below.
 - **the concepts are composed, not sampled**: a terrace across the garden doors, one lawn panel
   behind it, planting round the panel in runs, the shed in the corner nearest the gate, paths
   between them, and a front garden with a paved path to the kerb. The three concepts are three
@@ -103,6 +132,31 @@ house by `computeZones`, so storing them could only create something stale.
   it, so foliage overlaps its bed's edge and its neighbours; the house gets a derived roof. See
   "The render scene, and the two views" and "PixiJS, and where it earns its place" below.
 
+**There is a measurement of how a plan composes, and it is the seed of the evaluation harness.**
+`measureComposition` (`packages/schema/src/plan/composition.ts`, beside `quantities.ts`) samples a
+grid over the zones in scope and classifies each point by the **topmost** element covering it, so
+shares of hard landscaping, lawn, planting and base-showing-through sum to one by construction.
+Element areas overlap by design — a base fill is the whole zone and everything is drawn over it —
+so summing them double counts; sampling is the pure way to read coverage without a polygon-boolean
+library. It has no authority: every outline came from `geometryOutline`, and deleting the file
+leaves the plan dimensionally identical.
+
+**The bands come from the traced target, not from the generator.**
+`apps/web/scripts/fixtures/target.plan.json` is `target_design.png` traced by hand and scaled so the
+house is 9 m wide; it measures hard 0.42, lawn 0.21, planting 0.32, with 0.02 of base showing.
+`COMPOSITION_BANDS` (`apps/api/src/plan/generation/composition-rules.ts`) widens those and
+cross-checks them against the usual rules of thumb. Calibrating against the generator's own output
+would only ever confirm what it already did. The target renders on the judging sheet as the eleventh
+fixture, which is the comparison the sheet exists for.
+
+**The bands are asserted on the garden proper, and the whole plot is reported beside it.**
+`reference-fixture.test.ts` runs the rules over 10 fixtures × 3 concepts of live generation;
+`COMPOSITION_REPORT=1` prints both rows instead of asserting. The room is what the templates
+control. Over the whole plot, generated plans still show 5-46% base ground against the target's 2%,
+and closing that is the arrival grammar and the second side room — recorded in TODOS.md rather than
+hidden by a wider band. `MEASURE_TOLERANCE` is 0.05 m because clipping to an odd room and
+simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
+
 **Not built yet:** printing at true scale, a navigable 3D preview, and the optional AI
 photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
 draws the same top-down scene rather than a camera. There is also **no evaluation of any kind** — no benchmark over the generator, no user
@@ -111,7 +165,10 @@ outstanding gap in the project and it is not a feature.
 
 **No _automated_ Anthropic call has ever been made** — every assistant test injects a fake client
 (`Pick<Anthropic, 'messages'>`), constructing real `Anthropic.*Error` classes only to check the
-error mapping. Everything up to the request is exercised. `apps/api/.env` now carries a key and
+error mapping. Everything up to the request is exercised. That now covers **two** assistants: the
+garden assistant's model call has never been made either, and its deterministic half
+(`anchors.ts`, `garden-planner.service.ts`) is tested against real PostGIS with no model at all,
+which is the point of the split. `apps/api/.env` now carries a key and
 `ASSISTANT_ENABLED` is unset (so, enabled), which means the running app _is_ live-capable; whether
 a real call has been made through the UI is not something the repository records. The first one is
 still worth watching — check `usage.cache_read_input_tokens` before claiming the caching win.
@@ -154,7 +211,9 @@ keep updating while the boundary is still being drawn.
 plot three orders of magnitude out is not fixed by one step, and a button that leaves the same
 banner on screen teaches the user that the fix does not work.
 
-**The house's corners and walls carry ids, and `PLAN_DOCUMENT_VERSION` is 2 because of it.**
+**The house's corners and walls carry ids, and that is what `MIGRATIONS[1]` exists for.** (The
+document is at version **3** now — 2 → 3 is the no-op that dates `elevation` becoming something the
+plan draws. This section is about the 1 → 2 change.)
 `HouseFootprint.outline` is `HouseVertex[]` (a point plus an id) and the footprint carries a
 parallel `walls[]`. The ids exist so things can be _attached_ to a wall: a door recorded as "0.9 m
 along this wall" survives a move and a rotation with positional identity, but not a resize — which
@@ -250,6 +309,194 @@ what a chip applies, and what a fixture or the capture script calls deliberately
 
 **`gateCounter` is re-seeded in `hydrateBoundaryStore`**, exactly as `openingCounter` is, and for
 the same reason: miss it and the first gate added after a reload takes an id already in use.
+
+**A gate, a door and a side's kind all hang on an edge, and `plan/along-edge.ts` is the one place
+the arithmetic lives.** `gateSegment` and `openingSegment` are wrappers on `spanOnSegment`;
+`fitsOnEdge` / `fitsOnWall` share `spanFits` and `spansOverlap`; both clamps share `clampOffset`.
+The point is not the saved lines — it is that what happens to an offset when the segment under it
+changes has to be the *same* rule for a gate and a door, or a corner insert treats them differently.
+Offsets stay **metres from the start vertex to the centre**, never a 0–1 fraction: stretch a 6 m
+side to 12 m and a fraction slides the gate 3.6 m along the fence, where metres keep it with the
+corner it was hung from. The rules, each pinned by a test on both sides:
+
+- **Insert a corner** (`insertVertexOnEdge`): a gate beyond the cut is re-homed onto the new edge
+  measured from the new corner, then **clamped** onto its half (`gatesAfterSplit`), so a gate the
+  cut ran through is nudged whole onto one side rather than left straddling a corner. **Both halves
+  inherit the side's kind** (`inheritBoundaryStyle`) — _this reverses_ the note that had the new
+  half take the default: the user described that side, and a corner in it does not change what is
+  built along it; the default is also a guess, and the worse one because it draws a change where the
+  user made none. The street edge stays on the first half.
+- **Delete a corner** (`accessAfterDelete`): the edge that started there is gone; what was on it is
+  **carried onto the merged edge where that edge actually passes through the old centre** (within
+  `MERGE_TOLERANCE`, 0.5 m) and dropped where it does not. Deleting a redundant corner on a straight
+  side is the common case and loses nothing; a gate that was on a real bend has no honest place on
+  the straight line that replaced it. The street designation transfers by the same test on the old
+  edge's midpoint. Styles are still pruned.
+- **Type a side length**: every side but the closing edge is lengthened from its far end and needs
+  nothing. The closing edge ends on corner A, so its *start* slides — `offsetFromEndPreserved`
+  re-measures the gate so it stays where it was hung. Without this, a gate 4 m from A moved up the
+  fence every time the last side was typed.
+- **Rescale the plot** (`scalePlot`): offsets scale with the fence, **widths do not** — a 0.9 m gate
+  on a tenth-size plot is still 0.9 m, it is the plot that was drawn wrong. `scaleHouseAbout` does the
+  same for the openings, which used to be left at their old offsets and silently stopped resolving.
+- **Anything that then does not fit is left unplaced**, never moved: it stops resolving (`null`) and
+  draws nothing, and the document keeps it so it comes back if the geometry does.
+
+**`endGesture` compares `sameDraft`, not geometry.** The old `sameGeometry` looked at vertices and
+the house outline only — complete while those were the only things a drag could move, and a trap
+the moment a gate can be dragged along its fence: the gesture would end on "nothing changed" and
+leave no way to undo it. Anything a drag can touch has to be in that comparison.
+
+**`Gate.kind` is `pedestrian | vehicle | open`, defaulted.** A driveway and an open gap are the
+same key, position and fit rule as a garden gate; what differs is what the generator makes of them,
+which is a `kind` for the reason `OpeningType` is one enum. `GATE_DEFAULTS` carries the width and
+the keep-clear depth per kind (five metres inside a vehicle gate: a car stands there). The default
+means every stored gate reads back as the pedestrian gate it was — no migration, no version bump.
+The driveway *surface* is still the generator's to draw and is not built.
+
+**`HouseFootprint.storeys` is the one vertical fact about the building, and `houseHeight` reads
+it.** Storeys rather than a height in metres — the question a user can answer — and per house rather
+than per wall, because a single-storey extension is a footprint question that can be a per-wall
+override later. `EAVES_BY_STOREYS` is a table, not `storeys × 2.7`: a bungalow's eaves are about
+3 m, two storeys 6 m, a third adds less because it is often in the roof. The default is 2 → 6 m, so
+`HOUSE_HEIGHT` still means what it did and every stored plan casts the shadow it always did.
+`houseHeight` tolerates an absent `storeys` for the reason `scatterForm` does: fixtures and
+hand-built houses never go through `.parse()`.
+
+**Step 1 draws `FenceLine` with `boundaryRuns`, as step 5 always did.** It drew a plain 2 px
+`Line`, so a hedge chosen on step 1 changed nothing on the screen it was chosen on. Only once
+`draft.closed`: `boundaryRuns` does not check `closed`, and a half-drawn outline has edges but not
+yet sides. Step 2 draws the same.
+
+**A part of the property is described by clicking it, and `Selection` is what that means.** It was
+`vertex | house | null`; it is now those plus `edge`, `wall`, `gate` and `opening` — an `edge` named
+by the vertex it starts at and a `wall` by its id, for the reason gates and openings are keyed that
+way. A gate or an opening selected on its own shows its *parent's* editor with that entry expanded,
+which is what `selectedEdgeVertexId` / `selectedWallId` resolve; `selectedWallId` replaced the
+store's old `selectedWallId` **field**, so the wall the strip shows and the wall the plan highlights
+can no longer disagree. `SelectedObjectPanel` only routes: `SideEditor`, `WallEditor`, the house
+branch, the vertex branch.
+
+**The Access mode is gone, and that reverses "a side gate is placed with an armed tool".** It was a
+fourth `EditorMode` with an `accessTool` armed from a panel: press a button, then click a fence, and
+the tool disarms. Everything it did is a fact about *a side* — which fence has the gate, which faces
+the street, what the side is made of — and a fact about a side belongs in the panel that opens when
+you click that side. `AccessPanel`, `BoundaryStylePanel` and `OpeningsPanel` are deleted; what
+survives is `SuggestionsRow`, the four one-tap inferences, which are still **offered, not applied**.
+Modes are now `boundary | house | select | measure`, and placing a house lands in `select` rather
+than leaving the user in a creation tool. Boundary and House stay because their empty-canvas
+gestures (click to drop a corner, drag out a rectangle) genuinely conflict with clicking to select.
+
+**Everything selectable has a real button in the off-screen list, and that is not only about
+keyboards.** Konva shapes are not DOM at all, so a `data-testid` on a `Line` addresses nothing: the
+first version of the e2e test for this waited thirty seconds for `boundary-edge-0` and timed out.
+Sides and walls joined the corners and the house in the `sr-only` list, which makes them reachable
+by tab *and* gives Playwright something to focus. For a real pointer click on a side, aim at the
+side's own **length chip** — that is HTML, positioned at the edge midpoint, so its bounding box
+gives the pixel whatever the fit-on-load frame turned out to be.
+
+**A side's descriptor follows the zone labels, not `gardenDirection`.** `lib/side-labels.ts` calls
+the back the house's own bearing 270, which is what `computeZones` uses. Asking `gardenDirection`
+instead is the obvious thing and it is wrong on screen: it infers the garden from where the most
+plot lies, so a centred house makes it land on a *side*, and the panel then called a strip "Left
+side" while the canvas wrote "Back garden" across the same ground two inches away. Agreeing with the
+visible label beats agreeing with the generator's own inference — the descriptor says what a side
+*is called*, not where to design. Never a compass word: the plot can be drawn at any angle.
+
+**An attachment that no longer fits is kept, said, and never moved.** A gate whose side was typed
+shorter, or a door whose wall a resize shrank, stops resolving (`gateSegment` / `openingSegment`
+return `null`), draws nothing, and appears in its editor with an "off this side" badge and two
+honest answers: **Fit** (`fitGate` / `fitOpening`, offered only when the segment is long enough) or
+remove. Clamping it silently would move a thing the user placed; deleting it would lose it. This is
+what makes every rule in the section above safe to apply.
+
+**The generator picks the side path's gate rather than taking the first one.** It read
+`resolvedGates(site)[0]` — whichever gate was stored first — which was harmless while every gate
+was a 900 mm pedestrian one and wrong the moment a gap in the boundary can be a driveway or a
+street frontage. `sidePathGate` skips **anything on the street edge** (the front path already runs
+to the kerb; starting the back garden's side path there drags it through the front garden and past
+the house) and prefers pedestrian, then `open`, then vehicle — a side path carries the bins and the
+mower, and a driveway is only the last resort because you *can* walk through one. `gateSide`, the
+utility corner and the shed all follow from that choice, so getting it wrong moved the shed too.
+
+**Every opening in the boundary is kept clear to its own kind's depth.** `gateThresholdDepth` reads
+`GATE_DEFAULTS`: a metre to open a gate and step through, **five** for a car to stand inside a
+driveway. An `open` gap gets a pedestrian's metre rather than nothing — there is no leaf to swing,
+but it is still the way through, and a bed planted across it is a gap that is not a gap.
+
+**The suburban fixture has a driveway on its street edge and a side gate on its return, and the
+l-shape is a bungalow.** Neither is decoration: a vehicle opening is drawn as a *pair* of leaves,
+keeps five metres clear, and must not be chosen as the side path's start — none of which is visible
+on a sheet where every opening is a 900 mm gate. `storeys: 1` makes `houseHeight` visible at all,
+since every other fixture takes the two-storey default and throws the identical shadow it always
+did.
+
+**The composer draws the openings, and until Phase 3 it drew none at all.** A patio door was
+visible on step 1 and absent from every thumbnail, PNG export and judging sheet of the same plan —
+which is exactly backwards, since the door is the single most layout-determining object in the
+drawing and the sheets are what the design gets judged on. `RenderHouse.openings` carries them
+resolved (`RenderOpening`: the opening, its span, its outward normal), skipping any that do not
+currently resolve, and `drawOpenings` is a port of `HouseOpenings`. **Not over a roof**: from
+directly above you cannot see the doors beneath one, so Visualise — the only view with a roof —
+returns before them, and every other view gets the flat diagram where the openings are the point.
+
+**`swingGeometry` is the one answer, and the copies had already diverged.** The arc a hinged leaf
+sweeps was worked out in `SwingArc` and again inline in `drawAccess`, and the composer's version
+always hinged on the segment's *first* end — so a gate and the same gate on an exported PNG could
+open from opposite sides. It now lives in `symbols/property.ts` beside `gateSwings` and
+`openGapTicks`, returns **world metres** (the frame both backends agree on, for the reason
+`useSurfacePattern` gives), and `SwingArc` takes the resolved geometry rather than recomputing it.
+
+**`roofFor` deliberately does not read `house.storeys`**, now that it exists. A roof seen from
+directly above covers the same ground whether the house below is one storey or three: height
+changes how far the *shadow* falls, which is `shadowOccluders`' business. Taking it as an input
+would be a dependency that changes no pixel, and one a later reader would assume must matter.
+
+**A gate or a door is dragged along the thing it belongs to, and it cannot leave it by
+construction.** `AttachmentHandle` projects the pointer onto the parent segment with
+`offsetOfPoint` and passes on **only that distance** — the position off the line is thrown away, so
+a drag out into the garden slides the gate to the nearest point of its fence and there is no frame
+in which it is somewhere it could not be. Clamping afterwards would be the same picture with a
+worse guarantee. One component serves both, because the gesture is identical; what differs — what
+is legal, how narrow it may go — is in the store actions it is handed, so the handle knows nothing
+about gates.
+
+**End handles appear only when the thing is big enough on screen to have ends worth grabbing.**
+Each end's grab area reaches about 14 px, so on the 30 px a 900 mm gate occupies at plan zoom the
+two of them swallow the middle: the first real drag in a browser turned a 0.9 m gate into a 0.7 m
+one, because every attempt to slide it hit an end and resized instead. `MIN_SPAN_FOR_ENDS_PX`
+leaves a clear body between them. The consequence is deliberate and reads right — a small gate is
+move-only until you zoom in, and its width is *typed*, since 0.9, 1.2 and 3.0 are catalogue numbers
+rather than things you drag to. **This class of bug is only findable in a browser**: Konva's
+hit-testing decides it, and there is an e2e test for exactly this now.
+
+**A resize moves the end under the pointer and nothing else.** `spanFromDraggedEnd` pins the far
+end, clamps both into the segment, and **refuses** a result under the minimum width rather than
+holding it there — stopping dead shows the user a limit where silently pinning looks like the drag
+stopped tracking. Note it answers `offset` because it is about spans, and a gate stores
+`offsetAlongEdge`: spreading the result set the width, left the position behind and added a stray
+key. Map the fields.
+
+**Undo keeps the selection where it still exists.** It used to clear it outright, which was right
+while only a corner or the house could be selected — undo usually meant geometry had appeared or
+gone. It is wrong now that a gate, a door or a side can be: undoing a gate drag closed the very
+panel the drag happened in, so the correction vanished from under the user along with the thing
+being corrected. `reconcileSelection` is the same function the removals already call.
+
+**`SegmentTrack` is the wall strip, extracted.** A side of the property gets the same unrolled
+control for its gates, for the same reason the wall has one: placing a 900 mm thing on a drawing
+where the whole plot is a few hundred pixels across is a hard 2D task, and unrolling it makes it an
+easy 1D one. The vertical axis is the caller's business — a wall draws its openings at their true
+height against a storey, a fence draws a full-height block, because a gate has no elevation worth
+claiming. The drag listens on `window` rather than on the block so it survives the pointer running
+off the end of the track, which is the common case.
+
+**`Gate.kind` changes the drawing, not just the data.** `GateMarks` draws a pedestrian gate as one
+leaf on an arc, a driveway as **two half-width leaves hung at opposite ends** (the convention for a
+double gate, and what stops a 3 m opening reading as a very wide garden gate), and an open gap as a
+pair of dashed ticks with no leaf at all — because a leaf there would claim a gate the user said was
+absent. A **window** is no longer drawn as a gap: the wall carries on past it and two fine lines
+cross the band, since drawn as a hole every window read as a doorway.
 
 **`site.orientation` is read by the sun model.** Degrees clockwise from screen-up to true
 north, defaulting to 0. The compass was a _drawing_ for most of this project's life — it pointed up
@@ -460,7 +707,7 @@ come from `computeZones`, which excludes the house, so the ground total is unaff
 
 **The house still may not cross the fence — it may reach it.** A house really can be the full width
 of its plot, and `houseFitsInside` always allowed flush (on-edge counts as inside, matching
-`ST_Contains`); what was missing was any way to *get* there. The typed width and depth refused
+`ST_Contains`); what was missing was any way to _get_ there. The typed width and depth refused
 outright and in silence, leaving the rejected number in the box beside a house that had not moved.
 `clampHouseSize` answers with the largest house that fits — the binary search `clampHouseInside`
 already used for a drag — and `readMetres` on the two `LengthInput`s settles the field on what was
@@ -576,10 +823,29 @@ crosses a bucket, so a non-deterministic tone makes the plan shimmer as the user
 **Joints are the background, not lines between modules.** Modules are inset by half a joint on each
 side and drawn over a joint-coloured fill. A stroked joint needs a pixel width, which either
 vanishes zoomed out or swells zoomed in; drawn as background it is correct at every zoom by
-construction. Note that at a realistic zoom a 10 mm joint on a 600 mm slab is well under a pixel —
-it only ever lands as a slight darkening of its neighbours, so **do not write a test that thresholds
-those pixels.** The suite uses a high-contrast fixture with a fat joint for structural assertions
-and the shipped palette only for determinism.
+construction. The suite uses a high-contrast fixture with a fat joint for structural assertions and
+the shipped palette only for determinism.
+
+**The drawn joint has a floor and a cap, and _this reverses_ "a sub-pixel joint is fine, do not
+threshold those pixels".** The old note was right that a 10 mm joint on a 600 mm slab is well under
+a pixel — 0.21 px at the plan zoom, 0.51 px close up — and wrong that this was acceptable. It never
+lands as a line, only as a faint blend, so neighbouring slabs merge: a dozen of them read as about
+five, and the complaint that arrives is "the slabs are way too big" about a surface whose slabs are
+exactly the size the manifest says. Measuring a shipped render showed a true 58 px pitch reading as
+nearly 90.
+
+`drawnJointPx` (`lod.ts`) clamps it: at least `MIN_JOINT_PX` (1), at most `MAX_JOINT_SHARE` (0.12)
+of the pitch. The floor is the same answer the bevel three lines from the joint code already gives
+("at least a whole pixel, or the bevel is drawn at a fraction of one and simply does not appear")
+and the same as `MIN_CUT_EDGE_PX` — the joint was the one drawn line with no floor, and that
+asymmetry was the defect. The cap is what keeps it honest: joints are the background, so an
+unbounded floor would swallow a small unit (a 200 mm sett at plan zoom has a 5.5 px pitch, and a
+whole pixel of that is 18% against a real 4.8%).
+
+**The pitch is never floored — only the gap.** Module positions, module counts and the schedule's
+slab counts all still come from `(moduleSize + jointWidth) / 1000` exactly, which is why the
+module is derived as `pitchPx − drawnJoint` rather than by scaling `moduleSize`. Two abutting
+patios still line up for the same reason they always did.
 
 **Module shading is a proportion of the module, not a real bevel.** The first attempt used a true
 10-15 mm arris, which is under a pixel at every zoom the plan supports: the shading was computed,
@@ -752,6 +1018,43 @@ in `apps/web/src/lib/materials/palette/` — for the reason `materials.ts` alrea
 colour being presentation. `resolvePattern` joins the halves, and returns `null` if either is
 missing, which is the flat-fill path.
 
+**Paving is quoted at garden scale, not at utility scale.** `concrete` was 900 × 600 — the coarsest
+module in the catalogue — and `materialFor` hands it to two of the three medium-budget concepts, so
+the biggest slab in the app was the default look: about forty of them on a 7 × 3.3 m terrace, which
+reads as a yard. It is 400 × 400 now, which is what a garden is actually paved in. `porcelain` keeps
+its 600 × 600 stack bond because large-format porcelain really is laid that way, and keeping it is
+what makes the three concepts differ in grain rather than only in colour.
+
+**`stone-pavers` is a `pack`, not a grid, because riven sandstone is sold as one.** A pack holds
+`courses` and `lengths` rather than a single `moduleSize`, and the painter **walks** both instead
+of dividing — neither falls at a constant pitch. Both walks start at the plan origin and take their
+sizes from the course and unit index, so two abutting patios share course lines and unit boundaries
+exactly as a grid does, and a vertex drag renumbers nothing. `bondOffset` has no part in it: each
+course draws its own first length from its own index, so the vertical joints diverge from the first
+unit. The `random` bond was standing in for this — it gives the varying vertical joint that is the
+signature of laid stone, but with one unit size a patio still read as a chequerboard however small
+the module got. `PACK_MAX_COURSES` and `PACK_MAX_UNITS` exist because a walking sweep has no closed
+form for where it ends.
+
+**A pack is counted; a scatter is not; and `isCountable` is where that line is drawn.** A pack has
+no single pitch so it cannot answer `modulePitchMetres` — that is what `isModular` still means — but
+its members are real product dimensions and a pack is sold by the area it covers, so
+`packMeanUnitMetres` gives the schedule a number somebody can order from. A planting density is a
+_drawn_ density and still gets nothing.
+
+**Routes are laid in setts.** `stone-setts` (300 × 300) is the fine unit, and `circulationFor`
+returns it for every paved route rather than the terrace's slab. A path in the same paving as the
+patio it leaves reads as a narrow patio; at the old 900 × 600 a 1.2 m path was barely one slab wide.
+Square rather than 200 × 100 block paving, deliberately: a 100 mm side is 2.6 px at plan zoom, under
+`MIN_DRAWN_MODULE_PX`, so block paving would collapse to flat colour exactly where the fine grain
+was wanted.
+
+**`MIN_SHADED_PX` is 9, down from 12.** Twelve was set when the smallest paving unit was 600 mm
+(15.6 px at plan zoom). With a 400 mm slab at 10.4 px it would have taken the light off every
+terrace on every concept card and left the paving finer but flatter. Nine keeps a 400 mm slab and a
+coursed pack lit at plan zoom while leaving a 300 mm sett flat, which is right — you do not see a
+chamfer on a sett from that far away.
+
 **Quantities live in `packages/schema/src/plan/quantities.ts`, and this is the architecture paying
 off.** A plan here is real geometry rather than a generated picture, and the point of insisting on
 that — the tessellation rules, the PostGIS validation, deriving rather than storing — is that
@@ -799,7 +1102,239 @@ with `whitespace-nowrap`, so a long one grows in both directions and runs off th
 the exact rendered pixel in whatever font actually loaded, where a character count is wrong for
 "Wildflower meadow" and "IIIIIIIIII" in opposite directions. The full name goes on `title`.
 
+## Step 2 — the existing garden
+
+**The screen asks for far less than it used to, because the generator consumes far less than it
+asked for.** `concepts.service.ts` reads `document.features` in exactly one place and only takes
+`status === 'keep'` — those become obstacles and `existing-feature` elements. `remove` and
+`replace` are deliberately neither. So a user who carefully maps their whole garden is doing work
+the system throws away, which is what "only map what matters" is a correction to.
+
+**`FeatureStatus` is still `keep | remove | replace`, and that was a decision not an omission.**
+The brief asked for `keep / prefer_keep / remove`. The existing triple already expresses it —
+`keep` is protected, `replace` is "keep the space, change the thing", `remove` is "this may go" —
+and a fourth state would have to be *honoured* by the generator or it is a lie on screen. No
+schema change, no version bump, every stored plan unaffected; the UI copy says what each one means
+for the design instead.
+
+**Skipping is an action, not a checkbox.** It used to be a tick at the bottom of the placed-features
+list, which recorded `skipped` but did not move you on — so there were two controls for one flag and
+only one of them did the thing the user wanted. `PlanBottomBar` gained a `secondaryAction` slot (a
+`{ label, onClick }`, used only here, so the shared bar still knows nothing about what any step
+means) and Skip sets the flag, flushes and navigates. It deliberately does **not** clear features
+already placed: a feature the user drew is a fact about their garden whatever they press next.
+
+**The redesign area is two fields, and its *type* is derived.** `site.selectedZoneIds` stays the
+zone truth — same owner, same undo stack, same `site` section — and `site.scopePolygon` joins it.
+`resolveDesignScope` in `packages/schema/src/plan/scope.ts` answers
+`entire_garden | zones | custom` from the two. A stored `type: 'custom'` would go stale the moment
+the outline was cleared, and then a plan would claim an area it no longer has. Same argument as
+zones, openings and the roof.
+
+`BoundaryDraft` is a re-export of `SiteSection`, so adding the field gave persistence, hydration
+and 409-adoption for nothing — **no `project-sync.ts` change at all.** Worth knowing before adding
+another site field and writing plumbing that already exists.
+
+**`scopeRing` is the single rule about what a usable area is**, and the store, the PostGIS
+validator (`invalid_scope_polygon`) and the generator all ask it rather than repeating it. It
+refuses a self-crossing ring, a sliver under `MIN_SCOPE_AREA`, and one that leaves the fence —
+returning `null` rather than trimming, because `ST_Intersection` would absorb an overhang without a
+word. **`null` is not "the whole plot"**: it is the signal to skip the clip entirely, which is what
+keeps an unscoped plan generating byte-identically.
+
+**The scope-drawing gesture shares step 2's draft pipeline, and one line of that is load-bearing.**
+`mode: 'scope'` reuses `draftPoints`, `addDraftPoint` and `CLOSE_DISTANCE` rather than opening a
+second click pipeline on the same canvas. `handleStageMouseDown` has to name scope mode alongside
+`place`: falling through to the branch below arms the pan on every press, `handleStageClick`
+returns early while `panActive`, and every corner click is then swallowed in silence — the area
+simply cannot be drawn and nothing says why. `draftPlacement` exists for the same class of reason:
+the finish button was gated on `placement`, which is null with no `placingKind`, so the area had no
+way to close.
+
+**The dim is a `Shape` with an even-odd fill, not two `Line`s.** A custom area dims the plot
+*except* the outline, which is a polygon with a hole, and Konva's `Line` cannot express one. Zone
+scope needs none of that — it dims the zones that are out, reusing the polygons the canvas already
+tints. The overlay is spliced above the zone tints and below the features, so the house and every
+existing feature stay legible, which is what the brief asks for and what the layer order already
+gave for free.
+
+## The garden assistant
+
+A sibling of `assistant/`, not a second AI system: same `AnthropicModule`, same
+`toHttpException`, and the rate limiter was **extracted to `assistant/rate-limit.ts` so both share
+one budget** — two buckets would have made the real ceiling quietly double the number written down.
+
+**Structured JSON output, not tool calling, and that is a considered answer to the brief.** The
+requirement is "a bounded set of editor actions with validated structured arguments", and a
+discriminated union in a JSON Schema *is* that contract — enforced by the API rather than
+requested. Tool calling would need a tool-result loop this feature does not want ("avoid long
+conversational flows"), and would cost the three things `intent.service.ts` has earned: the cached
+system-prompt breakpoint, the thinking-enabled regression test, and the JSON-Schema-vs-Zod
+cross-check. Both are mirrored for `GARDEN_ACTION_JSON_SCHEMA`.
+
+**`GardenAction` has no field that can hold a coordinate**, exactly as `DesignIntent` has none.
+Position is a bounded enum of *places* — `back-left`, `along-right-fence`, `outside-back-door` —
+and `assistant/garden/anchors.ts` resolves one to a point to *aim at*. There is a test that walks
+the JSON Schema's property names and asserts none is `x`, `y`, `centre` or `points`.
+
+**Anchors are resolved in the `DesignFrame` off the garden door**, the same frame the generator
+composes in, so "back-left" means "far from the house, to the left as you look out" rather than
+anything about the screen — a rotated house or a plot drawn off-axis still has a back-left corner
+and it is the one the user means. **Mind the handedness**: +y is down the page, so the frame is
+left-handed; facing +y your left hand points to **+x**, the way south-facing puts east on your
+left on a map. `anchors.test.ts` pins it, because a plan with left and right swapped is a perfectly
+ordinary-looking plan.
+
+**The anchor is a preference, never an answer.** It is handed to `PlacementService.candidates` as a
+new `near-point` affinity (a `reference` point instead of the house centre; the rest of that query
+is untouched), and every candidate must then pass `featureIsLegal` **and** `clearOfOthers`. The
+second is not redundant and the test that caught it says so: erosion by `inradius` guarantees a
+*disc* fits, which under-estimates a rectangle, so a 2.5 × 2 m shed eroded by 1 m can still lap the
+obstacle it was meant to clear. Erosion makes the sampling efficient; those two make it correct.
+
+**Changes apply immediately — the one deliberate divergence from step 5's assistant.** There, a
+diff rewrites a finished design and every line is worth reviewing. Here the user is describing a
+garden that already exists, an approximate shed in roughly the right corner is the whole ask, and a
+review queue between "I have a shed" and a shed appearing would make the assisted path slower than
+drawing it by hand. The safety net is Undo: `features-store.applyAssistantChanges` is
+`plan-editor-store.applyProposal`'s bracket — `beginGesture()`, raw `set` per change (never
+`commit`, which would push its own entry), `endGesture()` — so **one sentence is one Undo**.
+
+**A `scope` action is a separate undo entry**, because scope lives in `boundary-store` and features
+in `features-store`, each with its own history. One history over both would make Undo mean
+different things depending on which screen you were looking at. Recorded rather than hidden.
+
+## Generation honours the redesign area
+
+**Clipping the zones and the room covers most of it; six decisions escape both.** Almost every
+placement bottoms out in `placement.candidates({ zone })`, a `FillService` method taking a zone
+polygon, or `isPlaceable(…, context.room)` — so `FillService.clipRingsTo` clips the in-scope zone
+polygons (one query for all of them) and `clipTo` clips the room, and everything downstream
+inherits it. `clipToRoom` was renamed `clipTo`: it was always this operation, and naming it for its
+first caller stopped being true the moment it had a second.
+
+**Every surviving piece of a clipped zone is kept**, as a `GardenZone` per piece sharing the id,
+with `area` and `centroid` recomputed (`rezone`). Dropping the smaller pieces would leave part of
+the drawn area with no base fill — bare graph paper inside the area the user asked to have
+designed. Duplicate ids are safe: nothing in `build` keys on the id from that array.
+
+**`allZones` stays unclipped**, and `usableWidth` is measured on it. How much room there is to walk
+past the house is a physical fact about the plot, not about what the user ticked — a 4 m side
+return whose drawn area covers 2 m of it still has to reserve the access lane.
+
+**`SCOPE_INSET` is 0.15 m and the derivation is the whole of it.** `clipTo` and `accentRegions`
+simplify at `SIMPLIFY_TOLERANCE` (0.05 m) *without* re-clamping, so a bed clipped to the room can
+end up centimetres outside it; with a hard containment guard downstream, every bed along the scope
+edge would be refused outright rather than trimmed, and a plan would lose its planting for a reason
+nothing on screen could explain. Three tolerances buys the margin. The visible cost is 15 cm of
+untouched ground — 1.5 mm at 1:100, under the plan's own line weight. Clamping after every simplify
+would be exact and would change what the *unscoped* path draws, which is the one thing this may not
+do.
+
+**"Inside the drawn area" lives in `placeable`**, beside the house rule and for the same reason: it
+is a rule about what the generator may compose, not about what is legal — a user may drag a bed
+outside their own area afterwards and the editor has to let them. That one signature swept fourteen
+call sites. Five things `placeable` cannot see get their own guard: `routeBetween` (both endpoints
+can be inside while the dog-leg swings out — and because routes are tried in order, refusing one L
+lets the other be found, so this *improves* routing), the formal axis path, the front path, the
+steps flight (it runs outwards past the terrace's edge), and lighting (a fitting is offset from the
+thing it lights).
+
+**Backward compatibility is structural, not numerical.** `scopePolygon` null ⇒ `scopeRing` null ⇒
+every clip is `scopePolygon ? await clip(…) : identity` — **the query is never issued**, and not
+"intersect with the boundary", which would re-simplify every zone and move coordinates on plans
+that never asked for a scope. Every guard short-circuits on `scope === null` before any geometry
+work. There is a test asserting `clipRingsTo` is never called on the unscoped path, which is what
+fails the day somebody "simplifies" the null branch into `scopePolygon ?? boundary`.
+
+**The strong test is a PostGIS difference, not a per-element containment check.** Union every
+generated element, subtract the drawn area, demand under 0.01 m² remains — one query, every element
+kind at once, and it cannot be fooled by a tessellated circle or a hairline bulge. The fixture area
+leaves the fence (so `borderRegions` is genuinely clipped), leaves a whole zone out, and still
+covers the garden door (so the grammar runs rather than the fallback).
+
+**`reference-fixture.test.ts` now states a 30 s timeout.** Each case generates three whole concepts
+against real PostGIS; Vitest's 5 s default was never a budget it was written to, and it was timing
+out on machine speed rather than on anything about the generator.
+
 ## The layout grammar
+
+**Every size in the grammar has a floor, and the floors are derived rather than declared.**
+`TERRACE_FLOOR` is `hostFloor('seating')` — the footprint of the first thing `FURNISHINGS` puts on
+a terrace, plus twice `furnish`'s own margin — so it moves when that list does. `PERGOLA_FLOOR` is
+the smallest thing a pergola may hold. `terraceDepth` reads
+`max(min(clamp(3.6 √scale, floor, 5.5), 0.35 × roomDepth), min(floor, roomDepth))`: the share cap
+sits **above** the floor and the only thing that may cap the floor is the room itself. It used to be
+`min(clamp(…, 2.4, 5), 0.35 × roomDepth)`, where the cap overrode the clamp's lower bound, and a
+three-metre-deep garden got a **one-metre terrace across the whole width of the house** — the wide
+fixture shipped "Seating patio 12.0 × 1.0 m". The width floor is capped by the room the same way, or
+a 3.7 m wide room would be refused a terrace rather than given a narrower one.
+
+**`Slot.minSize` refuses; it does not shrink.** `fitInSlot` stops its shrink loop at the slot's own
+floor and returns `null` when the sized footprint is already under it. A pergola shrunk to 0.6×
+linear is 36% of its area and nothing can sit under it, so the card says the feature was not
+included instead. `terraceEndSlot` carries `PERGOLA_FLOOR` and its own `maxSize.depth`, because a
+starved terrace used to starve the pergola beside it.
+
+**A refused terrace is reported.** `fitInSlot` returning `null` for the terrace leaves `seating`
+unsettled, so it falls through to the sampler like any feature — but the terrace, its furniture and
+every path anchored on it are gone. `terraceRefused` says so in the concept's summary rather than
+drawing a garden with no way out of the house.
+
+**A lawn has to be a lawn.** `LAWN_FLOOR` is 2.5 m across and 12 m²; `isCourtyard` is now "no viable
+lawn fits behind the terrace" rather than a depth comparison, and takes the room's width as well as
+its depth. Below viability the panel is dropped and the far-room slot takes the strip. `lawnStart`,
+`lawnEnd` and `rearBedDepth` are one set of functions the lawn's far edge and the rear bed both
+read — they were `2b` in `rectilinear.ts` and `b` in `beds.ts`, which left a band of base turf
+between the lawn and the bed on every plan.
+
+**No sketched bed is thinner than `MIN_FILL_SIDE`.** `BED_MIN_DEPTH` imports it from
+`generation/fill-limits.ts`, a leaf module `fill.service.ts` and the pure template layer both read,
+so the templates stay database-free. Runners used to be drawn at a third of the border depth, which
+PostGIS's sliver guard threw away in silence — so a small garden came out as a lawn, a patio and
+nothing else. `designedBeds` now emits the rear border first (the one bed every garden has), then
+the side beds only where the planting width can hold them, then `Terrace flank` beds beside the
+terrace where the fence is far enough away.
+
+**Zone roles are what a zone is _for_, and they are why the front and the sides stopped being turf.**
+`layout/zone-roles.ts` classifies each zone `main | arrival | passage | secondary | remote`:
+the room's zone is `main`, the front room's is `arrival`, and a side is a `passage` under
+`PASSAGE_MAX_WIDTH` (5 m) measured **level with the house** — `usableWidth` clips the zone to the
+band between the house's front and back wall planes, sharing `houseBand` with `sideReturn`, because
+a side zone runs the full depth of the plot and its bounding box says 26 m of a strip that is 4.5 m
+wide. A zone with nothing level with the house is `remote`, which is the old behaviour; never
+`passage`, because gravel on ground nobody measured is worse than turf on ground nobody designed.
+
+**A passage is an accent strip, never a base category — and that distinction is load-bearing.**
+`computeZones` gives the side zones all four corners of the plot, so a whole-zone gravel base would
+paint the back corners gravel, exactly where the shed and the kitchen garden go. `passageStrip` is
+the zone clipped to the half-plane in front of the house's back wall: the way past the house and the
+front corner, and nothing behind. The corners behind stay the palette's ground and are designed by
+the room. The locked base, `groundCoverArea` and the schedule are untouched.
+
+**The passage strip is not checked against the house, for the same reason the base fill is not.** A
+zone's inner edge _is_ the house's wall plane, clipped in floating point, so a strip can overlap the
+wall by a fraction of a nanometre — which had `geometryClearsHouse` accept one side return and
+reject the other on a symmetrical plot, and the suburban plan came out paved down one side and turf
+down the other. There is a test that both sides get the same strip.
+
+**The front garden is the one zone whose base a role may change.** Its polygon is exactly the front
+garden — fenced to the house's width, no corners — so `arrivalBase` can lay gravel over the whole of
+it. `frontWantsLawn` allows turf only at 4 m deep and 25 m²; below that it is gravel **whatever the
+budget**, because paving the front would claim a driveway the document cannot hold. Parking is a
+step-1 capture and a version bump, deferred in TODOS.md.
+
+**A passage's fence bed leaves the way past.** `passageBorderWidth` gives the full `BORDER_WIDTH`
+where the passage is wide, less where a bed that deep would block it, and nothing where even a
+1.2 m bed would. `concepts.service.ts` no longer asks `borderRegions` for a 0.45 m band in the main
+zone: that call was **already dead** (anything under `MIN_FILL_SIDE` returns `[]`), so the designed
+garden had never had a perimeter border and `designedBeds` was always its only planting.
+
+**A side wide enough to be a room gets one.** `sideRoomRect` finds the largest rectangle in a
+passage strip or a secondary side return after the access lane and the margins are taken out, capped
+at `SIDE_ROOM_MAX` (4.2 m) — uncapped it drew 8.2 × 6.2 m of decking down one side of the L-shaped
+plot, which is a yard rather than a room. One per plan, gated on seating being asked for and the
+budget being above low.
 
 **A plan is composed in a frame, not sampled in a zone.** `DesignFrame`
 (`apps/api/src/plan/generation/layout/frame.ts`) puts the origin at the garden door, `u` running
@@ -928,13 +1463,195 @@ posts, ridges, hips and rails as pure geometry and both the Konva canvas and the
 it. `SYMBOL_SPRITES` maps the rest to sprite families. A sprite is always fitted _inside_ the
 element's rect or radius (`spriteBox`): the geometry of record is never the sprite's natural size.
 
-**`furniture` is the eighth `ElementCategory`, and `DesignElement.symbol` a plain string.** Adding
+**`furniture` was the eighth `ElementCategory`, and `DesignElement.symbol` a plain string.** Adding
 the category was a compile error in nine records until each was answered — that is the point of
-them being total. Furniture has an outline for placing and selecting but is _counted, not measured_:
-the schedule gives it items rather than square metres and `materialCostIndex` skips it. The
+them being total. (`lighting` is the ninth, and adding *it* was a compile error in ten places: see
+below, and note that `layerForElement`'s switch is total too without being a `Record`.)
+
+Furniture has an outline for placing and selecting but is _counted, not measured_: the schedule
+gives it items rather than square metres and `materialCostIndex` skips it — `COUNTED_CATEGORIES` is
+where that is now said once, for furniture and lighting together. The
 concept test's pairwise-disjoint rule excludes it and a second test demands each piece sit wholly
 inside exactly one host, drawn after it. The assistant's `add` excludes the surfaces furniture may
 stand on from its obstacles, or a dining set could only ever land on the lawn beside the patio.
+
+**A retaining wall has two truthful drawings, and `RenderLevel.surface` is which.** A wall built of
+something — coursed stone, brick — has a *top course* worth painting and gets the same module
+treatment a patio does. A terrace retained in its own paving has no such course: it is an upstand of
+the same stuff, and the honest drawing is the host's tone a shade darker. `DesignElement.retaining`
+chooses between them and **absent is the default and the commoner answer**, because most raised
+terraces really are retained in what they are paved with. `WALLING_MATERIALS` sits outside
+`MATERIALS` for the reason `EDGING_MATERIALS` does: a retaining face is derived from an edge, so
+there is no element to give a category to, and `categoryOf` files both as `paved-area`.
+
+**Level changes are local, and that is a refusal rather than a simplification.** There is no ground
+surface: no spot levels, no contours, no fall across the plot. All three come off a survey, which is
+exactly the kind of fact `site.location` is nullable to avoid inventing — so a level change is not
+"the garden falls 1:20 to the north", it is "this terrace is 340 mm up", stated per element on
+`DesignElement.elevation` and true of nothing else. **Nothing anywhere infers a slope.**
+
+**A retaining wall is not a thing anybody places; it is what the edge of a raised element *is*.**
+`plan/levels.ts` derives the faces every read, for the same reason edging is derived from its bed: a
+wall stored beside a terrace is a wall that gets left behind when the terrace moves. `levelBands`
+excludes the sides against the **house** and nothing else — deliberately unlike `edgingRuns`, which
+drops the boundary side too. A terrace raised against the fence really does need holding up there;
+the fence is not doing it. It also skips a flight of steps, which carries an elevation but is the
+thing that *resolves* a level change rather than one that needs holding back — retaining it draws a
+wall across the very route down off the terrace.
+
+**`elevation` adds to an occluder's `height`; it must not set `baseHeight`.** A raised surface
+stands on a solid plinth of its own footprint, so a terrace at 340 mm casts the shadow of a 340 mm
+wall round its edge. `baseHeight` would say the terrace *floats* and casts nothing at all — that
+field means the underside of a canopy or a beam. A **sunken** area casts nothing, because what would
+shade it is the ground standing proud around it and a local model has no ground to make an occluder
+out of.
+
+**`castsShadow` counts `elevation`, and leaving it out was a real bug found by a test.** A terrace is
+flat, so `heightFor` is 0 and the whole element was filtered out of the shadow pass before anything
+downstream could give it its plinth — the raised edge cast nothing, silently. A raised surface is a
+wall as far as the sun is concerned, whatever it is in itself.
+
+**A flight's tread count is derived from its own `elevation`, never stored.** `stepFlight` divides
+the rise into whole risers near a 170 mm target, so a flight that climbs 450 mm draws three nosings
+and one that climbs 900 draws five, and the drawing cannot disagree with the level change it serves.
+**`ceil`, not `round`** — rounding to the nearest whole number of steps lets the riser overshoot by
+half a step, and a 230 mm rise came back as one 230 mm riser, steeper than Approved Document K allows
+for a private stair at all. Taking the ceiling means a flight can only err *shallow*. A property test
+walks every rise from 100 mm to 2 m and holds the whole band.
+
+**The generator lifts a terrace only where the style and the budget both ask, and never without a
+way down off it.** Retaining is the dearest thing per square metre in a garden, so `terraceRise`
+refuses below a high budget and outside the formal and modern styles. If `stepsFromTerrace` cannot
+place a flight the terrace stays **on grade** rather than raised and stranded — a raised terrace you
+cannot step off is worse than a flat one, and the generator is the only place that can tell. The
+flight is cut **flush** against the terrace: two rectangles sharing an edge do not intersect by
+`polygonsIntersect`, which tests a strict crossing, so a flush flight satisfies the concept suite's
+disjointness rule with no fudge gap. Its depth is the *going* — risers × 350 mm — so the footprint
+and the nosings come from one number.
+
+**`PLAN_DOCUMENT_VERSION` is 3, and `MIGRATIONS[2]` is a deliberate no-op.** Nothing about the
+document's shape changed; `elevation` has been on `DesignElement` for a long time. What changed is
+its **meaning** — it was documented as "carried for costing later; nothing renders differently
+because of it", and from here a raised element draws a retaining face and casts from the top of it.
+A stored v2 plan means the same thing it always did, so there is nothing to rewrite. The version is
+bumped so the change has a date, not because a row needs help.
+
+**Edging is a field on the host, not an element — and it is `plan/edging.ts` that decides where it
+goes.** `DesignElement.edging` records the *decision* ("this bed has a brick course"); the runs are
+derived every read from the outline it follows. Storing the run instead would mean two things that
+can disagree the moment the bed is dragged, and keeping them in step would put a dependency graph
+inside the editor's `moveElementLive` / `resizeElementLive` / `rotateElementLive` — miss one and you
+get a course floating beside a bed that has moved. Same argument as zones, openings and the roof.
+The visible consequence is that edging cannot be selected or moved on its own, which is correct: you
+edge a bed, you do not draw a line that happens to sit beside one. The known limit is a
+**freestanding** run — a kerb along a drive with nothing either side — which this shape cannot
+express and which the parking TODO will need.
+
+**`EDGING_MATERIALS` is deliberately outside `MATERIALS`,** because `MATERIALS` is keyed by
+`ElementCategory` and edging has none. `findMaterial` searches it as a second pass, and
+`resolvePattern` files an edging course under `paved-area` — which is the true answer rather than a
+fallback, since a brick course laid on edge is paving by every property the painters read, and
+`CATEGORY_EDGES['paved-area']` is null so a course correctly gets no edging of its own.
+
+**This pass is allowed to look at neighbours, and the reverted kerb was not.** The kerb failed
+because it was stroked on each surface's *own clipped raster*, so it could not know a neighbour was
+there and drew a line down the seam between two abutting patios; teaching it would have put every
+surface's neighbours in the raster cache key. `edgingRuns` runs once over the whole element list,
+before any rasterising, and returns geometry — so it can do the two things the stroke could not:
+**drop the sides against the boundary and the house** (on the l-shape fixture that is 139 m of brick
+rather than 196 m — 57 metres nobody would lay but everybody would be invoiced for), and **refuse an
+edge two edged hosts share**, so an internal seam is one course rather than two stacked on each
+other.
+
+**Runs are chained, not per segment, and that is a drawing fix as much as a counting one.** A curved
+bed is tessellated at two dozen points. One run per segment reported "73 runs" for a garden with six
+beds — and `polylineStrip` cuts its caps square, so two dozen stubby strips leave a notch at every
+vertex right round the curve. `chainsOf` joins consecutive kept segments into one polyline, wrap
+included: a ring is walked from an arbitrary index, so a course passing through that index must not
+come back as two runs butting into each other in the middle of a continuous edge.
+
+**The generator edges accents and features, never a base fill.** A base fill is the *whole zone
+polygon*, so its outline carries the zone's internal cross-fences as well as its perimeter — and
+`edgingRuns` drops only the sides against the boundary and the house. Edging one would draw a brick
+course straight across the middle of the garden where the side return meets the back, and nothing
+downstream would object. `edgingFor` is the policy and it is restrained on purpose: formal takes
+setts or brick, cottage brick, modern and low-maintenance steel, everything else nothing, and never
+on a low budget.
+
+**Edging is the only thing on the plan measured in metres,** so `ScheduleLine.lengthM` is nullable
+rather than zero — a nought would read as "no edging here", where the honest answer for a patio is
+that linear metres is not the unit it is bought in. `planSchedule` takes the boundary and the house
+so the number it prints is the number somebody would order.
+
+**`EDGING_WIDTH_MM` is presentation and nothing measures it.** The schedule measures a run by its
+length, so the table is free to be a drawing convention where the product is not one — which matters
+for exactly one entry: steel edging is a 3 mm blade, a fifth of a pixel at any zoom the plan
+supports, and is drawn at 45 mm because that is the width it *reads* at. The other four are real
+product widths.
+
+**`lighting` is the ninth `ElementCategory`, and it is emphatically not `furniture`.** The obvious
+saving was to reuse `furniture` — both are counted rather than measured, both stand on things — and
+it is wrong for one specific reason the test suite already encoded: furniture is _hosted_, and
+`concepts.service.test.ts` pins that every furniture element lies wholly inside exactly one built
+feature. Lighting is the opposite by nature. A spike light stands in a planting bed, which is a
+`fill`; a bollard runs beside a path, which is a polyline; a wall light is on the house, which is not
+an element at all. All three are zero hosts, so calling a light furniture would have meant weakening
+the rule that keeps a dining set on its patio. What the two _do_ share is said once, in
+`COUNTED_CATEGORIES`: no area in the schedule, items rather than square metres, no weight in
+`materialCostIndex`, and `null` in `KIND_BY_CATEGORY` so a lighting scheme cannot move the
+composition bands. Adding the category was a compile error in **ten** places, not the nine the
+furniture note quotes — `layerForElement`'s switch is total too and is not a `Record`.
+
+**Night is a ramp, and it is gated on `site.location` exactly as shadows are.** `nightFraction`
+returns 0 in daylight, 1 once civil twilight has ended, and the real fraction between — and `null`
+without a location, which is the same refusal `shadowCast` makes and for the same reason: there is no
+latitude that is true of anywhere, so there is no hour at which an unlocated garden is dark. A
+boolean was the first design and is visibly wrong: the time slider steps in fifteen minutes, so a
+switch takes the whole garden from noon to midnight in one step, and dusk is the hour a lit garden
+actually looks its best. `-6°` is not a tuned number — it is civil twilight, the standard definition
+of when outdoor activity needs artificial light, which is the question being asked.
+
+**A scene with an explicit `light` makes no claim about the night.** The judging sheets override
+`light` to draw one plan at four times of day, so `buildRenderScene` answers `night: null` whenever
+that override is present: an explicit light means the caller is driving the sun itself. The lighting
+sheet therefore deliberately does _not_ pass one, which is the opposite of every other sheet.
+
+**The fitting and the light it throws are two different things.** `RenderLight` carries a pool
+radius and an intensity, and the fitting is an ordinary `RenderItem` drawn from its own sprite. That
+split is the whole reason a 120 mm spike light works on a plan: the fitting is four pixels across at
+a normal zoom and the pool is three metres, and it is the pool a reader sees. It is also why the
+sprite prompts insist the fitting is **switched off** — a glow baked into a photograph would burn at
+midday and fight the real pool after dark. `fx-light-pool` is procedural for the reason
+`fx-soft-shadow` is: it is a gradient, and asking an image model for one buys banding and a colour
+cast in place of four lines of arithmetic.
+
+**Pools composite `lighter`; shadows must not.** Two lamps on one shrub really are brighter than one,
+so the pools add. That is the exact opposite of the cast-shadow rule three sections above, and the
+difference is physical rather than stylistic: shadow is the absence of a light source and cannot be
+more absent, whereas two lamps are two lamps. `NIGHT_MAX_ALPHA` stops well short of 1 on purpose — a
+plan is a document before it is a picture, and one that hid its own geometry after six o'clock would
+be a worse drawing however convincing the night.
+
+**Visualise needed no Pixi work at all, and that is the two-canvas split paying off.** The wash and
+the pools are drawn at the end of `drawOverlay`, which both backends already share, and the overlay
+canvas sits above the WebGL one — so a translucent wash there darkens the ground and planting Pixi
+drew underneath it. Nothing in `render/pixi/` was touched.
+
+**The generator places uplights and bollards, and deliberately no wall lights.** A pair either side
+of the garden door is the obvious move and is left to the user: a wall light is mounted _on_ the
+building, so a generated one would be the first thing this generator ever placed inside the house
+footprint, and `geometryClearsHouse` being true of everything it emits is worth more than the
+fitting. Recessed lights wait for steps to exist. Nothing at all on a low budget, because lighting is
+a real cost with a real trench in it. Lighting is **not** pushed onto `obstacles` — a spike standing
+among the planting it lights is the point of one, and treating a 120 mm fitting as an obstacle would
+push a whole bed away from it.
+
+**`lightingScheme` runs after `stampPlanting`, not merely after the features.** A tree is a bare
+`planting-bed` point until the stamp gives it its species symbol, so the first version — which ran
+before it — saw no trees at all and quietly specified bollards and nothing else. The stamp is
+therefore resolved to a local rather than applied inline in the return. This is the same class of
+bug as `openingCounter` not being re-seeded: everything works, nothing errors, and the output is
+silently impoverished.
 
 **`furnish` is pure and centred.** An item is placed in the middle of its host with a 0.3 m margin,
 inherits the host's rotation, may be turned a quarter to fit, and is verified by `geometryIsLegal`
@@ -1163,6 +1880,14 @@ of it for an afternoon and vanished on the next material run. They are in `.plan
 geometry into constants, which Postgres then JIT-compiles: 1.4 s a query against 114 ms with
 `SET jit = off`, so every generator test timed out while `EXPLAIN` reported 30 ms of execution.
 Both clients pass `connection: { jit: 'off' }` — `db.module.ts` and `src/test/db.ts`.
+
+**Two API test runs at once do not merely queue — they crawl and then fail.** `src/test/db.ts`
+truncates `plan_projects` on the same Postgres `pnpm dev` uses, so two suites running together
+truncate each other's rows mid-test while both hammer PostGIS. Observed: a generator test that takes
+1.2 s alone took **903 seconds and failed**, and passed immediately on its own. The failure looks
+like a defect in whatever you last touched, which is the trap — check for a second `vitest` before
+believing it. This is the concurrency face of the two truncate notes below, and it bites when a
+second agent or a second terminal is working in the repo at the same time.
 
 **The API test suite deletes the fixture projects too.** `capture:fixtures` creates real projects and
 `pnpm test` truncates the table, so a plan you were about to screenshot in the browser is gone the

@@ -14,6 +14,7 @@ import {
   processFace,
   processSprite,
   processTexture,
+  lightPoolDisc,
   softShadowDisc,
   type Processed,
 } from './postprocess.js';
@@ -215,7 +216,10 @@ async function main(): Promise<void> {
           skipped += 1;
           continue;
         }
-        const result = await softShadowDisc(family.sizePx);
+        const result =
+          family.procedural === 'light-pool'
+            ? await lightPoolDisc(family.sizePx)
+            : await softShadowDisc(family.sizePx);
         record(entries, id, variant, file, result, 'procedural');
         writeFileSync(out, result.webp);
         processed += 1;

@@ -58,7 +58,9 @@ export function isStageDrag(event: { target: { getStage(): unknown } }): boolean
  * below outlives any one render — reading the shape through a captured prop would refit to
  * whatever the geometry was when the observer was attached.
  */
-export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] }) {
+export function useCanvasViewport({ getPolygon, fitPaddingRatio = FIT_PADDING_RATIO }: {
+  getPolygon: () => Point[]; fitPaddingRatio?: number;
+}) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ scale: DEFAULT_SCALE, offsetX: 0, offsetY: 0 });
   const [panning, setPanning] = useState(false);
@@ -144,7 +146,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
               const fitted = fitTransform(current, {
                 width,
                 height,
-                padding: Math.min(width, height) * FIT_PADDING_RATIO,
+                padding: Math.min(width, height) * fitPaddingRatio,
               });
               return {
                 scale: clamp(fitted.scale, MIN_SCALE, MAX_SCALE),
@@ -163,7 +165,7 @@ export function useCanvasViewport({ getPolygon }: { getPolygon: () => Point[] })
 
       runEase();
     },
-    [runEase],
+    [runEase, fitPaddingRatio],
   );
 
   useLayoutEffect(() => {
