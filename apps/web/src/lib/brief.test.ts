@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DESIRED_FEATURE_LABELS, DesiredFeatureSchema } from '@garden-studio/schema';
 import {
   BUDGET_BANDS,
   DESIRED_FEATURES,
@@ -34,9 +35,29 @@ const FOUR_ZONES = [
 ];
 
 describe('the catalogues', () => {
-  it('offers the eight named features, plus Other separately', () => {
-    expect(DESIRED_FEATURES).toHaveLength(8);
-    expect(DESIRED_FEATURES.map((option) => option.id)).not.toContain('other');
+  /*
+   * Every space the schema allows has a card, and "Something else" is not one of them.
+   *
+   * Asserted against the enum rather than against a count, which is what makes it worth having:
+   * a hard-coded length only fails when somebody edits this file, where this fails the day a
+   * feature is added to `DesiredFeatureSchema` and nobody gives it a card — the exact way a tick
+   * that generates something goes missing from the screen that is meant to offer it.
+   */
+  it('gives every space a card, and keeps Other out of the grid', () => {
+    const grid = DESIRED_FEATURES.map((option) => option.id);
+
+    expect(grid).not.toContain('other');
+    expect([...grid].sort()).toEqual(
+      DesiredFeatureSchema.options.filter((id) => id !== 'other').sort(),
+    );
+  });
+
+  it('gives every space a description and a picture to go with its shared label', () => {
+    for (const option of DESIRED_FEATURES) {
+      expect(option.label).toBe(DESIRED_FEATURE_LABELS[option.id]);
+      expect(option.description.length).toBeGreaterThan(0);
+      expect(option.image).toBe(`/brief/space-${option.id}.webp`);
+    }
   });
 
   it('gives every budget band its own tint, so the four are told apart at a glance', () => {

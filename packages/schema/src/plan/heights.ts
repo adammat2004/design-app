@@ -70,6 +70,32 @@ export const MATERIAL_HEIGHTS: Partial<Record<MaterialId, number>> = {
 };
 
 /**
+ * How far an edging product stands proud of the ground it edges, in metres.
+ *
+ * **Exposed height, not product height**, and the difference is the whole of the table: a concrete
+ * kerb is a 250 mm unit with half of it bedded, a sleeper is a 200 mm baulk sitting on the surface,
+ * and a steel edging is a 100 mm blade showing about 50 mm. Quoting the product would have the
+ * drawing raise a kerb twice as far as one stands.
+ *
+ * Separate from `MATERIAL_HEIGHTS` because edging is not an element and has no category — the same
+ * reason `EDGING_MATERIALS` sits outside `MATERIALS`. It is read only by the elevated view, which
+ * raises each run by this so a kerb has a visible side; nothing measures it, and the schedule still
+ * counts edging in linear metres.
+ */
+export const EDGING_HEIGHTS: Record<string, number> = {
+  'steel-edging': 0.05,
+  'brick-edging': 0.065,
+  'sett-edging': 0.1,
+  'concrete-kerb': 0.125,
+  'timber-sleeper': 0.2,
+};
+
+/** How far a named edging product stands proud, defaulting to a course laid flat. */
+export function edgingHeight(material: string | undefined): number {
+  return (material === undefined ? undefined : EDGING_HEIGHTS[material]) ?? 0.065;
+}
+
+/**
  * The height an element presents to the sun, resolved.
  *
  * Three tiers, most specific first: an explicit per-element height wins, then the material, then

@@ -2,7 +2,6 @@ import {
   cellSize,
   distanceToEdge,
   MM_PER_METRE,
-  moduleRandom,
   samplePlanting,
   scatterForm,
   type DesignElement,
@@ -11,11 +10,14 @@ import {
 } from '@garden-studio/schema';
 import type { AssetId } from '../materials/assets/asset-spec';
 import { catalogueVariants } from '../materials/assets/catalogue';
+import { elevatedTwin } from '../materials/assets/material-assets';
 import { assetsMatching, type TaxonQuery } from '../materials/assets/taxonomy';
 import type { SurfaceLayer } from '../materials/layers';
+import { foldRotation } from '../materials/symbols/elevated';
 import { MATURITY } from './maturity';
 import type { Maturity, RenderPlant } from './scene';
 import { layerForPlantingRole } from './visual-layer';
+import { plantingClusterAt } from './plant-clusters';
 
 /**
  * How much denser instanced planting is than the texture it replaces.
@@ -132,7 +134,7 @@ export function buildPlants(
       const band = layer.planting.heightBand;
       const height = (band.min + (band.max - band.min) * t) * factors.crown;
 
-      const familyChoice = moduleRandom(`${seed}:family`, Math.floor(placement.at.x / 2.4), Math.floor(placement.at.y / 2.4))();
+      const familyChoice = plantingClusterAt(seed, placement.at).family;
       const asset = query ? chooseAsset(query, placement.variant, familyChoice) : null;
 
       plants.push({
@@ -140,7 +142,14 @@ export function buildPlants(
         at: placement.at,
         spread,
         height,
-        rotation: placement.rotation,
+        /*
+         * An elevated sprite carries its own light, so a full turn turns the sun with it and the
+         * bed ends up lit from every direction at once. A plan sprite is lit flat and turns freely,
+         * which is where most of a bed's variety comes from — so the limit applies to one and not
+         * the other, and `foldRotation` narrows the distribution rather than clamping it onto two
+         * values. Costs no draw, so the sampler's sequence is untouched either way.
+         */
+        rotation: asset?.elevated ? foldRotation(placement.rotation) : placement.rotation,
         assetId: asset?.assetId ?? null,
         variant: asset?.variant ?? 0,
         flower: null,
@@ -171,14 +180,28 @@ function chooseAsset(
   query: TaxonQuery,
   unitInterval: number,
   familyChoice: number,
-): { assetId: AssetId; variant: number } | null {
+): { assetId: AssetId; variant: number; elevated: boolean } | null {
   // Species repeat in short drifts, while individuals retain their own crown variant.
   const families = assetsMatching(query).filter((id) => catalogueVariants(id).length > 0);
   if (!families.length) return null;
-  const assetId = families[Math.min(families.length - 1, Math.floor(familyChoice * families.length))]!;
+  const planId = families[Math.min(families.length - 1, Math.floor(familyChoice * families.length))]!;
+
+  /*
+   * The plan family is chosen first and *then* translated, which is the whole design of
+   * `ELEVATED_TWINS` — see the note there. Asking the elevated library directly would answer a
+   * different-length list, so the seeded index would land on a different species and the same
+   * garden would be planted differently in the two views.
+   *
+   * The variant is re-drawn from the same `unitInterval` against the twin's own count, so a family
+   * with three elevated variants still spreads its plants across all three rather than collapsing
+   * onto whichever one happened to share a number with the plan sprite.
+   */
+  const twin = elevatedTwin(planId);
+  const assetId = twin ?? planId;
   const variants = catalogueVariants(assetId);
+  if (!variants.length) return null;
   const entry = variants[Math.min(variants.length - 1, Math.floor(unitInterval * variants.length))]!;
-  return { assetId, variant: entry.variant };
+  return { assetId, variant: entry.variant, elevated: twin !== null };
 }
 
 /** Presentation-only middle storey. Never fed back to the structural sampler or schedule. */

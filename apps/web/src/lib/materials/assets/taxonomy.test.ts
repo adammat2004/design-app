@@ -6,9 +6,11 @@ import {
   canopiesForSymbol,
   CANOPY_SPRITES,
   CONTACT_SHADOW_SPRITE,
+  ELEVATED_TWINS,
   LIGHT_POOL_SPRITE,
   materialAssets,
   MATERIAL_ASSETS,
+  SKIN_ASSETS,
   SYMBOL_SPRITES,
 } from './material-assets';
 import { assetAnchor, assetsMatching, clearTaxonomyCache, isRecolourable } from './taxonomy';
@@ -243,6 +245,14 @@ describe('every generated asset is reachable', () => {
       CONTACT_SHADOW_SPRITE,
       LIGHT_POOL_SPRITE,
       ...CANOPY_SPRITES,
+      /*
+       * The elevated library reaches the drawing by two routes, and both are tables rather than
+       * queries: a sprite family is swapped for its twin when Visualise draws it, and a skin is
+       * named by the face it goes on. So reachability here is the same question it is for the plan
+       * camera — is anything going to ask for this file — asked of the two tables that ask.
+       */
+      ...(Object.values(ELEVATED_TWINS) as AssetId[]),
+      ...SKIN_ASSETS,
     ]);
     // Trees resolve per species now, so the general canopy pool is no longer the whole story.
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
@@ -270,6 +280,14 @@ describe('every generated asset is reachable', () => {
       CONTACT_SHADOW_SPRITE,
       LIGHT_POOL_SPRITE,
       ...CANOPY_SPRITES,
+      /*
+       * The elevated library reaches the drawing by two routes, and both are tables rather than
+       * queries: a sprite family is swapped for its twin when Visualise draws it, and a skin is
+       * named by the face it goes on. So reachability here is the same question it is for the plan
+       * camera — is anything going to ask for this file — asked of the two tables that ask.
+       */
+      ...(Object.values(ELEVATED_TWINS) as AssetId[]),
+      ...SKIN_ASSETS,
     ]);
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
     for (const material of Object.keys(MATERIAL_ASSETS)) {

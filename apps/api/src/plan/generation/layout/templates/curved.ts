@@ -1,3 +1,5 @@
+import type { CandidateParams } from '../../design/types.js';
+import { DEFAULT_PARAMS } from '../../knowledge/archetypes/types.js';
 import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
@@ -31,16 +33,20 @@ const LAWN_WAVE = 0.13;
  * the utility corner is tucked into the bay nearest the gate, and the path curves rather than
  * cutting straight across. Nothing here is parallel to anything except the terrace.
  */
-export function curved(request: SketchRequest, room: Room): LayoutSketch {
+export function curved(
+  request: SketchRequest,
+  room: Room,
+  params: CandidateParams = { archetype: 'sweeping_lawn', ...DEFAULT_PARAMS },
+): LayoutSketch {
   const s = request.scale;
   const D = room.uMax;
   const b = borderDepth(s);
-  const terrace = terraceRect(request, room);
+  const terrace = terraceRect(request, room, params.terraceDepth);
   const T = terrace.u1;
 
   const gate = request.gateSide ?? 'right';
   const gateSign = gate === 'right' ? 1 : -1;
-  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin, params.terraceDepth);
 
   // The part of the room behind the terrace: on an L-plot, the deep limb alone.
   const deep = roomBehind(room, T + 0.4);
@@ -62,7 +68,15 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
     const cv = (deep.vMin + deep.vMax) / 2;
     const a = (end - start) / 2;
     const bb = (deep.vMax - deep.vMin - 2 * b) / 2;
-    const phase = gate === 'right' ? Math.PI / 4 : -Math.PI / 4 + Math.PI;
+    /*
+     * `lawnBias` flips which side the bulge lands on. `gate` is the default and the reasoning
+     * above: the bulge goes away from the gate, where the far room wants the space, and the pinch
+     * goes on the gate side, where the utility corner wants a deeper bay. `away` is the mirror.
+     * `centre` has no meaning for a two-lobed wave and falls back to the default rather than
+     * drawing a shape nobody asked for.
+     */
+    const bulgeSide = params.lawnBias === 'away' ? (gate === 'right' ? 'left' : 'right') : gate;
+    const phase = bulgeSide === 'right' ? Math.PI / 4 : -Math.PI / 4 + Math.PI;
 
     const points: LocalPoint[] = [];
     for (let i = 0; i < LAWN_SAMPLES; i += 1) {
@@ -96,7 +110,10 @@ export function curved(request: SketchRequest, room: Room): LayoutSketch {
       {
         id: 'far-room',
         kind: 'far-room',
-        anchor: { u: farRoom.u, v: farV(b + 2.4 * s) },
+        anchor: {
+          u: farRoom.u,
+          v: params.destination === 'far-centre' ? (deep.vMin + deep.vMax) / 2 : farV(b + 2.4 * s),
+        },
         maxSize: { width: 3.8 * s, depth: farRoom.depth },
       },
       {

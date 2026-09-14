@@ -9,12 +9,6 @@ const CONNECTION_STRING =
 
 export interface TestDatabase {
   db: Database;
-  /**
-   * Empties the plan table. The geometry tests never needed this — validation builds its
-   * geometry inline and writes nothing — but the persistence tests insert rows, and a suite
-   * that leaves them behind makes the next run's "list projects" assertions depend on history.
-   */
-  truncate: () => Promise<void>;
   close: () => Promise<void>;
 }
 
@@ -27,6 +21,13 @@ export interface TestDatabase {
  *
  * Returns null when the database is unreachable so suites can skip with a clear message
  * instead of failing with a connection error.
+ *
+ * **There is deliberately no `truncate` here, and there was.** Two suites now write rows, vitest
+ * runs files concurrently, and a helper that empties a shared table deletes whatever the suite
+ * beside it is using — as well as every plan the developer has open in the browser, a trap CLAUDE.md
+ * recorded twice before this. Each suite removes the rows it created instead, which is what a test
+ * sharing a database should do anyway and what the cascading foreign key on `design_events` makes
+ * a one-liner.
  */
 export async function connectTestDatabase(): Promise<TestDatabase | null> {
   // `jit: 'off'` for the reason `db.module.ts` gives: the fill queries are compiled otherwise.
@@ -46,9 +47,6 @@ export async function connectTestDatabase(): Promise<TestDatabase | null> {
   const db = drizzle(client, { schema });
   return {
     db,
-    truncate: async () => {
-      await client`truncate table plan_projects`;
-    },
     close: () => client.end({ timeout: 5 }),
   };
 }

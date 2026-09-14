@@ -157,17 +157,17 @@
     "concepts": [
       {
         "id": "c2-0",
-        "name": "Terrace and lawn",
+        "name": "Courtyard",
         "recommended": true,
-        "summary": "A terrace across the doors, one clean lawn set off-centre so the planting runs deeper down one side, and the gathering places in the far corner.",
-        "style": "Low-maintenance / Structured",
+        "summary": "A paved floor corner to corner with deep planting against the walls and one thing worth looking at opposite the doors. Nothing in the middle, because the middle is where you stand.",
+        "style": "Minimalist / Structured",
         "budget": "low",
         "estimatedBudget": "medium",
         "maintenance": "low",
         "requestedFeaturesIncluded": [
           {
             "feature": "seating",
-            "label": "Seating / dining area",
+            "label": "Seating area",
             "included": true
           },
           {
@@ -178,7 +178,7 @@
         ],
         "elements": [
           {
-            "id": "c2-0-e5",
+            "id": "c2-0-e3",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -208,7 +208,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e6",
+            "id": "c2-0-e4",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -238,7 +238,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e7",
+            "id": "c2-0-e5",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -268,7 +268,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e8",
+            "id": "c2-0-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -298,7 +298,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e9",
+            "id": "c2-0-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -329,7 +329,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e10",
+            "id": "c2-0-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -360,7 +360,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e11",
+            "id": "c2-0-e9",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -368,76 +368,20 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 0.15,
-                  "y": 11.85
+                  "x": 0,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 11.85
+                  "x": 9,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 10.472938
+                  "x": 9,
+                  "y": 10.65
                 },
                 {
-                  "x": 0.15,
-                  "y": 10.472938
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "shrubs",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-0-e12",
-            "category": "planting-bed",
-            "role": "fill",
-            "name": "Flowering border",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 0.15,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 9.767203
-                },
-                {
-                  "x": 2.67,
-                  "y": 9.414336
-                },
-                {
-                  "x": 2.67,
-                  "y": 8.708602
-                },
-                {
-                  "x": 1.35,
-                  "y": 8.355734
-                },
-                {
-                  "x": 1.35,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.65
-                },
-                {
-                  "x": 0.15,
-                  "y": 7.65
+                  "x": 0,
+                  "y": 10.65
                 }
               ],
               "cornerRadius": 0
@@ -456,10 +400,10 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.575
               },
-              "width": 8,
-              "depth": 3,
+              "width": 6.6,
+              "depth": 6.15,
               "rotation": 180
             },
             "zone": "back",
@@ -474,7 +418,7 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.575
               },
               "width": 3,
               "depth": 2.4,
@@ -486,51 +430,15 @@
             "symbol": "sofa-set"
           },
           {
-            "id": "c2-0-e3",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Tree",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 1.9,
-                "y": 10.1
-              },
-              "radius": 1.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "symbol": "tree-evergreen",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-0-e4",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Tree",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 7.1,
-                "y": 10.1
-              },
-              "radius": 1.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "symbol": "tree-deciduous",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-0-e13",
+            "id": "c2-0-e10",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 5.1732903653632,
-                "y": 11.157027707761488
+                "x": 6.5554276237801385,
+                "y": 11.323195160932926
               },
               "radius": 0.6
             },
@@ -538,24 +446,81 @@
             "material": "shrubs",
             "height": 1.3,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e11",
+            "bedId": "c2-0-e9",
             "plantingStyle": "low-maintenance"
           }
-        ]
+        ],
+        "strategy": {
+          "briefId": "A",
+          "archetype": "courtyard",
+          "candidateId": "c2-0"
+        },
+        "score": {
+          "total": 0.8770588235294118,
+          "categories": {
+            "style": 1,
+            "privacy": 1,
+            "grouping": 1,
+            "hierarchy": 1,
+            "featureFit": 0.8,
+            "proportion": 0.97,
+            "circulation": 0.5,
+            "buildability": 1
+          },
+          "issues": [
+            {
+              "code": "terrace-oversized",
+              "principle": "proportion",
+              "severity": "minor",
+              "message": "The terrace is 53% of the garden.",
+              "subjects": [],
+              "repair": "shrink-terrace"
+            }
+          ],
+          "tier": "realised"
+        },
+        "explanation": {
+          "strategy": "courtyard",
+          "briefId": "A",
+          "intent": "relaxation",
+          "emphasis": "planted",
+          "rationale": "A garden built round deep planting and somewhere quiet to sit in it, organised around the terrace area. The terrace area is what this concept is not worth offering without.",
+          "decisions": [
+            {
+              "kind": "composition",
+              "text": "Courtyard. No lawn fits behind the doors: a room to be in rather than a view to look at.",
+              "subjects": []
+            },
+            {
+              "kind": "chosen-from",
+              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "subjects": []
+            },
+            {
+              "kind": "terrace-at-doors",
+              "text": "Put the seating patio directly outside the garden doors, 6.6 × 6.2 m.",
+              "subjects": [
+                "c2-0-e1"
+              ]
+            }
+          ],
+          "excludedFeatures": [],
+          "repairs": []
+        }
       },
       {
         "id": "c2-1",
-        "name": "Sweeping lawn",
+        "name": "Terrace and lawn",
         "recommended": false,
-        "summary": "A flowing lawn that bulges and narrows between deep planted bays, with a path that curves out of sight to a seat at the far end.",
-        "style": "Low-maintenance / Natural",
+        "summary": "A terrace across the doors, one clean lawn set off-centre so the planting runs deeper down one side, and the gathering places in the far corner.",
+        "style": "Minimalist / Structured",
         "budget": "medium",
         "estimatedBudget": "medium",
         "maintenance": "low",
         "requestedFeaturesIncluded": [
           {
             "feature": "seating",
-            "label": "Seating / dining area",
+            "label": "Seating area",
             "included": true
           },
           {
@@ -796,27 +761,23 @@
                   "y": 10.472938
                 },
                 {
-                  "x": 1.41,
+                  "x": 1.35,
                   "y": 9.767203
                 },
                 {
-                  "x": 2.452461,
-                  "y": 9.296714
+                  "x": 2.67,
+                  "y": 9.414336
                 },
                 {
                   "x": 2.67,
-                  "y": 9.061469
+                  "y": 8.708602
                 },
                 {
-                  "x": 2.452461,
-                  "y": 8.826224
-                },
-                {
-                  "x": 1.41,
+                  "x": 1.35,
                   "y": 8.355734
                 },
                 {
-                  "x": 1.358501787,
+                  "x": 1.35,
                   "y": 7.75
                 },
                 {
@@ -885,7 +846,7 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 7.1,
+                "x": 1.9,
                 "y": 10.1
               },
               "radius": 1.6
@@ -903,7 +864,7 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.9,
+                "x": 7.1,
                 "y": 10.1
               },
               "radius": 1.6
@@ -933,21 +894,85 @@
             "bedId": "c2-1-e11",
             "plantingStyle": "low-maintenance"
           }
-        ]
+        ],
+        "strategy": {
+          "briefId": "B",
+          "archetype": "terrace_and_lawn",
+          "candidateId": "c2-1"
+        },
+        "score": {
+          "total": 0.8447316821465428,
+          "categories": {
+            "style": 0.8333333333333334,
+            "privacy": 1,
+            "grouping": 1,
+            "hierarchy": 1,
+            "featureFit": 0.8,
+            "proportion": 0.8423684210526317,
+            "circulation": 0.5,
+            "buildability": 1
+          },
+          "issues": [
+            {
+              "code": "leftover-pocket",
+              "principle": "proportion",
+              "severity": "major",
+              "message": "43% of the ground has nothing designed onto it.",
+              "subjects": [],
+              "repair": "enlarge-lawn"
+            },
+            {
+              "code": "too-many-materials",
+              "principle": "style",
+              "severity": "minor",
+              "message": "3 different materials, where a minimalist plan wants at most 2.",
+              "subjects": []
+            }
+          ],
+          "tier": "realised"
+        },
+        "explanation": {
+          "strategy": "terrace_and_lawn",
+          "briefId": "B",
+          "intent": "relaxation",
+          "emphasis": "open",
+          "rationale": "A garden built round one generous open lawn, organised around the terrace area. The terrace area is what this concept is not worth offering without.",
+          "decisions": [
+            {
+              "kind": "composition",
+              "text": "Terrace and lawn. A terrace, a gap and a rear border leave 2.5 m of lawn, which reads as a strip.",
+              "subjects": []
+            },
+            {
+              "kind": "chosen-from",
+              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "subjects": []
+            },
+            {
+              "kind": "terrace-at-doors",
+              "text": "Put the seating patio directly outside the garden doors, 8.0 × 3.0 m.",
+              "subjects": [
+                "c2-1-e1"
+              ]
+            }
+          ],
+          "excludedFeatures": [],
+          "repairs": []
+        }
       },
       {
         "id": "c2-2",
-        "name": "Formal axis",
+        "name": "Courtyard",
         "recommended": false,
-        "summary": "Everything mirrored about the view from the doors: a centred terrace, a paved line down the middle of the lawn, and a focal point at its end.",
-        "style": "Low-maintenance / Formal",
+        "summary": "A paved floor corner to corner with deep planting against the walls and one thing worth looking at opposite the doors. Nothing in the middle, because the middle is where you stand.",
+        "style": "Minimalist / Structured",
         "budget": "low",
         "estimatedBudget": "medium",
         "maintenance": "low",
         "requestedFeaturesIncluded": [
           {
             "feature": "seating",
-            "label": "Seating / dining area",
+            "label": "Seating area",
             "included": true
           },
           {
@@ -958,7 +983,7 @@
         ],
         "elements": [
           {
-            "id": "c2-2-e6",
+            "id": "c2-2-e4",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -988,7 +1013,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e7",
+            "id": "c2-2-e5",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1018,7 +1043,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e8",
+            "id": "c2-2-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1048,7 +1073,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e9",
+            "id": "c2-2-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1078,7 +1103,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e10",
+            "id": "c2-2-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -1109,7 +1134,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e11",
+            "id": "c2-2-e9",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -1140,7 +1165,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e12",
+            "id": "c2-2-e10",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -1148,60 +1173,20 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 0.15,
-                  "y": 11.85
+                  "x": 0,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 11.85
+                  "x": 9,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 10.472938
+                  "x": 9,
+                  "y": 10.65
                 },
                 {
-                  "x": 0.15,
-                  "y": 10.472938
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "ornamental-grasses",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e13",
-            "category": "planting-bed",
-            "role": "fill",
-            "name": "Right border",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 0.15,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.65
-                },
-                {
-                  "x": 0.15,
-                  "y": 7.65
+                  "x": 0,
+                  "y": 10.65
                 }
               ],
               "cornerRadius": 0
@@ -1220,10 +1205,10 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.575
               },
-              "width": 8,
-              "depth": 3,
+              "width": 6.6,
+              "depth": 6.15,
               "rotation": 180
             },
             "zone": "back",
@@ -1238,7 +1223,7 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.575
               },
               "width": 0.7,
               "depth": 1.9,
@@ -1258,7 +1243,7 @@
               "kind": "rect",
               "centre": {
                 "x": 3.45,
-                "y": 6.25
+                "y": 7.575
               },
               "width": 0.7,
               "depth": 1.9,
@@ -1270,51 +1255,15 @@
             "symbol": "lounger"
           },
           {
-            "id": "c2-2-e4",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Tree",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 7.1,
-                "y": 10.1
-              },
-              "radius": 1.6
-            },
-            "zone": "back",
-            "material": "ornamental-grasses",
-            "symbol": "tree-evergreen",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e5",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Tree",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 1.9,
-                "y": 10.1
-              },
-              "radius": 1.6
-            },
-            "zone": "back",
-            "material": "ornamental-grasses",
-            "symbol": "tree-deciduous",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e14",
+            "id": "c2-2-e11",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 4.276367758731557,
-                "y": 11.1613883078113
+                "x": 5.24288774109073,
+                "y": 11.340179920449618
               },
               "radius": 0.6
             },
@@ -1322,10 +1271,67 @@
             "material": "shrubs",
             "height": 1.3,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e12",
+            "bedId": "c2-2-e10",
             "plantingStyle": "low-maintenance"
           }
-        ]
+        ],
+        "strategy": {
+          "briefId": "C",
+          "archetype": "courtyard",
+          "candidateId": "c2-2"
+        },
+        "score": {
+          "total": 0.8770588235294118,
+          "categories": {
+            "style": 1,
+            "privacy": 1,
+            "grouping": 1,
+            "hierarchy": 1,
+            "featureFit": 0.8,
+            "proportion": 0.97,
+            "circulation": 0.5,
+            "buildability": 1
+          },
+          "issues": [
+            {
+              "code": "terrace-oversized",
+              "principle": "proportion",
+              "severity": "minor",
+              "message": "The terrace is 53% of the garden.",
+              "subjects": [],
+              "repair": "shrink-terrace"
+            }
+          ],
+          "tier": "realised"
+        },
+        "explanation": {
+          "strategy": "courtyard",
+          "briefId": "C",
+          "intent": "relaxation",
+          "emphasis": "social",
+          "rationale": "A garden built round eating and entertaining outside, organised around the terrace area. The terrace area is what this concept is not worth offering without.",
+          "decisions": [
+            {
+              "kind": "composition",
+              "text": "Courtyard. No lawn fits behind the doors: a room to be in rather than a view to look at.",
+              "subjects": []
+            },
+            {
+              "kind": "chosen-from",
+              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "subjects": []
+            },
+            {
+              "kind": "terrace-at-doors",
+              "text": "Put the seating patio directly outside the garden doors, 6.6 × 6.2 m.",
+              "subjects": [
+                "c2-2-e1"
+              ]
+            }
+          ],
+          "excludedFeatures": [],
+          "repairs": []
+        }
       }
     ],
     "selectedId": "c2-0",
@@ -1335,7 +1341,7 @@
   "layout": {
     "elements": [
       {
-        "id": "c2-0-e5",
+        "id": "c2-0-e3",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1365,7 +1371,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e6",
+        "id": "c2-0-e4",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1395,7 +1401,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e7",
+        "id": "c2-0-e5",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1425,7 +1431,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e8",
+        "id": "c2-0-e6",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1455,7 +1461,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e9",
+        "id": "c2-0-e7",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1486,7 +1492,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e10",
+        "id": "c2-0-e8",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1517,7 +1523,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e11",
+        "id": "c2-0-e9",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -1525,76 +1531,20 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 0.15,
-              "y": 11.85
+              "x": 0,
+              "y": 12
             },
             {
-              "x": 8.85,
-              "y": 11.85
+              "x": 9,
+              "y": 12
             },
             {
-              "x": 8.85,
-              "y": 10.472938
+              "x": 9,
+              "y": 10.65
             },
             {
-              "x": 0.15,
-              "y": 10.472938
-            }
-          ],
-          "cornerRadius": 0
-        },
-        "zone": "back",
-        "fillKind": "accent",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e12",
-        "category": "planting-bed",
-        "role": "fill",
-        "name": "Flowering border",
-        "shape": {
-          "kind": "polygon",
-          "points": [
-            {
-              "x": 0.15,
-              "y": 10.472938
-            },
-            {
-              "x": 1.35,
-              "y": 10.472938
-            },
-            {
-              "x": 1.35,
-              "y": 9.767203
-            },
-            {
-              "x": 2.67,
-              "y": 9.414336
-            },
-            {
-              "x": 2.67,
-              "y": 8.708602
-            },
-            {
-              "x": 1.35,
-              "y": 8.355734
-            },
-            {
-              "x": 1.35,
-              "y": 7.75
-            },
-            {
-              "x": 0.5,
-              "y": 7.75
-            },
-            {
-              "x": 0.5,
-              "y": 7.65
-            },
-            {
-              "x": 0.15,
-              "y": 7.65
+              "x": 0,
+              "y": 10.65
             }
           ],
           "cornerRadius": 0
@@ -1613,10 +1563,10 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 6.25
+            "y": 7.575
           },
-          "width": 8,
-          "depth": 3,
+          "width": 6.6,
+          "depth": 6.15,
           "rotation": 180
         },
         "zone": "back",
@@ -1631,7 +1581,7 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 6.25
+            "y": 7.575
           },
           "width": 3,
           "depth": 2.4,
@@ -1643,51 +1593,15 @@
         "symbol": "sofa-set"
       },
       {
-        "id": "c2-0-e3",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Tree",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 1.9,
-            "y": 10.1
-          },
-          "radius": 1.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "symbol": "tree-evergreen",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e4",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Tree",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 7.1,
-            "y": 10.1
-          },
-          "radius": 1.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "symbol": "tree-deciduous",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e13",
+        "id": "c2-0-e10",
         "category": "planting-bed",
         "role": "feature",
         "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 5.1732903653632,
-            "y": 11.157027707761488
+            "x": 6.5554276237801385,
+            "y": 11.323195160932926
           },
           "radius": 0.6
         },
@@ -1695,14 +1609,14 @@
         "material": "shrubs",
         "height": 1.3,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e11",
+        "bedId": "c2-0-e9",
         "plantingStyle": "low-maintenance"
       }
     ],
     "seededFrom": "c2-0",
     "pristine": [
       {
-        "id": "c2-0-e5",
+        "id": "c2-0-e3",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1732,7 +1646,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e6",
+        "id": "c2-0-e4",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1762,7 +1676,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e7",
+        "id": "c2-0-e5",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1792,7 +1706,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e8",
+        "id": "c2-0-e6",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1822,7 +1736,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e9",
+        "id": "c2-0-e7",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1853,7 +1767,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e10",
+        "id": "c2-0-e8",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1884,7 +1798,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e11",
+        "id": "c2-0-e9",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -1892,76 +1806,20 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 0.15,
-              "y": 11.85
+              "x": 0,
+              "y": 12
             },
             {
-              "x": 8.85,
-              "y": 11.85
+              "x": 9,
+              "y": 12
             },
             {
-              "x": 8.85,
-              "y": 10.472938
+              "x": 9,
+              "y": 10.65
             },
             {
-              "x": 0.15,
-              "y": 10.472938
-            }
-          ],
-          "cornerRadius": 0
-        },
-        "zone": "back",
-        "fillKind": "accent",
-        "material": "shrubs",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e12",
-        "category": "planting-bed",
-        "role": "fill",
-        "name": "Flowering border",
-        "shape": {
-          "kind": "polygon",
-          "points": [
-            {
-              "x": 0.15,
-              "y": 10.472938
-            },
-            {
-              "x": 1.35,
-              "y": 10.472938
-            },
-            {
-              "x": 1.35,
-              "y": 9.767203
-            },
-            {
-              "x": 2.67,
-              "y": 9.414336
-            },
-            {
-              "x": 2.67,
-              "y": 8.708602
-            },
-            {
-              "x": 1.35,
-              "y": 8.355734
-            },
-            {
-              "x": 1.35,
-              "y": 7.75
-            },
-            {
-              "x": 0.5,
-              "y": 7.75
-            },
-            {
-              "x": 0.5,
-              "y": 7.65
-            },
-            {
-              "x": 0.15,
-              "y": 7.65
+              "x": 0,
+              "y": 10.65
             }
           ],
           "cornerRadius": 0
@@ -1980,10 +1838,10 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 6.25
+            "y": 7.575
           },
-          "width": 8,
-          "depth": 3,
+          "width": 6.6,
+          "depth": 6.15,
           "rotation": 180
         },
         "zone": "back",
@@ -1998,7 +1856,7 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 6.25
+            "y": 7.575
           },
           "width": 3,
           "depth": 2.4,
@@ -2010,51 +1868,15 @@
         "symbol": "sofa-set"
       },
       {
-        "id": "c2-0-e3",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Tree",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 1.9,
-            "y": 10.1
-          },
-          "radius": 1.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "symbol": "tree-evergreen",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e4",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Tree",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 7.1,
-            "y": 10.1
-          },
-          "radius": 1.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "symbol": "tree-deciduous",
-        "plantingStyle": "low-maintenance"
-      },
-      {
-        "id": "c2-0-e13",
+        "id": "c2-0-e10",
         "category": "planting-bed",
         "role": "feature",
         "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 5.1732903653632,
-            "y": 11.157027707761488
+            "x": 6.5554276237801385,
+            "y": 11.323195160932926
           },
           "radius": 0.6
         },
@@ -2062,7 +1884,7 @@
         "material": "shrubs",
         "height": 1.3,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e11",
+        "bedId": "c2-0-e9",
         "plantingStyle": "low-maintenance"
       }
     ]

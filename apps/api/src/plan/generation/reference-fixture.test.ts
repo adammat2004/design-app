@@ -4,15 +4,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   computeZones,
   effectiveZoneIds,
-  gardenDirection,
   measureComposition,
   PlanDocumentSchema,
-  polygonCentroid,
   readPlanDocument,
   rectangleHouse,
   rectanglePlotOutline,
   suggestedAccess,
-  zoneAt,
   type GardenBrief,
   type PlanDocument,
 } from '@garden-studio/schema';
@@ -22,7 +19,8 @@ import { PlacementService } from './placement.service.js';
 import { FillService } from './fill.service.js';
 import { GeometryValidationService } from '../geometry-validation.service.js';
 import { compositionRules, describeComposition } from './composition-rules.js';
-import { backFrame, gardenRoom, localBox } from './layout/frame.js';
+import { analyseSite } from './design/site-analysis.js';
+import { describeScore } from './design/report.js';
 
 const connection = await connectTestDatabase();
 afterAll(async () => {
@@ -121,32 +119,20 @@ function extraDocument(name: string) {
 }
 
 /**
- * How deep the back room is, so a shallow garden's terrace is judged against the room rather than
- * against the floor it could never reach. Mirrors what `build` computes for the grammar.
+ * How deep the back room is, and which zone the grammar designed in.
+ *
+ * Both come from `analyseSite`, which is the same derivation `build` runs — this file used to
+ * re-implement the frame, the room and the zone lookup itself, and a second copy of "where is the
+ * garden" is exactly the kind of duplication that silently stops agreeing with the generator it is
+ * supposed to be measuring.
  */
-function backRoomOf(document: PlanDocument) {
-  const house = document.site.house;
-  const garden = gardenDirection(document.site);
-  if (!house || !garden) return null;
-  const frame = backFrame(house, garden);
-  if (!frame) return null;
-  const boundary = document.site.vertices.map(({ x, y }) => ({ x, y }));
-  const zones = computeZones(boundary, house);
-  const ticked = effectiveZoneIds(document.site.selectedZoneIds, zones);
-  const scope = ticked.length > 0 ? ticked : zones.map((zone) => zone.id);
-  const room = gardenRoom(boundary, house, frame, scope);
-  return room.length >= 3 ? { frame, room, zones } : null;
-}
-
 function roomDepthOf(document: PlanDocument): number | null {
-  const back = backRoomOf(document);
-  return back ? localBox(back.room, back.frame).uMax : null;
+  return analyseSite(document).roomDepth;
 }
 
 /** The zone the grammar designed in: where the terrace, the lawn and the beds are. */
 function mainZoneId(document: PlanDocument) {
-  const back = backRoomOf(document);
-  return back ? (zoneAt(polygonCentroid(back.room), back.zones)?.id ?? null) : null;
+  return analyseSite(document).mainZoneId;
 }
 
 /**
@@ -258,6 +244,13 @@ describe.skipIf(!connection)('reference garden fixtures', () => {
           if (process.env.COMPOSITION_REPORT === '1') {
             console.log(describeComposition(`${name}/${concept.name}`, whole));
             console.log(describeComposition('  garden only', room));
+            /*
+             * The design score beside the composition shares, which is the point of printing both:
+             * the shares say what the plan is made of and the score says how well it is arranged,
+             * and a pass that improves one at the expense of the other is exactly what a single
+             * number would hide.
+             */
+            if (concept.score) console.log(describeScore('  design score', concept.score));
           } else {
             expect({ concept: concept.name, violations: compositionRules(room, context) }).toEqual({
               concept: concept.name,

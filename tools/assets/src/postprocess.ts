@@ -28,6 +28,12 @@ export interface Processed {
   opaqueRadiusRatio?: number;
   /** Textures: edge mismatch after treatment, 0 (perfect) to 1. */
   seamScore?: number;
+  /** Elevated sprites: where the opaque pixels are, as fractions of the image. */
+  opaqueBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+  /** Elevated sprites: how much of the bottom edge band is opaque, 0-1. The ground-plane detector. */
+  footAlpha?: number;
+  /** Anything the QA pass found wrong with the picture. Empty is a pass. */
+  warnings?: string[];
 }
 
 /**
@@ -107,6 +113,278 @@ function opaqueRadiusRatio(image: Raw): number {
   }
 
   return Math.round((furthest / half) * 1000) / 1000;
+}
+
+/* ---------------------------------------------------------------- elevated sprites */
+
+/**
+ * An elevated sprite: trimmed, **bottom-aligned** in its frame, and measured.
+ *
+ * The difference from `processSprite` is one line and it is the whole of the 2.5D placement model.
+ * A plan sprite is centred, because a plan sprite *is* its footprint and the middle of the image is
+ * the middle of the thing. An elevated one is its footprint with its height leaning up the screen,
+ * so the object stands on the **bottom** edge of the frame and everything above the footprint band
+ * is height. Centre it and every object floats half its own height off the ground it stands on.
+ *
+ * `fit: 'contain'` with `position: 'bottom'` does exactly that: scale to fit, then pad the
+ * *remaining* space above rather than splitting it. The model is asked for the same framing, so on
+ * a well-generated asset there is almost nothing to pad — this is the guarantee, not the mechanism.
+ */
+export async function processElevatedSprite(
+  png: Buffer,
+  sizePx: { w: number; h: number },
+  footprintDepth: number,
+  frameDepth: number,
+): Promise<Processed> {
+  /*
+   * Clipping is measured on what the **model returned**, before anything is trimmed, and that is
+   * the only place it can be measured at all.
+   *
+   * The first version checked the finished file and warned on every asset. Of course it did: a
+   * contain-fit puts the content hard against the two edges of whichever axis limited it, so
+   * "touches an edge" is true of every correctly framed sprite by construction. What is actually
+   * worth knowing is whether the *model* ran the object off its own canvas, and after a trim that
+   * evidence is gone.
+   */
+  const original = await raw(sharp(png).ensureAlpha());
+  const clipped = touchesBorder(original);
+
+  const trimmed = await sharp(png).ensureAlpha().trim({ threshold: 12 }).toBuffer();
+
+  const fitted = await sharp(trimmed)
+    .resize(sizePx.w, sizePx.h, {
+      fit: 'contain',
+      position: 'bottom',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+      kernel: 'lanczos3',
+    })
+    .toBuffer();
+
+  const image = await raw(sharp(fitted));
+  /*
+   * Lossy with alpha rather than the lossless a plan sprite gets. The plan library is already 25 MB
+   * across 99 files and this one is more detailed; at quality 90 the difference is invisible at
+   * every zoom the plan supports and the payload is roughly a fifth. Alpha is kept exact by
+   * `alphaQuality: 100`, which matters more than the colour: a soft alpha edge is what stops a
+   * sprite showing a fringe against the lawn.
+   */
+  const webp = await fromRaw(image).webp({ quality: 90, alphaQuality: 100 }).toBuffer();
+
+  const bounds = opaqueBounds(image);
+  const foot = footAlpha(image);
+
+  return {
+    webp,
+    widthPx: image.width,
+    heightPx: image.height,
+    meanColour: meanColour(image),
+    opaqueBounds: bounds,
+    footAlpha: foot,
+    warnings: elevatedWarnings(image, bounds, foot, footprintDepth, frameDepth, clipped),
+  };
+}
+
+/** Whether any opaque pixel sits on the image's own border: the model cropped the object. */
+function touchesBorder(image: Raw): boolean {
+  const opaque = (x: number, y: number) => image.data[(y * image.width + x) * 4 + 3]! >= 64;
+
+  for (let x = 0; x < image.width; x += 1) {
+    if (opaque(x, 0) || opaque(x, image.height - 1)) return true;
+  }
+  for (let y = 0; y < image.height; y += 1) {
+    if (opaque(0, y) || opaque(image.width - 1, y)) return true;
+  }
+  return false;
+}
+
+/** Where the opaque pixels are, as fractions of the image. `null`-ish empty box when there are none. */
+export function opaqueBounds(image: Raw): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = image.width;
+  let minY = image.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      if (image.data[(y * image.width + x) * 4 + 3]! < 64) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+  return {
+    minX: round(minX / image.width),
+    minY: round(minY / image.height),
+    maxX: round((maxX + 1) / image.width),
+    maxY: round((maxY + 1) / image.height),
+  };
+}
+
+/** How much of a horizontal band across the image is opaque, 0-1. */
+function bandCoverage(image: Raw, from: number, to: number): number {
+  const first = Math.max(0, Math.min(image.height - 1, Math.round(image.height * from)));
+  const last = Math.max(first + 1, Math.min(image.height, Math.round(image.height * to)));
+
+  let opaque = 0;
+  let total = 0;
+  for (let y = first; y < last; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      if (image.data[(y * image.width + x) * 4 + 3]! >= 64) opaque += 1;
+      total += 1;
+    }
+  }
+  return total === 0 ? 0 : opaque / total;
+}
+
+/** How much of the bottom 2% of the frame is opaque. Recorded for the audit; see `spreadsAtTheFoot`. */
+export function footAlpha(image: Raw): number {
+  return Math.round(bandCoverage(image, 0.98, 1) * 1000) / 1000;
+}
+
+/**
+ * Whether the object gets **wider** where it meets the ground than it is through its body.
+ *
+ * This is the ground-plane detector, and it is the second attempt. The first compared the bottom
+ * band against a fixed threshold, on the reasoning that an object's own feet are a few percent of
+ * the frame and a baked patch of grass is most of it. That is true of a sofa and false of a great
+ * many things: a planter is a box, a raised bed is a box, a trampoline is a disc — each of them
+ * fills its own frame at the bottom because its footprint *is* its frame, and each was flagged.
+ *
+ * What actually distinguishes a ground plane is not how wide it is but that it **spreads**: a patch
+ * of grass or a soft ellipse reaches out past the object standing on it, where legs, a pot's base
+ * and a trampoline's rim never reach past the body above them. Comparing the two bands asks that
+ * question directly and is blind to how wide the object happens to be.
+ */
+function spreadsAtTheFoot(image: Raw): boolean {
+  const foot = bandCoverage(image, 0.96, 1);
+  const body = bandCoverage(image, 0.45, 0.65);
+  return foot > 0.5 && foot > body * 1.2 + 0.05;
+}
+
+/**
+ * What the QA pass can check without looking at the picture.
+ *
+ * Deliberately a list of warnings rather than a throw. Some of these are judgements a number gets
+ * *mostly* right — a very wide low planter legitimately has a broad foot — and a tool that refused
+ * them outright would have the author editing thresholds instead of looking at assets. `--strict`
+ * is what turns them into a refusal, for a batch run where nobody is watching.
+ *
+ * Everything a number cannot answer — is the camera angle right, is the light on the correct side,
+ * are the proportions believable — is on the contact sheet instead. See `docs/visualise-asset-style.md`.
+ */
+function elevatedWarnings(
+  image: Raw,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  foot: number,
+  footprintDepth: number,
+  frameDepth: number,
+  clipped: boolean,
+): string[] {
+  const warnings: string[] = [];
+
+  const corners = [
+    0,
+    (image.width - 1) * 4,
+    (image.height - 1) * image.width * 4,
+    ((image.height - 1) * image.width + image.width - 1) * 4,
+  ];
+  if (corners.some((index) => image.data[index + 3]! >= 64)) {
+    warnings.push('a corner is opaque — the background is not transparent');
+  }
+
+  const footprintShare = frameDepth > 0 ? footprintDepth / frameDepth : 1;
+
+  if (spreadsAtTheFoot(image)) {
+    warnings.push(
+      `spreads at the foot (${(foot * 100).toFixed(0)}% of the bottom edge) — a ground plane or a baked shadow`,
+    );
+  }
+
+  /*
+   * A contain fit makes the limiting axis fill the frame exactly, so "does it fill the width" is
+   * the wrong question — it is only ever true of whichever axis limited. What is worth knowing is
+   * whether the *other* axis is badly short, which means the model's proportions disagree with the
+   * metres the family declares and the object will be drawn smaller than its footprint.
+   */
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (Math.max(width, height) < 0.95) {
+    warnings.push('fills neither axis of its frame — it was trimmed to nothing sensible');
+  }
+  if (Math.min(width, height) < 0.55) {
+    warnings.push(
+      `only ${(Math.min(width, height) * 100).toFixed(0)}% of one axis — the model's proportions ` +
+        'disagree with the size this family declares',
+    );
+  }
+  if (clipped) {
+    warnings.push('the model ran the object off its own canvas — it is cropped');
+  }
+  // The object has to reach down into its own footprint band, or it is drawn hovering.
+  if (bounds.maxY < 1 - footprintShare) {
+    warnings.push('does not reach its footprint band — the object will float above the ground');
+  }
+
+  const fringe = edgeFringe(image);
+  if (fringe > 0.22) {
+    warnings.push(`soft edge is ${(fringe * 100).toFixed(0)}% off the interior colour — a halo`);
+  }
+
+  return warnings;
+}
+
+/**
+ * How far the half-transparent edge pixels sit from the colour of the solid interior.
+ *
+ * A clean cut-out fades an object's own colour to nothing. A matte-line halo fades it to whatever
+ * the model's background was — usually white — and that difference survives every tint and shows
+ * against every dark surface. Measured as a mean channel distance, normalised.
+ */
+export function edgeFringe(image: Raw): number {
+  const { data } = image;
+  let edgeR = 0;
+  let edgeG = 0;
+  let edgeB = 0;
+  let edgeN = 0;
+  let inR = 0;
+  let inG = 0;
+  let inB = 0;
+  let inN = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3]!;
+    if (alpha >= 10 && alpha <= 60) {
+      edgeR += data[i]!;
+      edgeG += data[i + 1]!;
+      edgeB += data[i + 2]!;
+      edgeN += 1;
+    } else if (alpha >= 250) {
+      inR += data[i]!;
+      inG += data[i + 1]!;
+      inB += data[i + 2]!;
+      inN += 1;
+    }
+  }
+
+  if (edgeN === 0 || inN === 0) return 0;
+
+  const distance =
+    (Math.abs(edgeR / edgeN - inR / inN) +
+      Math.abs(edgeG / edgeN - inG / inN) +
+      Math.abs(edgeB / edgeN - inB / inN)) /
+    3;
+
+  return Math.round((distance / 255) * 1000) / 1000;
 }
 
 /* ---------------------------------------------------------------- textures */

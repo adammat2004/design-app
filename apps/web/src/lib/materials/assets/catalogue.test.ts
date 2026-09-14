@@ -33,12 +33,40 @@ describe('the catalogue', () => {
     }
   });
 
+  /**
+   * What each kind has to record, and **the two cameras record different things**.
+   *
+   * A plan sprite is centred and inscribed in a circle, so the number the renderer needs is how far
+   * its opaque pixels reach from the middle. An elevated one is framed from its *foot* and is not
+   * square — a tree's pixels reach much further up than down — so a single radius from the centre
+   * cannot describe it, and a box is what the QA pass checks the framing against instead. Asking
+   * every sprite for a radius was the plan camera's assumption left standing when a second one
+   * arrived.
+   */
   it('records what the renderer reads for each kind', () => {
     for (const entry of catalogueEntries()) {
-      const { kind } = ASSET_FAMILIES[entry.id];
-      if (kind === 'sprite') expect(entry.opaqueRadiusRatio, entry.file).toBeGreaterThan(0);
+      const family: AssetFamily = ASSET_FAMILIES[entry.id];
+
+      if (family.kind === 'sprite' && family.camera === 'elevated') {
+        expect(entry.opaqueBounds, entry.file).toBeDefined();
+        expect(entry.opaqueBounds!.maxX, entry.file).toBeGreaterThan(entry.opaqueBounds!.minX);
+        expect(entry.opaqueBounds!.maxY, entry.file).toBeGreaterThan(entry.opaqueBounds!.minY);
+        /*
+         * `footAlpha` is **recorded, not judged**, and that distinction cost three false failures
+         * before it was understood. A high value means the object is as wide where it meets the
+         * ground as its frame is — which is a ground plane for a sofa and simply the truth for a
+         * planter, a raised bed or a trampoline, each of which *is* a box or a disc. Telling those
+         * apart needs the pixels either side of the foot, so the judgement lives in the tool's
+         * `spreadsAtTheFoot` and what the catalogue can honestly assert is that the number is there.
+         */
+        expect(entry.footAlpha, entry.file).toBeGreaterThanOrEqual(0);
+        expect(entry.footAlpha, entry.file).toBeLessThanOrEqual(1);
+        continue;
+      }
+
+      if (family.kind === 'sprite') expect(entry.opaqueRadiusRatio, entry.file).toBeGreaterThan(0);
       // A ratio against the tile's own grain: 1 is seamless, and the tool blends anything past 1.5.
-      if (kind === 'texture') expect(entry.seamScore, entry.file).toBeLessThanOrEqual(1.6);
+      if (family.kind === 'texture') expect(entry.seamScore, entry.file).toBeLessThanOrEqual(1.6);
     }
   });
 

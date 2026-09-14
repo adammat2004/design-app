@@ -17,6 +17,9 @@ export const HOST_SYMBOLS: Partial<Record<DesiredFeature, SymbolId>> = {
   pergola: 'pergola',
   storage: 'shed',
   vegPatch: 'raised-bed',
+  gardenRoom: 'garden-room',
+  greenhouse: 'greenhouse',
+  hotTub: 'hot-tub',
 };
 
 /**
@@ -31,6 +34,12 @@ export const HOST_SYMBOLS: Partial<Record<DesiredFeature, SymbolId>> = {
 export const FURNISHINGS: Partial<Record<DesiredFeature, SymbolId[]>> = {
   pergola: ['dining-set-6', 'dining-set-4'],
   seating: ['sofa-set', 'dining-set-6', 'lounger'],
+  /*
+   * A table, and nothing but a table — which is the whole difference from `seating` above, whose
+   * first choice is the sofas. It is also what `hostFloor('dining')` measures, so a dining terrace
+   * is never sized smaller than the six-seater it exists to hold.
+   */
+  dining: ['dining-set-6', 'dining-set-4'],
   outdoorKitchen: ['bbq'],
   firePit: ['fire-pit'],
   play: ['swing', 'trampoline', 'slide'],

@@ -8,6 +8,8 @@ import {
   type PlanGeometry,
 } from './features.js';
 import { BudgetBandSchema, DesiredFeatureSchema, MaintenanceLevelSchema } from './brief.js';
+import { ConceptExplanationSchema, ConceptStrategySchema } from './design/concept-explanation.js';
+import { DesignScoreSchema } from './design/design-score.js';
 import { formatArea, formatLength, formatLengthValue, type Unit } from './units.js';
 import { ZoneIdSchema } from './zone-id.js';
 
@@ -216,6 +218,14 @@ export const RequestedFeatureCheckSchema = z.object({
   label: z.string(),
   /** False when the generator could not fit it — the right panel reads this, never a literal. */
   included: z.boolean(),
+  /**
+   * Why it was left out, when it was. "The pond is missing" and "there was no room for the pond
+   * without losing the lawn" are different answers and only the second is a design decision.
+   *
+   * Optional so a concept generated before the design agent existed still parses, and absent
+   * rather than empty on an included feature — there is nothing to explain about a success.
+   */
+  reason: z.string().optional(),
 });
 export type RequestedFeatureCheck = z.infer<typeof RequestedFeatureCheckSchema>;
 
@@ -248,6 +258,27 @@ export const GeneratedConceptSchema = z.object({
    * approximate.
    */
   elements: z.array(DesignElementSchema).default([]),
+
+  /* ---- what the design agent adds. All optional: a stored concept predates every one. ---- */
+
+  /**
+   * Which brief slot, layout archetype and candidate produced this concept.
+   *
+   * Nothing on the wire used to say which template a concept came from — it survived only as the
+   * display `name`, so every test that wanted to identify one matched on the string, and "are these
+   * two concepts the same shape of plan" could not be asked at all.
+   */
+  strategy: ConceptStrategySchema.optional(),
+  /**
+   * How the layout scored against the design principles, and what is wrong with it.
+   *
+   * Carried on the concept rather than kept server-side because it is the honest report of a
+   * concept that was chosen from a field of fifty: a user comparing three plans is entitled to see
+   * that one of them circulates badly. No authority over geometry — see `design/design-score.ts`.
+   */
+  score: DesignScoreSchema.optional(),
+  /** Why this concept is the way it is: the decisions taken, in the order they were taken. */
+  explanation: ConceptExplanationSchema.optional(),
 });
 export type GeneratedConcept = z.infer<typeof GeneratedConceptSchema>;
 

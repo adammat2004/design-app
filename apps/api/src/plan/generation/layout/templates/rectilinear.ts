@@ -1,3 +1,5 @@
+import type { CandidateParams } from '../../design/types.js';
+import { DEFAULT_PARAMS } from '../../knowledge/archetypes/types.js';
 import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
@@ -25,17 +27,25 @@ import {
  * the other, a destination room in the far corner on the diagonal from the door, and a utility
  * strip across the back on the gate's side where the shed and the bins can be reached without
  * crossing the lawn. Everything is parallel to the house wall.
+ *
+ * `params` are the axes this composition may be varied along, and **the defaults are the
+ * composition as it was drawn before there were parameters** — which is what the golden comparison
+ * in `golden.test.ts` pins, to a nanometre.
  */
-export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
+export function rectilinear(
+  request: SketchRequest,
+  room: Room,
+  params: CandidateParams = { archetype: 'terrace_and_lawn', ...DEFAULT_PARAMS },
+): LayoutSketch {
   const s = request.scale;
   const D = room.uMax;
   const b = borderDepth(s);
-  const terrace = terraceRect(request, room);
+  const terrace = terraceRect(request, room, params.terraceDepth);
   const T = terrace.u1;
 
   const gate = request.gateSide ?? 'right';
   const gateSign = gate === 'right' ? 1 : -1;
-  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin, params.terraceDepth);
 
   // The part of the room behind the terrace: on an L-plot, the deep limb alone.
   const deep = roomBehind(room, T + 0.4);
@@ -65,7 +75,11 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
    * shed; a notch costs it one corner.
    */
   const wantsUtility =
-    request.features.includes('storage') || request.features.includes('vegPatch');
+    request.features.includes('storage') ||
+    request.features.includes('vegPatch') ||
+    // A greenhouse belongs with the beds and the shed — it is worked in, not sat in. A garden room
+    // is deliberately not on this list: it is a room, and it takes the far room like one.
+    request.features.includes('greenhouse');
   const utility = behindTerrace(T, D - 0.6, 2.6 * s);
   const utilityWidth = 3.2 * s;
   const notchV = wantsUtility && !courtyard ? 0.6 + utilityWidth + 0.4 : 0;
@@ -79,7 +93,15 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
       {
         id: 'far-room',
         kind: 'far-room',
-        anchor: { u: farRoom.u, v: farV(b + 2.1 * s) },
+        /*
+         * On the diagonal from the door by default: the longest view in the garden, and the reason
+         * a destination reads as somewhere to go rather than as a thing in a corner. `far-centre`
+         * squares it up on the axis instead, which suits a plan with a strong middle.
+         */
+        anchor: {
+          u: farRoom.u,
+          v: params.destination === 'far-centre' ? (deep.vMin + deep.vMax) / 2 : farV(b + 2.1 * s),
+        },
         maxSize: { width: 4 * s, depth: farRoom.depth },
       },
       {
@@ -134,11 +156,20 @@ export function rectilinear(request: SketchRequest, room: Room): LayoutSketch {
    * as the space left over. So: the back gets a deep border (2×), the far side a normal one, and
    * the gate side only a mowing strip, because that is the side you walk down.
    */
+  /*
+   * `lawnBias` says which side keeps the mowing edge. `gate` is the default and the reasoning
+   * above: you walk down the gate side, so the lawn runs to it and the deep bed goes opposite.
+   * `away` swaps them, for a plan whose interest should be on the side you walk down. `centre`
+   * gives both sides a full border, which is the even ring this note warns against — offered
+   * because a formal or a very wide room genuinely wants it, never as the default.
+   */
+  const deepBorderOnMin = params.lawnBias === 'away' ? gate !== 'right' : gate === 'right';
+  const shallowEdge = params.lawnBias === 'centre' ? b : MOWING_STRIP;
   const lawnRect = {
     u0: lawnStart(s, D, T),
     u1: lawnEnd(s, D, T),
-    v0: gate === 'right' ? deep.vMin + b : deep.vMin + MOWING_STRIP,
-    v1: gate === 'right' ? deep.vMax - MOWING_STRIP : deep.vMax - b,
+    v0: deepBorderOnMin ? deep.vMin + b : deep.vMin + shallowEdge,
+    v1: deepBorderOnMin ? deep.vMax - shallowEdge : deep.vMax - b,
   };
   const notched = notchV > 0 && notchU > lawnRect.u0 + 1.5 && notchU < lawnRect.u1;
   const lawn: LayoutSketch['lawn'] = courtyard

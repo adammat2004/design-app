@@ -44,6 +44,18 @@ export type SlotKind =
 export interface Slot {
   id: string;
   kind: SlotKind;
+  /**
+   * The functional zone this slot belongs to — the dining room, the utility corner, the destination.
+   *
+   * A slot kind was always a zone and a position within it said in one word (`terrace-end` is "the
+   * dining room, at the end of the terrace"), and nothing wrote it down. With it written down a
+   * feature can be assigned to a *room* while the fitter goes on working in slots, which is what
+   * lets the grouping principle ask whether the dining room holds together.
+   *
+   * Optional because `ZONE_BY_SLOT` derives it from the kind for every template that does not set
+   * it, so nothing had to change to gain it.
+   */
+  zoneId?: string;
   /** Where the feature's centre goes, in the frame. */
   anchor: LocalPoint;
   /** The most room the slot has, so a footprint is scaled to what will fit before fitting. */
@@ -285,8 +297,8 @@ export function behindTerrace(
  *   depth  = max(capped, min(floor, roomDepth))
  * ```
  */
-export function terraceDepth(scale: number, roomDepth: number): number {
-  const want = clamp(3.6 * Math.sqrt(scale), TERRACE_FLOOR.depth, 5.5);
+export function terraceDepth(scale: number, roomDepth: number, factor = 1): number {
+  const want = clamp(3.6 * Math.sqrt(scale) * factor, TERRACE_FLOOR.depth, 5.5);
   const capped = Math.min(want, TERRACE_MAX_SHARE * roomDepth);
   return Math.max(capped, Math.min(TERRACE_FLOOR.depth, roomDepth));
 }
@@ -311,8 +323,13 @@ export function terraceWidth(request: SketchRequest, room: Room): number {
  * and the far room is whatever is left. "Viable" is `LAWN_FLOOR`, measured on the strip left after
  * the terrace, the gap and the rear bed, and across the room less one border and a mowing edge.
  */
-export function isCourtyard(scale: number, roomDepth: number, roomWidth: number): boolean {
-  const T = terraceDepth(scale, roomDepth);
+export function isCourtyard(
+  scale: number,
+  roomDepth: number,
+  roomWidth: number,
+  factor = 1,
+): boolean {
+  const T = terraceDepth(scale, roomDepth, factor);
   const depth = lawnEnd(scale, roomDepth, T) - lawnStart(scale, roomDepth, T);
   const width = roomWidth - borderDepth(scale) - MOWING_STRIP;
   return !lawnViable(width, depth);
@@ -322,8 +339,8 @@ export function isCourtyard(scale: number, roomDepth: number, roomWidth: number)
  * The terrace across the door: centred on the door, held inside the room's width, and always
  * at least as wide as the door itself. `v` is measured from the door, so 0 is the door's centre.
  */
-export function terraceRect(request: SketchRequest, room: Room): LocalRect {
-  const depth = terraceDepth(request.scale, room.uMax - Math.max(room.uMin, 0));
+export function terraceRect(request: SketchRequest, room: Room, factor = 1): LocalRect {
+  const depth = terraceDepth(request.scale, room.uMax - Math.max(room.uMin, 0), factor);
   const width = terraceWidth(request, room);
   const [v0, v1] = clampToRoom(width, room, (request.doorWidth ?? 0) / 2);
   return { u0: Math.max(room.uMin, 0), u1: Math.max(room.uMin, 0) + depth, v0, v1 };

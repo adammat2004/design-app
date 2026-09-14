@@ -1,6 +1,8 @@
 import { emptyPlanDocument, type PlacedFeature, type SiteSection } from '@garden-studio/schema';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { planProjects } from '../db/schema.js';
 import { ConceptsService } from './generation/concepts.service.js';
 import { FillService } from './generation/fill.service.js';
 import { PlacementService } from './generation/placement.service.js';
@@ -58,6 +60,15 @@ function shed(id: string, x: number, y: number): PlacedFeature {
 describe.skipIf(connection === null)('PlanProjectsService', () => {
   let service: PlanProjectsService;
   let db: TestDatabase;
+  /** Every project this file created, so `afterEach` can remove exactly those. */
+  const madeHere: string[] = [];
+
+  /** `service.create`, with the id remembered for cleanup. Every test in this file uses it. */
+  const createProject = async (input: { name: string }) => {
+    const project = await service.create(input);
+    madeHere.push(project.id);
+    return project;
+  };
 
   beforeAll(() => {
     db = connection!;
@@ -68,8 +79,22 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
     );
   });
 
+  /**
+   * Only the rows this file made, never the whole table.
+   *
+   * It used to truncate, and that was two problems in one line. `pnpm test` silently deleted every
+   * plan the developer was looking at in the browser — a trap CLAUDE.md records twice — and, once a
+   * second suite needed rows of its own, the two files ran in parallel and deleted each other's
+   * data mid-test. Vitest runs files concurrently by default, and serialising the API suite to fix
+   * it costs minutes rather than seconds.
+   *
+   * Cleaning up what you created is the answer to both, and it is what any test sharing a database
+   * should have been doing. `design_events` goes with the plan through its cascading foreign key.
+   */
   afterEach(async () => {
-    await db.truncate();
+    if (madeHere.length === 0) return;
+    await db.db.delete(planProjects).where(inArray(planProjects.id, madeHere));
+    madeHere.length = 0;
   });
 
   afterAll(async () => {
@@ -77,7 +102,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('creates a project holding an empty plan at revision 1', async () => {
-    const project = await service.create({ name: 'Test garden' });
+    const project = await createProject({ name: 'Test garden' });
 
     expect(project.name).toBe('Test garden');
     expect(project.revision).toBe(1);
@@ -85,7 +110,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('reads a project back', async () => {
-    const created = await service.create({ name: 'Readable' });
+    const created = await createProject({ name: 'Readable' });
     const found = await service.findOne(created.id);
 
     expect(found).toEqual(created);
@@ -98,7 +123,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('persists a section and bumps the revision', async () => {
-    const created = await service.create({ name: 'Mapped' });
+    const created = await createProject({ name: 'Mapped' });
 
     const { project } = await service.patchSection(
       created.id,
@@ -116,7 +141,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('leaves the other sections alone when one is written', async () => {
-    const created = await service.create({ name: 'Partial' });
+    const created = await createProject({ name: 'Partial' });
     const afterSite = await service.patchSection(created.id, 'site', created.revision, closedSite);
 
     const { project } = await service.patchSection(
@@ -131,7 +156,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('reports violations alongside a clean save', async () => {
-    const created = await service.create({ name: 'Valid' });
+    const created = await createProject({ name: 'Valid' });
     const site = await service.patchSection(created.id, 'site', created.revision, closedSite);
 
     const result = await service.patchSection(created.id, 'features', site.project.revision, {
@@ -148,7 +173,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
    * subsequent edit. The draft is stored and the problem is reported.
    */
   it('stores an invalid draft and reports what is wrong with it', async () => {
-    const created = await service.create({ name: 'Invalid' });
+    const created = await createProject({ name: 'Invalid' });
     const site = await service.patchSection(created.id, 'site', created.revision, closedSite);
 
     const result = await service.patchSection(created.id, 'features', site.project.revision, {
@@ -162,7 +187,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('409s on a stale revision and hands back the current project', async () => {
-    const created = await service.create({ name: 'Contended' });
+    const created = await createProject({ name: 'Contended' });
     await service.patchSection(created.id, 'site', created.revision, closedSite);
 
     // Second tab still thinks it is on revision 1.
@@ -179,7 +204,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('renames without touching the document', async () => {
-    const created = await service.create({ name: 'Before' });
+    const created = await createProject({ name: 'Before' });
     const site = await service.patchSection(created.id, 'site', created.revision, closedSite);
 
     const renamed = await service.rename(created.id, site.project.revision, 'After');
@@ -189,7 +214,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('writes only the selection when step 4 chooses a concept', async () => {
-    const created = await service.create({ name: 'Chosen' });
+    const created = await createProject({ name: 'Chosen' });
 
     const { project } = await service.patchConceptSelection(created.id, {
       revision: created.revision,
@@ -205,7 +230,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   /* ---------------------------------------------------------------- generation */
 
   it('generates concepts into the plan and advances the seed', async () => {
-    const created = await service.create({ name: 'Generated' });
+    const created = await createProject({ name: 'Generated' });
     const site = await service.patchSection(created.id, 'site', created.revision, housedSite);
     const brief = await service.patchSection(created.id, 'brief', site.project.revision, {
       ...emptyPlanDocument().brief,
@@ -231,7 +256,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('rerolls a single slot, leaving the others alone', async () => {
-    const created = await service.create({ name: 'Rerolled' });
+    const created = await createProject({ name: 'Rerolled' });
     const site = await service.patchSection(created.id, 'site', created.revision, housedSite);
     const first = await service.generateConcepts(created.id, {
       revision: site.project.revision,
@@ -259,7 +284,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
    * its input.
    */
   it('refuses to generate against an invalid plan', async () => {
-    const created = await service.create({ name: 'Broken' });
+    const created = await createProject({ name: 'Broken' });
     const site = await service.patchSection(created.id, 'site', created.revision, housedSite);
     const features = await service.patchSection(created.id, 'features', site.project.revision, {
       features: [shed('shed-1', 2, 2), shed('shed-2', 3, 3)],
@@ -282,7 +307,7 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('409s on a stale revision when generating', async () => {
-    const created = await service.create({ name: 'Contended generate' });
+    const created = await createProject({ name: 'Contended generate' });
     const site = await service.patchSection(created.id, 'site', created.revision, housedSite);
     await service.generateConcepts(created.id, {
       revision: site.project.revision,
@@ -298,14 +323,21 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
   });
 
   it('lists projects newest-first without their documents', async () => {
-    await service.create({ name: 'Older' });
-    const newer = await service.create({ name: 'Newer' });
+    await createProject({ name: 'Older' });
+    const newer = await createProject({ name: 'Newer' });
     await service.patchSection(newer.id, 'site', newer.revision, closedSite);
 
     const list = await service.list();
 
-    expect(list.map((project) => project.name)).toEqual(['Newer', 'Older']);
-    expect(list[0]).not.toHaveProperty('document');
+    /*
+     * Filtered to the two this test made, rather than compared against the whole table. A test that
+     * demands exclusive ownership of a shared database is fragile by construction — it breaks when
+     * a second suite runs beside it and when a developer has a plan open in the browser — and what
+     * is actually being asserted is the *order*, which survives the filter intact.
+     */
+    const mine = list.filter((project) => madeHere.includes(project.id));
+    expect(mine.map((project) => project.name)).toEqual(['Newer', 'Older']);
+    expect(mine[0]).not.toHaveProperty('document');
   });
 });
 

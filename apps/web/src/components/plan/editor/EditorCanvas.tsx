@@ -55,6 +55,7 @@ import { useCanvasViewport } from '../use-canvas-viewport';
 import { ConceptLabels } from '../concepts/ConceptLabels';
 import { EditorScene } from './EditorScene';
 import { buildRenderScene } from '@/lib/render/build-scene';
+import { browserRendererVersion } from '@/lib/render/diagnostics';
 import { isStageDrag } from '../use-canvas-viewport';
 
 /**
@@ -86,7 +87,7 @@ export function EditorCanvas() {
   const elements = useMemo(() => allElements.filter((element) => !element.hidden), [allElements]);
   const maturity = usePlanEditorStore((state) => state.maturity);
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
-    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'visualise', maturity }),
+    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'visualise', maturity, rendererVersion: browserRendererVersion() }),
   [boundaryDraft, elements, maturity]);
 
   /*

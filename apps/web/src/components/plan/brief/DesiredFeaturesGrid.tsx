@@ -1,18 +1,22 @@
 'use client';
 
-import { Check } from 'lucide-react';
-import { DESIRED_FEATURES, DESIRED_FEATURE_OTHER, type DesiredFeature } from '@/lib/brief';
+import { SquarePen } from 'lucide-react';
+import { DESIRED_FEATURES, DESIRED_FEATURE_OTHER } from '@/lib/brief';
 import { useBriefStore } from '@/state/brief-store';
-import { DesiredFeatureIcon } from './BriefIcons';
 import { OtherTextField } from './OtherTextField';
+import { SpaceCard } from './SpaceCard';
 
 /**
- * Section 2, and the only multi-select on the screen.
+ * The garden spaces, as a grid of pictures.
  *
- * Square tick box on the left, to stay clearly apart from the round badge the single-select
- * cards use on the right. The control is a real `<input type="checkbox">` hidden with
- * `sr-only` inside its `<label>` — the recipe `DesignAreasPanel` uses — so keyboard and
- * screen-reader behaviour comes for free rather than being simulated with `aria-pressed`.
+ * Nothing about any individual space is written here: the grid maps over `DESIRED_FEATURES` and a
+ * new one is a row in that catalogue, not a card in this file. That is what keeps sixteen options
+ * from becoming sixteen pieces of markup that can drift apart.
+ *
+ * Four across on a desktop, which is what makes the artwork big enough to read — the old chips
+ * were three across at `text-xs` and the icon on them was 16 px. Two across on a phone rather than
+ * one: a single-column list of photographs is a very long scroll, and at two the pictures are
+ * still comfortably legible.
  */
 export function DesiredFeaturesGrid() {
   const chosen = useBriefStore((state) => state.present.desiredFeatures);
@@ -24,24 +28,22 @@ export function DesiredFeaturesGrid() {
 
   return (
     <div>
-      <ul data-testid="desired-features" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <ul
+        data-testid="desired-features"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4"
+      >
         {DESIRED_FEATURES.map((option) => (
           <li key={option.id}>
-            <FeatureChip
-              id={option.id}
-              label={option.label}
+            <SpaceCard
+              option={option}
               checked={chosen.includes(option.id)}
               onToggle={() => toggleFeature(option.id)}
             />
           </li>
         ))}
+
         <li>
-          <FeatureChip
-            id={DESIRED_FEATURE_OTHER.id}
-            label={DESIRED_FEATURE_OTHER.label}
-            checked={wantsOther}
-            onToggle={() => toggleFeature('other')}
-          />
+          <SomethingElseCard checked={wantsOther} onToggle={() => toggleFeature('other')} />
         </li>
       </ul>
 
@@ -49,7 +51,7 @@ export function DesiredFeaturesGrid() {
         <OtherTextField
           testId="desired-features-other"
           label="What else would you like?"
-          placeholder="e.g. A hot tub, a bin store, a compost area"
+          placeholder="e.g. A bin store, a compost area, a sauna"
           value={featuresOther}
           onChange={setFeaturesOther}
         />
@@ -58,49 +60,47 @@ export function DesiredFeaturesGrid() {
   );
 }
 
-function FeatureChip({
-  id,
-  label,
-  checked,
-  onToggle,
-}: {
-  id: DesiredFeature;
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-}) {
+/**
+ * The escape hatch, and the reason it is dashed and last.
+ *
+ * The grid is deliberately the common, high-value spaces — a catalogue of every garden feature
+ * anybody has ever wanted would bury the twelve that matter. This is where the rest goes, and it
+ * looks like a blank rather than a picture because there is no photograph of "something else".
+ * Dashed and empty is the honest drawing of an open question.
+ */
+function SomethingElseCard({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
   return (
     <label
+      data-testid="space-card-other"
+      data-checked={checked}
       className={[
-        'flex h-full cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition-colors',
-        'focus-within:ring-2 focus-within:ring-garden-green',
+        'flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 border-dashed',
+        'transition-colors focus-within:ring-2 focus-within:ring-garden-green focus-within:ring-offset-1',
         checked
-          ? 'border-garden-green bg-garden-sage text-garden-forest'
-          : 'border-garden-line bg-white text-garden-ink hover:border-garden-green hover:bg-garden-sage/50',
+          ? 'border-garden-green bg-garden-sage/60'
+          : 'border-garden-line bg-white hover:border-garden-green/50',
       ].join(' ')}
     >
-      <span
-        aria-hidden
-        className={[
-          'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-          checked
-            ? 'border-garden-green bg-garden-green text-white'
-            : 'border-garden-line bg-white',
-        ].join(' ')}
-      >
-        {checked ? <Check className="h-3 w-3" /> : null}
-      </span>
-
       <input
         type="checkbox"
-        data-testid={`desired-${id}`}
+        data-testid="desired-other"
         checked={checked}
         onChange={onToggle}
+        aria-label={DESIRED_FEATURE_OTHER.label}
         className="sr-only"
       />
 
-      <DesiredFeatureIcon id={id} className="h-4 w-4 shrink-0" />
-      <span className="min-w-0 text-xs leading-tight font-medium">{label}</span>
+      <span className="flex aspect-4/3 w-full items-center justify-center">
+        <SquarePen aria-hidden className="h-6 w-6 text-garden-muted" />
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
+        <span className="truncate text-sm leading-tight font-semibold text-garden-ink">
+          {DESIRED_FEATURE_OTHER.label}
+        </span>
+        <span className="text-xs leading-snug text-garden-muted">
+          {DESIRED_FEATURE_OTHER.description}
+        </span>
+      </span>
     </label>
   );
 }

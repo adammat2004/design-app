@@ -5,9 +5,10 @@ import { Check } from 'lucide-react';
 /**
  * The single-select card, shared by budget, maintenance and style.
  *
- * Deliberately unlike the multi-select chips next to it: **square indicator on the left means
- * many, round badge on the right means one.** Reinforced by the border weight — `border` on
- * chips, `border-2` here.
+ * Deliberately unlike the multi-select cards next to it: **round badge means one, square tick
+ * means many.** Both now sit in the top right, because a card whose artwork runs edge to edge has
+ * nowhere else to put one — so the *shape* carries that distinction on its own where it used to
+ * have position and border weight helping. Do not round off `SpaceCard`'s tick.
  *
  * A real `<input type="radio">` hidden with `sr-only`, so a group gets native arrow-key
  * navigation and announces itself as a radio group. There is no way to unselect: these three
@@ -40,7 +41,17 @@ export function ChoiceCard({
   children: React.ReactNode;
 }) {
   return (
+    /*
+     * `${testId}-card` on the label as well as `${testId}` on the input, because the two are for
+     * different questions. The input is the *state* — what a unit test and a screen reader read.
+     * The label is the *target*: the radio is `sr-only`, so a real pointer click (and Playwright's,
+     * which refuses an element outside the viewport) can only land here. A browser test that clicked
+     * the input would also pass on a day the label stopped wrapping it, which is the one regression
+     * worth catching.
+     */
     <label
+      data-testid={`${testId}-card`}
+      data-checked={checked}
       style={{
         background: tint,
         borderColor: checked ? accent : undefined,
@@ -68,20 +79,26 @@ export function ChoiceCard({
   );
 }
 
-/** The round "one of these" badge. Pinned top-right, opposite the chips' square tick. */
+/**
+ * The round "one of these" badge, against `SpaceCard`'s square "any of these" tick.
+ *
+ * `bg-white/75` and a white border when unchecked rather than the line colour: it sits over a
+ * photograph now, and a pale grey ring disappears against half the pictures it has to be legible
+ * on.
+ */
 export function SelectionBadge({ checked, accent }: { checked: boolean; accent?: string }) {
   return (
     <span
       aria-hidden
       style={{ background: checked ? (accent ?? undefined) : undefined }}
       className={[
-        'absolute top-2.5 right-2.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors',
+        'absolute top-2.5 right-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors',
         checked
           ? 'border-transparent bg-garden-green text-white'
-          : 'border-garden-line bg-white/80',
+          : 'border-white/70 bg-white/75 shadow-sm',
       ].join(' ')}
     >
-      {checked ? <Check className="h-3 w-3" /> : null}
+      {checked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
     </span>
   );
 }

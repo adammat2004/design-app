@@ -46,10 +46,15 @@ gaps, lighting and depth.
       treads come from the rise. The model is **local** — no ground surface, nothing infers a slope.
       `retaining` names a walling material (stone, brick, rendered block) or keeps the plain
       upstand. `PLAN_DOCUMENT_VERSION` 3, no-op migration.
-- [ ] **S5 services and structures.** `greenhouse`, `bin-store`, `log-store`, `water-butt`,
+- [ ] **S5 services and structures.** ~~`greenhouse`~~, `bin-store`, `log-store`, `water-butt`,
       `compost-bin`. The first three are rectangles with regular structure, so they are geometry
       following `shedRoof`/`gazeboRoof` and need no photographs — only `tex-glass-roof`. The last
-      two get sprites. An outdoor tap is deliberately excluded: 100 mm is under every floor in
+      two get sprites.
+      **`greenhouse` landed early**, with the step-3 redesign: it is a requestable space now, so it
+      needed a `SymbolId`, a `FEATURE_SPEC` and a drawing. It reuses `shedRoof` and adds
+      `glazingBars` plus a glass wash rather than taking a `tex-glass-roof` texture — which is the
+      cheaper answer and the one that survives an arbitrary rotation. `garden-room` and `hot-tub`
+      came with it. The four left here are unaffected. An outdoor tap is deliberately excluded: 100 mm is under every floor in
       `lod.ts`.
       **Blocked in part:** the plan says "fold these into the arrival grammar", and the arrival
       grammar is not built — it is its own item below. So this splits into the objects (which ship
@@ -89,9 +94,11 @@ gaps, lighting and depth.
       and front door → street. Not done: wedge-split drifts _within_ a run.
 
 - [ ] **Layout grammar, next.** The deep limb of an L-plot beyond the door wall is left as border
-      planting because the room is a half-plane: a second room per limb would design it. Slot
-      preferences are a fixed table rather than anything the brief's _purpose_ text touches. The
-      curved template's kidney is one wave shape at one phase. Effort: M each.
+      planting because the room is a half-plane: a second room per limb would design it. The curved
+      template's kidney is one wave shape at one phase. Effort: M each.
+      **Half done:** the brief's _purpose_ text is read now — `inferIntent` takes keyword hints from
+      it, which is what turns a flat tick list into a ranked one. It still steers no slot directly;
+      that waits on the zone planner.
 
 - [ ] **Source art for the finer paving.** The slab and sett face photographs in
       `apps/web/public/assets/` were generated against 600 mm and 900 mm modules; they are now
@@ -125,6 +132,17 @@ gaps, lighting and depth.
       you are looking at, so this is recorded rather than "fixed". **Effort:** M if ever wanted, and
       it needs a cross-store transaction concept that does not exist today.
 
+- [ ] **A Mediterranean style direction.** The style cards are pictures now, and "Mediterranean" is
+      the one obviously missing look — gravel, olives, terracotta, clipped evergreens against pale
+      render. It was deliberately *not* added with the rest of the brief redesign, because
+      `StyleDirection` ids are branched on in a dozen places and a new one that falls through to
+      the defaults would draw a garden identical to Modern. A card that produces the same plan as
+      the card beside it is worse than no card: it makes the whole selector look like decoration.
+      **Shape:** the id, then its own branches in `resolvePlantingStyle` (a Mediterranean palette),
+      `materialFor` (gravel ground, terracotta or limestone paving), `TREE_PALETTES` (olive, fig),
+      `styleCornerRadius` and `edgingFor` — plus a `style-mediterranean` photograph in
+      `brief-art.ts`. **Effort:** M, and mostly palette work rather than layout.
+
 - [ ] **The driveway surface.** *Everything but the paving is done*: a driveway is a `Gate` with
       `kind: 'vehicle'`, placed on a side from that side's editor, 3 m wide, drawn as a double gate,
       kept clear to a car's five metres by `gateThresholdDepth`, and never chosen as the side path's
@@ -151,6 +169,150 @@ gaps, lighting and depth.
 - [ ] **P8 optional AI hero render.** Segmentation map + plan PNG → image model, stored in a
       `plan_renders` table keyed on `revision`, gated on `RENDER_API_KEY` exactly like the assistant,
       labelled "AI impression — not the plan". Effort: M.
+
+## Deferred by the Visualise image-quality pass (Sep 2026)
+
+Three findings from the measurement pass. The first is the largest remaining lever on how the render
+looks; all three are recorded rather than done because each is a different kind of work from the
+grade and the shadows that shipped.
+
+- [ ] **Correct the over-saturated asset families at source, not at render time.**
+      **What:** re-post-process the checked-in assets so the catalogue's mean colours sit near the
+      reference, starting with the outliers `measure:render` prints.
+      **Why:** the loudest object in any plan that has one is the bark play area, and the cause is
+      measurable rather than arguable — the `play` family means **0.509** saturation against a
+      catalogue mean of 0.340 and a target scene of 0.334. `tree` (0.514), `hedge` (0.495) and `tex`
+      (0.468) are the other outliers. A runtime grade cannot fix this: it moves the whole scene
+      together, so pulling the bark down drags the lawn with it. Note the bark play area is a
+      `feature`, not a `fill`, which is why the design review's "recede the base fills" rule would
+      not have touched it — that rule was dropped for exactly this reason.
+      **Pros:** fixes the cause; costs nothing at runtime; improves 2D Plan, the concept cards and
+      the export equally, which a Visualise-only grade cannot.
+      **Cons:** touches checked-in binary; changes 2D Plan, so it needs its own decision about
+      whether the plan drawing may change, and the new golden gate will (correctly) fail until that
+      decision is made. `--reprocess` has misfired once before by generating families that were
+      meant to be excluded — check the guard before running it.
+      **Context:** `tools/assets --reprocess` redoes post-processing from the kept raw PNGs with no
+      image-model spend, and `pnpm --filter @garden-studio/web measure:render` prints the per-family
+      table to aim at. **Depends on:** nothing. **Effort:** M.
+
+- [ ] **Flatter baked light in the vegetation art.**
+      **What:** regenerate the elevated vegetation sprites with softer, less directional baked
+      shading.
+      **Why:** the art is lit from the upper left and a located plan's sun moves, measured at about
+      110 degrees of disagreement on the suburban fixture. Mirroring a sprite when the sun crosses
+      was specified, reviewed and **cut**: Visualise has a time slider stepping in fifteen minutes,
+      so the flip is a step function and the whole garden would jump in one step — a louder artefact
+      than the constant offset it removes, and it fixes only the left-right half. Less directional
+      art removes the whole problem instead of half of it, with no artefact.
+      **Pros:** no runtime cost, no discontinuity, fixes the up-down half too.
+      **Cons:** an asset regeneration with real image-model spend, and flatter art has less form, so
+      it trades one kind of realism for another and needs judging on a contact sheet.
+      **Context:** CLAUDE.md records the current fixed offset as reading ambient rather than as a
+      contradiction, which is why this is an improvement and not a bug fix. **Depends on:** the
+      asset correction above — same pipeline, do them in one pass. **Effort:** M.
+
+- [ ] **`designedBeds` floors leave a small back garden with no planting.**
+      **What:** give `layout/beds.ts` floors that degrade rather than bail.
+      **Why:** the back garden's planting comes only from `designedBeds`, which stops below 3 m wide
+      or 1.4 m deep, so a small plot gets a lawn, a patio and nothing else, and nothing on screen
+      says why. **Do not "fix" this by reviving the main zone's `borderRegions` call** — that call
+      existed, was dead (anything under `MIN_FILL_SIDE` returns `[]`), and was deliberately removed;
+      `concepts.service.ts:1688-1702` carries the comment explaining it. The image-quality plan
+      listed reviving it as a task and it was dropped on this evidence.
+      **Pros:** the actual cause of the bare-small-garden complaint; verified, with a 10/10
+      confidence prior learning behind it.
+      **Cons:** generator geometry rather than rendering, so it moves generated output and forces a
+      fixture recapture and a composition-band recheck.
+      **Context:** prior learning `design-app-main-zone-border-call-is-dead`, 2026-09-10.
+      **Depends on:** nothing. **Effort:** M.
+
+- [ ] **Nothing exercises a near-empty plan in Visualise.**
+      **What:** a fixture with a boundary, a house and almost nothing else, on the judging sheet.
+      **Why:** every fixture is a fully generated design, so the sheets say nothing about what a
+      user sees immediately after step 1, which is the first Visualise anyone ever opens. The grade,
+      the shadow buckets and the depth-sorted stack are all untested against a scene with no
+      planting and no surfaces.
+      **Pros:** covers the first-run experience, which is the one nobody is looking at.
+      **Cons:** one more fixture to keep captured, and it will mostly draw grass.
+      **Context:** raised by the design review's states pass. **Depends on:** nothing.
+      **Effort:** S.
+
+## In flight — the elevated Visualise (plan: `~/.claude/plans/read-prompt-1-md-and-plan-kind-music.md`)
+
+- [x] **Phase 1 — the specification.** `docs/visualise-asset-style.md`; `AssetFamily.camera` and
+      `heightMetres` with `assetsMatching` defaulting to `plan`, so no existing query changed its
+      answer; the `ELEVATED` preamble and six prompt templates; `elevatedFrame`/`elevatedAnchor`;
+      `opaqueBounds` and `footAlpha` on the catalogue; `--strict` QA and `--audit` in
+      `tools/assets`; the elevated QA contact sheet in `audit:assets`.
+- [x] **Phase 2A — the code foundation.** `lib/render/camera.ts` and `projection.ts` (`RISE`,
+      `lift`, `extrude`, `visualBounds`, `depthOf`); `RenderScene.stack` with `RenderExtrusion`,
+      `RenderObject` and `RenderHouse` nodes; the Canvas2D stack painter; Pixi drawing the same
+      stack with per-node cached rasters. **Gate held:** all 22 plan-view judging sheets are
+      byte-identical.
+- [x] **Phase 2B, the consumer.** `elevatedPlacement` places a sprite on its own frame at its
+      anchor, `elevatedFamilyFor` translates an element's symbol or tree species to its twin,
+      `chooseAsset` swaps a plant's family after resolving it in the plan camera, and `foldRotation`
+      narrows vegetation to ±15° because an elevated sprite carries its own light. Both backends
+      call the same placement function, which is how they are kept in agreement given Pixi cannot be
+      pixel-tested.
+- [x] **The elevated library is generated — 28 sprites and 4 skins.** Trees, shrubs, grasses,
+      every piece of furniture, the play equipment, the planters and the four structure skins.
+      **Note for the record:** the plant families were generated by accident, on a `--reprocess`
+      run that was meant to re-measure finished assets and instead bought every family with no raw.
+      The flag is fixed and the pictures are good, but they were not asked for.
+- [ ] **Three plan families share one elevated twin.** `plant-shrub`, `-architectural` and
+      `-topiary` all map to `vis-shrub-evergreen`, so a bed that had three shrub photographs now has
+      one. The fix is `vis-shrub-architectural` and `vis-shrub-topiary` families, not a code change.
+      **Effort:** S, 5 images.
+- [ ] **The interim lift stays for anything with no twin**, and should: a plan sprite drawn at half
+      its own height reads as standing up and costs nothing. It is only an approximation, so expect
+      a family to look slightly better the day its twin lands. Nothing to do until the library is
+      complete, at which point the branch can be deleted.
+- [x] **The house as a building.** An eaves overhang (`EAVES_OVERHANG`, visualise only, built on a
+      new `outsetPolygon` in the schema's geometry helpers), the shade the eaves throw on the wall
+      below, and the doors and windows drawn on the wall faces the camera can see — every number
+      from the document's own `sillHeight`, `floorLevel` and `OPENING_HEIGHTS`. **Trap worth
+      keeping:** a frame inset by the same width horizontally and vertically is invisible, because
+      a metre up the wall is `RISE` metres of screen. Divide the vertical inset by `RISE`.
+- [x] **Sheds and gazebos as buildings.** `STRUCTURE_OVERHANG` on the four roofed symbols, the
+      eaves shade below it, and the boarding drawn to the roof line rather than to the footprint.
+      **Two traps, same cause, both recorded in CLAUDE.md:** a shed's roof is a translucent wash
+      over its boards, so a shadow drawn beneath it shows through, and an oversail with no boards
+      under it composites over the grass as a grey frame.
+- [x] **Materials on the faces.** `PatternContext` gained `transform`, which is what a
+      parallelogram face needs and translate/rotate cannot give; `paintSkinnedFace` tiles a material
+      along the wall at its real size at any rotation. Skins resolve from what the renderer already
+      knows — a boundary's kind, an element's own material, a named default for the house. The four
+      `skin-*` textures are generated.
+- [x] **Steps, retaining walls and kerbs in 2.5D.** A flight descends as `risers` banded treads
+      rather than rising as a block; edging courses are extruded by `EDGING_HEIGHTS`, which is
+      **exposed** height not product height; retaining walls were already extruded and are now
+      visible on a sheet. `12-levels.png` is synthesised from the reference fixture, because no
+      captured fixture has a level change at all.
+- [ ] **Roof detail is what is left of the house.** Ridge and hip capping, more tone variation
+      across the slates, possibly a rooflight. **Effort:** S-M, no new assets.
+- [ ] **No fixture exercises levels, so only the synthesised sheet does.** Worth capturing a
+      formal-at-premium fixture next time `capture:fixtures` is run, so a real generated plan with a
+      raised terrace joins the eleven. **Effort:** S, needs the API up.
+- [ ] **The rotation and depth judging sheets (Phase 3).** `05-rotation` (one shed, sofa, dining
+      set and tree at 0/45/90/180/270) and `06-depth` (a canopy over a roof edge, a border against
+      the near and far fences, a dining set under a pergola). The furniture rotation decision —
+      one asset or four directional variants — is meant to be made on that sheet and cannot be
+      made before the art exists. **Effort:** S.
+- [ ] **Two suns: the art is lit from the upper left and a located plan's is not.** Measured on the
+      suburban fixture (Manchester, day 172, 15:00) `lightDirection` is `{-0.91, +0.41}` — the sun is
+      low in the west, below and left — while every generated sprite is lit from the upper left.
+      An *unlocated* plan has no disagreement at all, the art is deliberately low-contrast, and the
+      cast shadows still follow the real sun, so it is tolerable rather than fatal. The cheap partial
+      fix is mirroring a sprite horizontally when the sun crosses to the right; the expensive ones
+      all give up either the time slider or the form the elevated library exists for. **A decision,
+      not a bug.** See the style doc's "The cost, measured rather than assumed".
+- [ ] **A side fence shows no face, by construction.** A wall running up and down the screen is
+      edge-on to a vertical lift. It reads through its posts, its shade band and its cast shadow.
+      Revisit only with evidence from a real plan that it is not enough; the fix is leaning the
+      lift diagonally and it costs the measurable-footprint guarantee. **Effort:** L, and probably
+      wrong.
 - [ ] **Product catalogue and estimate** (deferred by decision: designs first). `symbol` and the
       furniture materials are what it keys on.
 - [ ] **Small:** every furniture palette button shares the armchair icon; the PNG download click
@@ -238,11 +400,106 @@ gaps, lighting and depth.
       **Blocked by:** Phase 1 (heights + location must be in `packages/schema`, which they are
       being put in specifically so the server can read them).
 
-- [ ] **Evaluation harness.** Benchmark over the generator: constraint satisfaction rate,
-      requested-feature inclusion rate, determinism, latency by plot scale. The codebase is
-      unusually ready for this — generation is seeded and `geometryIsLegal` is a ready-made
-      oracle. **This is the biggest remaining risk to the mark** and nothing else in the plan
-      addresses it. **Priority: P1 once Phase 2 lands.**
+- [x] **Evaluation harness.** `pnpm --filter @garden-studio/api eval:generator`, over 13 cases × 3
+      seeds: constraint satisfaction, composition bands, design score per principle, requested-feature
+      inclusion, determinism and latency by plot scale. Built on the design agent, because the three
+      easy measures were always available and "is this a good garden" was not.
+      **Baseline, on the generator as it stood:** 117/117 valid, deterministic, mean score 0.851
+      (min 0.748), no critical faults, 85% of requested features drawn, 129 ms – 5.2 s per set of
+      three. Take a fresh baseline before changing the generator: a number measured afterwards can
+      only confirm whatever the change did.
+      **It found a crash on its first run** — `ST_UnaryUnion` throwing `TopologyException` on a
+      self-intersecting path strip, on an L-shaped plot, at three of four call sites. Fixed, and the
+      fix is four times faster than not guarding at all (see CLAUDE.md).
+
+- [x] **Functional zones and layout archetypes.** Seven compositions, each answering for itself
+      whether a plot can hold it, with the style weighed evenly against the site and a refusal
+      honoured. Four are shapes the three templates could not express (side-by-side, linear
+      sequence, courtyard, destination). Zones position the rooms and features are fitted inside
+      them; `Slot.zoneId`, `strategy` and a real `explanation` are on the wire. The template
+      geometry did not move — `golden.test.ts` pins it to a nanometre until the candidate loop lands.
+      **Measured**: mean score 0.851 → 0.865, relationships 0.50 → 0.66, `route-missing` 59 → 46,
+      `shed-in-view` 43 → 31, suburban fixture 4.6 s → 1.2 s.
+
+- [x] **Candidates and scoring between them.** `design/choose.ts` enumerates every suitable
+      composition against its variations, previews each with no query (`design/layout-generator.ts`),
+      scores the field and picks the best that is not too like the other slots'. Routing left the
+      service (`design/circulation.ts`) and `ST_ClosestPoint` went with it; `assignByPriority` tries
+      a feature's own room before its slot ladder; `rng.mix` fixes the seed collision nesting
+      `conceptSeed` would have caused.
+      **Measured**: worst plan 0.680 → 0.739, eight of eleven comparable fixtures up, mean flat at
+      0.865, every case still valid and deterministic. The mean is flat because the preview and the
+      realised plan differ — see the next item.
+
+- [x] **Repair, and closing most of the preview/realised gap.** `design/repair.ts` takes a chosen
+      candidate's worst repairable fault, changes the one thing the scorer named, redraws the layout
+      and keeps it only on a measured rise with nothing critical introduced. What it accepts travels
+      into realisation as `LayoutAdjustments` rather than staying a preview-only fiction. Two thirds
+      of the gap closed with it: the preview now draws the access-guarantee paths the real pipeline
+      adds, and both sides place features in the same priority order through `assignByPriority`.
+      **Measured**: 24 repairs across 15% of concepts; relationships 0.668 → 0.717, privacy 0.987 →
+      1.000, buildability 0.970 → 0.989, mean 0.865 → 0.872, minimum held at 0.739. One plan went
+      0.74 → 0.92. A repair is accepted about one time in six it is tried, which is the gate working.
+      **What the benchmark caught in my own loop**: barring a slot can leave the feature *unplaced*,
+      and a preview with no store in it has no store in the sightline either — the score rises, the
+      sampler puts the store back at realisation, and the plan is worse. `keepsWhatItPlaced` is the
+      guard and there is a test named after the fixture that found it.
+
+- [ ] **`placement.candidates` is the dominant cost of generation, and nothing has ever profiled it.**
+      948 calls and 74 seconds of a full harness run — more than every other query put together, and
+      four times `remainderPieces`. It computes `zone − union(obstacles)` eroded by the footprint's
+      inradius and samples it with `ST_GeneratePoints`, and it gets markedly slower when the
+      arrangement is more complex: aligning the preview and the built plan cost the suburban fixture
+      1.5 s → 5.1 s with no change to the number of calls. Worth attacking before anything else about
+      performance, and worth knowing that the pure design layer is *not* the cost — the whole
+      candidate loop is about 100 ms per concept, measured. **Effort:** M.
+
+- [ ] **Two faults the repair stage cannot reach, and both want their own answer.**
+      `too-many-materials` (84, the commonest by a distance) is not a layout fault at all — a modern
+      plan uses paving, setts, turf and gravel against a cap of three, so it is `materialFor` reusing
+      the terrace's paving for routes. `seating-in-shade` (72) asks to move a terrace that goes
+      across the garden doors because that is what a terrace is; the designer's answer on a
+      north-facing plot is a *second* sitting area in the sun, which nothing composes yet.
+      **Effort:** S for the materials policy, M for the second sitting area.
+
+- [ ] **Realising a runner-up per slot, so the choice is made on realised scores.** The other third
+      of the preview/realised gap. Three finalists plus one runner-up each, tier-2 scored, better
+      kept — which needs `realise.service.ts` extracted from `concepts.service.ts`, still 2,300 lines
+      of deciding and drawing. Blocked on the query cost above: six realisations at today's prices is
+      ten seconds on the biggest fixture. **Effort:** M for the extraction, S for the selection.
+
+- [ ] **A circulation graph, rather than a list of paths per composition.** Routes are still whatever
+      each composition's sketch lists, plus a guarantee that every feature gets one. The zone planner
+      already produces `ZonePlan.adjacency` — which rooms should connect — and nothing reads it.
+      Deriving the routes from it is what would let the scorer's circulation principle and the
+      generator agree about what a route is *for*, and is the other half of `route-missing` (49) and
+      `route-dead-end` (18). **Effort:** M.
+
+- [ ] **The side lounge still lives in `concepts.service.ts`** rather than in the zone planner. It
+      resolves in world space through `sideRoomRect`, and moving it would put world geometry inside
+      a layer that is deliberately pure and frame-local. It belongs with `realise.service.ts` being
+      extracted. **Effort:** S, once that extraction exists.
+
+- [x] **`golden.sketches.json` — kept, not deleted.** The plan said to delete it once sketches varied
+      on purpose. They do vary now, and the golden still pins the three original compositions at
+      their **default** parameters, which is exactly the case a future change to the shared sketch
+      helpers would break silently. It costs one file and 85 fast assertions, and it is the only
+      thing standing between `terraceDepth`/`lawnStart`/`behindTerrace` and an unnoticed regression.
+      Regenerate with `CAPTURE_TEMPLATE_GOLDEN=1`, and only ever with a reason.
+
+- [x] **The strategic brief from a model.** `assistant/design-brief/` — one call per generation,
+      cached on the rendered inputs so rerolling a slot pays nothing, reconciled field by field by a
+      pure function in the design layer, and gated off by `DESIGN_BRIEF_LLM`. Every failure path
+      returns the deterministic brief, so generation cannot fail because of the model; there is a
+      test walking all seven. Writing it also closed a gap it would otherwise have widened:
+      `archetypeShortlist` was written by the brief builder and read by nothing, so a model writing
+      into it would have been the third "tick the design ignores" in these notes.
+      **Measured**: benchmark unchanged with the flag off, which is the point. The first attempt at
+      making the shortlist count — a tenth of a point of bonus — cost mean 0.872 → 0.868 and the
+      worst plan 0.739 → 0.680, so it was cut back to deciding only between compositions the plot
+      scores level.
+      **Not verified**: no live call has been made. `usage.cache_read_input_tokens` on the first one
+      is the number that confirms the prompt-cache breakpoint is earning its place.
 
 - [ ] **Maturity toggle (year 1 vs year 5)**, NOT a seasonal toggle. A density-and-size scalar
       over the planting forms. Answers "how long until it looks like this", which is the second
@@ -269,6 +526,26 @@ gaps, lighting and depth.
       and the path has never been exercised — every assistant test mocks the SDK. Check
       `usage.cache_read_input_tokens` on the first real call before claiming the caching win.
       Note `CLAUDE.md` still says there is no key; correct that at the same time.
+
+- [x] **Feedback telemetry.** `design_events` (jsonb payload, cascading from the plan),
+      `POST /plan-projects/:id/events`, and a batching fire-and-forget emitter in
+      `apps/web/src/state/design-events.ts`. Eight kinds — concept chosen and regenerated, element
+      added, moved, resized and deleted, layout reset, plan exported — each stamped with the
+      composition the garden was drawn from, which is what turns "somebody deleted a shed" into a
+      statement about a *composition*. One event per gesture, the same unit the undo stack uses.
+      **Nothing in `generation/design/**` reads it, deliberately**: a scorer consuming its own
+      feedback closes the loop and stops being inspectable.
+      **It also fixed a trap recorded twice in CLAUDE.md**: the shared test helper truncated
+      `plan_projects`, which deleted the developer's open plans and — once a second suite wrote rows
+      — deleted the neighbouring suite's data mid-test, because vitest runs files concurrently. Each
+      suite cleans up only what it created now and the helper is gone.
+
+- [ ] **Read the table.** The events are collected and nobody has asked them anything. The first
+      questions worth asking are the cheapest: which composition is chosen most, which is rerolled
+      most, and which element category is deleted first after a concept is taken. A script beside
+      `eval:generator` reporting those three would be the first time the generator has been measured
+      by something other than its own scorer. **Blocked by:** having any real usage at all.
+      **Effort:** S for the script, and the rest is a user study.
 
 - [ ] **Mobile / responsive.** Not mentioned anywhere in the codebase or any review. A garden
       plan on a phone is a real question (pinch-zoom on Konva, panels that do not fit).

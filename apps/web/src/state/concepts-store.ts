@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { RevisionConflictError, ValidationError, generateConcepts } from '@/lib/plan-api';
 import type { ConceptsSection, GeneratedConcept } from '@garden-studio/schema';
+import { designEventContext, emitDesignEvent, setDesignEventContext } from './design-events';
 import { advanceRevision, projectRevision, setProjectRevision } from './revision';
 
 /**
@@ -187,7 +188,18 @@ export const useConceptsStore = create<ConceptsState>((set, get) => {
       const index = present.concepts.findIndex((concept) => concept.id === present.selectedId);
       if (index < 0) return Promise.resolve();
 
-      return roll(present.concepts[index]!.id, { mode: 'one', index });
+      /*
+       * Rerolling a slot says this concept was not good enough. Emitted before the roll rather than
+       * after, and naming the concept being *replaced* — the new one has not been seen yet, so the
+       * judgement on record belongs to the old one.
+       */
+      const rejected = present.concepts[index]!;
+      emitDesignEvent('concept_regenerated', {
+        conceptId: rejected.id,
+        ...(rejected.strategy ? { strategy: rejected.strategy.archetype } : {}),
+      });
+
+      return roll(rejected.id, { mode: 'one', index });
     },
 
     select: (id) => {
@@ -197,7 +209,27 @@ export const useConceptsStore = create<ConceptsState>((set, get) => {
       set((state) => ({ present: { ...state.present, selectedId: id } }));
     },
 
-    choose: (id) => set({ chosenConceptId: id, lastSavedAt: Date.now() }),
+    choose: (id) => {
+      set({ chosenConceptId: id, lastSavedAt: Date.now() });
+
+      /*
+       * Which of three strategies a person preferred, against a recommendation that claims to know.
+       * The context is updated as well as the event emitted, so every editor event after this one
+       * carries the composition the garden being edited was drawn from — which is what turns
+       * "somebody deleted a shed" into a statement about a *composition*.
+       */
+      const chosen = get().present.concepts.find((concept) => concept.id === id);
+      const strategy = chosen?.strategy?.archetype;
+      emitDesignEvent('concept_chosen', {
+        conceptId: id,
+        ...(strategy ? { strategy } : {}),
+      });
+      setDesignEventContext({
+        ...designEventContext(),
+        conceptId: id,
+        ...(strategy ? { strategy } : {}),
+      });
+    },
 
     toggleCompare: (id) =>
       set((state) => ({

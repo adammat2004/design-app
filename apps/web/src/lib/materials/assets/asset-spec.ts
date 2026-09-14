@@ -26,7 +26,30 @@
  * what a "shrub-1" is. Regenerating with a better model is re-running the tool; nothing else moves.
  */
 
+import { RISE } from '../../render/camera';
+import type { AssetRenderQuality } from './quality';
+
 export type AssetKind = 'texture' | 'face' | 'sprite';
+
+/**
+ * Which specification a family was drawn to.
+ *
+ * There are two cameras in this library and they are not interchangeable. `plan` is what everything
+ * here was until now: strictly overhead, orthographic, flat even light, no perspective — the right
+ * picture for 2D Plan, where the drawing has to read as a measurable footprint. `elevated` is the
+ * Visualise camera: tilted about 12° from vertical, so a vertical face is visible below the top of
+ * the thing and the object communicates its height.
+ *
+ * A field rather than two manifests, because a query has to be able to say which it wants and fall
+ * back to the other when a file has not been generated yet. **Absent means `plan`**, which is what
+ * makes adding the elevated library a no-op for every existing query: `assetsMatching` defaults to
+ * `plan` and therefore returns exactly what it returned before any of this existed.
+ *
+ * The full contract is `docs/visualise-asset-style.md`, and the 12° is not free-floating — it is
+ * `RISE` in `lib/render/projection.ts` stated in words. Change one and you must change the other,
+ * or a photographed shed will not stand on a drawn one.
+ */
+export type AssetCamera = 'plan' | 'elevated';
 
 /**
  * What sort of thing an asset is, so a consumer can *ask* for one instead of naming it.
@@ -57,6 +80,8 @@ export interface AssetTaxon {
 }
 
 export interface AssetFamily {
+  /** Renderer-only QA and transform policy. Older catalogue entries use conservative defaults. */
+  render?: Partial<AssetRenderQuality>;
   kind: AssetKind;
   /**
    * What this is, for a query to match against. Required rather than optional, so classifying a
@@ -64,13 +89,29 @@ export interface AssetFamily {
    * `CATEGORY_HEIGHTS` is total.
    */
   taxon: AssetTaxon;
+  /** Which camera this was drawn to. Absent means `plan`; see `AssetCamera`. */
+  camera?: AssetCamera;
+  /**
+   * How tall the thing is, in metres. Elevated families only.
+   *
+   * Not a duplicate of `heightFor`, and it must never be read as one: `heights.ts` answers what an
+   * element *is* for shadows and the schedule, and this answers how much of the image above the
+   * footprint band is the object's height. They agree in practice and the audit sheet is where a
+   * disagreement would show, but the authority is `heights.ts` — this is a framing number.
+   *
+   * With `RISE` it gives the frame: `imageHeight = metres.h + heightMetres × RISE`. That one line
+   * is why a pot, a sofa and a seven-metre tree can share a placement routine.
+   */
+  heightMetres?: number;
   /**
    * Where the thing actually stands within its own frame, as a fraction of the image, when that is
    * not the centre.
    *
-   * Absent means centred, which is what every sprite generated so far is — the prompt says
-   * "centred and filling the frame". It exists for the things that are coming: a tree whose trunk
-   * is off to one side of a leaning canopy, a bench seen from above whose seat is not its centroid.
+   * Absent means centred for a plan sprite, which is what every one of them is — the prompt says
+   * "centred and filling the frame". For an **elevated** family absent means the centre of the
+   * footprint band at the bottom of the frame (`elevatedAnchor`), which is where an object drawn to
+   * the specification stands. Stated explicitly only when that is untrue: a tree whose trunk is off
+   * to one side of a leaning canopy.
    */
   anchor?: { x: number; y: number };
   /**
@@ -140,6 +181,65 @@ const PLANT = `${SPRITE} A single plant, its foliage seen from above.`;
 const TINTABLE =
   ' Neutral, mid-toned, desaturated foliage with even soft lighting and no deep shadows or bright ' +
   'highlights, so the plan can tint it. Clean cut-out edges with no white fringe.';
+
+/* ---------------------------------------------------------------- the elevated camera
+ *
+ * Everything below is the Visualise library, and it is a different specification rather than a
+ * variation on the one above. `docs/visualise-asset-style.md` is the contract; this constant is it
+ * in the form a model is given, and the two are meant to be read together.
+ *
+ * Four things in here are load-bearing and none of them is stylistic:
+ *
+ * - **"tilted twelve degrees from vertical"** is `RISE` in `lib/render/projection.ts`. The renderer
+ *   lifts a point `h × RISE` up the screen and extrudes the fence, the house and the shed by the
+ *   same rule, so an asset drawn at a different angle stands at a different angle from the drawn
+ *   things beside it. Nothing downstream can detect that; only the sheet shows it.
+ * - **"orthographic"** keeps the footprint an unforeshortened plan. With perspective, a sprite's
+ *   footprint is a trapezium that no rect can hold, and the placement routine has nothing to key on.
+ * - **"no shadow on the ground"** is the hybrid: the renderer casts the shadow, because a baked one
+ *   rotates with the object and is fixed at one hour. This is the single most important sentence in
+ *   the prompt and the one a model is most likely to ignore, which is why the QA pass measures it.
+ * - **"light from the upper left"** is `LIGHT_DIRECTION`. Two suns in one drawing is the most
+ *   obvious way a render gives itself away.
+ */
+export const ELEVATED =
+  'Photorealistic architectural landscape visualisation render of a single object, seen from ' +
+  'almost directly overhead — a near-nadir aerial view, only about twelve degrees off vertical. ' +
+  'The top surfaces are seen in true plan: square on, their real shape, NOT foreshortened and NOT ' +
+  'squashed. Only a narrow sliver of the front faces shows below the top, about a tenth of the ' +
+  "object's height. This is NOT a three-quarter view, NOT an isometric view, NOT a product " +
+  'photograph taken from the side, and NOT a perspective view: the camera is nearly straight down. ' +
+  'Orthographic projection with parallel vertical edges and no perspective convergence. Soft hazy ' +
+  'daylight from the upper left at about fifty-five degrees elevation, gentle self-shadowing with ' +
+  'no hard-edged shadow and plenty of ambient fill so the shaded side stays readable. No cast ' +
+  'shadow on the ground, no ground plane, no base, no reflection. The object isolated on a fully ' +
+  'transparent background with clean cut-out edges and no white fringe, centred left to right, ' +
+  'its front facing the bottom of the frame, filling the frame with a narrow margin and nothing ' +
+  'clipped or cropped at any edge. Natural slightly desaturated colour, neutral white balance, ' +
+  'restrained contrast. No text, no watermark, no logo.';
+
+const ELEVATED_TREE = `${ELEVATED} A single tree, its canopy seen from above and slightly in front so the foliage has real depth, layered branches reading through the crown, and a short length of trunk visible where the canopy is thinner.`;
+
+const ELEVATED_SHRUB = `${ELEVATED} A single shrub, a rounded mass of foliage with visible depth, lit across the top and shading into darkness underneath so it reads as a body rather than a disc.`;
+
+const ELEVATED_PLANT = `${ELEVATED} A single herbaceous plant, one clump standing up off the ground with its foliage seen from above and slightly in front, so the stems and the height of the clump are both visible.`;
+
+const ELEVATED_FURNITURE = `${ELEVATED} A single piece of outdoor garden furniture, its seat tops and frame seen from above and slightly in front, so the legs and the front edge are visible and the piece reads as standing on the ground.`;
+
+const ELEVATED_PLANTER = `${ELEVATED} A single garden container, its rim and planting seen from above and a little of its outer side visible below, so the container reads as having real height.`;
+
+/**
+ * A material for a vertical face — and the one elevated family that is lit *flat*.
+ *
+ * A skin is drawn onto a face whose brightness the renderer computes from that face's own normal
+ * against the scene light, exactly as the roof planes already are. Baked light here would be light
+ * applied twice: the face that happens to point away from the sun would be shaded by the renderer
+ * and shaded again by the photograph, and the two would not agree when the sun moved.
+ *
+ * So this is a `texture` in every respect that matters and shares `TILE`'s discipline — flat, even,
+ * seamless, no shadows. The only thing that makes it "elevated" is what it is used for.
+ */
+const SKIN = `${TILE} A material seen face-on, as it appears on a vertical surface.`;
 
 /* ---------------------------------------------------------------- the families */
 
@@ -571,6 +671,24 @@ export const ASSET_FAMILIES = {
     transparent: true,
     prompt: `${SPRITE} A round steel fire pit bowl with a small fire burning in it, glowing embers and a little flame, seen from directly above.`,
   },
+  /*
+   * The one *structure* in this library that is photographed rather than drawn.
+   *
+   * Everything under `symbols/structures.ts` — the shed, the pergola, the garden room, the
+   * greenhouse — is whatever rectangle the placer gave it at whatever rotation, so a photograph
+   * stretched to fit would put its posts and its ridge in the wrong places. A hot tub is not like
+   * that: it is a product, it comes in one size, and 2.4 m square is what the generator places and
+   * what the editor offers. So it takes the `furniture-fire-pit` route instead.
+   */
+  'feature-hot-tub': {
+    kind: 'sprite',
+    taxon: { group: 'feature', type: 'hot-tub' },
+    metres: { w: 2.4, h: 2.4 },
+    sizePx: { w: 384, h: 384 },
+    variants: 2,
+    transparent: true,
+    prompt: `${SPRITE} A square outdoor hot tub with its cover off, seen from directly above: a moulded acrylic shell with contoured seats and jets, still clear water with a faint reflection, and a slim dark cabinet surround. Each variant a different surround: grey composite, dark timber.`,
+  },
   'furniture-bench': {
     kind: 'sprite',
     taxon: { group: 'furniture', type: 'bench' },
@@ -902,6 +1020,276 @@ export const ASSET_FAMILIES = {
     prompt: 'A radial warm-white glow, brightest at the centre and fading to nothing at the edge.',
     procedural: 'light-pool',
   },
+
+  /* ================================================================ the elevated library
+   *
+   * Drawn to `docs/visualise-asset-style.md` and used only by Visualise. Everything above is the
+   * plan camera and keeps drawing 2D Plan exactly as it does today; `assetsMatching` defaults to
+   * `camera: 'plan'`, so **appending these changes no existing query's answer** — which is the one
+   * thing the append-only rule above could not have promised on its own.
+   *
+   * Three conventions hold for every family here and are worth stating once:
+   *
+   * - **`metres` is the footprint, not the picture.** A tree's `metres` is its canopy spread on the
+   *   ground; `heightMetres` is how far up the trunk the crown sits. The image is taller than
+   *   `metres.h` by exactly `heightMetres × RISE`, which `elevatedFrame` computes and a test pins
+   *   against `sizePx`. Nothing here is geometry: the element's rect or radius is still the record.
+   * - **Never `recolourable`.** The tint is a proportional multiply and these carry their own light,
+   *   so a multiply would darken them exactly where they are already shaded. Variety comes from the
+   *   variant and from a small lightness wash, which is what the plan library used a tint for.
+   * - **Structures are absent on purpose.** No shed, pergola, gazebo, raised bed, fence or house.
+   *   Those are whatever polygon the placer or the user gave them, at any rotation, so they are
+   *   extruded from their own outline and skinned with the `skin-*` textures below. A photograph
+   *   stretched into an arbitrary rectangle puts its posts in the wrong places.
+   * ================================================================ */
+
+  /* ---- trees: the deepest objects in the drawing, and the ones that must overhang ---- */
+  'vis-tree-deciduous': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'tree-deciduous', tags: ['broadleaf'] },
+    metres: { w: 4, h: 4 },
+    heightMetres: 7,
+    sizePx: { w: 746, h: 1024 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_TREE} A mature broadleaf garden tree about four metres across and seven metres tall, a deep rounded canopy of small green leaves with real thickness, gaps showing darker foliage and branch structure within it. Each variant a different tree: birch, hornbeam, rowan.`,
+  },
+  'vis-tree-multistem': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'tree-deciduous', tags: ['multi-stem'] },
+    metres: { w: 3.5, h: 3.5 },
+    heightMetres: 4,
+    sizePx: { w: 824, h: 1024 },
+    variants: 2,
+    transparent: true,
+    prompt: `${ELEVATED_TREE} A multi-stem ornamental tree about three and a half metres across and four metres tall, several slender trunks splaying from the base and clearly visible below a light open canopy. Each variant a different tree: amelanchier, multi-stem birch.`,
+  },
+
+  /* ---- shrubs: the backdrop and the body of every bed ---- */
+  'vis-shrub-evergreen': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'shrub', tags: ['evergreen', 'mounded'] },
+    metres: { w: 1, h: 1 },
+    heightMetres: 1.3,
+    sizePx: { w: 401, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_SHRUB} An evergreen garden shrub about a metre across and a little over a metre tall, dense small leaves forming a rounded mound. Each variant a different shrub: pittosporum, viburnum tinus, choisya.`,
+  },
+  'vis-shrub-flowering': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'shrub', tags: ['deciduous', 'flowering'] },
+    metres: { w: 1.3, h: 1.3 },
+    heightMetres: 1.5,
+    sizePx: { w: 411, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_SHRUB} A flowering deciduous garden shrub about one and a third metres across and one and a half metres tall, looser and more open than an evergreen, with flowers scattered across the top of the mass rather than covering it. Each variant a different shrub: hydrangea, philadelphus, weigela.`,
+  },
+
+  /* ---- grasses: the layer that shows the camera angle most clearly ---- */
+  'vis-grass': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'grass-ornamental', tags: ['tufted'] },
+    metres: { w: 0.5, h: 0.5 },
+    heightMetres: 1.1,
+    sizePx: { w: 349, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_PLANT} An ornamental grass about half a metre across and a metre tall, fine arching blades radiating from a tight base and falling outwards, so the clump reads as a fountain of foliage with height rather than a flat rosette. Each variant a different grass: stipa, miscanthus, calamagrostis.`,
+  },
+
+  /* ---- furniture: one asset each, free to rotate; see the style doc on why ---- */
+  'vis-dining-6': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'dining-set', tags: ['seats-6'] },
+    metres: { w: 3.2, h: 2.4 },
+    heightMetres: 0.75,
+    sizePx: { w: 768, h: 614 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A six-seat outdoor dining set: a rectangular teak table with its long side running left to right, three chairs along each side, their seats and backs visible and their legs standing on the ground.`,
+  },
+  'vis-sofa-set': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'lounge-set' },
+    metres: { w: 3, h: 2.4 },
+    heightMetres: 0.8,
+    sizePx: { w: 768, h: 658 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} An outdoor lounge set: a low corner sofa in pale grey weatherproof cushions on a dark woven frame, arranged around a small square coffee table, the cushion tops and the sofa's front edge both visible.`,
+  },
+
+  'vis-lounger': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'lounger' },
+    metres: { w: 0.7, h: 1.9 },
+    heightMetres: 0.4,
+    sizePx: { w: 271, h: 768 },
+    variants: 2,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A single outdoor sun lounger seen lengthways, its back raised at a shallow angle at the top end, a pale cushion on a slatted teak frame. Variant one reclined flat, variant two with the backrest propped up.`,
+  },
+  'vis-bench': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'bench' },
+    metres: { w: 1.6, h: 0.6 },
+    heightMetres: 0.9,
+    sizePx: { w: 768, h: 380 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A two-seat garden bench in weathered teak, its slatted seat and the top rail of its back both visible, its long side running left to right and its back along the top edge.`,
+  },
+  'vis-bbq': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'bbq' },
+    metres: { w: 1.4, h: 0.7 },
+    heightMetres: 0.9,
+    sizePx: { w: 768, h: 489 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A freestanding outdoor barbecue on a stainless steel cart, its closed lid and side shelf seen from above, on castors, its long side running left to right.`,
+  },
+  'vis-fire-pit': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'fire-pit' },
+    metres: { w: 1.2, h: 1.2 },
+    heightMetres: 0.4,
+    sizePx: { w: 717, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A round corten steel fire bowl on a low base, the bowl's rim and the ash and charred logs inside it both visible, unlit and cold with no flame and no glow.`,
+  },
+  'vis-parasol': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'furniture', type: 'parasol' },
+    metres: { w: 2.7, h: 2.7 },
+    heightMetres: 2.4,
+    sizePx: { w: 646, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED_FURNITURE} A large open garden parasol in natural canvas, seen almost from above so the canopy is a broad shallow octagon with its ribs reading through the fabric, the pole and base just visible beneath the near edge.`,
+  },
+
+  /* ---- play and growing: the things a family garden is furnished with ---- */
+  'vis-raised-bed': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'raised-bed', tags: ['vegetable'] },
+    metres: { w: 2, h: 1 },
+    heightMetres: 0.45,
+    sizePx: { w: 768, h: 421 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED} A timber raised vegetable bed made of stacked softwood sleepers, its long side running left to right, planted with rows of leafy vegetables, the near face of the timber visible below the soil line.`,
+  },
+  'vis-swing': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'play-equipment', tags: ['swing'] },
+    metres: { w: 3, h: 2 },
+    heightMetres: 2.2,
+    sizePx: { w: 768, h: 632 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED} A wooden A-frame garden swing set with two seats hanging on ropes, the top beam running left to right, the splayed legs and the seats below all visible.`,
+  },
+  'vis-slide': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'play-equipment', tags: ['slide'] },
+    metres: { w: 1.2, h: 2.6 },
+    heightMetres: 1.6,
+    sizePx: { w: 313, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED} A children's garden slide, the ladder and platform at the top of the frame and the green chute running down towards the bottom of the picture.`,
+  },
+  'vis-trampoline': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'play-equipment', tags: ['trampoline'] },
+    metres: { w: 3, h: 3 },
+    heightMetres: 0.9,
+    sizePx: { w: 722, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED} A round garden trampoline with a black jumping mat and a blue padded edge, its legs just visible beneath the near rim, with no safety net.`,
+  },
+
+  /* ---- containers: the smallest thing whose height has to read ---- */
+  'vis-planter': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'planter' },
+    metres: { w: 0.6, h: 0.6 },
+    heightMetres: 0.9,
+    sizePx: { w: 582, h: 768 },
+    variants: 2,
+    transparent: true,
+    prompt: `${ELEVATED_PLANTER} A square garden planter about six hundred millimetres across, its rim and a little of its outer face visible, holding a clipped evergreen ball that stands proud of it. Variant one a dark powder-coated metal trough, variant two an oak sleeper planter.`,
+  },
+
+  /* ---- skins: the materials the extrusions wear ----
+   *
+   * Textures, and lit flat like every other texture here — which is the point. A skin goes onto a
+   * face whose brightness the renderer computes from that face's own normal against the scene light,
+   * exactly as the roof planes already are. Art with baked light would be lit twice, and the two
+   * would disagree the moment the sun moved.
+   */
+  'skin-fence-boards': {
+    kind: 'texture',
+    camera: 'elevated',
+    taxon: { group: 'surface', type: 'timber-board', tags: ['fence', 'vertical', 'skin'] },
+    metres: { w: 1.8, h: 1.8 },
+    sizePx: { w: 512, h: 512 },
+    variants: 1,
+    transparent: false,
+    prompt: `${SKIN} A close-boarded timber garden fence panel, vertical feather-edge boards of weathered softwood butted side by side with fine shadow lines between them, seen square on.`,
+  },
+  'skin-render': {
+    kind: 'texture',
+    camera: 'elevated',
+    taxon: { group: 'surface', type: 'walling', tags: ['render', 'vertical', 'skin'] },
+    metres: { w: 2, h: 2 },
+    sizePx: { w: 512, h: 512 },
+    variants: 1,
+    transparent: false,
+    prompt: `${SKIN} A smooth painted render wall in a warm off-white, very fine even texture with no cracks, joints or staining, seen square on.`,
+  },
+  'skin-roof-slate': {
+    kind: 'texture',
+    camera: 'elevated',
+    taxon: { group: 'architectural', type: 'roofing', tags: ['slate', 'skin'] },
+    metres: { w: 2, h: 2 },
+    sizePx: { w: 512, h: 512 },
+    variants: 1,
+    transparent: false,
+    prompt: `${SKIN} A slate roof, overlapping courses of flat grey-blue slates in a regular running bond, their lower edges casting fine shadow lines, seen square on.`,
+  },
+  'skin-roof-felt': {
+    kind: 'texture',
+    camera: 'elevated',
+    taxon: { group: 'architectural', type: 'roofing', tags: ['felt', 'shed', 'skin'] },
+    metres: { w: 1.5, h: 1.5 },
+    sizePx: { w: 512, h: 512 },
+    variants: 1,
+    transparent: false,
+    prompt: `${SKIN} A mineral-finish roofing felt in dark charcoal grey, a fine even granular surface with a shallow overlap line, as found on a garden shed roof, seen square on.`,
+  },
 } as const satisfies Record<string, AssetFamily>;
 
 export type AssetId = keyof typeof ASSET_FAMILIES;
@@ -913,4 +1301,40 @@ export function assetFile(id: AssetId, variant: number): string {
   const family: AssetFamily = ASSET_FAMILIES[id];
   const dir = family.kind === 'sprite' ? 'sprites' : 'textures';
   return `${dir}/${id}-${variant}.webp`;
+}
+
+/**
+ * How much ground an elevated asset's image covers, in metres.
+ *
+ * The frame is the footprint with the object's height leaning up the screen above it:
+ *
+ * ```
+ * width  = metres.w                       the footprint's width
+ * height = metres.h + heightMetres × RISE  the footprint's depth, plus the lift
+ * ```
+ *
+ * Derived rather than declared, because declaring it would let a family's stated frame drift from
+ * its stated height and there would be no way to tell which was wrong. One consequence worth
+ * knowing: changing `RISE` reframes every elevated asset, which is exactly why it is not a setting.
+ */
+export function elevatedFrame(family: AssetFamily): { w: number; h: number } {
+  return { w: family.metres.w, h: family.metres.h + (family.heightMetres ?? 0) * RISE };
+}
+
+/**
+ * Where an elevated asset stands inside its own frame, as a fraction.
+ *
+ * The middle of the footprint band along the bottom. An object drawn to the specification has its
+ * base at the bottom of the frame and its ground plane occupying the bottom `metres.h` of it, so
+ * this is where the thing is actually standing — which is the point the renderer puts on the
+ * element's own anchor.
+ *
+ * Note the asymmetry with a plan sprite, whose anchor is simply the middle of the image: a plan
+ * sprite *is* its footprint, so the two coincide. Here they do not, and assuming they did would
+ * float every object half its own height above the ground it stands on.
+ */
+export function elevatedAnchor(family: AssetFamily): { x: number; y: number } {
+  const frame = elevatedFrame(family);
+  if (frame.h <= 0) return { x: 0.5, y: 0.5 };
+  return { x: 0.5, y: 1 - family.metres.h / 2 / frame.h };
 }

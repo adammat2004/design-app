@@ -31,8 +31,11 @@ import type { DesignConstraints } from './constraints.js';
  * **No recessed lights.** They belong in steps and in a deck edge, and steps are not in the model
  * yet. Placing them anywhere else would be decoration rather than a scheme.
  *
- * **Nothing on a low budget.** Lighting is a real cost with a real trench in it, and a low-budget
- * concept that quietly specified fourteen fittings would be misreporting what it costs.
+ * **Nothing on a low budget, unless it was asked for by name.** Lighting is a real cost with a real
+ * trench in it, and a low-budget concept that quietly specified fourteen fittings would be
+ * misreporting what it costs. That is a default, though, not a rule about what is possible: a brief
+ * that ticked "Garden lighting" has said it will pay for it, and returning a dark garden anyway
+ * would be the brief having no force. `constraints.wantsLighting` is the only thing that lifts it.
  */
 
 /** Uplights, then bollards. A garden with more fittings than plants is a car park. */
@@ -64,16 +67,16 @@ export interface LightingOptions {
 /**
  * Every fitting this concept specifies.
  *
- * Returns `[]` on a low budget and on a plan with nothing worth lighting, which is the common case
- * and must stay cheap: a concept with no trees and no long path gets no lighting rather than a
- * token fitting placed to prove the feature exists.
+ * Returns `[]` on an unasked-for low budget and on a plan with nothing worth lighting, which is the
+ * common case and must stay cheap: a concept with no trees and no long path gets no lighting rather
+ * than a token fitting placed to prove the feature exists.
  */
 export function lightingScheme(
   elements: DesignElement[],
   options: LightingOptions,
 ): DesignElement[] {
   const { constraints, boundary, scope, index } = options;
-  if (constraints.budget === 'low') return [];
+  if (constraints.budget === 'low' && !constraints.wantsLighting) return [];
 
   const material = materialFor('lighting', constraints, index);
   const lights: DesignElement[] = [];

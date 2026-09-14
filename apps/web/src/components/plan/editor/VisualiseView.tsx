@@ -5,12 +5,15 @@ import { type Point } from '@garden-studio/schema';
 import { Maximize2, Minus, Plus, Sprout } from 'lucide-react';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { buildRenderScene } from '@/lib/render/build-scene';
+import { browserRendererVersion } from '@/lib/render/diagnostics';
 import { fitPresentation, presentationExtent, zoomPresentation } from '@/lib/render/viewport';
 import { SceneRenderer, type ViewSize, type ViewTransform } from '@/lib/render/pixi/renderer';
 import { drawBrowserOverlay } from '@/lib/render/draw-browser-overlay';
+import { drawCanvasScene } from '@/lib/render/canvas-compositor';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
+import { gradeCss } from '@/lib/materials/grade';
 
 /**
  * Visualise, drawn by WebGL and driven live.
@@ -30,10 +33,8 @@ import { useAssetVersion } from '@/lib/materials/assets/use-assets';
  *
  * Switching between 2D Plan and Visualise must not regenerate or alter the design — they are two
  * views over one plan. Nothing here writes to the layout: it reads the same stores the editor
- * reads and asks `buildRenderScene` for a different *picture* of them. The one thing it does write
- * is `site.sun`, and that is deliberate and pre-existing: which hour the plan is drawn at is a
- * design decision of the same kind as which way the decking runs, so it belongs on the document
- * and has to survive a reload.
+ * reads and asks `buildRenderScene` for a different picture of them. Time and maturity previews
+ * are ephemeral; the saved solar state remains unchanged and supplies the initial preview.
  */
 const ZOOM_STEP = 1.12;
 
@@ -50,15 +51,18 @@ export function VisualiseView() {
   /** Flipped once the wrapper has been laid out, which is what lets the mount effect run. */
   const [sized, setSized] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
   const [view, setView] = useState<ViewTransform | null>(null);
   const [fitMode, setFitMode] = useState<'garden' | 'plot' | 'manual'>('garden');
   const [size, setSize] = useState<ViewSize>({ width: 0, height: 0 });
   const drag = useRef<{ x: number; y: number; centre: Point } | null>(null);
 
+  const previewMinutes = usePlanEditorStore((state) => state.previewMinutes);
   const boundary = useMemo(() => draftPolygon(boundaryDraft), [boundaryDraft]);
-  const planScene = useMemo(() => ({ boundary, house: boundaryDraft.house, elements, site: boundaryDraft }),
-    [boundary, boundaryDraft, elements]);
-  const scene = useMemo(() => buildRenderScene(planScene, { view: 'visualise', maturity }),
+  const planScene = useMemo(() => ({ boundary, house: boundaryDraft.house, elements,
+    site: previewMinutes === null ? boundaryDraft : { ...boundaryDraft, sun: { ...boundaryDraft.sun, minutes: previewMinutes } } }),
+    [boundary, boundaryDraft, elements, previewMinutes]);
+  const scene = useMemo(() => buildRenderScene(planScene, { view: 'visualise', maturity, rendererVersion: browserRendererVersion() }),
     [planScene, maturity]);
 
   /*
@@ -99,6 +103,8 @@ export function VisualiseView() {
 
     let live = true;
     const renderer = new SceneRenderer();
+    const lost = () => { if (live) { setFailed(true); setReady(true); } };
+    canvas.addEventListener('webglcontextlost', lost);
 
     void (async () => {
       try {
@@ -110,13 +116,14 @@ export function VisualiseView() {
         rendererRef.current = renderer;
         setReady(true);
       } catch {
-        if (live) setFailed(true);
+        if (live) { setFailed(true); setReady(true); }
       }
     })();
 
     return () => {
       live = false;
       rendererRef.current = null;
+      canvas.removeEventListener('webglcontextlost', lost);
       renderer.destroy();
       canvas.remove();
     };
@@ -152,7 +159,7 @@ export function VisualiseView() {
   useEffect(() => {
     const renderer = rendererRef.current;
     const wrapper = wrapperRef.current;
-    if (!renderer || !wrapper || !view || boundary.length < 3) return;
+    if ((!renderer && !failed) || !wrapper || !view || boundary.length < 3) return;
 
     /*
      * Deferred rather than drawn in the effect body, so a draw failure is reported from an async
@@ -169,16 +176,20 @@ export function VisualiseView() {
         const size: ViewSize = { width: wrapper.clientWidth, height: wrapper.clientHeight };
         if (size.width === 0 || size.height === 0) return;
 
-        renderer.render(scene, view, size);
-        drawBrowserOverlay(overlayRef.current, scene, boundaryDraft, view, size);
+        if (failed && overlayRef.current) {
+          drawCanvasScene(overlayRef.current, scene, view, size);
+        } else {
+          renderer?.render(scene, view, size);
+          drawBrowserOverlay(overlayRef.current, scene, boundaryDraft, view, size);
+        }
       } catch (error) {
         console.error('Garden presentation render failed', error);
-        setFailed(true);
+        if (failed) setFallbackFailed(true); else setFailed(true);
       }
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [boundary, boundaryDraft, scene, view, assetVersion, ready, size]);
+  }, [boundary, boundaryDraft, scene, view, assetVersion, ready, size, failed]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -232,22 +243,17 @@ export function VisualiseView() {
       data-centre={view ? `${view.centre.x.toFixed(3)},${view.centre.y.toFixed(3)}` : ''}
       data-plants={scene.plants.length}
       className="relative min-h-0 flex-1 touch-none overflow-hidden rounded-lg bg-slate-50"
+      // One grade, whether the active design compositor is Pixi or the Canvas fallback.
+      style={{ filter: gradeCss() }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/*
-        The objects, the house and the fence, on a 2D canvas over the WebGL one.
-
-        Not a compromise but a division of labour: WebGL earns its place on the ground and on the
-        thousands of plant sprites, where batching is the whole game. It earns nothing on the
-        twenty-odd pergolas, benches and trees — and writing those a second time in WebGL would
-        mean two sets of drawing rules that can disagree, which is the drift `buildRenderScene`
-        exists to stop. Both canvases draw from one scene and one transform.
-      */}
+      {/* Clear during GPU rendering; owns the complete design only when WebGL is unavailable. */}
       <canvas
         ref={overlayRef}
+        data-testid={failed ? 'visualise-fallback' : undefined}
         aria-hidden
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
@@ -267,13 +273,12 @@ export function VisualiseView() {
         ))}
       </div>
       <span className="pointer-events-none absolute bottom-5 left-4 hidden text-xs text-garden-muted sm:block">Drag to pan · Scroll to zoom</span>
-      {failed ? (
+      {fallbackFailed ? (
         <p
           data-testid="visualise-failed"
           className="absolute inset-0 flex items-center justify-center text-xs text-garden-muted"
         >
-          This view needs WebGL, which this browser has not made available. The Plan tab and the PNG
-          download still work.
+          This browser could not draw the garden. Try reloading; the saved design is unchanged.
         </p>
       ) : null}
     </div>

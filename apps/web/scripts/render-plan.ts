@@ -9,6 +9,8 @@ import {
   nightFraction,
   readPlanDocument,
   shadowCast,
+  stepFlight,
+  type DesignElement,
   type PlanDocument,
   type Point,
 } from '@garden-studio/schema';
@@ -131,6 +133,79 @@ async function compositionSheet(): Promise<Buffer> {
     context.fillText(`${prefix} · ${name}`, x + 18, y + 26);
   }
   return canvas.toBuffer('image/png');
+}
+
+/**
+ * A raised terrace, its retaining wall, a flight down off it and a kerbed path.
+ *
+ * **Synthesised, because no captured fixture has any of it.** The generator raises a terrace only on
+ * a formal or modern brief at a high budget and none of the eleven fixtures lands there, so levels,
+ * steps and walling have never appeared on a judging sheet — which is exactly how they came to be
+ * the last things nobody had looked at. The alternative was re-capturing fixtures against the API
+ * and changing every other sheet in the process.
+ *
+ * Everything here is an ordinary edit to a real plan: `elevation` on the terrace, `retaining` naming
+ * a walling product, and a `steps` element whose own `elevation` is the rise it serves. The
+ * renderer derives the wall, the treads and the risers from those three fields exactly as it would
+ * for a plan a user had made.
+ */
+function levelsSheet(document: PlanDocument): Buffer {
+  const RISE_METRES = 0.45;
+
+  const terrace = document.layout.elements.find(
+    (element) =>
+      element.category === 'paved-area' && element.role === 'feature' && element.shape.kind === 'rect',
+  );
+  if (!terrace || terrace.shape.kind !== 'rect') {
+    throw new Error('the levels sheet needs a fixture with a rectangular terrace');
+  }
+
+  const flight = stepFlight(RISE_METRES);
+  if (!flight) throw new Error('a 0.45 m rise should always give a flight');
+
+  /*
+   * Placed the way `stepsFromTerrace` places one: just beyond the terrace's far edge, turned so its
+   * own `-depth/2` end is the one against the terrace. That is the convention `drawFlight` and
+   * `stepNosings` both count from, and getting it backwards puts the flight under the house.
+   */
+  const depth = flight.risers * 0.35;
+  // Out along the terrace's own local −y, which is the garden side; then turned to face back.
+  const terraceAngle = (terrace.shape.rotation * Math.PI) / 180;
+  const reach = terrace.shape.depth / 2 + depth / 2;
+  const centre = {
+    x: terrace.shape.centre.x + Math.sin(terraceAngle) * reach,
+    y: terrace.shape.centre.y - Math.cos(terraceAngle) * reach,
+  };
+  const rotation = terrace.shape.rotation + 180;
+
+  const steps: DesignElement = {
+    id: `${terrace.id}:steps`,
+    category: 'structure',
+    role: 'feature',
+    name: 'Steps',
+    symbol: 'steps',
+    material: terrace.material,
+    zone: terrace.zone,
+    height: 0,
+    elevation: RISE_METRES,
+    shape: {
+      kind: 'rect',
+      centre,
+      width: Math.min(2.4, terrace.shape.width),
+      depth,
+      rotation,
+    },
+  } as DesignElement;
+
+  const elements = document.layout.elements.map((element) =>
+    element.id === terrace.id
+      ? ({ ...element, elevation: RISE_METRES, retaining: 'walling-stone' } as DesignElement)
+      : element,
+  );
+
+  return renderPlan({ ...sceneOf(document), elements: [...elements, steps] }, 64, {
+    view: 'visualise',
+  });
 }
 
 /**
@@ -326,6 +401,7 @@ async function main(): Promise<void> {
     }
   });
 
+  write('12-levels', levelsSheet(loadFixture('reference')));
   write('04-shadow-hours', shadowHours(loadFixture('suburban')));
   write('04-lighting-hours', lightingHours(loadFixture('suburban')));
   write('00-composition-sheet', await compositionSheet());

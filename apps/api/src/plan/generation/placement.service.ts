@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { polygonToWkt, type Point } from '@garden-studio/schema';
 import { sql, type SQL } from 'drizzle-orm';
 import { DRIZZLE, type Database } from '../../db/db.module.js';
+import { unionOf } from './fill.service.js';
 
 /**
  * Where a footprint can legally go.
@@ -74,18 +75,8 @@ export class PlacementService {
     const samples = request.sampleCount ?? DEFAULT_SAMPLES;
     const obstacles = request.obstacles.filter((ring) => ring.length >= 3);
 
-    /*
-     * COALESCE rather than a conditional CTE: an empty obstacle set is the common case on a
-     * fresh garden, and 'POLYGON EMPTY' makes ST_Difference a no-op instead of forcing two
-     * versions of the query to keep in step.
-     */
-    const obstacleUnion: SQL =
-      obstacles.length === 0
-        ? sql`'POLYGON EMPTY'::geometry`
-        : sql`ST_UnaryUnion(ST_Collect(ARRAY[${sql.join(
-            obstacles.map((ring) => sql`ST_GeomFromText(${polygonToWkt(ring)}::text)`),
-            sql`, `,
-          )}]))`;
+    /* One helper, shared with `fill.service.ts`: see `unionOf` for why every ring is made valid. */
+    const obstacleUnion = unionOf(obstacles);
 
     /*
      * What distance is measured against. The column is still called `house_distance` because for

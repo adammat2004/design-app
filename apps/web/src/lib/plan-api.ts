@@ -4,10 +4,12 @@ import {
   GenerateConceptsResultSchema,
   PlanProjectSchema,
   PlanProjectSummarySchema,
+  RecordDesignEventsResultSchema,
   SectionPatchResultSchema,
   ValidationResultSchema,
   ValidationViolationSchema,
   type AssistantProposal,
+  type DesignEvent,
   type GardenProposal,
   type FeaturesSection,
   type GardenBrief,
@@ -16,6 +18,7 @@ import {
   type PlanDocument,
   type PlanProject,
   type PlanProjectSummary,
+  type RecordDesignEventsResult,
   type SectionPatchResult,
   type SiteSection,
   type ValidationResult,
@@ -229,6 +232,25 @@ export function proposeGardenChanges(
     method: 'POST',
     body: JSON.stringify({ message }),
     signal,
+  });
+}
+
+/**
+ * Records what the user did with the design they were offered.
+ *
+ * A batch, and the only call in this client a caller is expected to ignore. Everything else here
+ * either answers a question the screen is waiting on or reports a failure it has to show; this one
+ * exists so the generator can be measured from outside itself, and a user must never wait on it,
+ * see it fail, or have an editor action broken by it. `recordDesignEvents` in `state/design-events`
+ * is what callers actually use — it swallows the rejection this can still produce.
+ */
+export function recordDesignEvents(
+  id: string,
+  events: DesignEvent[],
+): Promise<RecordDesignEventsResult> {
+  return request(`/plan-projects/${id}/events`, RecordDesignEventsResultSchema, {
+    method: 'POST',
+    body: JSON.stringify({ events }),
   });
 }
 

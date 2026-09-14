@@ -58,7 +58,11 @@ export function shadowLayerKey(request: ShadowRequest): string {
   const occluders = request.occluders
     .map(
       (occluder) =>
-        `${round(occluder.height)}:${round(occluder.baseHeight ?? 0)}@${ring(occluder.outline)}`,
+        // `character` decides the tone and the blur radius, so it changes the pixels and belongs
+        // here for the same reason `light` belongs in `patternKey`. Leave it out and reclassifying
+        // a hedge serves the old raster back with no error anywhere.
+        `${round(occluder.height)}:${round(occluder.baseHeight ?? 0)}:` +
+        `${occluder.character ?? 'built'}@${ring(occluder.outline)}`,
     )
     .join('|');
 

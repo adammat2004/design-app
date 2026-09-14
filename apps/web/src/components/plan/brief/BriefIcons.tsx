@@ -9,12 +9,19 @@ import {
   Columns3,
   Droplets,
   Flame,
+  Flower2,
   Gem,
+  Grid2x2,
+  Home,
+  Lamp,
   Leaf,
   Paintbrush,
   Scissors,
   Sprout,
+  Sun,
   ToyBrick,
+  Utensils,
+  Waves,
   Wallet,
   Warehouse,
   type LucideIcon,
@@ -33,14 +40,22 @@ import type { BudgetBand, DesiredFeature, MaintenanceLevel } from '@/lib/brief';
 
 const DESIRED_FEATURE_ICONS: Record<DesiredFeature, LucideIcon> = {
   seating: Armchair,
+  dining: Utensils,
   play: ToyBrick,
   vegPatch: Sprout,
+  greenhouse: Sun,
   water: Droplets,
+  hotTub: Waves,
   // No pergola in lucide; three uprights read as a frame overhead.
   pergola: Columns3,
   firePit: Flame,
   storage: Warehouse,
   outdoorKitchen: CookingPot,
+  gardenRoom: Home,
+  plantingBeds: Flower2,
+  // A mown panel: the one feature whose whole character is that it is an empty rectangle.
+  lawn: Grid2x2,
+  lighting: Lamp,
   other: CirclePlus,
 };
 

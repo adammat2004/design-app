@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Circle, Group, Image as KonvaImage, Line } from 'react-konva';
-import { resolveSymbol, type Point } from '@garden-studio/schema';
+import { rectToPolygon, resolveSymbol, type Point } from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { elementOutline, type DesignElement } from '@/lib/concepts';
 import { materialFill, useSurfacePattern } from '@/lib/materials';
@@ -36,7 +36,9 @@ import {
 import { symbolSprite } from '@/lib/materials/symbols/sprites';
 import {
   facesLight,
+  gardenRoomParts,
   gazeboRoof,
+  glazingBars,
   pergolaPosts,
   raisedBedRails,
   rectNormal,
@@ -430,6 +432,101 @@ function SymbolDrawing({
         </Group>
       );
     }
+    /*
+     * The two glazed buildings. Same geometry as the composer draws, same convention about which
+     * face is glass — see `gardenRoomParts`. The `GLASS` and `GLAZING_BAR` tones are repeated here
+     * rather than imported because every other case in this switch inlines its colours too, and
+     * one exported constant among a dozen literals reads as if it meant something more.
+     */
+    case 'garden-room': {
+      const { lit: litTone, unlit: unlitTone } = roofTones(element);
+      const parts = gardenRoomParts(shape);
+      const fallNormal = rectNormal(
+        shape,
+        shape.width >= shape.depth ? { x: 0, y: -1 } : { x: -1, y: 0 },
+      );
+      const bars = 0.6 * scale >= MIN_GLAZING_BAR_PX;
+      const bar = glazingBarPx(scale);
+
+      return (
+        <Group listening={false}>
+          <Line
+            points={ringPoints(parts.plane)}
+            closed
+            fill={facesLight(fallNormal, lit) ? litTone : unlitTone}
+            opacity={ROOF_ALPHA}
+          />
+          <Line points={ringPoints(parts.glazing)} closed fill={GLASS} />
+          <Line points={ringPoints(parts.glazing)} closed stroke={GLAZING_BAR} strokeWidth={bar} />
+          {bars
+            ? parts.mullions.map((mullion, index) => (
+                <Line
+                  key={`mullion-${index}`}
+                  points={ringPoints(mullion)}
+                  stroke={GLAZING_BAR}
+                  strokeWidth={bar}
+                />
+              ))
+            : null}
+          <Line
+            points={ringPoints(parts.high)}
+            stroke={CATEGORY_COLOURS.structure.stroke}
+            strokeWidth={bar * 1.6}
+          />
+        </Group>
+      );
+    }
+    case 'greenhouse': {
+      const { lit: litTone, unlit: unlitTone } = roofTones(element);
+      const roof = shedRoof(shape);
+      const normal = rectNormal(
+        shape,
+        shape.width >= shape.depth ? { x: 0, y: 1 } : { x: 1, y: 0 },
+      );
+      const secondLit = facesLight(normal, lit);
+      const bars = 0.6 * scale >= MIN_GLAZING_BAR_PX;
+      const bar = glazingBarPx(scale);
+
+      return (
+        <Group listening={false}>
+          <Line
+            points={ringPoints(roof.slopes[0])}
+            closed
+            fill={secondLit ? unlitTone : litTone}
+            opacity={ROOF_ALPHA}
+          />
+          <Line
+            points={ringPoints(roof.slopes[1])}
+            closed
+            fill={secondLit ? litTone : unlitTone}
+            opacity={ROOF_ALPHA}
+          />
+          <Line points={ringPoints(roof.slopes[0])} closed fill={GLASS} />
+          <Line points={ringPoints(roof.slopes[1])} closed fill={GLASS} />
+          {bars
+            ? glazingBars(shape).map((line, index) => (
+                <Line
+                  key={`bar-${index}`}
+                  points={ringPoints(line)}
+                  stroke={GLAZING_BAR}
+                  strokeWidth={bar}
+                />
+              ))
+            : null}
+          <Line
+            points={ringPoints(rectToPolygon(shape))}
+            closed
+            stroke={GLAZING_BAR}
+            strokeWidth={bar * 1.4}
+          />
+          <Line
+            points={ringPoints(roof.ridge)}
+            stroke={CATEGORY_COLOURS.structure.stroke}
+            strokeWidth={bar * 1.6}
+          />
+        </Group>
+      );
+    }
     case 'raised-bed': {
       const rails = raisedBedRails(shape);
       return (
@@ -462,6 +559,21 @@ function SymbolDrawing({
 
 /** Posts read as darker timber end-grain. The same tone `draw-symbol.ts` uses. */
 const POST_TONE = '#5b4a36';
+
+/**
+ * Glazing, matching `draw-symbol.ts`. A cool near-white rather than a blue — glass from above is
+ * reflected sky, and a saturated blue panel in a garden reads as water.
+ */
+const GLASS = 'rgba(214, 230, 236, 0.32)';
+const GLAZING_BAR = 'rgba(48, 57, 52, 0.7)';
+
+/** Below this the bars stop being divisions and become a grey wash over the whole roof. */
+const MIN_GLAZING_BAR_PX = 3;
+
+/** A 30 mm bar, floored at a whole pixel. The twin of `draw-symbol.ts`'s. */
+function glazingBarPx(pxPerMetre: number): number {
+  return Math.max(1, Math.min(3, 0.03 * pxPerMetre));
+}
 
 /* ---------------------------------------------------------------- symbols */
 

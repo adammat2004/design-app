@@ -1,4 +1,4 @@
-import { boundingBox, insetPolygon, type Point } from '@garden-studio/schema';
+import { boundingBox, insetPolygon, outsetPolygon, type Point } from '@garden-studio/schema';
 
 /**
  * A plausible roof over the mapped footprint.
@@ -18,12 +18,15 @@ import { boundingBox, insetPolygon, type Point } from '@garden-studio/schema';
  * this is not. Taking the storey count as an input here would be a dependency that changes no
  * pixel — and one a later reader would reasonably assume must matter.
  *
- * **The footprint is untouched.** The roof is drawn *within* `housePolygon(house)`, never outside
- * it — which is why there is no eaves overhang here. An overhang would look slightly better and
- * would put drawn geometry outside the outline that `houseFitsInside` and the validator measure,
- * and a presentation flourish that can make a legal house look illegal is not worth a millimetre
- * of shading. The prompt's rule, kept literally: do not modify measurement geometry to make the
- * roof look good.
+ * **The footprint is untouched**, and that rule has survived the arrival of an eaves overhang
+ * rather than being weakened by it. `overhang` defaults to zero, so the plan drawing is still the
+ * roof drawn *within* `housePolygon(house)` — where an oversail would put drawn geometry outside
+ * the outline `houseFitsInside` measures, and a presentation flourish that can make a legal house
+ * look illegal is not worth a millimetre of shading. Visualise passes `EAVES_OVERHANG`, where the
+ * roof is already drawn a metre and a quarter up the screen and the question is no longer whether
+ * drawn geometry may leave the outline but whether the building reads as one. See `EAVES_OVERHANG`.
+ * The prompt's rule is kept either way: do not modify *measurement* geometry to make the roof look
+ * good, and nothing here does.
  *
  * ## How the shape is derived
  *
@@ -78,6 +81,16 @@ export interface RenderRoof {
   planes: RoofPlane[];
   /** The ridge and hips, as lines to draw over the planes. Empty for a flat roof. */
   ridge: [Point, Point][];
+  /**
+   * The roof's own outer edge — the walls grown by the overhang, or the walls themselves when
+   * there is none.
+   *
+   * Carried rather than left to the painter to reassemble from the planes. The planes tile this
+   * ring, so it *could* be recovered from them, and a painter doing that would be rebuilding
+   * something the builder already had — and would get it wrong the first time a roof form had
+   * planes that meet somewhere other than a ridge.
+   */
+  eaves: Point[];
 }
 
 /**
@@ -90,8 +103,41 @@ const GABLE_ASPECT = 1.35;
 /** Held back off the true half-span so the ridge stays a line rather than collapsing to a point. */
 const RIDGE_INSET_RATIO = 0.46;
 
-export function roofFor(outline: Point[], light: Point): RenderRoof | null {
-  if (outline.length < 3) return null;
+/**
+ * How far a roof oversails its own walls, in metres. Visualise only.
+ *
+ * ## Why this exists now, when it was deliberately refused before
+ *
+ * The original note stands on its own terms: in the **plan** drawing the roof *is* the house's
+ * drawn extent, so an overhang would put geometry outside the outline `houseFitsInside` measures,
+ * and a presentation flourish that can make a legal house look illegal is not worth a millimetre of
+ * shading. None of that has changed and the plan view still gets `overhang: 0`.
+ *
+ * What changed is the elevated view, where the roof is already drawn 1.27 m up the screen from the
+ * footprint — far further than any eaves. The question there is not whether drawn geometry may
+ * leave the outline, which it already does by a factor of four, but whether the building reads as a
+ * building. A roof flush with its walls reads as an extruded block; an oversailing one reads as a
+ * roof, and it is the single clearest difference between the reference photograph and what we draw.
+ *
+ * 0.35 m is a real domestic eaves projection. **Nothing derived from it may reach validation**, and
+ * nothing can: it is applied inside `roofFor` in the visualise branch and never touches
+ * `housePolygon`, which is what every measurement still reads.
+ */
+export const EAVES_OVERHANG = 0.35;
+
+export function roofFor(walls: Point[], light: Point, overhang = 0): RenderRoof | null {
+  if (walls.length < 3) return null;
+
+  /*
+   * Everything below works on the eaves line rather than on the wall line, so the hips, the ridge
+   * and every plane are derived from the roof's real extent. Drawing the roof from the walls and
+   * then fattening it afterwards would put the hips where no roof has them.
+   *
+   * An outset that folds through itself falls back to no overhang rather than to nothing: a roof
+   * flush with its walls is a worse drawing, and no roof at all is a hole in the plan.
+   */
+  const grown = overhang > 0 ? outsetPolygon(walls, overhang) : null;
+  const outline = grown && grown.length === walls.length ? grown : walls;
 
   const rectangular = rectangularRoof(outline, light);
   if (rectangular) return rectangular;
@@ -114,6 +160,7 @@ export function roofFor(outline: Point[], light: Point): RenderRoof | null {
       material: DEFAULT_ROOF_MATERIAL,
       planes: [{ outline, lit: 0 }],
       ridge: [],
+      eaves: outline,
     };
   }
 
@@ -150,7 +197,7 @@ export function roofFor(outline: Point[], light: Point): RenderRoof | null {
     ridgeRing[(index + 1) % ridgeRing.length]!,
   ]);
 
-  return { form, material: DEFAULT_ROOF_MATERIAL, planes, ridge };
+  return { form, material: DEFAULT_ROOF_MATERIAL, planes, ridge, eaves: outline };
 }
 
 /** Orthogonal footprints get a real ridge in the building's frame, including rotated houses. */
@@ -203,6 +250,7 @@ function rectangularRoof(outline: Point[], light: Point): RenderRoof | null {
         ? corners.map((corner, i): [Point, Point] => [corner, i === 0 || i === 3 ? r0 : r1])
         : []),
     ],
+    eaves: corners,
   };
 }
 

@@ -57,8 +57,57 @@ export interface ShadowRaster {
  */
 const MAX_RASTER_PX = 4096;
 
-/** A restrained presentation penumbra, in metres; never changes the solar projection. */
+/**
+ * A restrained presentation penumbra, in metres; never changes the solar projection.
+ *
+ * This is the correct number for a **hard** occluder and nothing else: the sun subtends about half
+ * a degree, so the penumbra at the ground is roughly distance × 0.009. A wall, a shed, a house.
+ */
 export const PRESENTATION_SHADOW_SOFTNESS = 0.06;
+
+/**
+ * And this is a tree, which is not a hard occluder at all.
+ *
+ * A canopy is porous — light comes through it in a thousand places — so its shadow has no crisp
+ * edge and never reaches full darkness. Applying the hard-occluder number to foliage drew every
+ * tree on the plan as a sharp dark disc, which is the single most obviously non-photographic thing
+ * in the render. Nearly an order of magnitude softer, which sounds drastic and is still less
+ * diffuse than the real thing.
+ */
+export const FOLIAGE_SHADOW_SOFTNESS = 0.45;
+
+/**
+ * Foliage shade is lighter as well as softer, and the lightness cannot come from a second alpha.
+ *
+ * The whole layer is composited once at `SHADOW_OPACITY` — that single composite is what makes two
+ * overlapping shadows read as one shadow instead of doubling. Compositing two rasters at two
+ * different alphas would put the double-darkening straight back wherever they crossed. A lighter
+ * *tone* inside the one opaque union gets the same result with the invariant intact.
+ *
+ * Same blue-grey, because shaded ground outdoors is lit by the sky and sky light is blue; a shadow
+ * that drifts toward neutral as it lightens reads as dirt rather than as shade.
+ */
+export const FOLIAGE_SHADOW_TONE = '#7c8a91';
+
+/**
+ * Draw order, and it is the whole of how the overlap rule stays honest.
+ *
+ * Built last, so where a tree's shadow crosses a wall's the **darker** one wins. That is what
+ * actually happens: the wall blocks the sun completely, and a porous canopy in front of it cannot
+ * un-block it. Fixed order rather than input order means the result does not depend on which
+ * occluder the scene happened to list first.
+ */
+const CHARACTER_ORDER = ['foliage', 'built'] as const;
+
+const TONE: Record<(typeof CHARACTER_ORDER)[number], string> = {
+  foliage: FOLIAGE_SHADOW_TONE,
+  built: SHADOW_TONE,
+};
+
+const SOFTNESS: Record<(typeof CHARACTER_ORDER)[number], number> = {
+  foliage: FOLIAGE_SHADOW_SOFTNESS,
+  built: PRESENTATION_SHADOW_SOFTNESS,
+};
 
 /**
  * Rasterises every cast shadow on the plan into one image.
@@ -74,6 +123,18 @@ export function renderShadowLayer(
   occluders: ShadowOccluder[],
   cast: ShadowCast,
   boundary: Point[],
+  /**
+   * `softnessMetres` is a **switch, not a radius** — read this before changing a caller.
+   *
+   * Any value above zero turns the presentation path on; the blur actually applied then comes from
+   * the occluder's own character (`PRESENTATION_SHADOW_SOFTNESS` for built, `FOLIAGE_SHADOW_SOFTNESS`
+   * for foliage), because one number cannot be right for both a brick wall and a tree canopy. So
+   * passing 0.2 here does not give a 0.2 m penumbra; it gives the same picture 0.06 would. Zero or
+   * absent is the plan view, which takes the old single-union path untouched.
+   *
+   * Kept as a number rather than a boolean because it is in `shadowLayerKey`, and a caller that
+   * varies it should still miss the cache rather than silently reuse a raster.
+   */
   pass: DrawPass & { makeCanvas: MakeCanvas; softnessMetres?: number },
 ): ShadowRaster | null {
   if (occluders.length === 0 || boundary.length < 3) return null;
@@ -92,23 +153,79 @@ export function renderShadowLayer(
 
   const originMetres = { x: box.minX, y: box.minY };
 
-  drawShadowLayer(context, occluders, cast, boundary, { pxPerMetre: scale }, originMetres);
+  /*
+   * The plan view takes the old path exactly: one opaque union, one tone, no blur.
+   *
+   * Gating the character treatment on the presentation softness rather than on a view flag is what
+   * makes "2D Plan does not change" true *by construction* here rather than by inspection — the
+   * plan view passes no softness, so it cannot reach any of the code below.
+   */
+  if (!pass.softnessMetres || pass.softnessMetres <= 0) {
+    drawShadowLayer(context, occluders, cast, boundary, { pxPerMetre: scale }, originMetres);
 
-  if (pass.softnessMetres && pass.softnessMetres > 0) {
-    const softened = pass.makeCanvas(widthPx, heightPx);
-    const softenedContext = softened.getContext('2d');
-    if (softenedContext && typeof softenedContext.filter === 'string') {
-      // Blur the opaque union once: overlapping occluders still cannot double-darken.
-      tracePath(softenedContext, boundary, (p) => ({
-        x: (p.x - originMetres.x) * scale, y: (p.y - originMetres.y) * scale,
-      }));
-      softenedContext.clip();
-      softenedContext.filter = `blur(${pass.softnessMetres * scale}px)`;
-      softenedContext.drawImage(canvas, 0, 0, widthPx, heightPx);
-      softenedContext.filter = 'none';
-      return { canvas: softened, originMetres, pxPerMetre: scale, widthPx, heightPx };
-    }
+    return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
   }
+
+  if (typeof context.filter !== 'string') {
+    // No blur available. Still better to draw a crisp shadow than none.
+    drawShadowLayer(context, occluders, cast, boundary, { pxPerMetre: scale }, originMetres);
+
+    return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
+  }
+
+  /*
+   * Two buckets, one scratch canvas, reused.
+   *
+   * `canvas` is the accumulator and `scratch` is where a bucket's opaque union is built before it
+   * is blurred in. **Two live allocations, which is what it was before** — worth being deliberate
+   * about, because this raster reaches 4096² at about 67 MB and Safari has already been recorded
+   * refusing a canvas at 368 MB on the export path. One canvas per bucket per stage would have been
+   * the obvious way to write this and would have put five of them in flight.
+   *
+   *   foliage ─▶ scratch (opaque, light tone) ─▶ blur 0.45 m ─┐
+   *                                                            ├─▶ accumulator ─▶ ONE composite
+   *   built   ─▶ scratch (opaque, dark tone)  ─▶ blur 0.06 m ─┘     at SHADOW_OPACITY
+   *
+   * Built goes in second, so the darker tone covers the lighter where they cross.
+   */
+  const scratch = pass.makeCanvas(widthPx, heightPx);
+  const scratchContext = scratch.getContext('2d');
+  if (!scratchContext) {
+    drawShadowLayer(context, occluders, cast, boundary, { pxPerMetre: scale }, originMetres);
+
+    return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
+  }
+
+  const toPx = (p: Point): Point => ({
+    x: (p.x - originMetres.x) * scale,
+    y: (p.y - originMetres.y) * scale,
+  });
+
+  context.save();
+  tracePath(context, boundary, toPx);
+  context.clip();
+
+  for (const character of CHARACTER_ORDER) {
+    const bucket = occluders.filter((occluder) => (occluder.character ?? 'built') === character);
+    if (bucket.length === 0) continue;
+
+    scratchContext.clearRect(0, 0, widthPx, heightPx);
+    drawShadowLayer(
+      scratchContext,
+      bucket,
+      cast,
+      boundary,
+      { pxPerMetre: scale },
+      originMetres,
+      TONE[character],
+    );
+
+    context.filter = `blur(${SOFTNESS[character] * scale}px)`;
+    context.drawImage(scratch, 0, 0, widthPx, heightPx);
+    context.filter = 'none';
+  }
+
+  context.restore();
 
   return { canvas, originMetres, pxPerMetre: scale, widthPx, heightPx };
 }
@@ -131,6 +248,15 @@ export function drawShadowLayer(
   boundary: Point[],
   pass: DrawPass,
   rasterOrigin: Point,
+  /**
+   * The tone to fill in, defaulting to the one every caller used before buckets existed.
+   *
+   * Set **once, outside the loop**, exactly as it always was — that is not incidental. Varying the
+   * fill per occluder inside a single union is what would let two shadows stack into something
+   * darker than either, so the colour is a property of the whole call rather than of any occluder
+   * in it. A bucket is one call.
+   */
+  tone: string = SHADOW_TONE,
 ): void {
   const { pxPerMetre } = pass;
 
@@ -144,7 +270,7 @@ export function drawShadowLayer(
   tracePath(context, boundary, toPx);
   context.clip();
 
-  context.fillStyle = SHADOW_TONE;
+  context.fillStyle = tone;
 
   for (const occluder of occluders) {
     const baseHeight = occluder.baseHeight ?? 0;

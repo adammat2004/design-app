@@ -108,6 +108,81 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     affinity: 'near-house',
     planName: 'Outdoor kitchen',
   },
+  /*
+   * Somewhere to eat, as opposed to somewhere to sit. It used to be the same answer as `seating`
+   * — the label was "Seating / dining area" — and folding the two together meant a brief asking
+   * for both got one patio with a sofa on it. They are different rooms with different furniture
+   * and, in a real garden, usually different places: the table near the kitchen door, the sofas
+   * where the evening sun lands.
+   *
+   * Sized off `FURNISHINGS.dining` through `hostFloor`, so it is the table that decides the floor.
+   */
+  dining: {
+    category: 'paved-area',
+    footprint: { kind: 'rect', width: 4.6, depth: 3.4 },
+    prefer: ['back', 'front'],
+    affinity: 'near-house',
+    planName: 'Dining terrace',
+  },
+  hotTub: {
+    category: 'structure',
+    footprint: { kind: 'rect', width: 2.4, depth: 2.4 },
+    prefer: ['back'],
+    affinity: 'near-house',
+    planName: 'Hot tub',
+  },
+  /*
+   * A garden room is a building you walk to, so it is `far-from-house` — put against the back
+   * wall it is an extension, which is a different project with a different planning answer.
+   */
+  gardenRoom: {
+    category: 'structure',
+    footprint: { kind: 'rect', width: 4, depth: 3 },
+    prefer: ['back', 'left', 'right'],
+    affinity: 'far-from-house',
+    planName: 'Garden room',
+  },
+  greenhouse: {
+    category: 'structure',
+    footprint: { kind: 'rect', width: 3, depth: 2.4 },
+    prefer: ['back', 'right', 'left'],
+    affinity: 'far-from-house',
+    planName: 'Greenhouse',
+  },
+  /*
+   * ---- the three composed answers ----
+   *
+   * A lawn, a border and a lighting scheme are things the plan already draws: the template lays a
+   * lawn panel, `designedBeds` cuts the borders, `lightingScheme` composes from what was placed.
+   * Asking for one of them therefore *steers* that pass rather than dropping a second copy on top
+   * of it — `concepts.service.ts` settles all three from what actually landed, and never sends
+   * them through `assignSlots` or the sampler.
+   *
+   * They still need a spec, because `FEATURE_SPECS` is total and because the sampler is the whole
+   * placer on a plot with no house to compose a room off. These footprints are what that fallback
+   * would drop, and nothing else reads them.
+   */
+  lawn: {
+    category: 'lawn',
+    footprint: { kind: 'rect', width: 6, depth: 5 },
+    prefer: ['back'],
+    affinity: 'far-from-house',
+    planName: 'Lawn',
+  },
+  plantingBeds: {
+    category: 'planting-bed',
+    footprint: { kind: 'rect', width: 4, depth: 1.5 },
+    prefer: ['back', 'left', 'right'],
+    affinity: 'any',
+    planName: 'Planting bed',
+  },
+  lighting: {
+    category: 'lighting',
+    footprint: { kind: 'point', radius: 0.1 },
+    prefer: ['back', 'front', 'left', 'right'],
+    affinity: 'any',
+    planName: 'Garden lighting',
+  },
   other: {
     category: 'paved-area',
     footprint: { kind: 'rect', width: 2.5, depth: 2.5 },
@@ -124,7 +199,13 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
  * is a judgement about gardens rather than about geometry, which is why it is a list here beside
  * the other opinions rather than a rule derived from the footprint.
  */
-export const REPEATABLE_FEATURES: DesiredFeature[] = ['seating', 'vegPatch', 'water'];
+/*
+ * Note `plantingBeds` is deliberately absent despite being the most repeatable thing in a garden:
+ * it is composed rather than placed, so it never reaches the surplus pass at all, and listing it
+ * here would be a line that reads as policy and does nothing. The borders already grow with the
+ * plot because `designedBeds` cuts them from the room.
+ */
+export const REPEATABLE_FEATURES: DesiredFeature[] = ['seating', 'dining', 'vegPatch', 'water'];
 
 /** The footprint's shortest half-extent — how far a centre must sit from the free region's edge. */
 export function inradius(spec: FeatureSpec): number {
@@ -422,11 +503,18 @@ export function scaledSpec(spec: FeatureSpec, constraints: DesignConstraints): F
   };
 }
 
+/**
+ * What the concept card calls the style.
+ *
+ * `STYLE_LABELS` is one word per direction now, so this is a straight lookup — it used to take the
+ * first half of "Modern / minimal" with a `split`, which would silently return the whole label the
+ * day somebody reworded one.
+ */
 export function styleLabel(brief: GardenBrief): string {
   if (brief.style === 'other') return brief.styleOther.trim() || 'Bespoke';
   if (!brief.style) return 'Contemporary';
 
-  return STYLE_LABELS[brief.style].split(' / ')[0]!;
+  return STYLE_LABELS[brief.style];
 }
 
 export function featureLabel(feature: DesiredFeature, brief: GardenBrief): string {

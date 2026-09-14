@@ -140,7 +140,39 @@ export function roundPolygon(
  * house. Callers fall back to the flat fill. Works for either winding.
  */
 export function insetPolygon(points: Point[], distance: number): Point[] | null {
-  if (points.length < 3 || distance <= 0) return null;
+  if (distance <= 0) return null;
+  return offsetPolygon(points, distance);
+}
+
+/**
+ * The same polygon, every edge moved **outward** by `distance`.
+ *
+ * The mirror of `insetPolygon` and the same arithmetic with the normal the other way round, which
+ * is why they share an implementation rather than having one each — the winding probe, the corner
+ * intersections and the fold-through refusal are the subtle parts, and a second copy of them would
+ * be a second thing to get wrong.
+ *
+ * Drawing only, and one caller: a roof oversails its walls. **Nothing derived from this may reach
+ * a measurement.** An outset outline is bigger than the thing it came from, so feeding one to
+ * `houseFitsInside` would refuse a house that fits.
+ *
+ * `null` on the same terms as an inset: an outset can still fold through itself at a deep reflex
+ * corner, and a roof drawn from that would be a bow tie.
+ */
+export function outsetPolygon(points: Point[], distance: number): Point[] | null {
+  if (distance <= 0) return null;
+  return offsetPolygon(points, -distance);
+}
+
+/**
+ * Every edge moved along its own normal by a signed distance: positive inward, negative outward.
+ *
+ * Note what makes this work for either sign without a special case — the normal is derived from the
+ * ring's own winding, so it always points *inward*, and a negative distance simply walks the other
+ * way along it.
+ */
+function offsetPolygon(points: Point[], distance: number): Point[] | null {
+  if (points.length < 3 || distance === 0) return null;
 
   // Signed area decides which side is inside, so a hand-drawn anticlockwise outline insets too.
   const clockwise = signedArea(points) > 0;

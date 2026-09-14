@@ -23,7 +23,9 @@ import type { PatternCanvas, PatternContext } from '../render-surface-pattern';
 import { symbolSprite } from './sprites';
 import {
   facesLight,
+  gardenRoomParts,
   gazeboRoof,
+  glazingBars,
   pergolaPosts,
   raisedBedRails,
   rectNormal,
@@ -87,6 +89,12 @@ export function drawSymbol(
       return true;
     case 'gazebo':
       drawGazebo(context, element, shape, light, toPx);
+      return true;
+    case 'garden-room':
+      drawGardenRoom(context, element, shape, light, pxPerMetre, toPx);
+      return true;
+    case 'greenhouse':
+      drawGreenhouse(context, element, shape, light, pxPerMetre, toPx);
       return true;
     case 'raised-bed':
       drawRaisedBed(context, shape, toPx);
@@ -275,6 +283,175 @@ export function roofTones(element: DesignElement): { lit: string; unlit: string 
     lit: rgbToCss(shiftBrightness(tone, MODULE_HIGHLIGHT * 1.5)),
     unlit: rgbToCss(shiftBrightness(tone, -MODULE_SHADOW * 1.5)),
   };
+}
+
+/**
+ * Glass, as a colour — and the frame that is what actually says "glass".
+ *
+ * A cool near-white rather than a blue: glazing seen from above is mostly reflected *sky*, and a
+ * saturated blue panel in the middle of a garden reads as water.
+ *
+ * **Kept light.** The first version washed the roof at 0.55 and bleached a hardwood greenhouse to a
+ * flat pale slab that read as paving — the wash was doing all the work and doing it badly. What
+ * distinguishes glass in plan is not its tone, it is the *frame*: bars at a real spacing inside a
+ * defined edge. So the wash only cools the material and the bars are drawn properly.
+ */
+const GLASS = 'rgba(214, 230, 236, 0.32)';
+const GLAZING_BAR = 'rgba(48, 57, 52, 0.7)';
+
+/** Below this a glazing bar is not a line, it is a smear across the whole roof. */
+const MIN_GLAZING_BAR_PX = 3;
+
+/**
+ * A glazing bar is a real product, about 30 mm across, so it is drawn in metres and floored at a
+ * whole pixel — the same rule as `drawnJointPx` and `MIN_CUT_EDGE_PX`. Drawn at a fixed 1 px it
+ * vanished at plan zoom and stayed a hairline close up, where a greenhouse should be visibly
+ * framed.
+ */
+function glazingBarPx(pxPerMetre: number): number {
+  return Math.max(1, Math.min(3, 0.03 * pxPerMetre));
+}
+
+/**
+ * A garden room: one falling roof plane and a glazed front.
+ *
+ * Unlike the shed there is no ridge to break the roof at — a mono-pitch is one plane — so the whole
+ * footprint takes a single tone, lit or unlit by which way the fall faces. What identifies the
+ * building is the glass, which is why that is drawn even when the roof shading is too subtle to
+ * see.
+ */
+function drawGardenRoom(
+  context: SymbolContext,
+  element: DesignElement,
+  shape: RectShape,
+  light: Point,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  const { lit, unlit } = roofTones(element);
+  const parts = gardenRoomParts(shape);
+
+  // The roof falls towards the glazed face, which is local -y on the long axis (or -x when the
+  // room is deeper than it is wide) — the same convention `gardenRoomParts` documents.
+  const fallNormal = rectNormal(
+    shape,
+    shape.width >= shape.depth ? { x: 0, y: -1 } : { x: -1, y: 0 },
+  );
+
+  const bar = glazingBarPx(pxPerMetre);
+
+  context.globalAlpha = ROOF_ALPHA;
+  context.fillStyle = facesLight(fallNormal, light) ? lit : unlit;
+  fillRing(context, parts.plane, toPx);
+  context.globalAlpha = 1;
+
+  context.fillStyle = GLASS;
+  fillRing(context, parts.glazing, toPx);
+
+  // The glazed band, outlined. Without the frame the band is a pale strip along one edge, which
+  // reads as a paving margin rather than as the front of a building.
+  strokeRing(context, parts.glazing, toPx, GLAZING_BAR, bar);
+
+  // The high edge, drawn heavier than anything else: it is the tall wall, and which edge is tall is
+  // the only thing that says the roof falls at all from directly above.
+  strokeLine(context, parts.high, toPx, CATEGORY_COLOURS.structure.stroke, bar * 1.6);
+
+  if (mullionsWorthDrawing(pxPerMetre)) {
+    for (const mullion of parts.mullions) strokeLine(context, mullion, toPx, GLAZING_BAR, bar);
+  }
+}
+
+/**
+ * A greenhouse: the shed's pitched roof, in glass.
+ *
+ * The roof geometry is `shedRoof` unchanged — a greenhouse *is* a pitched box, and a second
+ * implementation of a ridge would be one more thing to keep in step. What makes it glass is the
+ * wash and the bars over it.
+ */
+function drawGreenhouse(
+  context: SymbolContext,
+  element: DesignElement,
+  shape: RectShape,
+  light: Point,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  const { lit, unlit } = roofTones(element);
+  const roof = shedRoof(shape);
+  const secondNormal = rectNormal(
+    shape,
+    shape.width >= shape.depth ? { x: 0, y: 1 } : { x: 1, y: 0 },
+  );
+  const secondLit = facesLight(secondNormal, light);
+
+  const bar = glazingBarPx(pxPerMetre);
+
+  context.globalAlpha = ROOF_ALPHA;
+  context.fillStyle = secondLit ? unlit : lit;
+  fillRing(context, roof.slopes[0], toPx);
+  context.fillStyle = secondLit ? lit : unlit;
+  fillRing(context, roof.slopes[1], toPx);
+  context.globalAlpha = 1;
+
+  context.fillStyle = GLASS;
+  fillRing(context, roof.slopes[0], toPx);
+  fillRing(context, roof.slopes[1], toPx);
+
+  if (mullionsWorthDrawing(pxPerMetre)) {
+    for (const line of glazingBars(shape)) strokeLine(context, line, toPx, GLAZING_BAR, bar);
+  }
+
+  // The frame: the eaves and the gable ends, then the ridge over them. A pitched pale rectangle
+  // with a line down the middle is a paved slab; the same thing inside a frame is a greenhouse.
+  strokeRing(context, rectToPolygon(shape), toPx, GLAZING_BAR, bar * 1.4);
+  strokeLine(context, roof.ridge, toPx, CATEGORY_COLOURS.structure.stroke, bar * 1.6);
+}
+
+/**
+ * Whether the glazing divisions are far enough apart to be lines.
+ *
+ * The same judgement `boundaryRuns` makes about fence posts and `drawnJointPx` makes about a joint:
+ * below about three pixels apart a run of fine lines stops reading as divisions and becomes a grey
+ * wash over the whole roof, which is worse than no bars at all. Measured on the spacing in metres
+ * rather than on the element, so it answers the question actually being asked.
+ */
+function mullionsWorthDrawing(pxPerMetre: number): boolean {
+  return 0.6 * pxPerMetre >= MIN_GLAZING_BAR_PX;
+}
+
+function strokeRing(
+  context: PatternContext,
+  ring: Point[],
+  toPx: (point: Point) => Point,
+  stroke: string,
+  width: number,
+): void {
+  context.strokeStyle = stroke;
+  context.lineWidth = width;
+  context.beginPath();
+  ring.forEach((point, index) => {
+    const at = toPx(point);
+    if (index === 0) context.moveTo(at.x, at.y);
+    else context.lineTo(at.x, at.y);
+  });
+  context.closePath();
+  context.stroke();
+}
+
+function strokeLine(
+  context: PatternContext,
+  line: readonly Point[],
+  toPx: (point: Point) => Point,
+  stroke: string,
+  width: number,
+): void {
+  const [from, to] = [toPx(line[0]!), toPx(line[line.length - 1]!)];
+  context.strokeStyle = stroke;
+  context.lineWidth = width;
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
 }
 
 function drawRaisedBed(

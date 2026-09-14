@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   computeZones,
   effectiveZoneIds,
@@ -26,6 +26,7 @@ import {
   thresholdRect,
   zoneAt,
   type DesignElement,
+  type ElementCategory,
   type DesiredFeature,
   type GardenZone,
   type GeneratedConcept,
@@ -36,6 +37,7 @@ import {
   type RequestedFeatureCheck,
   type ZoneId,
   estimateBudgetBand,
+  describeGeometry,
   distanceToEdge,
   isStructuralRole,
   samplePlanting,
@@ -43,13 +45,13 @@ import {
   symbolForLayer,
   type GardenBrief,
   type SymbolId,
+  type BriefSlot,
 } from '@garden-studio/schema';
 import {
   archetypeFor,
   CONCEPTS_PER_SET,
   FEATURE_SPECS,
   REPEATABLE_FEATURES,
-  describeConcept,
   edgingFor,
   featureLabel,
   fillPalette,
@@ -58,6 +60,7 @@ import {
   materialFor,
   scaledSpec,
   shiftBudget,
+  styleLabel,
   type FeatureSpec,
 } from './archetypes.js';
 import {
@@ -72,7 +75,7 @@ import { furnishRoom, hostSymbol, type FurnishOptions } from './furnish.js';
 import { lightingScheme } from './lighting.js';
 import { retainingFor, stepsFromTerrace, terraceRise } from './levels.js';
 import { circulationFor, roomSurface, wantsLoungeRoom, type RoutePurpose } from './room-policy.js';
-import { assignSlots, slotPreferences } from './layout/assign.js';
+import { assignByPriority } from './layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from './layout/fit.js';
 import {
   backFrame,
@@ -84,7 +87,6 @@ import {
 } from './layout/frame.js';
 import { FRONT_PATH_WIDTH, frontGarden } from './layout/front.js';
 import { rectSize, type LayoutSketch, type SketchRequest } from './layout/sketch.js';
-import { recommendedIndex, templateFor, TEMPLATES } from './layout/templates/index.js';
 import {
   baseFillFor,
   passageBorderWidth,
@@ -96,6 +98,28 @@ import {
 } from './layout/zone-roles.js';
 import { PlacementService } from './placement.service.js';
 import { conceptSeed, makeRng, sqlSeed } from './rng.js';
+import { archetypesForSlots } from './design/archetype-selector.js';
+import { chooseLayouts } from './design/choose.js';
+import {
+  closestPointOnRing,
+  isIgnored,
+  PATH_STANDOFF,
+  routeBetween,
+  routeFromHouse,
+  withinRing,
+} from './design/circulation.js';
+import type { DesignBrief } from '@garden-studio/schema';
+import { DesignBriefService } from '../assistant/design-brief/design-brief.service.js';
+import { buildBriefs } from './design/brief-builder.js';
+import { buildExplanation, decide, placedSentence } from './design/decisions.js';
+import { NO_ADJUSTMENTS, slotBarred, type LayoutAdjustments } from './design/types.js';
+import { interpretRequirements, withinCapacity } from './design/requirements.js';
+import { analyseSite } from './design/site-analysis.js';
+import { scoreConcept } from './design/index.js';
+import { planZones } from './design/zone-planner.js';
+import type { Decision, ZonePlan } from './design/types.js';
+import { defaultParams } from './knowledge/archetypes/index.js';
+import { FEATURE_LIBRARY, placementLadder } from './knowledge/feature-library.js';
 
 /**
  * Design generation.
@@ -192,42 +216,133 @@ const MAX_TREES = 5;
  */
 const SIDE_ROOM_FLOOR = { width: 2.4, depth: 2.4 };
 
+/**
+ * The requested features this generator **composes** rather than places.
+ *
+ * A lawn, a planting scheme and a lighting scheme are not objects that go in a slot — they are
+ * passes that run over the whole plan. The template lays the lawn panel, `designedBeds` cuts the
+ * borders round it and `lightingScheme` reads the finished garden. Sending these through
+ * `assignSlots` and the sampler as well would put a second lawn on top of the first, a stray bed
+ * in the middle of it, and a lone bollard somewhere nobody walks.
+ *
+ * So they are held out of stage 1 entirely and reported at the end from what actually landed. The
+ * tick still has force — it lifts the low-upkeep lawn ban and the low-budget lighting gate through
+ * `resolveConstraints` — it just steers a pass instead of asking for a footprint.
+ */
+type ComposedFeature = 'lawn' | 'plantingBeds' | 'lighting';
+const COMPOSED_FEATURES: ComposedFeature[] = ['lawn', 'plantingBeds', 'lighting'];
+
+function isComposed(feature: DesiredFeature): feature is ComposedFeature {
+  return (COMPOSED_FEATURES as DesiredFeature[]).includes(feature);
+}
+
+/**
+ * What counts as the composed feature having been drawn.
+ *
+ * Read off the finished element list rather than trusted from upstream: the point of reporting
+ * these at all is that a courtyard with no room for a lawn should say so, and only the elements
+ * can tell you that.
+ */
+const COMPOSED_CATEGORIES: Record<ComposedFeature, ElementCategory> = {
+  lawn: 'lawn',
+  plantingBeds: 'planting-bed',
+  lighting: 'lighting',
+};
+
+/** Which brief slot a concept index fills. Slot A is the recommendation. */
+const SLOTS: BriefSlot[] = ['A', 'B', 'C'];
+
 @Injectable()
 export class ConceptsService {
   constructor(
     private readonly placement: PlacementService,
     private readonly fill: FillService,
+    /**
+     * The strategic brief writer, when one is wired up.
+     *
+     * Optional in the Nest sense *and* in the constructor's, because three call sites build this
+     * service by hand — the concept suite, the reference fixtures and the eval harness — and none of
+     * them wants a model. `null` is the ordinary state: the deterministic brief builder answers, and
+     * the whole generator behaves exactly as it did before Phase 5.
+     */
+    @Optional()
+    @Inject(DesignBriefService)
+    private readonly strategist: DesignBriefService | null = null,
   ) {}
 
   /** A fresh set of three. */
-  generate(document: PlanDocument, seed: number): Promise<GeneratedConcept[]> {
+  async generate(document: PlanDocument, seed: number): Promise<GeneratedConcept[]> {
+    const strategic = await this.strategy(document, 0);
     return Promise.all(
-      Array.from({ length: CONCEPTS_PER_SET }, (_, index) => this.build(document, seed, index)),
+      Array.from({ length: CONCEPTS_PER_SET }, (_, index) =>
+        this.build(document, seed, index, strategic),
+      ),
     );
   }
 
   /** One slot, rerolled in place. */
-  regenerate(document: PlanDocument, seed: number, index: number): Promise<GeneratedConcept> {
-    return this.build(document, seed, index);
+  async regenerate(document: PlanDocument, seed: number, index: number): Promise<GeneratedConcept> {
+    /*
+     * The same question as `generate` asked, and the service caches on the site and the brief — so
+     * rerolling one slot costs no second call. That is the whole reason the cache is keyed on the
+     * rendered inputs rather than on the document.
+     */
+    return this.build(document, seed, index, await this.strategy(document, index));
+  }
+
+  /**
+   * What the three concepts are each trying to be, from a model where one is configured.
+   *
+   * Returns `null` — meaning "use the deterministic builder" — whenever no model answered, and that
+   * is deliberately a *different* value from the fallback briefs rather than the same list handed
+   * back. `read` builds its briefs against its own slot's constraints, so passing the fallback down
+   * would quietly replace a per-concept reading with slot A's and change what the generator drew
+   * with the feature switched off. Null changes nothing at all.
+   */
+  private async strategy(document: PlanDocument, index: number): Promise<DesignBrief[] | null> {
+    if (!this.strategist?.available) return null;
+
+    /* The same budget position `build` will use for this slot, so the two readings agree. */
+    const archetype = archetypeFor(index, 0);
+    const analysis = analyseSite(document);
+    const constraints = resolveConstraints(document.brief, archetype, analysis.scale.designedArea);
+    const requirements = interpretRequirements(document.brief, analysis, constraints);
+    const fallback = buildBriefs(document.brief, requirements, analysis);
+
+    const briefs = await this.strategist.write(document.brief, analysis, requirements, fallback);
+    return briefs === fallback ? null : briefs;
   }
 
   private async build(
     document: PlanDocument,
     seed: number,
     index: number,
+    strategic: DesignBrief[] | null = null,
   ): Promise<GeneratedConcept> {
     const { brief } = document;
     const site = document.site;
     const house = site.house;
 
     /*
-     * Three concepts are three *shapes of plan*, not three rolls of one. The slot decides the
-     * template; the brief's style decides which slot is the recommendation; the archetype — the
-     * budget and upkeep position — follows the slot so the recommendation always answers the
-     * brief as written. See `layout/templates`.
+     * Three concepts are three *shapes of plan*, not three rolls of one.
+     *
+     * Which shapes is now a question about the plot rather than about the slot index. Every
+     * composition scores itself against this site and this brief and a score of zero is a refusal
+     * that is honoured — so a courtyard is no longer offered a formal axis, and a wide shallow plot
+     * gets the composition that lays its rooms beside each other instead of three that lay them
+     * front to back. See `design/archetype-selector.ts`.
+     *
+     * `archetypeFor` — the budget and upkeep position — still follows the slot, so the
+     * recommendation goes on answering the brief as written.
      */
-    const recommended = recommendedIndex(brief.style);
-    const template = templateFor(index);
+    /*
+     * **Slot A is the best fit and is therefore the recommendation.** `recommendedIndex(style)`
+     * mapped a style to a fixed slot, which meant something only while the slots were a fixed list
+     * of templates; with the composition chosen by suitability the recommendation is simply the one
+     * that scored highest. The style still decides — it is 40% of every score — it just no longer
+     * decides by pointing at a position.
+     */
+    const recommended = 0;
     const archetype = archetypeFor(index, recommended);
     const rng = makeRng(conceptSeed(seed, index));
     const conceptId = `c${seed}-${index}`;
@@ -281,6 +396,16 @@ export class ConceptsService {
 
     const designedArea = zones.reduce((total, zone) => total + zone.area, 0);
     const constraints = resolveConstraints(brief, archetype, designedArea);
+
+    /*
+     * ---- the design agent's reading, before any geometry ----
+     *
+     * Pure and query-free, so it costs a fraction of a millisecond beside the dozen PostGIS round
+     * trips below. It decides what the garden is for, what each requested feature is worth, which
+     * rooms the plan is made of and which composition suits this plot — and every one of those was
+     * previously either absent or a constant.
+     */
+    const design = this.read(document, constraints, index, strategic);
 
     /*
      * What a new element has to avoid. Kept features are real obstacles; removed and replaced ones
@@ -341,10 +466,55 @@ export class ConceptsService {
     /* ---- stage 1: the features the brief asked for ---- */
 
     const requested = brief.desiredFeatures;
-    const attempts = featureAttempts(requested.length, archetype, constraints);
+    /**
+     * The requested features that stage 1 actually has to find room for.
+     *
+     * `attempts` is a budget of *placements*, and the composed three consume none — the lawn and
+     * the borders are drawn by passes that would run anyway. Counting them would have a brief
+     * that ticked "lawn" and "planting beds" quietly starve two real features out of the plan.
+     */
+    const toPlace = requested.filter((feature) => !isComposed(feature));
+    const attempts = featureAttempts(toPlace.length, archetype, constraints);
+
+    /**
+     * The order the grammar tries features in — the agent's ranking, not the tick list's.
+     *
+     * **This closes a divergence rather than adding a preference.** The candidate loop previews and
+     * scores a layout with the features taken in priority order, and the plan that was then built
+     * took them in the order the user happened to tick the cards in. So the arrangement that won
+     * was not always the arrangement that got drawn: a slot the preview gave to the dining area
+     * could go to a fire pit at realisation, and the score the concept carried belonged to a garden
+     * nobody saw.
+     *
+     * It is also the answer to a fault recorded against the old generator in its own right. The
+     * placement budget cuts whatever falls past it, and cutting in tick order means a fire pit
+     * ticked first can displace the dining space the garden is *for*. `withinCapacity` ranks by
+     * tier and never cuts an essential; anything it already excluded is appended here so that it is
+     * still reported rather than silently absent.
+     */
+    const rank = (feature: DesiredFeature) => {
+      const at = design.placing.indexOf(feature);
+      return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+    };
+    const ordered = [...toPlace].sort((a, b) => rank(a) - rank(b));
     const checks: RequestedFeatureCheck[] = [];
     /** Features the grammar has answered, one way or the other. */
     const settled = new Set<DesiredFeature>();
+
+    /*
+     * The three answers that are *composed* rather than placed, held out of stage 1 entirely.
+     *
+     * A lawn, a border and a lighting scheme are not things the placer drops into a slot — the
+     * template lays the lawn panel, `designedBeds` cuts the borders round it, and `lightingScheme`
+     * composes from whatever ended up in the garden. Sending them through `assignSlots` and the
+     * sampler as well would draw a second lawn on top of the first and a stray bed in the middle
+     * of it.
+     *
+     * So they are settled here with **no check pushed**: `settleComposed` below reports them once
+     * the passes that actually draw them have run, from what landed rather than from what was
+     * attempted. They are also left out of `attempts`, which counts placements, not preferences.
+     */
+    for (const feature of COMPOSED_FEATURES) settled.add(feature);
     /** What the grammar placed, by the slot it filled — where the sketch's paths go. */
     const placedBySlot = new Map<string, DesignElement>();
     /** Sampler-placed destinations: the first gathering place, then everything far from the house. */
@@ -448,7 +618,15 @@ export class ConceptsService {
       frontZoneId: frontZone?.id ?? null,
     });
 
+    /*
+     * Which composition this slot draws, and how it is parameterised.
+     *
+     * Chosen from the plot rather than from `index % 3`: every archetype scores itself against this
+     * site and this brief, a zero is a refusal that is honoured, and the slots take the best three
+     * distinct answers. See `design/archetype-selector.ts`.
+     */
     let sketch: LayoutSketch | null = null;
+    let zonePlan: ZonePlan | null = null;
     let terrace: DesignElement | null = null;
     let lawn: DesignElement | null = null;
     /** The sketch wanted a terrace and nothing legal could be fitted: the card has to say so. */
@@ -461,6 +639,97 @@ export class ConceptsService {
      */
     const gate = sidePathGate(site);
 
+    /*
+     * ---- the candidate loop ----
+     *
+     * Every composition that suits the plot, against every variation each of them offers, previewed
+     * and scored — then the best that is not too like what the other slots have already taken. The
+     * whole field costs a few milliseconds because a preview issues no query, which is the entire
+     * reason the design layer was built pure. See `design/choose.ts`.
+     *
+     * `chooseLayouts` answers for all three slots at once, because being *different* is a property
+     * of the set rather than of any one concept; this slot takes its own answer and builds it. With
+     * no room to compose in there is nothing to preview, and the fall-back is the archetype the
+     * selector ranked first — which is also the path a plot with no house takes.
+     */
+    const chosen = grammar
+      ? chooseLayouts({
+          analysis: design.analysis,
+          briefs: design.briefs,
+          context: {
+            constraints,
+            room: grammar.room,
+            box: grammar.box,
+            frame: grammar.frame,
+            boundary,
+            houseRing,
+            scope: scopePolygon,
+            obstacles,
+            thresholds,
+            placing: design.placing,
+            zoneAt: (ring) => zoneOf(ring, allZones.length > 0 ? allZones : zones),
+            gateSide: gate ? (grammar.frame.toLocal(gate.centre).v >= 0 ? 'right' : 'left') : null,
+            gateCentre: gate?.centre ?? null,
+            lawnAllowed: !constraints.forbiddenFill.includes('lawn'),
+          },
+        })
+      : [];
+
+    const slotChoice = chosen[index % SLOTS.length] ?? null;
+    const composition = slotChoice?.candidate.fit.archetype ?? design.composition.archetype;
+    const params = slotChoice?.candidate.params ?? defaultParams(composition.id);
+
+    /*
+     * What the repair stage changed about this layout, honoured here as well as in the preview.
+     *
+     * **This is the rule that keeps a repair honest.** The loop accepts a change only on a measured
+     * improvement to the preview's score — so if the pipeline that actually draws the plan ignored
+     * the change, the concept would carry a score claiming an improvement the garden does not have.
+     * Every field of `LayoutAdjustments` is read below; adding one means plumbing it here in the
+     * same change. An unrepaired candidate carries the empty set and draws exactly what it always
+     * drew.
+     */
+    const adjustments = slotChoice?.adjustments ?? NO_ADJUSTMENTS;
+
+    /*
+     * A feature the repair left out is reported as left out, with the reason it was. Settling it
+     * here keeps it out of the grammar *and* out of the sampler, which would otherwise cheerfully
+     * put back the thing that was removed for spoiling something else.
+     */
+    for (const feature of adjustments.dropped) {
+      if (settled.has(feature)) continue;
+      settled.add(feature);
+      checks.push({
+        feature,
+        label: featureLabel(feature, brief),
+        included: false,
+        reason: 'Left out to keep the rest of the garden working.',
+      });
+    }
+
+    /**
+     * What this concept decided, recorded by the pass that decided it.
+     *
+     * The rule that keeps the explanation honest: a decision names the elements it produced, so the
+     * concept cannot claim the terrace went at the doors unless a terrace element exists to point
+     * at. Until now the only prose a concept carried was one of three fixed sentences about the
+     * template, identical whether the plan had a shed in the corner or no shed at all.
+     */
+    const decisions: Decision[] = [
+      decide(
+        'composition',
+        `${composition.name}. ${slotChoice?.candidate.fit.reasons[0] ?? design.composition.reasons[0] ?? composition.summary}`,
+      ),
+      ...(slotChoice && slotChoice.considered > 1
+        ? [
+            decide(
+              'chosen-from',
+              `Chosen from ${slotChoice.considered} arrangements of this garden, on circulation, grouping and how the space is proportioned.`,
+            ),
+          ]
+        : []),
+    ];
+
     if (grammar && house) {
       const request: SketchRequest = {
         features: requested,
@@ -472,13 +741,29 @@ export class ConceptsService {
         houseWallLength: grammar.frame.wallLength,
         doorWidth: grammar.frame.doorWidth,
       };
-      sketch = TEMPLATES[template](request, {
+      const sketchRoom = {
         uMin: Math.max(0, grammar.box.uMin),
         uMax: grammar.box.uMax,
         vMin: grammar.box.vMin,
         vMax: grammar.box.vMax,
         polygon: grammar.box.polygon,
+      };
+
+      /*
+       * The rooms first, then the composition that arranges them. `params` is the composition's own
+       * first choice — the plan as its author intended it — which is what keeps this phase's output
+       * identical for the three original compositions. Phase 3 enumerates the rest of the list.
+       */
+      zonePlan = planZones({
+        brief: design.brief,
+        site: design.analysis,
+        archetype: composition,
+        params,
+        room: sketchRoom,
+        request,
+        placing: design.placing,
       });
+      sketch = composition.sketch(request, sketchRoom, zonePlan, params);
 
       const fitContext: FitContext = {
         frame: grammar.frame,
@@ -490,7 +775,12 @@ export class ConceptsService {
 
       /*
        * The terrace first. It exists in every plan — a garden with nowhere to step out onto is not
-       * a garden design — and asking for seating is what furnishes it.
+       * a garden design — and asking for somewhere to sit or eat is what furnishes it.
+       *
+       * Which of the two claims it matters, because they are furnished differently: seating gets
+       * the sofas, dining gets the table. Seating wins when both were asked for, and the dining
+       * area then takes `terrace-end` or `beside-terrace` from the slot pass below — which is how
+       * a garden with both is actually laid out, rather than one patio doing two jobs badly.
        */
       const terraceSlot = sketch.slots.find((slot) => slot.kind === 'terrace');
       if (sketch.terrace && terraceSlot) {
@@ -501,17 +791,28 @@ export class ConceptsService {
         });
 
         if (geometry) {
-          const wantsSeating = requested.includes('seating');
+          const terraceFeature: DesiredFeature | null = requested.includes('seating')
+            ? 'seating'
+            : requested.includes('dining')
+              ? 'dining'
+              : null;
           terrace = hostFor(
-            'seating',
+            terraceFeature ?? 'seating',
             FEATURE_SPECS.seating,
             geometry,
-            wantsSeating ? 'Seating patio' : 'Terrace',
+            terraceFeature ? FEATURE_SPECS[terraceFeature].planName! : 'Terrace',
             index,
           );
           obstacles.push(geometryOutline(geometry));
           featureLayer.push(terrace);
           placedBySlot.set(terraceSlot.id, terrace);
+          decisions.push(
+            decide(
+              'terrace-at-doors',
+              `Put the ${(terrace.name ?? 'terrace').toLowerCase()} directly outside the garden doors, ${describeGeometry(geometry, document.unit)}.`,
+              [terrace.id],
+            ),
+          );
 
           /*
            * ---- the level change, if this concept makes one ----
@@ -547,8 +848,8 @@ export class ConceptsService {
             }
           }
 
-          if (wantsSeating) {
-            this.furnishHost(terrace, 'seating', featureLayer, obstacles, {
+          if (terraceFeature) {
+            this.furnishHost(terrace, terraceFeature, featureLayer, obstacles, {
               index,
               rng,
               constraints,
@@ -556,10 +857,10 @@ export class ConceptsService {
               boundary,
               nextId,
             });
-            settled.add('seating');
+            settled.add(terraceFeature);
             checks.push({
-              feature: 'seating',
-              label: featureLabel('seating', brief),
+              feature: terraceFeature,
+              label: featureLabel(terraceFeature, brief),
               included: true,
             });
           }
@@ -574,12 +875,19 @@ export class ConceptsService {
         }
       }
 
-      const { assigned } = assignSlots(
+      /*
+       * `assignByPriority`, the same function the preview uses: a feature's own room first, then
+       * its slot-kind ladder. Two assignment functions over one sketch is two opinions about where
+       * the dining area goes, and the loop chose on the other one's.
+       */
+      const assigned = assignByPriority(
         { ...sketch, slots: sketch.slots.filter((slot) => slot.kind !== 'terrace') },
-        requested.filter((feature) => !settled.has(feature)),
+        ordered.filter((feature) => !settled.has(feature)),
       );
 
-      for (const [order, feature] of requested.entries()) {
+      // `ordered`, not `requested`: `order` is a position in the placement budget, and the
+      // composed three take none of it.
+      for (const [order, feature] of ordered.entries()) {
         if (settled.has(feature)) continue;
         const label = featureLabel(feature, brief);
 
@@ -593,10 +901,13 @@ export class ConceptsService {
         const spec = scaledSpec(FEATURE_SPECS[feature], constraints);
         const candidates = [
           ...sketch.slots.filter((candidate) => candidate.id === entry?.slotId),
-          ...slotPreferences(feature).flatMap((kind) =>
+          ...placementLadder(feature).flatMap((kind) =>
             sketch!.slots.filter((candidate) => candidate.kind === kind),
           ),
-        ].filter((candidate) => !placedBySlot.has(candidate.id));
+        ].filter(
+          (candidate) =>
+            !placedBySlot.has(candidate.id) && !slotBarred(adjustments, feature, candidate.id),
+        );
         const fitted = candidates
           .map((slot) => ({ slot, geometry: fitInSlot(footprintOf(spec), slot, fitContext) }))
           .find((candidate) => candidate.geometry !== null);
@@ -618,12 +929,24 @@ export class ConceptsService {
 
         settled.add(feature);
         checks.push({ feature, label, included: true });
+        decisions.push(
+          decide(
+            'feature-in-zone',
+            placedSentence(
+              spec.planName ?? label,
+              FEATURE_LIBRARY[feature].zone,
+              slot.kind,
+              gate !== null,
+            ),
+            [host.id],
+          ),
+        );
       }
     }
 
     /* ---- the sampler, for whatever the grammar could not place ---- */
 
-    for (const [order, feature] of requested.entries()) {
+    for (const [order, feature] of ordered.entries()) {
       if (settled.has(feature)) continue;
       const label = featureLabel(feature, brief);
 
@@ -675,9 +998,9 @@ export class ConceptsService {
      * is a list rather than a rule. Repeats do not go on `checks`: that list answers "did the brief
      * get what it asked for", and it was asked for once.
      */
-    let surplus = attempts - requested.length;
+    let surplus = attempts - toPlace.length;
 
-    for (const feature of requested) {
+    for (const feature of toPlace) {
       if (surplus <= 0 || zones.length === 0) break;
       if (!REPEATABLE_FEATURES.includes(feature)) continue;
 
@@ -880,16 +1203,17 @@ export class ConceptsService {
 
         const via = (sketched.via ?? []).map((point) => grammar.frame.toWorld(point.u, point.v));
         const route = circulationFor(purpose, constraints);
-        const path = this.routeBetween(
+        const path = routeBetween({
           start,
           destination,
           via,
           obstacles,
           boundary,
           ignore,
-          scopePolygon,
-          route.width,
-        );
+          scope: scopePolygon,
+          width: routeWidth(adjustments, route.width),
+          skip: adjustments.reroute[sketched.name] ?? 0,
+        });
         if (!path) continue;
 
         obstacles.push(geometryOutline(path));
@@ -929,42 +1253,37 @@ export class ConceptsService {
           }),
         ];
         const ignore = [terraceOutline, destination, ...thresholds];
-        const path = starts
-          .map((start) =>
-            this.routeBetween(
-              start,
-              destination,
-              [],
-              obstacles,
-              boundary,
-              ignore,
-              scopePolygon,
-              route.width,
-            ),
-          )
-          .find((candidate) => candidate !== null);
+        /* The same name the preview gave this route, so a `reroute` repair reaches the same path. */
+        const name = `Path to ${(target.name ?? 'garden room').toLowerCase()}`;
+        /* Lazily: the nearest start succeeds most of the time, and each one it does not costs
+         * four polylines tested against every obstacle on the plot. See the preview's own copy. */
+        let path: PlanGeometry | null = null;
+        for (const start of starts) {
+          path = routeBetween({
+            start,
+            destination,
+            obstacles,
+            boundary,
+            ignore,
+            scope: scopePolygon,
+            width: routeWidth(adjustments, route.width),
+            skip: adjustments.reroute[name] ?? 0,
+          });
+          if (path) break;
+        }
         if (!path) continue;
         obstacles.push(geometryOutline(path));
-        featureLayer.push(
-          pathElement(
-            path,
-            `Path to ${(target.name ?? 'garden room').toLowerCase()}`,
-            route.material,
-            route.category,
-          ),
-        );
+        featureLayer.push(pathElement(path, name, route.material, route.category));
       }
     }
 
     if (houseRing) {
       for (const destination of destinations) {
-        const path = await this.routeTo(
-          houseRing,
-          destination.outline,
+        const path = routeFromHouse(houseRing, destination.outline, {
           obstacles,
           boundary,
-          scopePolygon,
-        );
+          scope: scopePolygon,
+        });
         if (!path) continue;
 
         obstacles.push(geometryOutline(path));
@@ -1102,7 +1421,7 @@ export class ConceptsService {
         // from where it was drawn is the same design, where a tree the sampler put in the side
         // return is not.
         let placed: { shape: PlanGeometry; outline: Point[] } | null = null;
-        for (const [du, dv] of TREE_NUDGES) {
+        for (const [du, dv] of TREE_NUDGES.slice(adjustments.treeNudge % TREE_NUDGES.length)) {
           const at = grammar.frame.toWorld(point.u + du, point.v + dv);
           const shape: PlanGeometry = { kind: 'point', at, radius: TREE_RADIUS };
           const outline = geometryOutline(shape);
@@ -1274,6 +1593,15 @@ export class ConceptsService {
           zone: roomZone?.id ?? 'back',
           material: materialFor(sketch.lawnCategory, constraints, index),
         };
+        decisions.push(
+          decide(
+            'open-ground',
+            sketch.lawnCategory === 'lawn'
+              ? 'Kept the lawn as one continuous panel rather than cutting it into pieces.'
+              : 'Laid one open panel of gravel where a lawn would have been, since none was wanted.',
+            [lawn.id],
+          ),
+        );
       }
     }
 
@@ -1641,8 +1969,43 @@ export class ConceptsService {
       nextId,
     });
 
-    const { name, summary, style } = describeConcept(template, brief);
+    /*
+     * ---- the composed three, reported from what was actually drawn ----
+     *
+     * Last, because this is the first point at which the lawn panel, the borders and the lighting
+     * scheme all exist. Each is answered by looking at the finished element list rather than by
+     * anything upstream claiming to have placed it — so a courtyard with no room for a lawn says
+     * the lawn is not included, and a plan whose planting was all refused as slivers says so too,
+     * instead of both quietly reading as a success.
+     */
+    for (const feature of COMPOSED_FEATURES) {
+      if (!requested.includes(feature)) continue;
+      checks.push({
+        feature,
+        label: featureLabel(feature, brief),
+        included: [...stamped, ...lights].some(
+          (element) => element.category === COMPOSED_CATEGORIES[feature],
+        ),
+      });
+    }
 
+    /*
+     * The card's words come from the composition that drew the plan, which is the first time they
+     * have described *this* garden rather than the template family. `styleLabel` still supplies the
+     * user's own half of the line.
+     */
+    const name = composition.name;
+    const summary = composition.summary;
+    const style = `${styleLabel(brief)} / ${composition.tone}`;
+    const finished = [...stamped, ...lights];
+
+    /*
+     * ---- what the design agent makes of the finished plan ----
+     *
+     * Scored *after* the elements exist rather than consulted while they are being made. Nothing
+     * here can move a coordinate: `elements` is already final, and the score only decides what the
+     * concept says about itself.
+     */
     return {
       id: conceptId,
       name,
@@ -1659,10 +2022,93 @@ export class ConceptsService {
        */
       maintenance: constraints.maintenance,
       /** What the materials actually came to, as opposed to the position above. */
-      estimatedBudget: estimateBudgetBand([...stamped, ...lights]),
-      requestedFeaturesIncluded: checks,
-      elements: [...stamped, ...lights],
+      estimatedBudget: estimateBudgetBand(finished),
+      requestedFeaturesIncluded: this.explainChecks(checks, design.brief),
+      elements: finished,
+      strategy: {
+        briefId: design.brief.id,
+        archetype: composition.id,
+        candidateId: conceptId,
+      },
+      score: scoreConcept(finished, design.analysis, design.brief),
+      explanation: buildExplanation(
+        design.brief,
+        composition.id,
+        decisions,
+        slotChoice?.repairs ?? [],
+      ),
     };
+  }
+
+  /**
+   * The design agent's reading of this document for one concept slot.
+   *
+   * Pure and query-free, so it costs a fraction of a millisecond beside the dozen PostGIS round
+   * trips `build` has already made. `constraints` is passed in rather than resolved again: it is
+   * the generator's own per-concept reading of the brief, and there goes on being exactly one.
+   */
+  private read(
+    document: PlanDocument,
+    constraints: DesignConstraints,
+    index: number,
+    /**
+     * The strategic briefs a model wrote, where one did.
+     *
+     * `null` is the ordinary case and means the deterministic builder answers, which is what every
+     * generation did before this existed and what every generation still does with the flag off.
+     * Supplied rather than fetched because the call is made **once per set** in `generate`, and a
+     * read that could reach for a model would be a read that makes three calls.
+     */
+    strategic: DesignBrief[] | null,
+  ) {
+    const analysis = analyseSite(document);
+    const requirements = interpretRequirements(document.brief, analysis, constraints);
+    const briefs = strategic ?? buildBriefs(document.brief, requirements, analysis);
+    const slot = SLOTS[index % SLOTS.length]!;
+    const brief = briefs.find((entry) => entry.id === slot) ?? briefs[0]!;
+
+    /*
+     * The compositions for all three slots, chosen together. Together rather than one at a time
+     * because the three have to be *distinct* — which is a property of the set, not of any one
+     * concept, and the reason `index % 3` produced three different plans by accident.
+     */
+    /*
+     * The composition the selector would pick for this slot with no candidate loop to hand.
+     *
+     * Kept as the fall-back for a plot with no room to compose in — no house, or a drawn area that
+     * misses the doors — where there is nothing to preview and the sampler does the work. With a
+     * room, `chooseLayouts` supersedes it.
+     */
+    const composition = archetypesForSlots(analysis, briefs)[index % SLOTS.length]!.fit;
+
+    return {
+      analysis,
+      requirements,
+      brief,
+      briefs,
+      composition,
+      /* What survived the capacity cut, in priority order: the rooms are built from these. */
+      placing: withinCapacity(requirements).keep,
+    };
+  }
+
+  /**
+   * The feature checks, with a reason on each one the concept left out.
+   *
+   * "The pond is missing" and "there was no room for the pond without losing the lawn" are
+   * different answers and only the second is a design decision. The reason comes from the brief's
+   * own exclusion list where the agent decided one, and falls back to the plain fact otherwise —
+   * never invented, because a reason nothing measured is worse than no reason.
+   */
+  private explainChecks(
+    checks: RequestedFeatureCheck[],
+    brief: ReturnType<ConceptsService['read']>['brief'],
+  ): RequestedFeatureCheck[] {
+    return checks.map((check) => {
+      if (check.included) return check;
+      const excluded = brief.excludedFeatures.find((entry) => entry.feature === check.feature);
+      return excluded ? { ...check, reason: excluded.reason } : check;
+    });
   }
 
   /**
@@ -1699,66 +2145,6 @@ export class ConceptsService {
           : {}),
       };
     });
-  }
-
-  /**
-   * A path from `start` to the edge of `destination`, straight or by way of `via`, else dog-legged.
-   *
-   * Ends at the point on the destination's outline nearest the last waypoint, pulled back a
-   * standoff so the strip touches the feature rather than entering it — the reason paths exist
-   * at all (see CLAUDE.md). Refuses anything under a stride and a half, which is too short to
-   * read as a path. Ignores the rings in `ignore`: the house it leaves, the terrace it starts on,
-   * the feature it arrives at, and the doorways it is allowed to cross.
-   *
-   * The redesign area is checked on the *strip*, not on the endpoints, and that is the whole point
-   * of doing it here: both ends can sit comfortably inside the drawn area while the dog-leg between
-   * them swings out through a corner that is not. Because the routes are tried in order, refusing
-   * one L lets the other be found — this improves the routing rather than only refusing it.
-   */
-  private routeBetween(
-    start: Point,
-    destination: Point[],
-    via: Point[],
-    obstacles: Point[][],
-    boundary: Point[],
-    ignore: Point[][],
-    scope: Point[] | null,
-    width = PATH_WIDTH,
-  ): PlanGeometry | null {
-    const aimFrom = via[via.length - 1] ?? start;
-    const end = closestPointOnRing(destination, aimFrom, PATH_STANDOFF);
-
-    if (Math.hypot(start.x - end.x, start.y - end.y) < 1.5) return null;
-
-    const routes: Point[][] = [];
-    if (via.length > 0) routes.push([start, ...via, end]);
-    routes.push(
-      [start, end],
-      [start, { x: start.x, y: end.y }, end],
-      [start, { x: end.x, y: start.y }, end],
-    );
-
-    for (const points of routes) {
-      const distinct = points.filter(
-        (point, i) =>
-          i === 0 || Math.hypot(point.x - points[i - 1]!.x, point.y - points[i - 1]!.y) > 0.01,
-      );
-      const geometry: PlanGeometry = { kind: 'polyline', points: distinct, width };
-      const strip = geometryOutline(geometry);
-      if (strip.length < 3) continue;
-      if (!withinRing(strip, boundary)) continue;
-      if (scope && !withinRing(strip, scope)) continue;
-      if (
-        obstacles.some(
-          (obstacle) => !isIgnored(obstacle, ignore) && polygonsIntersect(strip, obstacle),
-        )
-      ) {
-        continue;
-      }
-      return geometry;
-    }
-
-    return null;
   }
 
   /**
@@ -1837,46 +2223,20 @@ export class ConceptsService {
 
     return pool[Math.floor(rng() * pool.length)] ?? null;
   }
-
-  /**
-   * A path from the house out to the main gathering element, the way the mockup's "Service path"
-   * runs. Skipped rather than forced when it would cut through something — a generator that draws
-   * a path over the pergola looks like a fault, not like a draft.
-   */
-  /**
-   * A path from the house to a feature: straight if it can be, else one of the two L-shaped
-   * routes round whatever is in the way.
-   *
-   * It ends at the feature's *edge* — the point on its outline nearest the house, pulled back a
-   * hair — rather than at its centroid. The first version ran to the centroid, so the strip
-   * always entered the patio it was going to, the patio was always in `obstacles`, and the path
-   * was refused on every plan that ever asked for one. A route is checked against everything on
-   * the plan except the house it starts on and the feature it arrives at.
-   */
-  private async routeTo(
-    houseRing: Point[],
-    destination: Point[],
-    obstacles: Point[][],
-    boundary: Point[],
-    scope: Point[] | null,
-  ): Promise<PlanGeometry | null> {
-    const aim = polygonCentroid(destination);
-    const start = await this.placement.closestOnHouse(houseRing, aim);
-    if (!start) return null;
-
-    return this.routeBetween(
-      start,
-      destination,
-      [],
-      obstacles,
-      boundary,
-      [houseRing, destination],
-      scope,
-    );
-  }
 }
 
-const PATH_WIDTH = 1.2;
+/**
+ * How wide a route is drawn, after the repair stage has had its say.
+ *
+ * A floor rather than an override: `circulationFor` decides what *kind* of route this is and a
+ * repair only ever asks for more room, so an access lane that is already 1.2 m stays 1.2 m when a
+ * repair widened the secondary paths to 1.2 m. Raising a route the policy made deliberately narrow
+ * — the 0.85 m stepping-stone path — is exactly what the repair is for, which is why this is a
+ * maximum rather than a refusal.
+ */
+function routeWidth(adjustments: LayoutAdjustments, wanted: number): number {
+  return adjustments.routeWidth === null ? wanted : Math.max(wanted, adjustments.routeWidth);
+}
 
 /** Offsets tried for a sketched tree, in frame metres: where it was drawn, then nearby. */
 const TREE_NUDGES: [number, number][] = [
@@ -1892,16 +2252,6 @@ const TREE_NUDGES: [number, number][] = [
   [-1.2, -1.2],
   [1.2, 1.2],
 ];
-
-/**
- * Ignored rings are matched by value, not by reference. `geometryOutline` tessellates afresh on
- * every call, so the terrace outline a path is told to ignore is never the same array as the one
- * pushed onto `obstacles` — and matched by reference, every path was refused for crossing the
- * terrace it started on. That was the whole of "no plan ever has a path".
- */
-function isIgnored(ring: Point[], ignore: Point[][]): boolean {
-  return ignore.some((candidate) => sameRing(candidate, ring));
-}
 
 /**
  * The generator's own placement rule: legal to save, clear of the house, **and** inside the
@@ -1945,54 +2295,6 @@ function placeable(
  */
 function rezone(zone: GardenZone, polygon: Point[]): GardenZone {
   return { ...zone, polygon, area: polygonArea(polygon), centroid: polygonCentroid(polygon) };
-}
-
-function sameRing(a: Point[], b: Point[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  return a.every(
-    (point, i) => Math.abs(point.x - b[i]!.x) < 1e-9 && Math.abs(point.y - b[i]!.y) < 1e-9,
-  );
-}
-
-/** How far short of a feature's edge a path stops, so the strip touches rather than enters it. */
-const PATH_STANDOFF = 0.05;
-
-/** The point on `ring`'s outline nearest `from`, pulled `standoff` back towards `from`. */
-function closestPointOnRing(ring: Point[], from: Point, standoff: number): Point {
-  let best: Point = ring[0]!;
-  let bestDistance = Infinity;
-
-  for (let i = 0; i < ring.length; i += 1) {
-    const a = ring[i]!;
-    const b = ring[(i + 1) % ring.length]!;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length2 = dx * dx + dy * dy;
-    const t =
-      length2 === 0
-        ? 0
-        : Math.max(0, Math.min(1, ((from.x - a.x) * dx + (from.y - a.y) * dy) / length2));
-    const candidate = { x: a.x + dx * t, y: a.y + dy * t };
-    const distance = Math.hypot(candidate.x - from.x, candidate.y - from.y);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = candidate;
-    }
-  }
-
-  if (bestDistance === 0) return best;
-  const back = standoff / bestDistance;
-  return { x: best.x + (from.x - best.x) * back, y: best.y + (from.y - best.y) * back };
-}
-
-/**
- * Contained in `outer` — every vertex inside and no edge crossing out, which is the same
- * predicate the house and the PostGIS validator use. Not re-implemented here.
- */
-function withinRing(inner: Point[], outer: Point[]): boolean {
-  if (outer.length < 3) return true;
-  return polygonContainsPolygon(outer, inner);
 }
 
 /** A spec's footprint, as the fitter wants it. */

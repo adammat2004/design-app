@@ -1,5 +1,6 @@
-import type { MaterialId, SymbolId } from '@garden-studio/schema';
+import { isTreeSymbol, resolveSymbol, type MaterialId, type SymbolId } from '@garden-studio/schema';
 import { ASSET_IDS, type AssetId } from './asset-spec';
+import { catalogueVariants } from './catalogue';
 import { assetsMatching, type TaxonQuery } from './taxonomy';
 
 /**
@@ -177,6 +178,8 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
   lounger: 'furniture-lounger',
   bbq: 'furniture-bbq',
   'fire-pit': 'furniture-fire-pit',
+  // The only structure here: a hot tub is a product at a fixed size, not a placed rectangle.
+  'hot-tub': 'feature-hot-tub',
   bench: 'furniture-bench',
   parasol: 'furniture-parasol',
   planter: 'furniture-planter',
@@ -199,6 +202,152 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
   'shrub-flowering': 'plant-shrub-deciduous',
   'shrub-architectural': 'plant-shrub-architectural',
 };
+
+/* ================================================================ the elevated camera
+ *
+ * How Visualise reaches the 2.5D library, and why it is a *translation* rather than a second set of
+ * queries.
+ *
+ * The obvious design is to give every query a camera and let Visualise ask for elevated art
+ * directly. It is wrong in a way that is invisible until you look at a bed: a query is answered in
+ * manifest order and the sampler picks from that list with a seeded index, so two queries returning
+ * different-length lists put a *different plant* in each cell. The same garden would be planted
+ * differently in the two views — same geometry, different species — and switching tabs would look
+ * like the design had changed, which is the one thing §12 says must never happen.
+ *
+ * So resolution happens exactly once, in the plan camera, with the same query and the same seed it
+ * always used, and the elevated view then swaps the family for its twin. Same cell, same species,
+ * same variant, drawn from a different angle. That is what "two views of one plan" has to mean.
+ *
+ * It also gives the fallback for free, which matters more than it sounds: a family with no twin, or
+ * a twin whose files have not been generated, keeps its plan sprite. So Visualise works with a
+ * half-finished library and with **no library at all** — the no-key path this whole directory
+ * exists to protect.
+ * ================================================================ */
+
+/**
+ * The elevated twin of a plan-camera family, where one has been drawn.
+ *
+ * Deliberately many-to-one in places: `plant-grass` and `plant-grass-tall` share a twin, because the
+ * elevated library is a foundation rather than a catalogue and a grass seen from twelve degrees off
+ * vertical is a fountain of blades whichever species it is. Widening it is adding a row.
+ *
+ * Note there is no twin for anything drawn rather than photographed — no shed, pergola, gazebo or
+ * fence — because those are extruded from their own outlines. A twin here would be a photograph of
+ * a structure, which is the mistake the whole extrusion path exists to avoid.
+ */
+export const ELEVATED_TWINS: Partial<Record<AssetId, AssetId>> = {
+  'plant-shrub': 'vis-shrub-evergreen',
+  'plant-shrub-architectural': 'vis-shrub-evergreen',
+  'plant-shrub-deciduous': 'vis-shrub-flowering',
+  'plant-shrub-topiary': 'vis-shrub-evergreen',
+  'plant-grass': 'vis-grass',
+  'plant-grass-tall': 'vis-grass',
+  'tree-canopy': 'vis-tree-deciduous',
+  'tree-multistem': 'vis-tree-multistem',
+  'furniture-dining-6': 'vis-dining-6',
+  'furniture-dining-4': 'vis-dining-6',
+  'furniture-sofa-set': 'vis-sofa-set',
+  'furniture-lounger': 'vis-lounger',
+  'furniture-bench': 'vis-bench',
+  'furniture-bbq': 'vis-bbq',
+  'furniture-fire-pit': 'vis-fire-pit',
+  'furniture-parasol': 'vis-parasol',
+  'furniture-planter': 'vis-planter',
+  'play-raised-bed': 'vis-raised-bed',
+  'play-swing': 'vis-swing',
+  'play-slide': 'vis-slide',
+  'play-trampoline': 'vis-trampoline',
+};
+
+/**
+ * The family Visualise should draw instead, or `null` to keep the plan sprite.
+ *
+ * Catalogued rather than merely listed: a twin that has been *specified* but not yet *generated*
+ * must fall back, or the elevated view would resolve to a family with no files and draw nothing at
+ * all. That is the difference between a library arriving in batches and a garden with holes in it
+ * while it does.
+ *
+ * The catalogue rather than the registry, deliberately — what has been *generated*, not what has
+ * finished *loading*. Loading is asynchronous and per-wave, so keying on it would have a bed swap
+ * species halfway through a preload; `assetVersion()` is already in the raster key for exactly that
+ * reason and this must not introduce a second, subtler version of the same flicker.
+ */
+export function elevatedTwin(id: AssetId | null | undefined): AssetId | null {
+  if (!id) return null;
+  const twin = ELEVATED_TWINS[id];
+  return twin && catalogueVariants(twin).length > 0 ? twin : null;
+}
+
+/**
+ * The elevated family an element would draw as, or `null` to keep the plan drawing.
+ *
+ * The element side of `elevatedTwin`, and it resolves **through the plan camera first** for the
+ * reason the twin table exists at all: a tree's species already chose a canopy family, and a
+ * symbol already chose a sprite, so translating that choice keeps the two views drawing the same
+ * plant rather than two different ones.
+ *
+ * A tree walks its species' canopy pool in order and takes the first family that has a twin, which
+ * is what lets the library arrive one species at a time: an oak with no elevated twin keeps drawing
+ * the canopy it always drew, beside a birch that has one.
+ */
+export function elevatedFamilyFor(element: {
+  symbol?: string | undefined;
+  plantId?: string | undefined;
+}): AssetId | null {
+  const symbol = resolveSymbol(element);
+  if (!symbol) return null;
+
+  if (isTreeSymbol(symbol)) {
+    for (const id of canopiesForSymbol(symbol, element.plantId)) {
+      const twin = elevatedTwin(id);
+      if (twin) return twin;
+    }
+    return null;
+  }
+
+  return elevatedTwin(SYMBOL_SPRITES[symbol]);
+}
+
+/**
+ * The material a visible vertical face is skinned with.
+ *
+ * Keyed by what the renderer already knows about the thing rather than by a new enum — a boundary
+ * has a `BoundaryKind`, a roof has a `RoofMaterial` — so there is nothing here to keep in step with
+ * anything. Absent is a real answer and the common one: a face with no skin is filled with its
+ * palette tone shaded by its own normal, which is what every drawn structure does today.
+ *
+ * These are `texture` families and lit flat on purpose. The renderer shades a face from that face's
+ * normal against the scene light; art with its own baked light would be shaded twice and the two
+ * would disagree the moment the sun moved.
+ */
+export const BOUNDARY_SKINS: Partial<Record<string, AssetId>> = {
+  fence: 'skin-fence-boards',
+  wall: 'skin-render',
+};
+
+/** Every pitched roof in the library is slate today; the field exists so that can change. */
+export const ROOF_SKINS: Partial<Record<string, AssetId>> = {
+  slate: 'skin-roof-slate',
+  'dark-tile': 'skin-roof-slate',
+  'red-tile': 'skin-roof-slate',
+};
+
+/** A garden building's roof — felt rather than slate, which is what a shed actually has. */
+export const OUTBUILDING_ROOF_SKIN: AssetId = 'skin-roof-felt';
+
+/** The house's own walls. Render rather than brick: it is the commoner finish and the quieter one. */
+export const HOUSE_WALL_SKIN: AssetId = 'skin-render';
+
+/** Every skin, for preloading and for the audit sheet. */
+export const SKIN_ASSETS: AssetId[] = [
+  ...new Set<AssetId>([
+    ...(Object.values(BOUNDARY_SKINS).filter(Boolean) as AssetId[]),
+    ...(Object.values(ROOF_SKINS).filter(Boolean) as AssetId[]),
+    OUTBUILDING_ROOF_SKIN,
+    HOUSE_WALL_SKIN,
+  ]),
+];
 
 /** The disc every sprite stands on. */
 export const CONTACT_SHADOW_SPRITE: AssetId = 'fx-soft-shadow';

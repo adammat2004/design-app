@@ -7,6 +7,7 @@ import {
   PatchFeaturesSchema,
   PatchLayoutSchema,
   PatchSiteSchema,
+  RecordDesignEventsSchema,
   RenameProjectSchema,
   ValidateDocumentSchema,
   type CreatePlanProject,
@@ -19,12 +20,15 @@ import {
   type PatchSite,
   type PlanProject,
   type PlanProjectSummary,
+  type RecordDesignEvents,
+  type RecordDesignEventsResult,
   type RenameProject,
   type SectionPatchResult,
   type ValidateDocument,
   type ValidationResult,
 } from '@garden-studio/schema';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { DesignEventsService } from './design-events.service.js';
 import { PlanProjectsService } from './plan-projects.service.js';
 
 const createBody = new ZodValidationPipe(CreatePlanProjectSchema);
@@ -36,10 +40,14 @@ const layoutBody = new ZodValidationPipe(PatchLayoutSchema);
 const selectionBody = new ZodValidationPipe(PatchConceptSelectionSchema);
 const validateBody = new ZodValidationPipe(ValidateDocumentSchema);
 const generateBody = new ZodValidationPipe(GenerateConceptsSchema);
+const eventsBody = new ZodValidationPipe(RecordDesignEventsSchema);
 
 @Controller('plan-projects')
 export class PlanProjectsController {
-  constructor(private readonly projects: PlanProjectsService) {}
+  constructor(
+    private readonly projects: PlanProjectsService,
+    private readonly events: DesignEventsService,
+  ) {}
 
   @Post()
   create(@Body(createBody) body: CreatePlanProject): Promise<PlanProject> {
@@ -126,5 +134,21 @@ export class PlanProjectsController {
     @Body(generateBody) body: GenerateConcepts,
   ): Promise<GenerateConceptsResult> {
     return this.projects.generateConcepts(id, body);
+  }
+
+  /**
+   * What the person did with the design they were offered.
+   *
+   * A batch, because the editor produces these in bursts and a request per gesture would put the
+   * measurement in the way of the thing being measured. The client never waits on the answer and
+   * never acts on it — a failed insert is logged and reported as zero rather than raised, because
+   * telemetry that can break an editor is worth less than none.
+   */
+  @Post(':id/events')
+  recordEvents(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(eventsBody) body: RecordDesignEvents,
+  ): Promise<RecordDesignEventsResult> {
+    return this.events.record(id, body.events);
   }
 }

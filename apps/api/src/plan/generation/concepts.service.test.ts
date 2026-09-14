@@ -76,6 +76,42 @@ function plan(overrides: Partial<PlanDocument> = {}): PlanDocument {
   return PlanDocumentSchema.parse({ version: 1, site, brief, ...overrides });
 }
 
+/**
+ * `plan()`'s own plot, run deeper: 20 × 30 m with the same house, so the room behind the doors is
+ * 20 × 20 rather than 20 × 9.
+ *
+ * Square, and therefore a plot **all three of the classic compositions can hold**. `plan()`'s room
+ * is genuinely wide and shallow, so the side-by-side composition is the right answer to it whatever
+ * the style asks for, and a formal axis is refused on it outright — there is no view to have. Any
+ * test about which composition a *style* chooses needs a plot that is not itself an argument.
+ */
+function deepPlan(style: GardenBrief['style']): PlanDocument {
+  return PlanDocumentSchema.parse({
+    version: 1,
+    site: siteWithAccess({
+      vertices: [
+        { id: 'v1', x: 0, y: 0 },
+        { id: 'v2', x: 20, y: 0 },
+        { id: 'v3', x: 20, y: 30 },
+        { id: 'v4', x: 0, y: 30 },
+      ],
+      closed: true,
+      house: {
+        outline: [
+          { id: 'h0', x: -4, y: -3 },
+          { id: 'h1', x: 4, y: -3 },
+          { id: 'h2', x: 4, y: 3 },
+          { id: 'h3', x: -4, y: 3 },
+        ],
+        centre: { x: 10, y: 7 },
+        rotation: 180,
+      },
+      selectedZoneIds: ['front', 'back', 'left', 'right'],
+    }),
+    brief: { ...brief, style },
+  });
+}
+
 /** Parses a raw site, then fills in the doors, the gate and the street edge. */
 function siteWithAccess(raw: unknown) {
   return suggestedAccess(PlanDocumentSchema.shape.site.parse(raw));
@@ -334,16 +370,50 @@ describe.skipIf(connection === null)('ConceptsService', () => {
     const cottage = await service.generate(plan({ brief: { ...brief, style: 'cottage' } }), 11);
     const modern = await service.generate(plan({ brief: { ...brief, style: 'modern' } }), 11);
 
-    const radii = (concepts: GeneratedConcept[]) =>
-      concepts
+    /*
+     * Measured on the **drawn outline** rather than on `shape.cornerRadius`.
+     *
+     * The stored radius is not where the rounding always ends up. A panel the fill pass has to
+     * re-cut — clipped to an odd room, or split round a bed — comes back from PostGIS as a ring
+     * with the curve already in its points and `cornerRadius: 0`, because rounding it a second time
+     * would round the rounding. Reading the field therefore measured *whether the panel happened to
+     * survive the clip*, which is a fact about the fill pass rather than about the style.
+     *
+     * A rounded rectangle has many more vertices than a crisp one, whichever way the curve got
+     * there, so the honest comparison is between the two gardens on the same plot.
+     */
+    /*
+     * The open panel of **the same composition** in each set.
+     *
+     * Both halves of that matter. A border piece comes out of `remainderPieces` with a great many
+     * vertices whatever the style, so counting every accent measures the fill pass; and a sweeping
+     * lawn is a 28-point ellipse whatever the style, so counting across compositions measures which
+     * composition was chosen. Comparing the terrace-and-lawn plan in each set holds both constant
+     * and leaves only the thing under test.
+     */
+    const panel = (concepts: GeneratedConcept[]) => {
+      const concept = concepts.find(
+        (candidate) => candidate.strategy!.archetype === 'terrace_and_lawn',
+      )!;
+      const open = concept.elements.find(
+        (element) =>
+          element.fillKind === 'accent' &&
+          (element.category === 'lawn' || element.category === 'gravel-mulch'),
+      )!;
+      return geometryOutline(open.shape).length;
+    };
+
+    expect(panel(cottage)).toBeGreaterThan(panel(modern));
+    // And a modern plan stores no radius at all: its shapes are crisp by construction.
+    expect(
+      modern
         .flatMap((concept) => concept.elements)
         .filter((element) => element.role === 'fill' && element.fillKind === 'accent')
         .filter((element) => element.category !== 'planting-bed' || element.name === undefined)
-        .map((element) => (element.shape.kind === 'polygon' ? element.shape.cornerRadius : 0));
-
-    // Border bands stay square (they meet the fence); the beds inside are what the style shapes.
-    expect(radii(cottage).some((radius) => radius >= 1)).toBe(true);
-    expect(radii(modern).every((radius) => radius === 0)).toBe(true);
+        .every(
+          (element) => (element.shape.kind === 'polygon' ? element.shape.cornerRadius : 0) === 0,
+        ),
+    ).toBe(true);
   });
 
   it('runs paths that stay on the plot and end at the feature they serve', async () => {
@@ -396,17 +466,28 @@ describe.skipIf(connection === null)('ConceptsService', () => {
    * garden reaches the street. Every one of these was false of the sampled layout.
    */
 
-  it('recommends the template the style asks for, and the three concepts differ', async () => {
-    const modern = await service.generate(plan({ brief: { ...brief, style: 'modern' } }), 2);
-    const cottage = await service.generate(plan({ brief: { ...brief, style: 'cottage' } }), 2);
-    const formal = await service.generate(plan({ brief: { ...brief, style: 'formal' } }), 2);
+  /**
+   * The style still chooses the plan, but it chooses among the plans the **plot** can hold.
+   *
+   * Asserted on `strategy.archetype` rather than on the card's name: the name is display text that
+   * a rewording would break, and it could never express "these two concepts are the same shape of
+   * plan". Asserted on a *deep* plot rather than on `plan()`, whose room is 20 × 9 m — genuinely
+   * wide and shallow, and therefore a plot on which the side-by-side composition is the right
+   * answer whatever the style. That case is the test below.
+   */
+  it('recommends the layout the style asks for, and the three concepts differ', async () => {
+    const modern = await service.generate(deepPlan('modern'), 2);
+    const cottage = await service.generate(deepPlan('cottage'), 2);
+    const formal = await service.generate(deepPlan('formal'), 2);
 
-    expect(modern.find((concept) => concept.recommended)!.name).toBe('Terrace and lawn');
-    expect(cottage.find((concept) => concept.recommended)!.name).toBe('Sweeping lawn');
-    expect(formal.find((concept) => concept.recommended)!.name).toBe('Formal axis');
+    const chosen = (set: GeneratedConcept[]) =>
+      set.find((concept) => concept.recommended)!.strategy!.archetype;
+    expect(chosen(modern)).toBe('terrace_and_lawn');
+    expect(chosen(cottage)).toBe('sweeping_lawn');
+    expect(chosen(formal)).toBe('formal_axis');
 
     for (const set of [modern, cottage, formal]) {
-      expect(new Set(set.map((concept) => concept.name)).size).toBe(3);
+      expect(new Set(set.map((concept) => concept.strategy!.archetype)).size).toBe(3);
       // Different templates, not the same layout with a different badge: the main panel differs.
       const panels = set.map((concept) =>
         JSON.stringify(
@@ -439,7 +520,7 @@ describe.skipIf(connection === null)('ConceptsService', () => {
     }
   });
 
-  it('lays one lawn panel, inside the back garden, behind the terrace', async () => {
+  it('lays one lawn panel, inside the back garden, clear of the terrace', async () => {
     const document = plan();
     const house = housePolygon(document.site.house!);
 
@@ -457,9 +538,23 @@ describe.skipIf(connection === null)('ConceptsService', () => {
       );
       expect(polygonsIntersect(outline, house)).toBe(false);
       expect(polygonsIntersect(outline, terrace)).toBe(false);
-      // Behind the terrace: every lawn vertex is further down the garden than the terrace's far edge.
-      const terraceFar = Math.max(...terrace.map((point) => point.y));
-      expect(Math.min(...outline.map((point) => point.y))).toBeGreaterThan(terraceFar - 1e-6);
+
+      /*
+       * **Behind the terrace only where the composition puts its rooms front to back.**
+       *
+       * That was an invariant while every plan was one of three that all do. The side-by-side
+       * composition exists precisely because a wide shallow plot has no "behind": it lays the lawn
+       * *beside* the terrace, which is the whole reason it was added. What is true of every plan is
+       * that the lawn is one panel and clear of the paving, which is asserted above.
+       */
+      if (concept.strategy!.archetype !== 'side_by_side') {
+        const terraceFar = Math.max(...terrace.map((point) => point.y));
+        expect(Math.min(...outline.map((point) => point.y))).toBeGreaterThan(terraceFar - 1e-6);
+      } else {
+        // Beside it: the two share a depth band and do not overlap.
+        const terraceNear = Math.min(...terrace.map((point) => point.y));
+        expect(Math.max(...outline.map((point) => point.y))).toBeGreaterThan(terraceNear);
+      }
       // And drawn after the border pieces it sits on.
       const lastBed = concept.elements.findLastIndex(
         (element) =>
@@ -468,6 +563,38 @@ describe.skipIf(connection === null)('ConceptsService', () => {
           element.zone !== 'front',
       );
       expect(concept.elements.indexOf(lawns[0]!)).toBeGreaterThan(lastBed);
+    }
+  });
+
+  /**
+   * The explanation is only worth carrying if it is about *this* garden.
+   *
+   * Until the design agent landed, a concept's prose was one of three fixed sentences describing the
+   * template — identical whether the plan had a shed in the corner or no shed at all. The rule that
+   * replaces it is that a decision is recorded by the pass that took it and names the elements it
+   * produced, so this checks the one thing that cannot be faked: every id it points at exists.
+   */
+  it('explains itself, naming elements that are actually in the drawing', async () => {
+    for (const concept of await service.generate(plan(), 11)) {
+      const explanation = concept.explanation!;
+      expect(explanation.strategy).toBe(concept.strategy!.archetype);
+      expect(explanation.decisions.length).toBeGreaterThanOrEqual(3);
+      expect(explanation.rationale.length).toBeGreaterThan(20);
+
+      const ids = new Set(concept.elements.map((element) => element.id));
+      for (const decision of explanation.decisions) {
+        expect(decision.text.endsWith('.'), decision.text).toBe(true);
+        for (const subject of decision.subjects) expect(ids.has(subject), subject).toBe(true);
+      }
+
+      // The composition it claims is the one that drew it, and it says why it was chosen.
+      expect(explanation.decisions[0]!.kind).toBe('composition');
+      // A feature reported as not included carries the reason it was left out.
+      for (const check of concept.requestedFeaturesIncluded) {
+        if (check.included) continue;
+        if (!check.reason) continue;
+        expect(check.reason.length).toBeGreaterThan(20);
+      }
     }
   });
 
@@ -500,8 +627,15 @@ describe.skipIf(connection === null)('ConceptsService', () => {
   });
 
   it('mirrors the formal plan about the door axis', async () => {
-    const concepts = await service.generate(plan({ brief: { ...brief, style: 'formal' } }), 11);
-    const formal = concepts.find((concept) => concept.name === 'Formal axis')!;
+    /*
+     * On the deep plot: a formal axis is *refused* on `plan()`'s 20 × 9 m room, because after a
+     * terrace, a lawn and a focal point there is no lawn left — which is the composition answering
+     * for itself rather than being offered everywhere and drawn badly.
+     *
+     * Found by `strategy.archetype` rather than by the card's name, which is display text.
+     */
+    const concepts = await service.generate(deepPlan('formal'), 11);
+    const formal = concepts.find((concept) => concept.strategy!.archetype === 'formal_axis')!;
     const axisX = 10; // The door is centred on the back wall of a house centred at x = 10.
 
     const terrace = formal.elements.find((element) => element.name === 'Seating patio')!;
@@ -957,6 +1091,22 @@ describe.skipIf(connection === null)('ConceptsService', () => {
     }
   });
 
+  it('lights a low-budget garden that asked for lighting by name', async () => {
+    // The budget gate above is a *default*, not a rule about what is possible. A brief that ticked
+    // "Garden lighting" has said it will pay for it, and returning a dark garden anyway would be
+    // the brief having no force — which is the defect `resolveConstraints` exists to prevent.
+    const concepts = await service.generate(
+      plan({ brief: { ...brief, budget: 'low', desiredFeatures: ['seating', 'lighting'] } }),
+      11,
+    );
+
+    expect(
+      concepts.some((concept) =>
+        concept.elements.some((element) => element.category === 'lighting'),
+      ),
+    ).toBe(true);
+  });
+
   it('counts lighting in items rather than in square metres', async () => {
     // The reason lighting is a `COUNTED_CATEGORY`: "0.02 m² of powder-coated black" is not a line
     // anyone can order against, and the area would be noise in the ground totals besides.
@@ -1095,6 +1245,132 @@ describe.skipIf(connection === null)('ConceptsService', () => {
       expect(concept.maintenance).toBe('low');
       expect(concept.elements.filter((element) => element.category === 'lawn')).toEqual([]);
     }
+  });
+
+  it('lays a lawn the brief asked for by name, even on a low-maintenance brief', async () => {
+    /*
+     * The two answers can genuinely disagree now: `lowMaintenance` reads as "Minimalist" on the
+     * style cards, so choosing a spare look *and* a lawn is an ordinary thing to do rather than a
+     * contradiction. Where they conflict the named thing wins — the user pointed at a picture of a
+     * lawn, and quietly returning a garden without one is the worst of the two answers.
+     *
+     * The upkeep badge is deliberately *not* softened with it: the concept still says "Low", which
+     * is the honest report of a garden whose one demanding element the owner chose knowingly.
+     */
+    const concepts = await service.generate(
+      plan({
+        brief: { ...brief, maintenance: 'low', desiredFeatures: ['seating', 'lawn'] },
+      }),
+      5,
+    );
+
+    for (const concept of concepts) {
+      expect(concept.maintenance).toBe('low');
+      expect(concept.elements.some((element) => element.category === 'lawn')).toBe(true);
+    }
+  });
+
+  it('reports the composed answers from what was drawn, not from what was asked', async () => {
+    /*
+     * A lawn, the borders and the lighting are passes rather than placements, so they never reach
+     * `assignSlots` — and the danger in that is a tick that quietly reports success because nothing
+     * tried and failed. Every one of them is answered from the finished element list instead.
+     */
+    const [concept] = await service.generate(
+      plan({
+        brief: { ...brief, desiredFeatures: ['lawn', 'plantingBeds', 'lighting'] },
+      }),
+      7,
+    );
+
+    const checks = new Map(
+      concept!.requestedFeaturesIncluded.map((check) => [check.feature, check.included]),
+    );
+
+    expect([...checks.keys()].sort()).toEqual(['lawn', 'lighting', 'plantingBeds']);
+
+    for (const [feature, category] of [
+      ['lawn', 'lawn'],
+      ['plantingBeds', 'planting-bed'],
+      ['lighting', 'lighting'],
+    ] as const) {
+      expect(checks.get(feature)).toBe(
+        concept!.elements.some((element) => element.category === category),
+      );
+    }
+  });
+
+  it('gives the new spaces a real footprint rather than a tick that draws nothing', async () => {
+    /*
+     * The point of extending the enum at all: a card on the brief screen has to become something on
+     * the plan. Each of these carries a `HOST_SYMBOL`, so asserting the symbols is asserting that
+     * the placer found room *and* that the drawing knows what it is looking at — a garden room with
+     * no symbol is an anonymous rectangle of decking.
+     */
+    const concepts = await service.generate(
+      plan({
+        brief: {
+          ...brief,
+          budget: 'high',
+          desiredFeatures: ['gardenRoom', 'greenhouse', 'hotTub'],
+        },
+      }),
+      9,
+    );
+
+    for (const [feature, symbol] of [
+      ['gardenRoom', 'garden-room'],
+      ['greenhouse', 'greenhouse'],
+      ['hotTub', 'hot-tub'],
+    ] as const) {
+      const placed = concepts.some((concept) =>
+        concept.elements.some((element) => element.symbol === symbol),
+      );
+      const reported = concepts.some((concept) =>
+        concept.requestedFeaturesIncluded.some(
+          (check) => check.feature === feature && check.included,
+        ),
+      );
+
+      expect(placed, `${feature} is drawn somewhere`).toBe(true);
+      expect(reported, `${feature} is reported as included`).toBe(true);
+    }
+  });
+
+  it('gives dining its own room rather than folding it into the seating patio', async () => {
+    /*
+     * Splitting `dining` out of `seating` is only worth the schema change if the two land in
+     * different places. Seating claims the terrace — a garden with nowhere to step out onto is not
+     * a design — and dining then takes a room of its own beside or beyond it.
+     */
+    const [concept] = await service.generate(
+      plan({ brief: { ...brief, desiredFeatures: ['seating', 'dining'] } }),
+      3,
+    );
+
+    const seating = concept!.elements.find((element) => element.name === 'Seating patio');
+    const dining = concept!.elements.find((element) => element.name === 'Dining terrace');
+
+    expect(seating).toBeDefined();
+    expect(dining).toBeDefined();
+    expect(polygonsIntersect(geometryOutline(seating!.shape), geometryOutline(dining!.shape))).toBe(
+      false,
+    );
+  });
+
+  it('furnishes the terrace with a table when dining was asked for and seating was not', async () => {
+    // The terrace exists in every plan; what it is *for* comes from the brief. Asked for somewhere
+    // to eat and nowhere to lounge, the patio at the doors is the dining room and gets the table.
+    const [concept] = await service.generate(
+      plan({ brief: { ...brief, desiredFeatures: ['dining'] } }),
+      3,
+    );
+
+    const terrace = concept!.elements.find((element) => element.name === 'Dining terrace');
+    expect(terrace).toBeDefined();
+
+    const furniture = concept!.elements.filter((element) => element.category === 'furniture');
+    expect(furniture.some((element) => element.symbol?.startsWith('dining-set'))).toBe(true);
   });
 
   it('keeps the badge and the ground cover in step even when the brief disagrees', async () => {

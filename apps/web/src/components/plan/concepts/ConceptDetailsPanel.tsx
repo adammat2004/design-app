@@ -39,6 +39,12 @@ export function ConceptDetailsPanel({ concept }: { concept: GeneratedConcept | n
   const chosen = concept.id === chosenConceptId;
   const budget = BUDGET_BANDS.find((band) => band.id === concept.budget);
   const maintenance = MAINTENANCE_LEVELS.find((level) => level.id === concept.maintenance);
+  const decisions = concept.explanation?.decisions ?? [];
+  const repairs = concept.explanation?.repairs ?? [];
+  /* Only the ones that carry a reason: a cross with nothing after it is the list above already. */
+  const excluded = concept.requestedFeaturesIncluded.filter(
+    (check): check is typeof check & { reason: string } => !check.included && Boolean(check.reason),
+  );
 
   return (
     <section
@@ -136,7 +142,87 @@ export function ConceptDetailsPanel({ concept }: { concept: GeneratedConcept | n
             ))}
           </ul>
         )}
+
+        {/*
+          Why a feature was left out, where the design agent had a reason for it. "The pond is
+          missing" and "there was no room for the pond without losing the lawn" are different
+          answers and only the second is a design decision — which is the entire argument for
+          letting a concept exclude something in the first place.
+        */}
+        {excluded.length > 0 ? (
+          <ul data-testid="excluded-reasons" className="mt-2 space-y-1.5">
+            {excluded.map((check) => (
+              <li
+                key={check.feature}
+                className="border-l-2 border-garden-line pl-2 text-[10px] leading-relaxed text-garden-muted"
+              >
+                <span className="font-medium text-garden-ink">{check.label}:</span> {check.reason}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
+
+      {/*
+        What the concept decided and why.
+
+        Absent on any plan generated before the design agent existed, which is most of the reason
+        this is a conditional block rather than a section with an empty state: a concept with no
+        explanation is an older concept, not a concept that failed to explain itself.
+      */}
+      {decisions.length > 0 ? (
+        <div>
+          <h3 className="text-[11px] font-semibold text-garden-ink">Why this design</h3>
+          <ul data-testid="design-decisions" className="mt-1.5 space-y-1.5">
+            {decisions.map((decision, index) => (
+              <li
+                key={`${decision.kind}-${index}`}
+                data-testid={`decision-${decision.kind}`}
+                className="flex gap-2 text-[11px] leading-relaxed text-garden-ink"
+              >
+                <span
+                  aria-hidden
+                  className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-garden-green"
+                />
+                {decision.text}
+              </li>
+            ))}
+          </ul>
+          {concept.explanation?.rationale ? (
+            <p className="mt-2 text-[10px] leading-relaxed text-garden-muted">
+              {concept.explanation.rationale}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
+        What the design agent changed after it had drawn the plan and looked at it.
+
+        Its own heading rather than more bullets under "Why this design", because these are a
+        different kind of claim: a decision says what the concept did, a repair says what it did
+        *instead*, and each one was accepted only because the score measurably rose afterwards.
+        Most concepts need none and show nothing.
+      */}
+      {repairs.length > 0 ? (
+        <div>
+          <h3 className="text-[11px] font-semibold text-garden-ink">What was adjusted</h3>
+          <ul data-testid="design-repairs" className="mt-1.5 space-y-1.5">
+            {repairs.map((repair, index) => (
+              <li
+                key={`repair-${index}`}
+                className="flex gap-2 text-[11px] leading-relaxed text-garden-ink"
+              >
+                <span
+                  aria-hidden
+                  className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-garden-muted"
+                />
+                {repair}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="space-y-2 border-t border-garden-line pt-3">
         <button

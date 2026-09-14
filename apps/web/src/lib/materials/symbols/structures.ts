@@ -111,6 +111,112 @@ export function gazeboRoof(rect: RectShape): Point[][] {
   ];
 }
 
+/**
+ * A garden room: a mono-pitch roof and a glazed frontage.
+ *
+ * What distinguishes one from a shed in plan is not the roof — from directly above a flat roof and
+ * a mono-pitch one are the same rectangle — it is the **glazing**. A garden room is a building you
+ * look out of, so a band of glass down one long face with mullions across it is the whole read,
+ * and the single fall of the roof is what says it is a modern box rather than a hut.
+ *
+ * `high` and `low` are the two long edges, high first. The fall runs from one to the other, so a
+ * caller can shade the plane as one facet rather than two — there is no ridge to break it at.
+ *
+ * **Which face is glazed is a convention, not an inference.** The document records no door on an
+ * element and no direction it faces, so this takes the local `-y` long face and says so. Guessing
+ * from the house would be a derived direction nothing downstream could check, which is the class
+ * of thing `openingNormal` exists to avoid.
+ */
+export function gardenRoomParts(
+  rect: RectShape,
+  glazingShare = 0.3,
+): {
+  plane: Point[];
+  high: [Point, Point];
+  low: [Point, Point];
+  glazing: Point[];
+  mullions: Point[][];
+} {
+  const at = frame(rect);
+  const along = rect.width >= rect.depth;
+  const hw = rect.width / 2;
+  const hd = rect.depth / 2;
+
+  // The long axis runs across the face; the fall runs along the short one.
+  const faceHalf = along ? hw : hd;
+  const fallHalf = along ? hd : hw;
+  /*
+   * A share of the depth rather than a fixed band, because a garden room's front really is mostly
+   * glass and the whole read depends on it: quoted at a flat 0.35 m it was a pale stripe on a 3 m
+   * building, which is the proportion of a paving margin rather than of a frontage.
+   */
+  const glazed = fallHalf * 2 * glazingShare;
+
+  /** Local-frame point, with the long axis first however the rect is proportioned. */
+  const local = (face: number, fall: number): Point => (along ? at(face, fall) : at(fall, face));
+
+  const mullions: Point[][] = [];
+  // Four panes' worth of divisions, spaced evenly across the face rather than at a fixed pitch:
+  // a 2 m room and a 6 m one should both read as a glazed wall, not as two and eighteen panes.
+  const panes = 4;
+  for (let i = 1; i < panes; i += 1) {
+    const face = -faceHalf + (faceHalf * 2 * i) / panes;
+    mullions.push([local(face, -fallHalf), local(face, -fallHalf + glazed)]);
+  }
+
+  return {
+    plane: [
+      local(-faceHalf, -fallHalf),
+      local(faceHalf, -fallHalf),
+      local(faceHalf, fallHalf),
+      local(-faceHalf, fallHalf),
+    ],
+    // The roof is highest over the solid back and falls towards the glass, which is how these are
+    // built: the tall wall is the one you do not have to look past.
+    high: [local(-faceHalf, fallHalf), local(faceHalf, fallHalf)],
+    low: [local(-faceHalf, -fallHalf), local(faceHalf, -fallHalf)],
+    glazing: [
+      local(-faceHalf, -fallHalf),
+      local(faceHalf, -fallHalf),
+      local(faceHalf, -fallHalf + glazed),
+      local(-faceHalf, -fallHalf + glazed),
+    ],
+    mullions,
+  };
+}
+
+/**
+ * The glazing bars of a greenhouse, across the roof's fall.
+ *
+ * The roof itself is `shedRoof` — a greenhouse is a pitched box, and there is no reason for a
+ * second implementation of a ridge. This is the part that makes it read as glass rather than as a
+ * shed: a run of fine lines at a real spacing, running from eave to ridge on both slopes.
+ *
+ * Spaced in metres, like the fence posts, so they stay the right density at any zoom; the caller
+ * drops them when they fall closer together than a pixel or two.
+ */
+export function glazingBars(rect: RectShape, spacing = 0.6): Point[][] {
+  const at = frame(rect);
+  const along = rect.width >= rect.depth;
+  const hw = rect.width / 2;
+  const hd = rect.depth / 2;
+
+  // Bars run across the ridge, so they are spaced along it.
+  const ridgeHalf = along ? hw : hd;
+  const fallHalf = along ? hd : hw;
+  const local = (onRidge: number, fall: number): Point =>
+    along ? at(onRidge, fall) : at(fall, onRidge);
+
+  const bars: Point[][] = [];
+  const step = Math.max(0.1, spacing);
+
+  for (let x = -ridgeHalf + step; x < ridgeHalf - 1e-6; x += step) {
+    bars.push([local(x, -fallHalf), local(x, fallHalf)]);
+  }
+
+  return bars;
+}
+
 /** The outer and inner rings of a raised bed's timber rails. */
 export function raisedBedRails(
   rect: RectShape,

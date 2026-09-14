@@ -1,6 +1,6 @@
 {
-  "version": "5a28c64ec789",
-  "generatedAt": "2026-09-12T14:36:46.727Z",
+  "version": "0b27a0b0a29d",
+  "generatedAt": "2026-09-13T14:22:05.756Z",
   "assets": [
     {
       "id": "face-concrete-slab",
@@ -357,6 +357,34 @@
         "model": "gpt-image-2 (medium)",
         "generatedAt": "2026-09-12T14:36:46.707Z",
         "promptHash": "dd3669eb589b"
+      }
+    },
+    {
+      "id": "feature-hot-tub",
+      "variant": 1,
+      "file": "sprites/feature-hot-tub-1.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#8b99a1",
+      "opaqueRadiusRatio": 1.341,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T12:52:05.500Z",
+        "promptHash": "dfb0573de391"
+      }
+    },
+    {
+      "id": "feature-hot-tub",
+      "variant": 2,
+      "file": "sprites/feature-hot-tub-2.webp",
+      "widthPx": 384,
+      "heightPx": 384,
+      "meanColour": "#8899a0",
+      "opaqueRadiusRatio": 1.352,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T12:52:53.495Z",
+        "promptHash": "047c570f9394"
       }
     },
     {
@@ -1251,6 +1279,62 @@
       "opaqueRadiusRatio": 0.812
     },
     {
+      "id": "skin-fence-boards",
+      "variant": 1,
+      "file": "textures/skin-fence-boards-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#a89e8f",
+      "seamScore": 1.277,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:01:43.819Z",
+        "promptHash": "40a7393dd8d7"
+      }
+    },
+    {
+      "id": "skin-render",
+      "variant": 1,
+      "file": "textures/skin-render-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#ebe5db",
+      "seamScore": 1.344,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:01:39.962Z",
+        "promptHash": "74fcbfeaada5"
+      }
+    },
+    {
+      "id": "skin-roof-felt",
+      "variant": 1,
+      "file": "textures/skin-roof-felt-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#4c4c4d",
+      "seamScore": 1.119,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:02:18.301Z",
+        "promptHash": "37bca2e11047"
+      }
+    },
+    {
+      "id": "skin-roof-slate",
+      "variant": 1,
+      "file": "textures/skin-roof-slate-1.webp",
+      "widthPx": 512,
+      "heightPx": 512,
+      "meanColour": "#666e74",
+      "seamScore": 1.263,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:02:15.686Z",
+        "promptHash": "a736a24f4f84"
+      }
+    },
+    {
       "id": "tex-artificial-turf",
       "variant": 1,
       "file": "textures/tex-artificial-turf-1.webp",
@@ -1609,6 +1693,566 @@
         "model": "gpt-image-2 (medium)",
         "generatedAt": "2026-09-05T18:07:03.265Z",
         "promptHash": "27526a4ea326"
+      }
+    },
+    {
+      "id": "vis-bbq",
+      "variant": 1,
+      "file": "sprites/vis-bbq-1.webp",
+      "widthPx": 768,
+      "heightPx": 489,
+      "meanColour": "#8d8c8c",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.008,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.069,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:32.128Z",
+        "promptHash": "55f66f7bb8f4"
+      }
+    },
+    {
+      "id": "vis-bench",
+      "variant": 1,
+      "file": "sprites/vis-bench-1.webp",
+      "widthPx": 768,
+      "heightPx": 380,
+      "meanColour": "#9b8167",
+      "opaqueBounds": {
+        "minX": 0.113,
+        "minY": 0,
+        "maxX": 0.887,
+        "maxY": 1
+      },
+      "footAlpha": 0.055,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.960Z",
+        "promptHash": "8b9a047ec4ba"
+      }
+    },
+    {
+      "id": "vis-dining-6",
+      "variant": 1,
+      "file": "sprites/vis-dining-6-1.webp",
+      "widthPx": 768,
+      "heightPx": 614,
+      "meanColour": "#ab8b6d",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.042,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.079,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.342Z",
+        "promptHash": "0c6631fae1c8"
+      }
+    },
+    {
+      "id": "vis-fire-pit",
+      "variant": 1,
+      "file": "sprites/vis-fire-pit-1.webp",
+      "widthPx": 717,
+      "heightPx": 768,
+      "meanColour": "#715c54",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.043,
+        "maxX": 0.999,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.061,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:32.348Z",
+        "promptHash": "f1f8e9eea0de"
+      }
+    },
+    {
+      "id": "vis-grass",
+      "variant": 1,
+      "file": "sprites/vis-grass-1.webp",
+      "widthPx": 349,
+      "heightPx": 512,
+      "meanColour": "#a1976e",
+      "opaqueBounds": {
+        "minX": 0.02,
+        "minY": 0.004,
+        "maxX": 0.971,
+        "maxY": 0.996
+      },
+      "footAlpha": 0.005,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:04.123Z",
+        "promptHash": "88ec4d4f941d"
+      }
+    },
+    {
+      "id": "vis-grass",
+      "variant": 2,
+      "file": "sprites/vis-grass-2.webp",
+      "widthPx": 349,
+      "heightPx": 512,
+      "meanColour": "#797551",
+      "opaqueBounds": {
+        "minX": 0.032,
+        "minY": 0.004,
+        "maxX": 0.968,
+        "maxY": 0.994
+      },
+      "footAlpha": 0.006,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:07.385Z",
+        "promptHash": "e67e6c97d916"
+      }
+    },
+    {
+      "id": "vis-grass",
+      "variant": 3,
+      "file": "sprites/vis-grass-3.webp",
+      "widthPx": 349,
+      "heightPx": 512,
+      "meanColour": "#8d8353",
+      "opaqueBounds": {
+        "minX": 0.052,
+        "minY": 0.006,
+        "maxX": 0.948,
+        "maxY": 0.982
+      },
+      "footAlpha": 0,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:06.812Z",
+        "promptHash": "eab3d899a6da"
+      }
+    },
+    {
+      "id": "vis-lounger",
+      "variant": 1,
+      "file": "sprites/vis-lounger-1.webp",
+      "widthPx": 271,
+      "heightPx": 768,
+      "meanColour": "#c7beb4",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.201,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.161,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.643Z",
+        "promptHash": "f0f58b033828"
+      }
+    },
+    {
+      "id": "vis-lounger",
+      "variant": 2,
+      "file": "sprites/vis-lounger-2.webp",
+      "widthPx": 271,
+      "heightPx": 768,
+      "meanColour": "#beb0a3",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.169,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.118,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.775Z",
+        "promptHash": "fcd5a2c0137a"
+      }
+    },
+    {
+      "id": "vis-parasol",
+      "variant": 1,
+      "file": "sprites/vis-parasol-1.webp",
+      "widthPx": 646,
+      "heightPx": 768,
+      "meanColour": "#d1c7bb",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.168,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.082,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:16.322Z",
+        "promptHash": "ddda66e3211e"
+      }
+    },
+    {
+      "id": "vis-planter",
+      "variant": 1,
+      "file": "sprites/vis-planter-1.webp",
+      "widthPx": 582,
+      "heightPx": 768,
+      "meanColour": "#3e4d2a",
+      "opaqueBounds": {
+        "minX": 0.002,
+        "minY": 0.036,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.86,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:43.502Z",
+        "promptHash": "16b1d640a7bc"
+      }
+    },
+    {
+      "id": "vis-planter",
+      "variant": 2,
+      "file": "sprites/vis-planter-2.webp",
+      "widthPx": 582,
+      "heightPx": 768,
+      "meanColour": "#626241",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.155,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.886,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:43.725Z",
+        "promptHash": "29e80cac4198"
+      }
+    },
+    {
+      "id": "vis-raised-bed",
+      "variant": 1,
+      "file": "sprites/vis-raised-bed-1.webp",
+      "widthPx": 768,
+      "heightPx": 421,
+      "meanColour": "#62643c",
+      "opaqueBounds": {
+        "minX": 0.009,
+        "minY": 0.002,
+        "maxX": 0.991,
+        "maxY": 1
+      },
+      "footAlpha": 0.605,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:47.898Z",
+        "promptHash": "a2f598680fbb"
+      }
+    },
+    {
+      "id": "vis-shrub-evergreen",
+      "variant": 1,
+      "file": "sprites/vis-shrub-evergreen-1.webp",
+      "widthPx": 401,
+      "heightPx": 512,
+      "meanColour": "#576535",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.053,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.031,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:54.175Z",
+        "promptHash": "da93ede1b6d3"
+      }
+    },
+    {
+      "id": "vis-shrub-evergreen",
+      "variant": 2,
+      "file": "sprites/vis-shrub-evergreen-2.webp",
+      "widthPx": 401,
+      "heightPx": 512,
+      "meanColour": "#495035",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.111,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.09,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:54.179Z",
+        "promptHash": "54e4ee62d0a7"
+      }
+    },
+    {
+      "id": "vis-shrub-evergreen",
+      "variant": 3,
+      "file": "sprites/vis-shrub-evergreen-3.webp",
+      "widthPx": 401,
+      "heightPx": 512,
+      "meanColour": "#536139",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.098,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.044,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:54.355Z",
+        "promptHash": "7efbf5b70194"
+      }
+    },
+    {
+      "id": "vis-shrub-flowering",
+      "variant": 1,
+      "file": "sprites/vis-shrub-flowering-1.webp",
+      "widthPx": 411,
+      "heightPx": 512,
+      "meanColour": "#586644",
+      "opaqueBounds": {
+        "minX": 0.002,
+        "minY": 0.016,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.024,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.090Z",
+        "promptHash": "170120049418"
+      }
+    },
+    {
+      "id": "vis-shrub-flowering",
+      "variant": 2,
+      "file": "sprites/vis-shrub-flowering-2.webp",
+      "widthPx": 411,
+      "heightPx": 512,
+      "meanColour": "#5f6b3d",
+      "opaqueBounds": {
+        "minX": 0.022,
+        "minY": 0,
+        "maxX": 0.978,
+        "maxY": 1
+      },
+      "footAlpha": 0.048,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:31.143Z",
+        "promptHash": "fa6e9533d844"
+      }
+    },
+    {
+      "id": "vis-shrub-flowering",
+      "variant": 3,
+      "file": "sprites/vis-shrub-flowering-3.webp",
+      "widthPx": 411,
+      "heightPx": 512,
+      "meanColour": "#5f583a",
+      "opaqueBounds": {
+        "minX": 0.015,
+        "minY": 0,
+        "maxX": 0.985,
+        "maxY": 1
+      },
+      "footAlpha": 0.013,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:30.204Z",
+        "promptHash": "cfed50a6e229"
+      }
+    },
+    {
+      "id": "vis-slide",
+      "variant": 1,
+      "file": "sprites/vis-slide-1.webp",
+      "widthPx": 313,
+      "heightPx": 768,
+      "meanColour": "#4f7360",
+      "opaqueBounds": {
+        "minX": 0.195,
+        "minY": 0,
+        "maxX": 0.805,
+        "maxY": 1
+      },
+      "footAlpha": 0.304,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:43.272Z",
+        "promptHash": "584021a3d446"
+      }
+    },
+    {
+      "id": "vis-sofa-set",
+      "variant": 1,
+      "file": "sprites/vis-sofa-set-1.webp",
+      "widthPx": 768,
+      "heightPx": 658,
+      "meanColour": "#85827f",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.033,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.117,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:22:05.734Z",
+        "promptHash": "fd6cf713309e"
+      }
+    },
+    {
+      "id": "vis-swing",
+      "variant": 1,
+      "file": "sprites/vis-swing-1.webp",
+      "widthPx": 768,
+      "heightPx": 632,
+      "meanColour": "#9b8967",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.198,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.07,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:19:46.046Z",
+        "promptHash": "23b462ea9058"
+      }
+    },
+    {
+      "id": "vis-trampoline",
+      "variant": 1,
+      "file": "sprites/vis-trampoline-1.webp",
+      "widthPx": 722,
+      "heightPx": 768,
+      "meanColour": "#385276",
+      "opaqueBounds": {
+        "minX": 0.001,
+        "minY": 0.055,
+        "maxX": 0.999,
+        "maxY": 1
+      },
+      "footAlpha": 0.154,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:20:12.254Z",
+        "promptHash": "d1a18e7065b0"
+      }
+    },
+    {
+      "id": "vis-tree-deciduous",
+      "variant": 1,
+      "file": "sprites/vis-tree-deciduous-1.webp",
+      "widthPx": 746,
+      "heightPx": 1024,
+      "meanColour": "#636b3c",
+      "opaqueBounds": {
+        "minX": 0.034,
+        "minY": 0.001,
+        "maxX": 0.966,
+        "maxY": 1
+      },
+      "footAlpha": 0.012,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:54.008Z",
+        "promptHash": "5b3f736f1c01"
+      }
+    },
+    {
+      "id": "vis-tree-deciduous",
+      "variant": 2,
+      "file": "sprites/vis-tree-deciduous-2.webp",
+      "widthPx": 746,
+      "heightPx": 1024,
+      "meanColour": "#515e2f",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.033,
+        "maxX": 0.999,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.018,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:54.912Z",
+        "promptHash": "e3c60011d9a9"
+      }
+    },
+    {
+      "id": "vis-tree-deciduous",
+      "variant": 3,
+      "file": "sprites/vis-tree-deciduous-3.webp",
+      "widthPx": 746,
+      "heightPx": 1024,
+      "meanColour": "#575c31",
+      "opaqueBounds": {
+        "minX": 0.004,
+        "minY": 0,
+        "maxX": 0.995,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.04,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:52.747Z",
+        "promptHash": "76a7ec6235ba"
+      }
+    },
+    {
+      "id": "vis-tree-multistem",
+      "variant": 1,
+      "file": "sprites/vis-tree-multistem-1.webp",
+      "widthPx": 824,
+      "heightPx": 1024,
+      "meanColour": "#71733c",
+      "opaqueBounds": {
+        "minX": 0.03,
+        "minY": 0,
+        "maxX": 0.97,
+        "maxY": 1
+      },
+      "footAlpha": 0.036,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:17:53.990Z",
+        "promptHash": "03fac7c144fb"
+      }
+    },
+    {
+      "id": "vis-tree-multistem",
+      "variant": 2,
+      "file": "sprites/vis-tree-multistem-2.webp",
+      "widthPx": 824,
+      "heightPx": 1024,
+      "meanColour": "#666d35",
+      "opaqueBounds": {
+        "minX": 0.056,
+        "minY": 0.001,
+        "maxX": 0.943,
+        "maxY": 1
+      },
+      "footAlpha": 0.04,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-13T14:18:28.130Z",
+        "promptHash": "eefadd0796bb"
       }
     }
   ]

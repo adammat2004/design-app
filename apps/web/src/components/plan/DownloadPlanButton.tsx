@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { downloadPlanPng, planFileName } from '@/lib/materials/export-plan';
 import type { SceneView } from '@/lib/render/scene';
+import { browserRendererVersion } from '@/lib/render/diagnostics';
+import { emitDesignEvent } from '@/state/design-events';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { ToolbarButton } from './ToolbarButton';
@@ -46,16 +48,23 @@ export function DownloadPlanButton({
           boundary: draftPolygon(boundaryDraft),
           house: boundaryDraft.house,
           elements: editor.present.elements,
-          site: boundaryDraft,
+          site: view === 'visualise' && editor.previewMinutes !== null
+            ? { ...boundaryDraft, sun: { ...boundaryDraft.sun, minutes: editor.previewMinutes } } : boundaryDraft,
         },
         {
           unit,
-          labels: editor.labelsVisible,
+          labels: view === 'visualise' ? false : editor.labelsVisible,
           view,
           maturity: editor.maturity,
+          rendererVersion: browserRendererVersion(),
           fileName: planFileName(projectName),
         },
       );
+      /*
+       * Recorded only after the file is written, so it means "they kept this design" rather than
+       * "they tried to". A failed export is not a judgement on the garden.
+       */
+      emitDesignEvent('plan_exported');
     } catch {
       setFailed(true);
     } finally {

@@ -22,6 +22,21 @@ import type { ShadowCast } from './sun.js';
  * `ST_Union`, which is the right tool there anyway.
  */
 
+/**
+ * What kind of thing is casting, which decides how the shadow is *drawn* rather than where it goes.
+ *
+ * `PRESENTATION_SHADOW_SOFTNESS` was a single number applied to everything, and it is the correct
+ * penumbra for a **hard** occluder: the sun subtends about half a degree, so the blur at the ground
+ * is roughly distance × 0.009. A brick wall is a hard occluder. A tree is not — it is a porous
+ * canopy, light comes through the leaves, and its shadow is the softest and lightest thing in a real
+ * garden photograph. One constant served both, and every tree on the plan cast a crisp dark disc.
+ *
+ * Only two values, and the cap is deliberate: the shadow layer is drawn into a raster that reaches
+ * 4096² (about 67 MB), and each character costs a blur pass. Two is what the picture needs and what
+ * the memory allows; see `render-shadow-layer.ts`.
+ */
+export type ShadowCharacter = 'built' | 'foliage';
+
 /** Something with height, and therefore a shadow. */
 export interface ShadowOccluder {
   /** World metres, already tessellated. */
@@ -30,6 +45,13 @@ export interface ShadowOccluder {
   height: number;
   /** Height of the underside of a canopy or beam; absent for solid objects. */
   baseHeight?: number;
+  /**
+   * How the shadow is drawn. Absent means `built`, so every existing caller is unchanged.
+   *
+   * Note this is presentation, not geometry: `projectShadow` never reads it, and where the shadow
+   * falls is the sun's business alone.
+   */
+  character?: ShadowCharacter;
 }
 
 export interface ShadowGeometry {
@@ -168,6 +190,8 @@ export function shadowOccluders(
         { x: run.start.x + nx, y: run.start.y + ny },
       ],
       height: run.height,
+      // A hedge is a boundary made of plants, and its shadow behaves like one.
+      ...(run.kind === 'hedge' ? { character: 'foliage' as const } : {}),
     });
   }
 
@@ -238,10 +262,23 @@ export function shadowOccluders(
      */
     const raised = Math.max(0, element.elevation ?? 0);
     const height = heightFor(element) + raised;
+
+    /*
+     * Foliage is a tree, a hedge, or the planting that got past the filter above — which by that
+     * point means a bed with a stated height or a point-shaped one, both of which are a mass of
+     * leaves rather than a wall. Everything else is built: sheds, pergola posts, raised terraces,
+     * walls, the house.
+     */
+    const foliage =
+      (symbol !== null && isTreeSymbol(symbol)) ||
+      element.material === 'hedging' ||
+      element.category === 'planting-bed';
+
     occluders.push({
       outline,
       height,
       ...(symbol && isTreeSymbol(symbol) ? { baseHeight: height * 0.45 } : {}),
+      ...(foliage ? { character: 'foliage' as const } : {}),
     });
   }
 

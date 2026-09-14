@@ -39,6 +39,12 @@ export * from './plan/levels.js';
 export * from './plan/brief.js';
 export * from './plan/materials.js';
 export * from './plan/material-patterns.js';
+// The design agent's vocabulary. Before `concepts.js`, which carries three of its types.
+export * from './plan/design/vocabulary.js';
+export * from './plan/design/design-brief.js';
+export * from './plan/design/design-score.js';
+export * from './plan/design/concept-explanation.js';
+export * from './plan/design/design-events.js';
 export * from './plan/concepts.js';
 export * from './plan/symbols.js';
 export * from './plan/heights.js';

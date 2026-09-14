@@ -14,6 +14,7 @@ import { useBoundaryStore } from './boundary-store';
 import { useBriefStore } from './brief-store';
 import { useConceptsStore } from './concepts-store';
 import { useFeaturesStore } from './features-store';
+import { flushDesignEvents, setDesignEventContext } from './design-events';
 import { hydratePlanStores } from './hydrate';
 import { usePlanEditorStore } from './plan-editor-store';
 import { advanceRevision, projectRevision, setProjectRevision } from './revision';
@@ -226,6 +227,24 @@ export function startProjectSync(project: PlanProject): () => void {
     violations: [],
   });
 
+  /*
+   * Which plan the telemetry is about, and which concept it was seeded from.
+   *
+   * Set here rather than passed at every call site: the alternative is a dozen store actions
+   * reaching into `concepts-store` to find the composition of the concept the editor was seeded
+   * from, which would put a telemetry dependency inside functions that have no other reason to know
+   * about one. Recovering the concept from the *stored* plan matters as much as setting it — a user
+   * who comes back to a saved plan a day later and deletes the shed is describing the same design,
+   * and without this their events would carry no composition at all.
+   */
+  const seeded = project.document.layout.seededFrom;
+  const concept = project.document.concepts.concepts.find((entry) => entry.id === seeded);
+  setDesignEventContext({
+    planId: project.id,
+    ...(seeded ? { conceptId: seeded } : {}),
+    ...(concept?.strategy ? { strategy: concept.strategy.archetype } : {}),
+  });
+
   unsubscribes = [
     useBoundaryStore.subscribe((state, previous) => {
       if (state.present !== previous.present) schedule('site');
@@ -265,6 +284,9 @@ export function startProjectSync(project: PlanProject): () => void {
     for (const off of unsubscribes) off();
     unsubscribes = [];
     setProjectRevision(null);
+    /* Anything queued belongs to the plan being torn down, so it goes now rather than never. */
+    flushDesignEvents();
+    setDesignEventContext({ planId: null });
     useSyncStore.setState({ hydratedProjectId: null });
   };
 }

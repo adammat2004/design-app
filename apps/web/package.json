@@ -12,6 +12,7 @@
     "render:material": "tsx scripts/render-material.ts",
     "render:plan": "tsx scripts/render-plan.ts",
     "audit:assets": "tsx scripts/audit-assets.ts",
+    "measure:render": "tsx scripts/measure-render.ts",
     "capture:fixtures": "tsx scripts/capture-fixtures.ts"
   },
   "dependencies": {

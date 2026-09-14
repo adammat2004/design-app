@@ -9,7 +9,7 @@ import {
   type SymbolId,
 } from '@garden-studio/schema';
 import type { Maturity } from '@/lib/render/scene';
-import type { LayoutSection, Point, ProposedChange } from '@garden-studio/schema';
+import type { DesignEvent, LayoutSection, Point, ProposedChange } from '@garden-studio/schema';
 import { draftPolygon, polygonCentroid } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
@@ -39,6 +39,7 @@ import { housePolygon } from '@/lib/house';
 import { defaultMaterial } from '@/lib/materials';
 import { zoneAt, type ZoneId } from '@/lib/zones';
 import { selectZones, useBoundaryStore } from './boundary-store';
+import { emitDesignEvent } from './design-events';
 
 /**
  * Step 5's editor state: the chosen concept, made editable.
@@ -132,6 +133,7 @@ interface PlanEditorState {
    * garden they are drawing.
    */
   maturity: Maturity;
+  previewMinutes: number | null;
   /**
    * Whether the plan is annotated.
    *
@@ -193,6 +195,7 @@ interface PlanEditorState {
   toggleSnap: () => void;
   toggleGrid: () => void;
   setMaturity: (maturity: Maturity) => void;
+  setPreviewMinutes: (minutes: number | null) => void;
   toggleLabels: () => void;
   toggleZones: () => void;
   toggleDimensions: () => void;
@@ -406,6 +409,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     snapEnabled: true,
     gridVisible: false,
     maturity: 'mature',
+    previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,
@@ -498,6 +502,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       }));
 
       set({ selectedId: id, placingCategory: null, placingSymbol: null, placingPlantId: null });
+      /* Something the generator did not think of. See `state/design-events.ts`. */
+      emitDesignEvent('element_added', { elementId: id, category });
     },
 
     moveElementLive: (id, anchor) => {
@@ -696,6 +702,13 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         elements: draft.elements.filter((candidate) => candidate.id !== id),
       }));
       set((state) => ({ selectedId: state.selectedId === id ? null : state.selectedId }));
+      /*
+       * The most informative event there is: the generator put something here and a person took it
+       * straight back out. Recorded with the category rather than the name, because "people delete
+       * the structure on this composition" is a fact about the design and "people delete Garden
+       * store 2" is not.
+       */
+      emitDesignEvent('element_deleted', { elementId: id, category: element.category });
     },
 
     /*
@@ -713,6 +726,15 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         // The guides only mean anything mid-gesture.
         if (!snapshot) return { gestureSnapshot: null, alignments: [] };
         if (sameElements(snapshot, state.present)) return { gestureSnapshot: null, alignments: [] };
+
+        /*
+         * One event per gesture, which is the same unit the undo stack uses and for the same
+         * reason: a drag calls `moveElementLive` on every mousemove, and forty rows saying a shed
+         * moved two centimetres describe the mouse rather than the decision. What is recorded is
+         * what the gesture *did* — see `gestureChange`.
+         */
+        const change = gestureChange(snapshot.elements, state.present.elements);
+        if (change) emitDesignEvent(change.kind, change.detail);
 
         return {
           gestureSnapshot: null,
@@ -749,7 +771,9 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         };
       }),
 
-    resetToConcept: () =>
+    resetToConcept: () => {
+      /* Everything the person changed, thrown away: the strongest signal an editor can give. */
+      emitDesignEvent('layout_reset');
       set((state) => {
         if (!state.pristine) return state;
 
@@ -761,7 +785,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           clash: null,
           lastSavedAt: Date.now(),
         };
-      }),
+      });
+    },
 
     toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled, alignments: [] })),
     /*
@@ -771,6 +796,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
 
     setMaturity: (maturity) => set({ maturity }),
+    setPreviewMinutes: (minutes) => set({ previewMinutes: minutes === null ? null : Math.max(0, Math.min(1425, minutes)) }),
 
     toggleLabels: () => set((state) => ({ labelsVisible: !state.labelsVisible })),
 
@@ -910,6 +936,78 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
   };
 });
 
+/**
+ * What a finished gesture actually did, as one event.
+ *
+ * Reported only when exactly one element changed, and that restriction is the point rather than a
+ * simplification: a gesture that moved several things is a selection drag or an applied assistant
+ * diff, and "three things moved by various amounts" is not a fact anybody can act on. One element
+ * moving 1.8 m is.
+ *
+ * Move and resize are told apart by which part of the geometry changed, because that is what the
+ * user was doing — the handles are different, and a resize that also nudges the centre is still a
+ * resize. `delta` is metres for a move and the linear factor for a resize.
+ */
+function gestureChange(
+  before: DesignElement[],
+  after: DesignElement[],
+): { kind: 'element_moved' | 'element_resized'; detail: Omit<DesignEvent, 'kind'> } | null {
+  if (before.length !== after.length) return null;
+
+  const changed = after.filter((element, index) => {
+    const other = before[index];
+    return (
+      other?.id === element.id && JSON.stringify(other.shape) !== JSON.stringify(element.shape)
+    );
+  });
+  if (changed.length !== 1) return null;
+
+  const element = changed[0]!;
+  const was = before.find((candidate) => candidate.id === element.id);
+  if (!was) return null;
+
+  const wasSize = spanOf(was.shape);
+  const nowSize = spanOf(element.shape);
+  if (wasSize !== null && nowSize !== null && Math.abs(nowSize - wasSize) > 1e-6) {
+    return {
+      kind: 'element_resized',
+      detail: {
+        elementId: element.id,
+        category: element.category,
+        delta: Number((nowSize / Math.max(wasSize, 1e-6)).toFixed(3)),
+      },
+    };
+  }
+
+  const from = anchorOf(was.shape);
+  const to = anchorOf(element.shape);
+  const moved = from && to ? Math.hypot(to.x - from.x, to.y - from.y) : 0;
+  if (moved <= 1e-6) return null;
+
+  return {
+    kind: 'element_moved',
+    detail: {
+      elementId: element.id,
+      category: element.category,
+      delta: Number(moved.toFixed(2)),
+    },
+  };
+}
+
+/** Where a shape sits, for the two kinds that have a single anchor. Null for a polyline. */
+function anchorOf(shape: PlanGeometry): Point | null {
+  if (shape.kind === 'rect') return shape.centre;
+  if (shape.kind === 'point') return shape.at;
+  return null;
+}
+
+/** One number standing for how big a shape is, so a resize can be told from a move. */
+function spanOf(shape: PlanGeometry): number | null {
+  if (shape.kind === 'rect') return Math.hypot(shape.width, shape.depth);
+  if (shape.kind === 'point') return shape.radius;
+  return null;
+}
+
 /** Whether two layouts describe the same garden — the test a drag uses to earn a history entry. */
 function sameElements(a: PlanEditorDraft, b: PlanEditorDraft): boolean {
   if (a.elements.length !== b.elements.length) return false;
@@ -970,6 +1068,7 @@ function ephemeralState() {
     snapEnabled: true,
     gridVisible: false,
     maturity: 'mature' as Maturity,
+    previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,

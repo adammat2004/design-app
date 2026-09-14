@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Generates the plan renderer's textures and sprites into apps/web/public/assets. Dev-time only; the app never imports this package.",
+  "description": "Generates the plan renderer's textures and sprites into apps/web/public/assets, and the brief screen's card artwork into apps/web/public/brief. Dev-time only; the app never imports this package.",
   "scripts": {
-    "generate": "tsx src/generate.ts"
+    "generate": "tsx src/generate.ts",
+    "generate:brief": "tsx src/generate-brief.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.8",

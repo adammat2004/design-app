@@ -46,7 +46,7 @@ test('Visualise renders at DPR 2, responds to maturity and camera controls, and 
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(`/plan/${projectId}/editor`);
+  await page.goto(`/plan/${projectId}/editor?renderer=v2&renderDiagnostics`);
   await expect(page.getByTestId('editor-concept-name')).toBeVisible();
   await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();
   // Make a real user edit before exercising presentation; it must survive both views and reload.
@@ -59,7 +59,8 @@ test('Visualise renders at DPR 2, responds to maturity and camera controls, and 
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
   // The existing editor resolves bed membership on its first edit. Take the saved baseline
   // after that explicit edit, then require all presentation actions to leave it untouched.
-  const edited = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json()).document.layout;
+  const baseline = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json()).document;
+  const edited = baseline.layout;
   expect(edited.elements.map(({ id, shape, category, material }) => ({ id, shape, category, material })))
     .toEqual(originalLayout.elements.map(({ id, shape, category, material }) => ({ id, shape, category, material })));
   expect(edited.elements.find((element) => element.id === terrace.id)?.name).toBe('Family terrace');
@@ -121,15 +122,43 @@ test('Visualise renders at DPR 2, responds to maturity and camera controls, and 
   await expect.poll(async () => Number(await canvas.getAttribute('data-scale'))).toBeLessThan(fitScale);
   await page.screenshot({ path: resolve(output, 'browser-mobile.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // Measure actual mobile-viewport camera updates, separately from the desktop fixture lab.
+  const mobileBox = (await canvas.boundingBox())!;
+  await page.mouse.move(mobileBox.x + mobileBox.width / 2, mobileBox.y + mobileBox.height / 2);
+  await page.mouse.down();
+  const mobileFrames: number[] = [];
+  for (let i = 1; i <= 20; i++) {
+    await page.mouse.move(mobileBox.x + mobileBox.width / 2 + i, mobileBox.y + mobileBox.height / 2);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const frame = JSON.parse((await canvas.locator('canvas').first().getAttribute('data-render-metrics'))!);
+    expect(frame.surfacesRasterized).toBe(0); expect(frame.shadowsRasterized).toBe(0);
+    mobileFrames.push(frame.frameMs);
+  }
+  await page.mouse.up();
+  const mobileP95Ms = mobileFrames.sort((a, b) => a - b)[19]!;
+  expect(mobileP95Ms).toBeLessThanOrEqual(33);
+  writeFileSync(resolve(output, 'mobile-performance.json'), JSON.stringify({ mobileP95Ms, mobileFrames }, null, 2));
   const persisted = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
   expect(persisted.document.layout).toEqual(originalLayout);
-  expect(persisted.document.site.sun.minutes).toBe(initialTime + 15);
+  expect(persisted.document.site.sun.minutes).toBe(initialTime);
+  expect(JSON.stringify(persisted.document)).toBe(JSON.stringify(baseline));
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.reload();
   await page.getByRole('tab', { name: 'Layers', exact: true }).click();
   await expect(page.getByTestId(`placed-element-${terrace.id}`)).toContainText('Family terrace');
   await page.getByTestId('view-visualise').click();
-  await expect(page.getByTestId('sun-time')).toHaveValue(String(initialTime + 15));
+  await expect(page.getByTestId('sun-time')).toHaveValue(String(initialTime));
   await expect(page.getByTestId('visualise-failed')).toHaveCount(0);
+  // Losing WebGL must preserve the design through the shared Canvas2D compositor.
+  await expect(canvas.locator('canvas').first()).toHaveAttribute('data-render-metrics', /revision/);
+  await canvas.locator('canvas').first().evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+    if (!gl) throw new Error('Expected a live WebGL context before the fallback test');
+    gl.getExtension('WEBGL_lose_context')!.loseContext();
+  });
+  await expect(page.getByTestId('visualise-fallback')).toHaveAttribute('data-revision', /\w/);
+  await expect(page.getByTestId('visualise-failed')).toHaveCount(0);
+  await page.screenshot({ path: resolve(output, 'browser-canvas-fallback.png') });
   expect(errors).toEqual([]);
 });

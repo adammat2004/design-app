@@ -225,9 +225,23 @@ describe('render-only planting', () => {
     /*
      * The prompt's number. Not 100%: a mature bed still shows dark gaps between crowns, and
      * without them the planting reads as one flat mat rather than as individual plants.
+     *
+     * `PLANTING_REPORT=1 pnpm test` prints where inside the band we actually sit instead of only
+     * asserting that we are somewhere in it — the same escape hatch `COMPOSITION_REPORT=1` gives
+     * over the generator. It exists because the band was once argued to be "too low" while nobody
+     * had measured which end of it we were at, and a range that wide can hide a real change at
+     * either edge.
      */
     it('closes a mature bed to within the 70-95% band', () => {
       const fraction = covered('mature');
+
+      if (process.env.PLANTING_REPORT === '1') {
+        const report = (['year-1', 'year-3', 'mature'] as Maturity[])
+          .map((maturity) => `${maturity} ${(covered(maturity) * 100).toFixed(1)}%`)
+          .join('   ');
+        console.log(`\n  PLANTING COVERAGE   ${report}\n`);
+      }
+
       expect(fraction).toBeGreaterThan(0.7);
       expect(fraction).toBeLessThan(0.97);
     });

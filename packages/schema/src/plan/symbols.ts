@@ -43,6 +43,15 @@ export const SymbolIdSchema = z.enum([
   'shed',
   'gazebo',
   'raised-bed',
+  'garden-room',
+  'greenhouse',
+  /*
+   * The one structure that is a *product* rather than a built rectangle, and therefore the one
+   * drawn from a photograph: a hot tub comes in a fixed size and looks the same in every garden,
+   * which is what `furniture-fire-pit` already relies on. The two above it are whatever rectangle
+   * the placer gave them at whatever rotation, so they are drawn from their own outline.
+   */
+  'hot-tub',
   /* ---- planting ---- */
   'specimen',
   /*
@@ -245,6 +254,28 @@ export const SYMBOLS: Record<SymbolId, SymbolSpec> = {
     label: 'Raised bed',
     footprint: { kind: 'rect', width: 2, depth: 1 },
     height: 0.45,
+  },
+  'garden-room': {
+    category: 'structure',
+    label: 'Garden room',
+    footprint: { kind: 'rect', width: 4, depth: 3 },
+    height: 2.6,
+  },
+  greenhouse: {
+    category: 'structure',
+    label: 'Greenhouse',
+    footprint: { kind: 'rect', width: 3, depth: 2.4 },
+    height: 2.4,
+  },
+  /*
+   * Height is the tub, not the deck it may be sunk into. `heightFor` feeds `projectShadow` and a
+   * hot tub really is a waist-high box; a raised deck around one is the deck's own `elevation`.
+   */
+  'hot-tub': {
+    category: 'structure',
+    label: 'Hot tub',
+    footprint: { kind: 'rect', width: 2.4, depth: 2.4 },
+    height: 0.9,
   },
   specimen: {
     category: 'planting-bed',

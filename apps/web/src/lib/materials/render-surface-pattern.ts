@@ -42,6 +42,7 @@ import {
 } from './assets/material-assets';
 import { assetsMatching } from './assets/taxonomy';
 import type { AssetImage, AssetLookup, LoadedAsset } from './assets/registry';
+import { assetQuality } from './assets/quality';
 import { CONTACT_SHADOW_ALPHA, CONTACT_SHADOW_OFFSET_RATIO, CONTACT_SHADOW_SCALE } from './light';
 
 /**
@@ -140,7 +141,8 @@ export interface PatternCanvas {
  * but not that nominal type.
  */
 export interface PatternContext {
-  fillStyle: string;
+  fillStyle: string | CanvasGradient;
+  createRadialGradient?(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
   /** Optional Canvas filter support; the shadow compositor keeps a crisp fallback. */
   filter?: string;
   /**
@@ -162,9 +164,34 @@ export interface PatternContext {
   closePath(): void;
   clip(): void;
   fillRect(x: number, y: number, width: number, height: number): void;
+  /**
+   * Used for exactly one thing: the shadow compositor reuses a single scratch canvas for both of
+   * its occluder buckets, and the second bucket has to start from nothing. Reusing the canvas is
+   * the point — that raster reaches 4096 square at about 67 MB, and allocating one per bucket per
+   * stage is how the export path ends up near the size Safari refuses.
+   *
+   * Widening the interface for it is safe on the same grounds as `strokeStyle` and `transform`:
+   * this type is narrowed to avoid the DOM's *nominal* type, not to avoid capability, and both the
+   * DOM context and `@napi-rs/canvas` have always had it.
+   */
+  clearRect(x: number, y: number, width: number, height: number): void;
   fill(): void;
   translate(x: number, y: number): void;
   rotate(angle: number): void;
+  /**
+   * Multiply the current transform by an arbitrary matrix.
+   *
+   * Used for exactly one thing, and it is a thing `translate` and `rotate` genuinely cannot do: a
+   * vertical face in the elevated view is a **parallelogram**, because its base runs along the wall
+   * at whatever angle the wall is and its height runs straight up the screen. Those two axes are
+   * not perpendicular, so no combination of translate, rotate and scale reaches it — the frame has
+   * to be given as a matrix, and then a wall's boards can be tiled along it at their real size.
+   *
+   * Widening the interface for it is safe on the same grounds `strokeStyle` was: this type is
+   * narrowed to avoid the DOM's *nominal* type, not to avoid capability, and both the DOM context
+   * and `@napi-rs/canvas` have had `transform` since forever.
+   */
+  transform(a: number, b: number, c: number, d: number, e: number, f: number): void;
   /**
    * Images arrived with the asset pipeline: a face per slab, a tile of gravel, a shrub. Both
    * forms are used — the nine-argument one samples a strip of a board's grain, the five-argument
@@ -659,6 +686,7 @@ function tileTexture(
   if (tiles > MAX_SCATTER_UNITS) return;
 
   const choices = variants.length > 1 ? variants : null;
+  const quality = assetQuality(texture.entry.id);
 
   context.globalAlpha = alpha;
   for (let row = range.minRow; row <= range.maxRow; row += 1) {
@@ -666,10 +694,41 @@ function tileTexture(
       const image = choices
         ? pick(choices, moduleRandom(`${texture.entry.id}:tile`, col, row)()).image
         : texture.image;
-      context.drawImage(image, col * tilePx.w, row * tilePx.h, tilePx.w + 1, tilePx.h + 1);
+      if (quality.rotation === 'quarter-turn') {
+        const random = moduleRandom(`${texture.entry.id}:transform`, col, row);
+        const turn = Math.floor(random() * 4);
+        context.save();
+        context.translate((col + 0.5) * tilePx.w, (row + 0.5) * tilePx.h);
+        context.rotate(turn * Math.PI / 2);
+        if (quality.mirror && random() > 0.5) context.transform(-1, 0, 0, 1, 0, 0);
+        if (quality.saturation !== 1 && context.filter !== undefined) context.filter = `saturate(${quality.saturation})`;
+        const w = turn % 2 ? tilePx.h : tilePx.w, h = turn % 2 ? tilePx.w : tilePx.h;
+        context.drawImage(image, -w / 2 - 0.5, -h / 2 - 0.5, w + 1, h + 1);
+        context.restore();
+      } else context.drawImage(image, col * tilePx.w, row * tilePx.h, tilePx.w + 1, tilePx.h + 1);
     }
   }
   context.globalAlpha = 1;
+  if (quality.rotation === 'quarter-turn' && context.createRadialGradient) {
+    // Smooth metre-scale fields sit above an opaque tile layer, so overlapping equal materials
+    // remain idempotent. The field is spatially hashed and independent of the surface identity.
+    const field = gridRange(outline, origin, rotation, 3.8, 3.8);
+    if ((field.maxCol - field.minCol + 1) * (field.maxRow - field.minRow + 1) < 4000) {
+      context.save();
+      for (let row = field.minRow - 1; row <= field.maxRow + 1; row++) for (let col = field.minCol - 1; col <= field.maxCol + 1; col++) {
+        const random = moduleRandom(`${texture.entry.id}:macro`, col, row);
+        const x = (col + random()) * 3.8 * pxPerMetre, y = (row + random()) * 3.8 * pxPerMetre;
+        const radius = (2.5 + random() * 1.5) * pxPerMetre;
+        const dark = random() > 0.5;
+        const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(0, dark ? 'rgba(35,43,26,0.065)' : 'rgba(240,231,192,0.045)');
+        gradient.addColorStop(1, dark ? 'rgba(35,43,26,0)' : 'rgba(240,231,192,0)');
+        context.fillStyle = gradient;
+        context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      }
+      context.restore();
+    }
+  }
 }
 
 /**

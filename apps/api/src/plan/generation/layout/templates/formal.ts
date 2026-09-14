@@ -1,3 +1,5 @@
+import type { CandidateParams } from '../../design/types.js';
+import { DEFAULT_PARAMS } from '../../knowledge/archetypes/types.js';
 import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
@@ -38,7 +40,19 @@ const AXIS_WIDTH = 1.2;
  * narrow for its table; so the terrace keeps its floor and slides along the wall to stay in the
  * room, exactly as the other templates do, while the lawn and the axis stay centred on the door.
  */
-export function formal(request: SketchRequest, room: Room): LayoutSketch {
+/*
+ * `lawnBias` and `destination` are **pinned** on this composition rather than offered.
+ *
+ * A formal plan is symmetric about the view from the doors; biasing the lawn to one side or moving
+ * the focal point off the axis does not give a variation on a formal garden, it gives a plan that
+ * is no longer one. `formalArchetype.params` never emits either, and this signature ignores them if
+ * a caller passes them anyway — which is what keeps the mirror-symmetry test true by construction.
+ */
+export function formal(
+  request: SketchRequest,
+  room: Room,
+  params: CandidateParams = { archetype: 'formal_axis', ...DEFAULT_PARAMS },
+): LayoutSketch {
   const s = request.scale;
   const D = room.uMax;
   const b = borderDepth(s);
@@ -49,7 +63,7 @@ export function formal(request: SketchRequest, room: Room): LayoutSketch {
   const hw = Math.max(Math.min(-room.vMin, room.vMax), floor.width / 2);
   const symmetric: Room = { uMin: room.uMin, uMax: room.uMax, vMin: -hw, vMax: hw };
 
-  const depth = terraceDepth(s, D);
+  const depth = terraceDepth(s, D, params.terraceDepth);
   const width = Math.max(floor.width, Math.min(terraceWidth(request, room), 2 * hw - 0.8));
   const [v0, v1] = clampToRoom(width, room, (request.doorWidth ?? 0) / 2);
   const terrace: LocalRect = {
@@ -60,7 +74,7 @@ export function formal(request: SketchRequest, room: Room): LayoutSketch {
   };
   const T = terrace.u1;
 
-  const courtyard = isCourtyard(s, D, room.vMax - room.vMin);
+  const courtyard = isCourtyard(s, D, room.vMax - room.vMin, params.terraceDepth);
   // Behind the terrace the room may be narrower (an L-plot): the lawn and the far slots mirror
   // about the axis within *that* width.
   const deep = roomBehind(symmetric, T + 0.4);

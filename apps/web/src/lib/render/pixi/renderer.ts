@@ -12,12 +12,15 @@ import {
   CONTACT_SHADOW_SCALE,
   SHADOW_OPACITY,
 } from '../../materials/light';
-import { PLOT_GROUND } from '../../materials/render-plan';
-import type { RenderPlant, RenderScene, RenderSurface, VisualLayer } from '../scene';
+import { drawStackNode, PLOT_GROUND, type PlanContext, type PlanPass } from '../../materials/render-plan';
+import type { RenderNode, RenderPlant, RenderScene, RenderSurface, VisualLayer } from '../scene';
 import { LAYER_ORDER } from '../visual-layer';
+import { RISE } from '../camera';
+import { elevatedPlacement } from '../../materials/symbols/elevated';
 
 /**
- * The WebGL backend, for Visualise.
+ * Original WebGL backend retained for baseline profiling. The active SceneRenderer is re-exported
+ * from compositor.ts below; do not add new design contributions to this legacy implementation.
  *
  * ## What it is, and what it deliberately is not
  *
@@ -32,9 +35,10 @@ import { LAYER_ORDER } from '../visual-layer';
  * through. Pixi batches same-texture sprites into a handful of draw calls, so the sprite count
  * stops mattering. A one-shot still render never needed this; an interactive view does.
  *
- * ## Why it cannot be pixel-tested
+ * ## Verification
  *
- * Pixi v8 has no supported Node backend, so nothing here runs under Vitest. That is precisely why
+ * Pixi v8 has no supported Node backend, so the browser compositor is tested with Playwright.
+ * Under Vitest,
  * `buildRenderScene` is a pure function tested on its own: every decision about *what* to draw is
  * asserted before a renderer sees it, and this file is left with nothing to be wrong about except
  * paint. The Canvas2D backend stays the reference for the judging sheets.
@@ -43,6 +47,8 @@ import { LAYER_ORDER } from '../visual-layer';
 /** Where the camera is: metres per screen, and which world point is in the middle. */
 export interface ViewTransform {
   pxPerMetre: number;
+  /** Diagnostic comparison; only affects eligible low planting, not authored geometry. */
+  plantingPreview?: import('../plant-clusters').PlantingPreview;
   /** World point at the centre of the viewport. */
   centre: Point;
 }
@@ -71,13 +77,39 @@ const LAYERS: VisualLayer[] = (Object.keys(LAYER_ORDER) as VisualLayer[]).sort(
   (a, b) => LAYER_ORDER[a] - LAYER_ORDER[b],
 );
 
-export class SceneRenderer {
+/*
+ * Note what the layer containers are now *for*.
+ *
+ * They stay, and they hold the ground — which genuinely is a stack with a fixed order: base fills
+ * under accents under edging. Everything that stands up goes into `this.standing` instead, one
+ * container above them all, in the order `buildStack` sorted it. That order is a property of where
+ * things stand rather than of what kind of thing they are, and no fixed set of containers can
+ * express it: a fence is sometimes in front of a shrub and sometimes behind one.
+ */
+
+export { SceneRenderer } from './compositor';
+
+/** Retained temporarily for isolated baseline profiling during the v2 rollout. */
+export class LegacySceneRenderer {
   private app: Application | null = null;
   private world = new Container();
   private layers = new Map<VisualLayer, Container>();
   private textures = new Map<string, Texture>();
   private surfaceTextures = new Map<PatternCanvas, Texture>();
   private usedSurfaces = new Set<PatternCanvas>();
+  private standing = new Container();
+  /**
+   * One raster per standing thing that is not a plant, keyed on everything that changes its pixels.
+   *
+   * There are tens of these a scene — a house, a shed, a pergola, four fence runs, a retaining wall
+   * — against a few thousand plants, and the split is what keeps this file a compositor. The plants
+   * are batched WebGL sprites because that is the load Pixi is here for; everything else is painted
+   * by the composer, once, and reused until the zoom bucket or the light moves. Writing a second
+   * WebGL implementation of a shed to save tens of draws would buy nothing and cost a second set of
+   * drawing rules to drift from the first.
+   */
+  private nodeRasters = new Map<string, { canvas: PatternCanvas; origin: Point; pxPerMetre: number }>();
+  private usedNodes = new Set<string>();
   /**
    * The plot's edge, created once and redrawn.
    *
@@ -115,6 +147,7 @@ export class SceneRenderer {
       this.layers.set(layer, container);
       this.world.addChild(container);
     }
+    this.world.addChild(this.standing);
 
     this.app = app;
   }
@@ -159,7 +192,9 @@ export class SceneRenderer {
     for (const container of this.layers.values()) {
       for (const child of container.removeChildren()) child.destroy({ children: true });
     }
+    for (const child of this.standing.removeChildren()) child.destroy({ children: true });
     this.usedSurfaces.clear();
+    this.usedNodes.clear();
 
     /*
      * The viewport in CSS pixels, taken from the caller rather than from the renderer.
@@ -179,10 +214,8 @@ export class SceneRenderer {
 
     this.drawGround(scene, view, toPx);
     this.drawSurfaces(scene, view, toPx);
-    this.drawLevels(scene, toPx);
-    this.drawWalling(scene, view, toPx);
     this.drawShadows(scene, view, toPx);
-    this.drawPlants(scene, view, toPx);
+    this.drawStanding(scene, view, toPx);
 
     /*
      * The plot's edge. A garden plan may not draw over land it does not own, and foliage that
@@ -199,6 +232,10 @@ export class SceneRenderer {
       if (this.usedSurfaces.has(canvas)) continue;
       texture.destroy(true);
       this.surfaceTextures.delete(canvas);
+    }
+    // The node rasters have no shared LRU behind them, so this map is their whole lifetime.
+    for (const key of this.nodeRasters.keys()) {
+      if (!this.usedNodes.has(key)) this.nodeRasters.delete(key);
     }
   }
 
@@ -249,51 +286,6 @@ export class SceneRenderer {
     sprite.scale.set(view.pxPerMetre / raster.pxPerMetre);
     sprite.alpha = SHADOW_OPACITY;
     this.layers.get('surface')!.addChild(sprite);
-  }
-
-  /**
-   * The retaining faces of everything off grade.
-   *
-   * A `Graphics` fill rather than a raster, matching the Canvas2D backend: at 340 mm a wall top is
-   * a couple of pixels across, so a pattern inside it would spend a texture upload on something
-   * that lands as one tone. Between the surfaces and the shadows, because a wall is ground the
-   * shadows fall on.
-   */
-  private drawLevels(scene: RenderScene, toPx: (point: Point) => Point): void {
-    if (scene.levels.length === 0) return;
-
-    const layer = this.layers.get('surface')!;
-
-    for (const level of scene.levels) {
-      // A wall with a material of its own is drawn by `drawWalling`; filling under it would be
-      // paint nobody sees, and the two would disagree at the edge where anti-aliasing lets it show.
-      if (level.surface) continue;
-
-      const band = new Graphics();
-      tracePolygon(band, level.outline, toPx);
-      band.fill({ color: level.colour });
-      layer.addChild(band);
-    }
-  }
-
-  /** The retaining walls that were given a material of their own, rasterised like any surface. */
-  private drawWalling(
-    scene: RenderScene,
-    view: ViewTransform,
-    toPx: (point: Point) => Point,
-  ): void {
-    for (const level of scene.levels) {
-      if (!level.surface?.material) continue;
-
-      const sprite = this.surfaceSprite(level.surface, scene, view);
-      if (!sprite) continue;
-
-      const at = toPx(sprite.originMetres);
-      sprite.node.x = at.x;
-      sprite.node.y = at.y;
-      sprite.node.scale.set(view.pxPerMetre / sprite.pxPerMetre);
-      this.layers.get('surface')!.addChild(sprite.node);
-    }
   }
 
   private drawSurfaces(
@@ -382,40 +374,55 @@ export class SceneRenderer {
   }
 
   /**
-   * The planting: one batched sprite per plant, plus its contact shadow.
+   * Everything that stands up, in the order `buildStack` put it in.
    *
-   * This is the load Pixi is here for. Every plant of one species shares a texture, so the whole
-   * bed collapses into a few draw calls no matter how many plants are in it — which is what makes
-   * a mature garden pannable rather than a slideshow.
+   * ## The split, and why it is where it is
+   *
+   * Plants are **batched WebGL sprites**: a mature garden is a few thousand of them, every plant of
+   * one species shares a texture, and that is the entire reason there is a WebGL backend at all.
+   * Everything else — the house, a shed, a pergola, four fence runs — is **a raster the composer
+   * painted**, uploaded once and reused. There are tens of those, so batching them would buy
+   * nothing, and drawing them in WebGL instead would mean a second implementation of what a shed
+   * looks like. One painter, two ways of getting its output onto the screen.
+   *
+   * Both go into one container in stack order, so a plant genuinely can be drawn in front of a
+   * fence and a canopy across a roof. Pixi still batches the runs of same-texture plants inside
+   * that order, which is most of it.
+   *
+   * ## The contact shadows
+   *
+   * Flattened into one container drawn once, because two overlapping shadows are one shadow and a
+   * mature bed overlaps constantly. That forces them *below* the whole stack rather than each under
+   * its own plant, which is the right trade: a shadow under the plant in front of it would be
+   * invisible anyway, and drawing them in sequence at alpha muddies the entire bed.
    */
-  private drawPlants(scene: RenderScene, view: ViewTransform, toPx: (point: Point) => Point): void {
+  private drawStanding(
+    scene: RenderScene,
+    view: ViewTransform,
+    toPx: (point: Point) => Point,
+  ): void {
     const shadowAsset = getAssetVariants(CONTACT_SHADOW_SPRITE)[0] ?? null;
     const shadowTexture = shadowAsset
       ? this.cachedTexture('fx:shadow', shadowAsset.image as unknown as HTMLCanvasElement)
       : null;
 
-    /*
-     * Every plant's contact shadow into one container, flattened, and laid down once.
-     *
-     * Two overlapping shadows are one shadow — a shrub standing against a hedge is not twice as
-     * dark — and in a mature bed at 93% coverage every shadow overlaps several others, so drawing
-     * them in sequence at alpha muddies the whole bed. `cacheAsTexture` renders the container to a
-     * texture and draws that once, so the container's own alpha applies to the flattened result.
-     * The same rule the cast-shadow layer has always followed and has a test for, applied to the
-     * presentation convention rather than to the solar claim.
-     */
     const shadows = new Container();
     shadows.alpha = CONTACT_SHADOW_ALPHA;
-    this.layers.get('groundcover')!.addChild(shadows);
+    this.standing.addChild(shadows);
 
-    for (const plant of scene.plants) {
+    for (const node of scene.stack) {
+      if (node.kind !== 'plant') {
+        const sprite = this.nodeSprite(node, scene, view, toPx);
+        if (sprite) this.standing.addChild(sprite);
+        continue;
+      }
+
+      const { plant } = node;
       const radius = (plant.spread / 2) * view.pxPerMetre;
       // Below a pixel and a half a plant is noise on the ground rather than a plant.
       if (radius * 2 < 1.4) continue;
 
       const at = toPx(plant.at);
-      const container = this.layers.get(plant.visualLayer)!;
-
       const texture = this.plantTexture(plant);
       if (!texture) continue;
 
@@ -432,16 +439,114 @@ export class SceneRenderer {
       }
 
       const sprite = new Sprite(texture);
-      sprite.anchor.set(0.5);
-      sprite.width = radius * 2;
-      sprite.height = radius * 2;
-      sprite.x = at.x;
-      sprite.y = at.y;
-      sprite.rotation = plant.rotation;
-      container.addChild(sprite);
+      /*
+       * The elevated path and the interim, resolved by the same function the composer calls.
+       *
+       * `elevatedPlacement` answers `null` for a plan-camera family, so this is one branch rather
+       * than a flag — and because both backends ask the same question of the same manifest, they
+       * cannot come to different answers about where a plant stands. That matters more here than
+       * anywhere else in this file: Pixi cannot be pixel-tested, so agreement has to be structural.
+       */
+      const placement = elevatedPlacement(plant.assetId, plant.at, {
+        width: plant.spread,
+        depth: plant.spread,
+      });
+
+      if (placement) {
+        /*
+         * Pixi turns a sprite about its own anchor, and the anchor is a fraction of the image — so
+         * the fraction of the frame the plant stands at *is* the anchor, and placing it is setting
+         * the sprite's position to the ground point. No pivot arithmetic, and the foot holds still
+         * at any rotation by construction.
+         */
+        sprite.anchor.set(
+          (plant.at.x - placement.x) / placement.width,
+          (plant.at.y - placement.y) / placement.height,
+        );
+        sprite.width = placement.width * view.pxPerMetre;
+        sprite.height = placement.height * view.pxPerMetre;
+        sprite.x = at.x;
+        sprite.y = at.y;
+        sprite.rotation = plant.rotation;
+      } else {
+        sprite.anchor.set(0.5);
+        sprite.width = radius * 2;
+        sprite.height = radius * 2;
+        sprite.x = at.x;
+        /* Lifted off the shadow it stands on: the gap between the two is the plant's height, and
+         * it is the same half-height the composer uses, from the same `plant.height`. */
+        sprite.y = at.y - (plant.height / 2) * RISE * view.pxPerMetre;
+        sprite.rotation = plant.rotation;
+      }
+
+      this.standing.addChild(sprite);
     }
 
     if (shadows.children.length > 0) shadows.cacheAsTexture(true);
+  }
+
+  /**
+   * One non-plant node, painted by the composer into a raster of its own and uploaded.
+   *
+   * Cached on everything that changes its pixels: which node it is, the zoom **bucket** rather than
+   * the live zoom, the light, and the asset version. Bucketing matters for the same reason it does
+   * for the surface cache — the viewport eases zoom through `requestAnimationFrame`, so a key on
+   * raw scale would repaint the house on every frame of every wheel gesture. Panning changes none
+   * of these, so a pan costs no repaints at all.
+   */
+  private nodeSprite(
+    node: RenderNode,
+    scene: RenderScene,
+    view: ViewTransform,
+    toPx: (point: Point) => Point,
+  ): Sprite | null {
+    const { bounds } = node;
+    if (bounds.width <= 0 || bounds.length <= 0) return null;
+
+    /* √2 buckets, as `pattern-cache.ts` uses: at most 41% off the live zoom, and a redraw only
+     * when the zoom crosses a bucket edge. */
+    const bucket = Math.pow(2, Math.round(Math.log2(Math.max(1, view.pxPerMetre)) * 2) / 2);
+    const key = `${node.id}:${bucket}:${scene.light.x.toFixed(3)},${scene.light.y.toFixed(3)}:${assetVersion()}`;
+    this.usedNodes.add(key);
+
+    let raster = this.nodeRasters.get(key);
+
+    if (!raster) {
+      const widthPx = Math.ceil(bounds.width * bucket);
+      const heightPx = Math.ceil(bounds.length * bucket);
+      // A node bigger than this is a plot-sized thing at a huge zoom; the shadow raster caps the
+      // same way and for the same reason.
+      if (widthPx < 1 || heightPx < 1 || widthPx > 4096 || heightPx > 4096) return null;
+
+      const canvas = makeCanvas(widthPx, heightPx);
+      const context = canvas.getContext('2d') as unknown as PlanContext | null;
+      if (!context) return null;
+
+      const origin: Point = { x: bounds.minX, y: bounds.minY };
+      const localPx = (point: Point): Point => ({
+        x: (point.x - origin.x) * bucket,
+        y: (point.y - origin.y) * bucket,
+      });
+
+      const pass: PlanPass = {
+        pxPerMetre: bucket,
+        light: scene.light,
+        assets: getAssetVariants,
+        makeCanvas,
+      };
+
+      drawStackNode(context, node, scene, pass, scene.light, localPx, origin, null);
+
+      raster = { canvas, origin, pxPerMetre: bucket };
+      this.nodeRasters.set(key, raster);
+    }
+
+    const sprite = new Sprite(this.rasterTexture(raster.canvas));
+    const at = toPx(raster.origin);
+    sprite.x = at.x;
+    sprite.y = at.y;
+    sprite.scale.set(view.pxPerMetre / raster.pxPerMetre);
+    return sprite;
   }
 
   private plantTexture(plant: RenderPlant): Texture | null {

@@ -89,6 +89,14 @@ export interface DesignConstraints {
   /** Kept so material choice can still read the style; nothing else may. */
   style: GardenBrief['style'];
   wantsPlay: boolean;
+  /**
+   * The brief asked for a lawn by name, which is the one thing that overrides the low-upkeep ban
+   * on one. Kept as its own flag rather than left implicit in `forbiddenFill`, because the two say
+   * different things: the list is what this concept may not draw, and this is why.
+   */
+  wantsLawn: boolean;
+  /** The brief asked for lighting by name, which is what lifts `lightingScheme`'s budget gate. */
+  wantsLighting: boolean;
   scale: PlotScale;
   /**
    * How every bed this concept places is planted — see `planting.ts` in the shared package.
@@ -157,6 +165,17 @@ export function resolveConstraints(
   const maintenance = cappedMaintenance(archetype.maintenance(brief), brief.maintenance);
   const budget = brief.budget ?? 'medium';
   const lowUpkeep = maintenance === 'low' || brief.style === 'lowMaintenance';
+  /*
+   * A lawn asked for **by name**, which is a different kind of answer from a maintenance slider.
+   *
+   * The two can now genuinely disagree: `lowMaintenance` reads as "Minimalist" on the style cards,
+   * so picking a minimalist look and a lawn in the same brief is an ordinary thing to do rather
+   * than a contradiction. Where they conflict the named thing wins — the user pointed at a picture
+   * of a lawn, and silently returning a garden without one is the failure mode this whole layer
+   * exists to prevent. The upkeep claim on the card still comes from `maintenance`, so the concept
+   * says what it is.
+   */
+  const wantsLawn = brief.desiredFeatures.includes('lawn');
 
   return {
     maintenance,
@@ -166,7 +185,7 @@ export function resolveConstraints(
      * season — so "low maintenance" has to mean it is not there. It is forbidden outright rather
      * than capped as a fraction because a *little* lawn still needs the mower.
      */
-    forbiddenFill: lowUpkeep ? ['lawn'] : [],
+    forbiddenFill: lowUpkeep && !wantsLawn ? ['lawn'] : [],
     /*
      * The flowering perennial mixes, and only those. `shrubs`, `ground-cover`, `ornamental-grasses`
      * and `hedging` all stay: they are genuinely low-upkeep, and removing them would leave a
@@ -176,6 +195,13 @@ export function resolveConstraints(
     style: brief.style,
     plantingStyle: resolvePlantingStyle(brief.style, maintenance),
     wantsPlay: brief.desiredFeatures.includes('play'),
+    wantsLawn,
+    /*
+     * Lighting is a real cost with a real trench in it, which is why `lightingScheme` draws none
+     * at a low budget. A user who ticked it has said they will pay for it, and that is the only
+     * thing that lifts the gate.
+     */
+    wantsLighting: brief.desiredFeatures.includes('lighting'),
     scale: resolvePlotScale(designedArea),
   };
 }

@@ -1,5 +1,6 @@
 import type { LoadedAsset } from './assets/registry';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
+import { RasterLru } from './raster-lru';
 
 /**
  * Plant sprites, tinted towards their material's own palette.
@@ -40,7 +41,8 @@ import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
  */
 export const SPRITE_TINT = 0.1;
 
-const cache = new Map<string, PatternCanvas>();
+const cache = new RasterLru<PatternCanvas>(96, { maxBytes: 48 * 1024 * 1024,
+  sizeOf: (canvas) => canvas.width * canvas.height * 4 });
 
 /** The tone this variant is carried towards. Index-based, so a family spreads across the palette. */
 export function toneForVariant(palette: readonly string[], index: number): string {

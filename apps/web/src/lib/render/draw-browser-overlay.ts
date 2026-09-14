@@ -12,7 +12,7 @@ const makeCanvas: MakeCanvas = (width, height) => {
   return canvas as unknown as PatternCanvas;
 };
 
-/** Shared object pass for the editable canvas and the presentation view. */
+/** Plan-only overlay. Visualise clears this canvas; Pixi (or explicit Canvas fallback) owns design pixels. */
 export function drawBrowserOverlay(canvas: HTMLCanvasElement | null, scene: RenderScene,
   site: SiteSection, view: ViewTransform, { width, height }: ViewSize): void {
   if (!canvas) return;
@@ -23,6 +23,8 @@ export function drawBrowserOverlay(canvas: HTMLCanvasElement | null, scene: Rend
   if (!context) return;
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, width, height);
+  // All design pixels belong to Pixi, including the legacy full-scene fallback. Konva owns UI.
+  if (scene.view === 'visualise') return;
   drawOverlay(context as unknown as PlanContext, scene, site,
     { pxPerMetre: view.pxPerMetre, light: scene.light, assets: getAssetVariants, makeCanvas },
     { x: view.centre.x - width / 2 / view.pxPerMetre,

@@ -3,6 +3,9 @@ import {
   boundingBox,
   edgingRuns,
   elementAnchor,
+  edgingHeight,
+  heightFor,
+  houseHeight,
   levelBands,
   elementCentreline,
   elementOutline,
@@ -18,6 +21,7 @@ import {
   resolveSymbol,
   shadowCast,
   shadowOccluders,
+  type BoundaryRun,
   type DesignElement,
   type HouseFootprint,
   type Point,
@@ -29,22 +33,28 @@ import { materialFill } from '../material-colours';
 import { cssToRgb, rgbToCss, shiftBrightness } from '../materials/light';
 import { edgingWidth, resolvePattern } from '../materials/palette';
 import { plantingExclusions, scenePasses } from '../materials/scene-passes';
+import { boundaryBand, inwardNormal, ringIsClockwise } from '../materials/symbols/boundary';
+import { drawnLift } from '../materials/symbols/elevated';
 import { WALL_THICKNESS } from '../materials/symbols/property';
 import { buildPlants } from './plants';
-import { roofFor } from './roof';
+import { EAVES_OVERHANG, roofFor } from './roof';
+import { depthOf, extrude, visualBounds } from './projection';
 import {
   DEFAULT_SCENE_OPTIONS,
   type RenderHouse,
   type RenderItem,
   type RenderLevel,
   type RenderLight,
+  type RenderNode,
   type RenderOpening,
   type RenderPlant,
   type RenderScene,
   type RenderSurface,
   type SceneOptions,
 } from './scene';
-import { layerForElement } from './visual-layer';
+import { LAYER_ORDER, layerForElement } from './visual-layer';
+import { compilePrimitives } from './primitives';
+import { clockNow, recordCompilation } from './diagnostics';
 
 /** What is drawn. The same subset of the document every canvas already works from. */
 export interface PlanScene {
@@ -77,7 +87,8 @@ export interface BuildOptions extends Partial<SceneOptions> {
  * it — leaving the backends with nothing to be wrong about except paint.
  */
 export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): RenderScene {
-  const { view, maturity } = { ...DEFAULT_SCENE_OPTIONS, ...options };
+  const started = clockNow();
+  const { view, maturity, rendererVersion, depthFragments } = { ...DEFAULT_SCENE_OPTIONS, ...options };
   const instanced = view === 'visualise';
 
   const elements = scene.elements.filter((element) => !element.hidden);
@@ -122,26 +133,301 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     visualLayer: layerForElement(element),
   }));
 
-  return {
+  const house = resolveHouse(scene.house, instanced ? light : null);
+  const runs = boundaryRuns(scene.site);
+  const levels = buildLevels(elements, scene);
+  const edging = buildEdging(elements, scene);
+  const casters = [
+    ...shadowOccluders([], scene.house).map((occluder) => ({ sourceId: 'house', occluder })),
+    ...runs.flatMap((run) => shadowOccluders([], null, [run]).map((occluder) => ({ sourceId: `boundary:${run.edgeVertexId}`, occluder }))),
+    ...elements.flatMap((element) => shadowOccluders([element], null).map((occluder) => ({ sourceId: element.id, occluder }))),
+  ];
+
+  const content = {
+    rendererVersion,
     boundary: scene.boundary,
     bounds: boundingBox(scene.boundary),
     ground,
     objects,
     plants,
-    house: resolveHouse(scene.house, instanced ? light : null),
+    house,
     shadows: {
       cast: shadowCast(scene.site),
-      occluders: shadowOccluders(elements, scene.house, boundaryRuns(scene.site)),
+      occluders: casters.map((caster) => caster.occluder),
+      sourceIds: casters.map((caster) => caster.sourceId),
     },
     light,
     night,
     lights: buildLights(elements, night),
-    edging: buildEdging(elements, scene),
-    levels: buildLevels(elements, scene),
+    edging,
+    levels,
     maturity,
     view,
-    boundaryRuns: boundaryRuns(scene.site),
+    boundaryRuns: runs,
+    stack: instanced
+      ? buildStack({ boundary: scene.boundary, objects, plants, house, runs, levels, edging, light })
+      : [],
   };
+  const rendered: RenderScene = { ...content, ...compilePrimitives(content, scene.site, depthFragments) };
+  recordCompilation(rendered, clockNow() - started);
+  return rendered;
+}
+
+/**
+ * Where lighting sorts: last, outside the depth order entirely.
+ *
+ * Every other standing thing takes its place from where it stands. A light fitting does not, and
+ * the reason is the one already written into `LAYER_ORDER`: a spike light is 120 mm across, and the
+ * spike lights that matter most are the ones uplighting a tree — so depth-sorting them honestly
+ * would bury every one of them under the thing it lights. A fitting drawn over its own shrub is
+ * wrong by a few centimetres; a fitting that cannot be seen at all is wrong by the whole feature.
+ */
+const DEPTH_SORTED = 0;
+const ALWAYS_LAST = 1;
+
+/**
+ * How much room a node's bounds leave around its footprint, as a proportion.
+ *
+ * A sprite is not clipped to the geometry it stands on — a canopy overhangs its trunk, a contact
+ * shadow reaches past the thing casting it, a shrub's foliage spills over the bed's edge — and all
+ * of that has to be inside the box a backend rasterises. Too small and objects are cropped; too
+ * large and every raster is mostly empty. A sixth is what `CONTACT_SHADOW_SCALE` and the canopy
+ * offset between them ask for, rounded up.
+ */
+const NODE_MARGIN = 1.18;
+
+/** The same ring with that margin about its own centre. */
+function marginOf(outline: Point[]): Point[] {
+  const box = boundingBox(outline);
+  const cx = box.minX + box.width / 2;
+  const cy = box.minY + box.length / 2;
+  return outline.map((point) => ({
+    x: cx + (point.x - cx) * NODE_MARGIN,
+    y: cy + (point.y - cy) * NODE_MARGIN,
+  }));
+}
+
+function sortGroup(node: RenderNode): number {
+  return node.visualLayer === 'lighting' ? ALWAYS_LAST : DEPTH_SORTED;
+}
+
+/**
+ * Everything that stands up, in the order a painter with no depth buffer should lay it down.
+ *
+ * ## The sort, and why depth comes before layer
+ *
+ * `(group, depth, layer, id)` — and the order of those keys is the whole design.
+ *
+ * The obvious sort is by layer: ground cover, then perennials, then shrubs, then trees, which is
+ * how the flat view has always stacked a bed. In an elevated view that is wrong, and visibly so: it
+ * puts every tree in front of every shrub regardless of where the two stand, so a shrub at the
+ * front of a border is drawn *behind* a tree at the back of it. The picture reads as a collage.
+ *
+ * Sorting by where a thing stands — the furthest-down-screen point of its own footprint — is the
+ * painter's algorithm, and it is correct for the overwhelming majority of a garden: things nearer
+ * the viewer are drawn later and cover what is behind them.
+ *
+ * Layer is then the **tiebreak**, and it earns its place there. Two things standing on exactly the
+ * same line is not a rare case in a generated plan — the grammar aligns everything — and that is
+ * precisely where the hierarchy is the right answer: a ground cover and a shrub at the same depth
+ * should stack short-then-tall. `id` last makes the sort total, so a plan draws the same way twice.
+ *
+ * ## What this cannot do
+ *
+ * A painter's sort on footprints is not a depth buffer, and two objects whose *lifted* extents
+ * interleave — a tall tree just behind a low wall — are genuinely ambiguous without one. The answer
+ * here is always "the nearer thing's whole drawing wins", which is right far more often than it is
+ * wrong and, when it is wrong, is wrong in a way that reads as an object standing slightly further
+ * forward than it is. A z-buffer would need real depth per pixel, which needs a real camera, which
+ * is the thing this projection exists not to have.
+ */
+function buildStack(scene: {
+  boundary: Point[];
+  objects: RenderItem[];
+  plants: RenderPlant[];
+  house: RenderHouse | null;
+  runs: BoundaryRun[];
+  levels: RenderLevel[];
+  edging: RenderSurface[];
+  light: Point;
+}): RenderNode[] {
+  const nodes: RenderNode[] = [];
+
+  for (const plant of scene.plants) {
+    const half = (plant.spread / 2) * NODE_MARGIN;
+    nodes.push({
+      kind: 'plant',
+      id: plant.id,
+      depth: plant.at.y,
+      bounds: visualBounds(
+        [
+          { x: plant.at.x - half, y: plant.at.y - half },
+          { x: plant.at.x + half, y: plant.at.y + half },
+        ],
+        plant.height / 2,
+      ),
+      visualLayer: plant.visualLayer,
+      plant,
+    });
+  }
+
+  for (const item of scene.objects) {
+    const outline = elementOutline(item.element);
+    if (outline.length < 3) continue;
+
+    const height = heightFor(item.element) + Math.max(0, item.element.elevation ?? 0);
+    const base = {
+      id: item.element.id,
+      depth: depthOf(outline),
+      bounds: visualBounds(marginOf(outline), height),
+      visualLayer: item.visualLayer,
+    };
+
+    /*
+     * Built or photographed, and the line is `isBuilt`. A structure is whatever rectangle it was
+     * given, so it is raised from that rectangle; everything else is a thing of a known size that a
+     * sprite can be fitted inside, which is what the plan camera has always done and what the
+     * elevated library carries on doing from a different angle.
+     */
+    if (isBuilt(item.element)) {
+      nodes.push({
+        ...base,
+        kind: 'extrusion',
+        extrusion: extrude(outline, height, scene.light),
+        source: { of: 'element', element: item.element, surface: item.surface },
+      });
+    } else {
+      nodes.push({ ...base, kind: 'object', item, height });
+    }
+  }
+
+  const clockwise = ringIsClockwise(scene.boundary);
+
+  for (const run of scene.runs) {
+    /*
+     * A run is raised from the same band the flat view fills — `boundaryBand`, pushed **inward**
+     * from the property line, because a fence is built inside the plot it encloses. Raising a strip
+     * centred on the line instead would put half of every fence on the neighbour's land and would
+     * disagree with what the plan view has always drawn.
+     *
+     * Skipped when there is nothing to raise: an `open` boundary is a cadastral line rather than a
+     * thing, and a zero-height prism for it would put a hairline of wall across a gap the user
+     * explicitly said was open.
+     */
+    if (run.height <= 0 || run.thickness <= 0) continue;
+
+    const inward = inwardNormal(run, clockwise);
+    const outline = boundaryBand(run, inward);
+    if (outline.length < 3) continue;
+
+    nodes.push({
+      kind: 'extrusion',
+      id: `boundary:${run.edgeVertexId}`,
+      /*
+       * **The far end of the run, not the near one** — the only place in the stack that does not
+       * use `depthOf`, and it is a consequence of a run being drawn whole.
+       *
+       * A side fence spans the entire depth of the plot, so its furthest-down-screen point is the
+       * bottom corner of the garden. Sorted on that, a side fence draws after everything and lays a
+       * line over the border planted against it — which is exactly backwards: the planting is
+       * inside the fence and in front of it at every point along it.
+       *
+       * Taking the furthest point instead says the honest thing about an object that is drawn as
+       * one piece: it reaches back to here, so everything nearer than that is in front of it. The
+       * near boundary still sorts last, because its whole band is at the bottom of the plot.
+       *
+       * The exact answer is to split each run into segments and sort each on its own, and it is not
+       * worth it: the segments would abut, and a dozen anti-aliased seams down every fence is a
+       * worse defect than the one being fixed.
+       */
+      depth: Math.min(...outline.map((point) => point.y)),
+      bounds: visualBounds(outline, run.height),
+      visualLayer: 'structure',
+      extrusion: extrude(outline, run.height, scene.light),
+      source: { of: 'boundary', run, inward },
+    });
+  }
+
+  for (const level of scene.levels) {
+    if (level.rise <= 0) continue;
+
+    /*
+     * **A sunken area is raised by nothing, and that is the honest answer rather than an omission.**
+     *
+     * What would stand up around a sunken terrace is the ground beyond it, and this model has no
+     * ground — `levels.ts` refuses to infer one, for the same reason `site.location` is nullable.
+     * So it comes through the stack as a zero-height extrusion: no faces, and a top ring that is
+     * its own footprint, which draws the identical band the flat view has always drawn. Handled
+     * here rather than skipped, so every level is in exactly one place.
+     */
+    nodes.push({
+      kind: 'extrusion',
+      id: `${level.hostId}:wall`,
+      depth: depthOf(level.outline),
+      bounds: visualBounds(level.outline, level.sunken ? 0 : level.rise),
+      visualLayer: 'structure',
+      extrusion: extrude(level.outline, level.sunken ? 0 : level.rise, scene.light),
+      source: { of: 'level', level },
+    });
+  }
+
+  for (const surface of scene.edging) {
+    const height = edgingHeight(surface.element.material);
+    nodes.push({
+      kind: 'extrusion',
+      id: surface.elementId,
+      depth: depthOf(surface.outline),
+      bounds: visualBounds(surface.outline, height),
+      visualLayer: 'surface',
+      extrusion: extrude(surface.outline, height, scene.light),
+      source: { of: 'edging', surface, height },
+    });
+  }
+
+  if (scene.house) {
+    /*
+     * The *drawn* eaves, which for anything above a storey is less than the real ones — see
+     * `MAX_DRAWN_LIFT`. The shadow pass is untouched and still casts from `houseHeight`, because
+     * how far a building shades its own garden is a fact about the site rather than a drawing
+     * convention.
+     */
+    const eaves = drawnLift(houseHeight(scene.house.house));
+    nodes.push({
+      kind: 'house',
+      id: 'house',
+      depth: depthOf(scene.house.outline),
+      /* The house is the one thing whose drawing reaches *outside* its own footprint on the ground
+       * as well as above it: `houseGroundShadow` is the footprint translated half a metre. */
+      bounds: visualBounds(marginOf(scene.house.outline), eaves),
+      visualLayer: 'house',
+      house: scene.house,
+      walls: extrude(scene.house.outline, eaves, scene.light),
+    });
+  }
+
+  return nodes.sort(
+    (a, b) =>
+      sortGroup(a) - sortGroup(b) ||
+      a.depth - b.depth ||
+      LAYER_ORDER[a.visualLayer] - LAYER_ORDER[b.visualLayer] ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
+/**
+ * Whether this is a thing that is *built* rather than a thing that is *placed*.
+ *
+ * The single decision that says which of the two drawing models an element gets, and it is worth
+ * being precise about the criterion: not "is it big", not "is it a structure", but **is its shape
+ * arbitrary**. A shed is whatever rectangle the placer gave it and can be turned to any angle, so
+ * no photograph fits it and it is raised from its own outline. A dining set is a dining set: a known
+ * object of a known size that a sprite can be fitted inside.
+ *
+ * `steps` is deliberately included even though it is short: a flight's whole point is the level
+ * change it resolves, and its treads are derived from a rise that only the extrusion can show.
+ */
+function isBuilt(element: DesignElement): boolean {
+  return element.category === 'structure';
 }
 
 /**
@@ -396,8 +682,10 @@ function resolveHouse(house: HouseFootprint | null, roofLight: Point | null): Re
     outline,
     interior: insetPolygon(outline, WALL_THICKNESS),
     /* Only Visualise gets a roof: step 1 and the editor want the wall-and-floor diagram, where a
-     * building the user is positioning has to read as the footprint they are positioning. */
-    roof: roofLight ? roofFor(outline, roofLight) : null,
+     * building the user is positioning has to read as the footprint they are positioning. And only
+     * Visualise gets eaves — see `EAVES_OVERHANG` for why that reverses an earlier refusal without
+     * contradicting it. */
+    roof: roofLight ? roofFor(outline, roofLight, EAVES_OVERHANG) : null,
     openings: resolveOpenings(house),
     house,
   };

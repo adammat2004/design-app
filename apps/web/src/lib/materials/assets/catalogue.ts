@@ -22,6 +22,34 @@ export const CatalogueEntrySchema = z.object({
   /** Edge mismatch ÷ interior grain: about 1 for a seamless tile. See the tool's `SEAM_THRESHOLD`. */
   seamScore: z.number().nonnegative().optional(),
   /**
+   * Where the opaque pixels actually are, as fractions of the image. Elevated sprites only.
+   *
+   * `opaqueRadiusRatio` is the plan camera's question — how far the foliage reaches from the middle,
+   * so a canopy can be inscribed in the circle the placer eroded by. It is the wrong measure for an
+   * elevated sprite, which is framed from its *foot* rather than its centre and is deliberately not
+   * square: a tree's opaque pixels reach much further up than down, and one radius cannot say that.
+   *
+   * A box can. It is what the QA pass checks the framing against — an object that fills its frame,
+   * touches no edge, and leaves the bottom margin clear of anything that is not its footprint.
+   */
+  opaqueBounds: z
+    .object({
+      minX: z.number(),
+      minY: z.number(),
+      maxX: z.number(),
+      maxY: z.number(),
+    })
+    .optional(),
+  /**
+   * How much of the frame's bottom edge band is opaque, 0-1. Elevated sprites only.
+   *
+   * The ground-plane detector. The single most common way a model ignores "no ground, no shadow" is
+   * to return the object standing on a patch of grass or a soft grey ellipse, and that patch reaches
+   * the bottom of the frame right across its width. A sofa's own legs touch the bottom too, but they
+   * are a few percent of it; a ground plane is most of it.
+   */
+  footAlpha: z.number().min(0).max(1).optional(),
+  /**
    * Where this file came from.
    *
    * Optional, so the 43 families generated before it existed still parse — and that is also the

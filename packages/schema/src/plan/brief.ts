@@ -11,15 +11,41 @@ import { z } from 'zod';
  * round trip.
  */
 
+/**
+ * The garden *spaces* a user can ask for — not a catalogue of objects.
+ *
+ * The distinction is the point: the brief asks how the garden will be used, and the generator
+ * turns each answer into a room with a footprint, a place to sit and a way to reach it. "Outdoor
+ * dining area" is a thing `FEATURE_SPECS` can compose; "table" is not.
+ *
+ * **Every id here is honoured somewhere in generation**, and adding one is deliberately a compile
+ * error in four total `Record`s — the labels below, `FEATURE_SPECS`, the slot-preference table and
+ * the web app's icon map — so a card on screen cannot be a tick the design ignores.
+ *
+ * Three of them (`lawn`, `plantingBeds`, `lighting`) are **composed rather than placed**: the
+ * templates already draw a lawn panel and borders, and `lightingScheme` already composes a scheme
+ * from what was placed. Asking for one of those steers what is already happening instead of
+ * dropping a second copy on top of it — see `concepts.service.ts`.
+ *
+ * Growing this enum needs no migration and no `PLAN_DOCUMENT_VERSION` bump: a union that only
+ * *gains* permitted values still parses every stored document.
+ */
 export const DesiredFeatureSchema = z.enum([
   'seating',
-  'play',
-  'vegPatch',
-  'water',
+  'dining',
   'pergola',
   'firePit',
-  'storage',
+  'hotTub',
   'outdoorKitchen',
+  'gardenRoom',
+  'greenhouse',
+  'vegPatch',
+  'plantingBeds',
+  'lawn',
+  'water',
+  'play',
+  'storage',
+  'lighting',
   'other',
 ]);
 export type DesiredFeature = z.infer<typeof DesiredFeatureSchema>;
@@ -30,6 +56,13 @@ export type BudgetBand = z.infer<typeof BudgetBandSchema>;
 export const MaintenanceLevelSchema = z.enum(['low', 'medium', 'high']);
 export type MaintenanceLevel = z.infer<typeof MaintenanceLevelSchema>;
 
+/**
+ * The overall look, and **the ids are the contract** — generation branches on these exact strings
+ * in a dozen places (the planting style, the tree palette, corner radius, edging, paving, the
+ * retaining material, which template is recommended). The *words* below are free to change; these
+ * are not, and a new direction is only worth adding when it earns its own branches. A style card
+ * that generates the same garden as the one beside it is worse than no card.
+ */
 export const StyleDirectionSchema = z.enum([
   'modern',
   'cottage',
@@ -77,15 +110,22 @@ export function emptyBrief(): GardenBrief {
  * produced it cannot call the same thing by two names.
  */
 export const DESIRED_FEATURE_LABELS: Record<DesiredFeature, string> = {
-  seating: 'Seating / dining area',
-  play: 'Play area',
-  vegPatch: 'Veg patch / kitchen garden',
-  water: 'Water feature',
-  pergola: 'Pergola / shade structure',
+  seating: 'Seating area',
+  dining: 'Dining area',
+  pergola: 'Pergola',
   firePit: 'Fire pit',
+  hotTub: 'Hot tub',
+  outdoorKitchen: 'Outdoor kitchen',
+  gardenRoom: 'Garden room',
+  greenhouse: 'Greenhouse',
+  vegPatch: 'Kitchen garden',
+  plantingBeds: 'Planting beds',
+  lawn: 'Lawn',
+  water: 'Water feature',
+  play: 'Play area',
   storage: 'Storage / shed',
-  outdoorKitchen: 'Outdoor kitchen / BBQ area',
-  other: 'Other',
+  lighting: 'Garden lighting',
+  other: 'Something else',
 };
 
 export const BUDGET_LABELS: Record<BudgetBand, string> = {
@@ -101,10 +141,15 @@ export const MAINTENANCE_LABELS: Record<MaintenanceLevel, string> = {
   high: 'High effort',
 };
 
+/**
+ * One word each, because the style is chosen from a picture rather than read from a list — and a
+ * concept card has room for a name, not for a name and its gloss. The ids they are keyed by have
+ * not moved; only the wording has.
+ */
 export const STYLE_LABELS: Record<StyleDirection, string> = {
-  modern: 'Modern / minimal',
-  cottage: 'Cottage / naturalistic',
-  formal: 'Formal / structured',
-  lowMaintenance: 'Low-maintenance / contemporary',
-  other: 'Other',
+  modern: 'Modern',
+  cottage: 'Natural',
+  formal: 'Traditional',
+  lowMaintenance: 'Minimalist',
+  other: 'Something else',
 };

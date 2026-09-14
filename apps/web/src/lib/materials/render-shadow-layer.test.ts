@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, type Canvas } from '@napi-rs/canvas';
 import type { Point, ShadowCast } from '@garden-studio/schema';
 import { SHADOW_TONE } from './light';
 import { drawShadowLayer, renderShadowLayer, type ShadowOccluder } from './render-shadow-layer';
@@ -59,14 +59,20 @@ function draw(occluders: ShadowOccluder[], boundary: Point[] = PLOT): Drawn {
 
 describe('drawShadowLayer', () => {
   /**
-   * The assertion the whole design exists for.
+   * The assertion the whole design exists for, in its general form:
    *
-   * Two overlapping shadows are one shadow — standing a tree in a hedge's shade does not make
-   * that patch twice as dark. Drawing translucent shapes in sequence would double-darken it, and
-   * that reads instantly as a rendering bug. Filling opaque into a dedicated layer and
-   * compositing once is what makes the overlap merge, with no polygon-union library involved.
+   *     **where two shadows overlap, the result is the darker of them — never their sum.**
+   *
+   * That used to be written as "the overlap equals either one", which was the same statement while
+   * every shadow was the same darkness. It stopped being once foliage got a lighter tone than
+   * masonry, and the honest generalisation is the one above: a porous canopy in front of a wall
+   * cannot un-block the sun, so the wall's shade wins there. The half that has not changed, and
+   * must not, is that nothing anywhere *adds* — two shadows on one patch are one shadow.
+   *
+   * This case holds the original equality, because both occluders are the same character. The
+   * cross-character case is `foliage against built` below.
    */
-  it('does not double-darken where two shadows overlap', () => {
+  it('does not double-darken where two shadows of one character overlap', () => {
     // Both 2 m squares, 4 m tall, stacked so their northward shadows share a 2 m band.
     // A shades y 6..12, B shades y 2..8, so 6..8 is covered by both.
     const drawn = draw([
@@ -82,6 +88,83 @@ describe('drawShadowLayer', () => {
     expect(both).toEqual(onlyB);
     // And it really is drawn, rather than all three being empty.
     expect(both[3]).toBe(255);
+  });
+
+  /*
+   * The generalised invariant, on the case that made it necessary.
+   *
+   * A tree standing in front of a wall: the canopy's shade is lighter, the wall's is darker, and
+   * where they cross the answer is the wall's. Checked by luminance rather than by equality with a
+   * named constant, so it keeps meaning the right thing if either tone is ever retuned.
+   */
+  it('resolves a foliage and a built shadow to the darker of the two, never their sum', () => {
+    /*
+     * Through `renderShadowLayer`, not `draw`: bucketing by character is what that function does,
+     * and `drawShadowLayer` is one bucket by construction — it takes a single tone for the whole
+     * call, which is exactly the property that stops an occluder darkening its neighbour.
+     *
+     * A shadow runs from its occluder's near edge to `height` metres past it, so with 3 m squares
+     * 8 m tall the foliage covers y 4..15 and the wall covers y -4..7. Sample points sit at least
+     * 15 px from every edge, which is well clear of the 4.5 px foliage blur.
+     */
+    const pass = { pxPerMetre: PX_PER_METRE, makeCanvas, softnessMetres: 0.06 };
+    const canopy: ShadowOccluder = { outline: square(4, 12, 3), height: 8, character: 'foliage' };
+    const wall: ShadowOccluder = { outline: square(4, 4, 3), height: 8, character: 'built' };
+
+    const raster = renderShadowLayer([canopy, wall], NORTHWARD, PLOT, pass)!;
+    // The real thing, not the narrowed `PatternContext`: reading pixels back is a test's job.
+    const context = (raster.canvas as unknown as Canvas).getContext('2d');
+    const luma = (xMetres: number, yMetres: number) => {
+      const { data } = context.getImageData(
+        xMetres * raster.pxPerMetre,
+        yMetres * raster.pxPerMetre,
+        1,
+        1,
+      );
+
+      return 0.2126 * data[0]! + 0.7152 * data[1]! + 0.0722 * data[2]!;
+    };
+
+    const onlyFoliage = luma(5.5, 11);
+    const onlyBuilt = luma(5.5, 2);
+    const both = luma(5.5, 5.5);
+
+    // Foliage really is the lighter of the two, or the rest of this proves nothing.
+    expect(onlyFoliage).toBeGreaterThan(onlyBuilt + 5);
+
+    // The overlap is the darker one — not darker still, which is what summing would give.
+    expect(both).toBeCloseTo(onlyBuilt, 0);
+    expect(both).toBeLessThan(onlyFoliage);
+  });
+
+  /* Order of arrival must not decide the overlap: the bucket order does, and it is fixed. */
+  it('gives the same answer whichever order the two characters arrive in', () => {
+    const canopy: ShadowOccluder = {
+      outline: square(5, 10, 2),
+      height: 4,
+      character: 'foliage',
+    };
+    const wall: ShadowOccluder = { outline: square(5, 6, 2), height: 4, character: 'built' };
+
+    const pass = { pxPerMetre: PX_PER_METRE, makeCanvas, softnessMetres: 0.06 };
+    const a = renderShadowLayer([canopy, wall], NORTHWARD, PLOT, pass)!;
+    const b = renderShadowLayer([wall, canopy], NORTHWARD, PLOT, pass)!;
+
+    const png = (raster: { canvas: unknown }) =>
+      (raster.canvas as Canvas).toBuffer('image/png');
+
+    expect(png(a).equals(png(b))).toBe(true);
+  });
+
+  /*
+   * An occluder with no character is a built one. Every caller that existed before buckets did
+   * passes none, so this is what keeps the plan view and every stored expectation unchanged.
+   */
+  it('treats an occluder with no stated character as built', () => {
+    const stated = draw([{ outline: square(5, 10, 2), height: 4, character: 'built' }]);
+    const silent = draw([{ outline: square(5, 10, 2), height: 4 }]);
+
+    expect(stated.at(6, 8)).toEqual(silent.at(6, 8));
   });
 
   it('draws the shadow opaque, so the layer can be composited once', () => {

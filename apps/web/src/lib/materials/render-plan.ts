@@ -1,34 +1,74 @@
 import {
+  boundingBox,
+  elementAnchor,
+  elementOutline,
+  geometryOutline,
   moduleRandom,
+  OPENING_HEIGHTS,
   pick,
   resolvedGates,
+  resolveSymbol,
+  stepFlight,
+  STOREY_HEIGHT,
   streetEdge,
   streetOutward,
   type BoundaryRun,
   type DesignElement,
+  type PlanGeometry,
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
 import { buildRenderScene, type BuildOptions, type PlanScene } from '../render/build-scene';
+import { applyGrade, type GradeTarget } from './grade';
+import { ASSET_FAMILIES, type AssetId } from './assets/asset-spec';
 import type {
+  ExtrusionSource,
+  RenderExtrusionNode,
   RenderHouse,
+  RenderHouseNode,
   RenderItem,
+  RenderNode,
+  RenderObjectNode,
   RenderOpening,
+  RenderPlantNode,
   RenderScene,
   RenderSurface,
 } from '../render/scene';
 import { LAYER_ORDER } from '../render/visual-layer';
+import { depthOf, extrude, lift, RISE, visibleEdges, type Extrusion } from '../render/projection';
+import {
+  EAVES_SHADOW_ALPHA,
+  EAVES_SHADOW_DEPTH,
+  elevatedPlacement,
+  FACE_SKIN_TINT,
+  FRAME_TONE,
+  FRAME_WIDTH,
+  GLAZING_TONE,
+  MAX_PANE_WIDTH,
+  faceFill,
+  footBand,
+  footBandDepth,
+  HOUSE_WALL_TONE,
+  liftPx,
+  ROOFED_SYMBOLS,
+  STRUCTURE_OVERHANG,
+  type ElevatedPlacement,
+} from './symbols/elevated';
 import { ROOF_TONES, type RenderRoof } from '../render/roof';
 import { COLOUR } from '../canvas-colours';
 import { CATEGORY_COLOURS } from '../concept-colours';
 import { materialFill } from '../material-colours';
 import {
+  BOUNDARY_SKINS,
   canopiesForSymbol,
   CONTACT_SHADOW_SPRITE,
+  elevatedFamilyFor,
+  HOUSE_WALL_SKIN,
   LIGHT_POOL_SPRITE,
+  materialAssets,
   SYMBOL_SPRITES,
 } from './assets/material-assets';
-import type { LoadedAsset } from './assets/registry';
+import type { AssetImage, LoadedAsset } from './assets/registry';
 import {
   CONTACT_SHADOW_ALPHA,
   CONTACT_SHADOW_OFFSET_RATIO,
@@ -70,6 +110,7 @@ import {
   drawBlob,
   drawSprite,
   drawSurfacePattern,
+  renderSurfacePattern,
   type DrawPass,
   type MakeCanvas,
   type PatternCanvas,
@@ -85,6 +126,10 @@ import {
   trunkAndCanopy,
 } from './symbols/canopy';
 import { drawSymbol, MIN_STRUCTURE_DETAIL_PX } from './symbols/draw-symbol';
+import { RENDER_PASSES, type RenderPrimitive, type RenderPassName } from '../render/primitives';
+import { clusterMassOpacity, plantMassOpacity } from '../render/plant-clusters';
+import { drawLinearCourse } from './render-linear-course';
+import { compileLinearCourse } from '../render/linear-course';
 
 /**
  * A whole plan, drawn into one 2D context.
@@ -133,6 +178,13 @@ export interface PlanContext extends PatternContext {
 export interface PlanPass extends DrawPass {
   /** For the shadow sub-layer, which must be filled opaque on its own and composited once. */
   makeCanvas: MakeCanvas;
+  /** Contact shadows are a shared ground pass in v2. */
+  contactShadows?: boolean;
+  /** LOD uses CSS pixels; raster density can be higher on Retina displays. */
+  lodPxPerMetre?: number;
+  plantOpacity?: number;
+  massOpacity?: number;
+  grade?: boolean;
 }
 
 /** A neutral ground for the plot — the same tint the canvases fill the boundary with. */
@@ -191,6 +243,12 @@ export function drawScene(
     y: (point.y - rasterOrigin.y) * pxPerMetre,
   });
 
+  if (rendered.view === 'visualise' && rendered.rendererVersion === 'v2') {
+    for (const name of RENDER_PASSES) drawPrimitivePass(context, rendered, name, pass, rasterOrigin);
+    if (pass.grade !== false) gradeScene(context, rendered, pass, rasterOrigin);
+    return;
+  }
+
   context.save();
 
   /* The ground, clipped to the plot; everything else is drawn inside this clip. */
@@ -222,24 +280,206 @@ export function drawScene(
    * spend a raster on something that lands as one tone anyway. The tone is the host's own paving
    * darkened, so a level change reads as the same material stepping down rather than as a foreign
    * object laid round it.
+   *
+   * In Visualise a retaining wall has a face you can see, so it sorts into the stack with
+   * everything else that stands up and is drawn there instead — a plant in front of a terrace has
+   * to be able to cover the wall holding it up.
    */
-  for (const level of rendered.levels) {
-    if (level.surface) {
-      drawSurface(context, level.surface, pass, light, toPx, rasterOrigin);
-      continue;
+  if (rendered.view !== 'visualise') {
+    for (const level of rendered.levels) {
+      if (level.surface) {
+        drawSurface(context, level.surface, pass, light, toPx, rasterOrigin);
+        continue;
+      }
+      context.fillStyle = level.colour;
+      tracePath(context, level.outline, toPx);
+      context.fill();
     }
-    context.fillStyle = level.colour;
-    tracePath(context, level.outline, toPx);
-    context.fill();
   }
 
   drawShadows(context, rendered, pass, toPx);
 
-  drawPlants(context, rendered, pass, light, toPx);
+  /*
+   * Planting is part of the depth-sorted stack in Visualise, so drawing it here as well would draw
+   * every plant twice — once under the fence and once over it. In the plan view the stack is empty
+   * and this is the only place plants are drawn, exactly as before.
+   */
+  if (rendered.view !== 'visualise') drawPlants(context, rendered, pass, light, toPx);
 
   context.restore();
 
   drawOverlay(context, rendered, site, pass, rasterOrigin);
+
+  /*
+   * The scene grade, last, and only in Visualise.
+   *
+   * Over the plot's own box rather than the whole canvas: a sheet is drawn with a paper margin and a
+   * thumbnail is not, so grading everything would darken the paper on one and nothing on the other,
+   * and the two would stop being the same picture at different sizes.
+   *
+   * On screen this same grade arrives as a CSS `filter` on the Visualise wrapper instead, because
+   * there the WebGL ground and this 2D overlay are separate DOM canvases and no single context
+   * holds both. `grade.ts` carries the one set of constants and `grade.test.ts` pins the two
+   * applications to each other.
+   */
+  if (rendered.view === 'visualise' && pass.grade !== false) {
+    const box = boundingBox(boundary);
+    const topLeft = toPx({ x: box.minX, y: box.minY });
+    const bottomRight = toPx({ x: box.minX + box.width, y: box.minY + box.length });
+    const x = Math.max(0, Math.floor(topLeft.x));
+    const y = Math.max(0, Math.floor(topLeft.y));
+
+    applyGrade(
+      context as unknown as GradeTarget,
+      x,
+      y,
+      Math.ceil(bottomRight.x) - x,
+      Math.ceil(bottomRight.y) - y,
+    );
+  }
+}
+
+function gradeScene(context: PlanContext, scene: RenderScene, pass: PlanPass, origin: Point): void {
+  const { bounds } = scene;
+  const x = Math.max(0, Math.floor((bounds.minX - origin.x) * pass.pxPerMetre));
+  const y = Math.max(0, Math.floor((bounds.minY - origin.y) * pass.pxPerMetre));
+  const right = Math.ceil((bounds.minX + bounds.width - origin.x) * pass.pxPerMetre);
+  const bottom = Math.ceil((bounds.minY + bounds.length - origin.y) * pass.pxPerMetre);
+  if (right > x && bottom > y) applyGrade(context as unknown as GradeTarget, x, y, right - x, bottom - y);
+}
+
+/** The pass order and inputs are shared with Pixi; this function only puts down pixels. */
+export function drawPrimitivePass(context: PlanContext, scene: RenderScene, name: RenderPassName,
+  pass: PlanPass, origin: Point): void {
+  const toPx = (point: Point): Point => ({ x: (point.x - origin.x) * pass.pxPerMetre, y: (point.y - origin.y) * pass.pxPerMetre });
+  context.save();
+  if (name !== 'access') { tracePath(context, scene.boundary, toPx); context.clip(); }
+  if (name === 'cast-shadows') {
+    drawShadows(context, scene, pass, toPx);
+  } else if (name === 'contacts') {
+    drawContactPass(context, scene, pass, toPx);
+    for (const primitive of scene.passes.contacts) if (primitive.kind === 'plant-mass') {
+      drawPrimitive(context, primitive, scene, pass, origin);
+    }
+  } else {
+    for (const primitive of scene.passes[name]) drawPrimitive(context, primitive, scene, pass, origin);
+  }
+  context.restore();
+}
+
+export function drawContactPass(context: PlanContext, scene: RenderScene, pass: PlanPass, toPx: (point: Point) => Point): void {
+  context.globalAlpha = FENCE_SHADE_OPACITY;
+  context.fillStyle = COLOUR.fenceShade;
+  for (const band of fenceShadeBands(scene.boundary, scene.light)) { tracePath(context, band, toPx); context.fill(); }
+  context.globalAlpha = 1;
+  const shadow = pass.assets?.(CONTACT_SHADOW_SPRITE)[0];
+  const { bounds } = scene;
+  const scale = Math.min(pass.pxPerMetre, 4096 / Math.max(bounds.width, bounds.length));
+  const canvas = pass.makeCanvas(Math.max(1, Math.ceil(bounds.width * scale)), Math.max(1, Math.ceil(bounds.length * scale)));
+  const scratch = canvas.getContext('2d');
+  if (!scratch) return;
+  const localPx = (point: Point) => ({ x: (point.x - bounds.minX) * scale, y: (point.y - bounds.minY) * scale });
+  scratch.fillStyle = SHADOW_TONE;
+  for (const primitive of scene.passes.contacts) {
+    if (primitive.kind !== 'contact-shadow' || !primitive.outline) continue;
+    tracePath(scratch, primitive.outline, localPx); scratch.fill();
+  }
+  for (const primitive of scene.passes.contacts) {
+    if (primitive.kind !== 'contact-shadow' || primitive.outline || !shadow) continue;
+    const reach = primitive.radius * CONTACT_SHADOW_SCALE;
+    const offset = primitive.radius * CONTACT_SHADOW_OFFSET_RATIO;
+    scratch.drawImage(shadow.image, (primitive.at.x - scene.light.x * offset - reach - bounds.minX) * scale,
+      (primitive.at.y - scene.light.y * offset - reach - bounds.minY) * scale, reach * 2 * scale, reach * 2 * scale);
+  }
+  const at = toPx({ x: bounds.minX, y: bounds.minY });
+  context.globalAlpha = CONTACT_SHADOW_ALPHA;
+  context.drawImage(canvas, at.x, at.y, canvas.width / scale * pass.pxPerMetre, canvas.height / scale * pass.pxPerMetre);
+  context.globalAlpha = 1;
+}
+
+export function drawPrimitive(context: PlanContext, primitive: RenderPrimitive, scene: RenderScene,
+  pass: PlanPass, origin: Point): void {
+  const toPx = (point: Point): Point => ({ x: (point.x - origin.x) * pass.pxPerMetre, y: (point.y - origin.y) * pass.pxPerMetre });
+  switch (primitive.kind) {
+    case 'terrain':
+      context.fillStyle = PLOT_GROUND; tracePath(context, primitive.outline, toPx); context.fill(); return;
+    case 'surface': {
+      const surface = primitive.item.surface;
+      // Match the browser's local raster origin and sampling. Painting a large texture
+      // directly into the export viewport changes minification and subpixel filtering.
+      const raster = surface?.material ? renderSurfacePattern(surface.outline, surface.material,
+        surface.anchor, surface.seed, { ...pass, light: scene.light, layers: surface.layers,
+          exclusions: surface.exclusions ?? undefined, centreline: surface.centreline ?? undefined,
+          element: surface.element }) : null;
+      if (raster) {
+        const at = toPx(raster.originMetres);
+        context.drawImage(raster.canvas, at.x, at.y,
+          raster.widthPx / raster.pxPerMetre * pass.pxPerMetre,
+          raster.heightPx / raster.pxPerMetre * pass.pxPerMetre);
+      } else drawItem(context, primitive.item, pass, scene.light, toPx, origin);
+      return;
+    }
+    case 'linear-course': {
+      if (primitive.height > 0) {
+        const source: ExtrusionSource = { of: 'edging', surface: primitive.surface, height: primitive.height };
+        paintFaces(context, extrude(primitive.surface.outline, primitive.height, scene.light),
+          materialFill(primitive.surface.element), skinFor(source, pass), pass.pxPerMetre, toPx, false);
+      }
+      context.save(); context.translate(0, -liftPx(primitive.height, pass.pxPerMetre));
+      drawLinearCourse(context, primitive, pass, origin); context.restore(); return;
+    }
+    case 'sprite':
+    case 'extrusion': {
+      const lookup = pass.assets;
+      const standingPass: PlanPass = { ...pass, contactShadows: false,
+        assets: lookup ? (id) => id === CONTACT_SHADOW_SPRITE ? [] : lookup(id) : undefined };
+      let opacity = 1;
+      if (primitive.node.kind === 'plant') {
+        opacity = pass.plantOpacity ?? 1 - plantMassOpacity(scene.clusters, primitive.node.id, pass.lodPxPerMetre ?? pass.pxPerMetre);
+      }
+      if (opacity <= 0) return;
+      context.save();
+      // Darken the opaque object itself, never add a rectangular wash around its raster.
+      const oldFilter = context.filter ?? 'none';
+      if (scene.night && context.filter !== undefined) context.filter = `brightness(${1 - scene.night * NIGHT_MAX_ALPHA * 0.8})`;
+      context.globalAlpha = opacity;
+      drawStackNode(context, primitive.node, scene, standingPass, scene.light, toPx, origin, null);
+      context.filter = oldFilter;
+      context.restore();
+      return;
+    }
+    case 'plant-mass': {
+      const opacity = pass.massOpacity ?? clusterMassOpacity(primitive.cluster, pass.lodPxPerMetre ?? pass.pxPerMetre);
+      if (opacity <= 0) return;
+      context.save(); context.globalAlpha = opacity;
+      for (const plant of primitive.cluster.plants) {
+        const at = toPx(plant.at);
+        drawBlob(context, { light: scene.light, form: 'clipped-mass', x: at.x, y: at.y,
+          radius: plant.spread * 0.52 * pass.pxPerMetre, lobes: 7,
+          tone: cssToRgb(pick(plant.blob.palette, plant.tone)),
+          random: moduleRandom(`${primitive.id}:mass`, Math.round(plant.at.x * 100), Math.round(plant.at.y * 100)) });
+      }
+      context.restore(); return;
+    }
+    case 'ambient':
+      context.save(); context.globalAlpha = primitive.night * NIGHT_MAX_ALPHA;
+      context.fillStyle = NIGHT_TONE; tracePath(context, scene.boundary, toPx); context.fill(); context.restore(); return;
+    case 'ground-light':
+    case 'emissive': {
+      const pool = pass.assets?.(LIGHT_POOL_SPRITE)[0];
+      if (!pool) return;
+      const at = toPx(primitive.light.at);
+      const glow = primitive.kind === 'emissive';
+      const radius = (glow ? Math.min(0.18, primitive.light.radius / 5) : primitive.light.radius) * pass.pxPerMetre;
+      context.save(); context.globalCompositeOperation = 'lighter';
+      context.globalAlpha = primitive.light.intensity * (glow ? 0.9 : LIGHT_POOL_ALPHA);
+      context.drawImage(pool.image as PatternCanvas, at.x - radius, at.y - radius, radius * 2, radius * 2);
+      context.restore(); return;
+    }
+    case 'access': drawAccess(context, primitive.site, pass.pxPerMetre, toPx); return;
+    case 'shadow-caster':
+    case 'contact-shadow': return; // These are unioned once by their pass compositor.
+  }
 }
 
 /**
@@ -269,23 +509,996 @@ export function drawOverlay(
     y: (point.y - rasterOrigin.y) * pxPerMetre,
   });
 
-  context.save();
-  tracePath(context, boundary, toPx);
-  context.clip();
+  /*
+   * Two orders, and which one applies is the whole difference between the views.
+   *
+   * **Plan** keeps the order it has always had: every object, then the house, then the boundary,
+   * each pass complete before the next begins. It is a diagram, and in a diagram the building is
+   * always legible and the fence is always the edge of the drawing. Nothing about it has changed.
+   *
+   * **Visualise** draws one depth-sorted list instead. That is what lets a canopy fall across a
+   * roof and a border disappear behind the fence standing in front of it — neither of which the
+   * pass order above can express at all, because it draws every fence after every plant whatever
+   * the two are doing.
+   */
+  if (rendered.view === 'visualise') {
+    context.save();
+    tracePath(context, boundary, toPx);
+    context.clip();
 
-  for (const item of rendered.objects) {
-    drawItem(context, item, pass, light, toPx, rasterOrigin);
+    /*
+     * The shade the boundary throws onto the ground inside it, under everything that stands there.
+     *
+     * It matters more here than in the flat view, not less. A wall running up and down the screen
+     * is seen exactly edge-on and shows no face at all — the price of lifting straight up — so on
+     * two sides of every rectangular plot this band and the cast shadow are the only things saying
+     * the boundary has any height. Drawn first so a border planted against the fence sits on it.
+     */
+    context.globalAlpha = FENCE_SHADE_OPACITY;
+    context.fillStyle = COLOUR.fenceShade;
+    for (const band of fenceShadeBands(boundary, light)) {
+      tracePath(context, band, toPx);
+      context.fill();
+    }
+    context.globalAlpha = 1;
+
+    drawStack(context, rendered, pass, light, toPx, rasterOrigin);
+    context.restore();
+  } else {
+    context.save();
+    tracePath(context, boundary, toPx);
+    context.clip();
+
+    for (const item of rendered.objects) {
+      drawItem(context, item, pass, light, toPx, rasterOrigin);
+    }
+
+    context.restore();
+
+    /* The house sits above the planting so a bed can run right up to the wall. */
+    if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx);
+
+    drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
   }
 
-  context.restore();
-
-  /* The house sits above the planting so a bed can run right up to the wall. */
-  if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx);
-
-  drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
   drawAccess(context, site, pxPerMetre, toPx);
 
   drawLighting(context, rendered, pass, toPx);
+}
+
+/* ---------------------------------------------------------------- the elevated stack */
+
+/**
+ * Everything that stands up, drawn back to front.
+ *
+ * One loop over `RenderScene.stack`, which `buildStack` has already sorted; this function makes no
+ * ordering decisions of its own and must not start making any. That separation is what lets the
+ * order be asserted in Node — Pixi cannot be pixel-tested, so the only way the two backends can be
+ * known to agree about depth is for neither of them to decide it.
+ */
+function drawStack(
+  context: PlanContext,
+  rendered: RenderScene,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+): void {
+  const shadow = pass.assets?.(CONTACT_SHADOW_SPRITE)[0] ?? null;
+
+  for (const node of rendered.stack) {
+    drawStackNode(context, node, rendered, pass, light, toPx, rasterOrigin, shadow);
+  }
+}
+
+/**
+ * One standing thing.
+ *
+ * Exported because Pixi draws the same node into a raster of its own: the plants there are batched
+ * WebGL sprites, and everything else — a house, a shed, four fence runs, a couple of retaining
+ * walls — is a handful of objects a frame, which is far too few to be worth a second painter. So
+ * Pixi calls this, and there is exactly one implementation of what a shed looks like.
+ */
+export function drawStackNode(
+  context: PlanContext,
+  node: RenderNode,
+  rendered: RenderScene,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+  shadow: LoadedAsset | null,
+): void {
+  switch (node.kind) {
+    case 'plant':
+      drawPlantNode(context, node, pass, light, toPx, shadow);
+      return;
+    case 'object':
+      drawObjectNode(context, node, pass, light, toPx, rasterOrigin);
+      return;
+    case 'extrusion':
+      drawExtrusionNode(context, node, pass, light, toPx, rasterOrigin);
+      return;
+    case 'house':
+      drawHouseNode(context, node, pass, toPx);
+      return;
+  }
+}
+
+/**
+ * The visible faces of anything raised, and the strip of ground at its foot.
+ *
+ * The foot band is not decoration. A wall running up and down the screen is seen exactly edge-on
+ * and has no face at all — the honest consequence of lifting straight up the screen — so without a
+ * mark where it meets the ground it would appear to hover. The band is the same class of drawing
+ * convention as the contact shadow under a sprite: it says "this meets the ground here", and says
+ * nothing about the sun.
+ */
+function paintFaces(
+  context: PlanContext,
+  extrusion: Extrusion,
+  tone: string,
+  skin: FaceSkin | null,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+  contact = true,
+): void {
+  if (extrusion.height <= 0) return;
+
+  const depth = footBandDepth(extrusion.height);
+
+  context.globalAlpha = 0.14;
+  context.fillStyle = SHADOW_TONE;
+  for (const face of contact ? extrusion.faces : []) {
+    tracePath(context, footBand(face.base[0], face.base[1], depth), toPx);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+
+  /* Far to near, as `extrude` sorted them: on a concave outline that is what stops a near limb's
+   * face showing through a far one's. */
+  for (const face of extrusion.faces) {
+    if (skin && paintSkinnedFace(context, face, extrusion.height, tone, skin, pxPerMetre, toPx)) {
+      continue;
+    }
+    context.fillStyle = faceFill(tone, face.lit);
+    tracePath(context, face.quad, toPx);
+    context.fill();
+  }
+}
+
+/** A material photographed flat, and the real size one tile of it covers. */
+interface FaceSkin {
+  image: AssetImage;
+  metres: { w: number; h: number };
+}
+
+/**
+ * One face, with its material tiled along it at the material's real size.
+ *
+ * ## The frame, which is the whole of this function
+ *
+ * A face is a **parallelogram**: its base runs along the wall at whatever angle the wall is, and
+ * its height runs straight up the screen regardless. Those two axes are not perpendicular, so no
+ * amount of translate-and-rotate reaches them — which is why `PatternContext` grew a `transform`.
+ *
+ * Given the matrix, everything else is easy and, more to the point, *correct*: inside it one unit
+ * is one metre along the wall and one metre up it, so a tile is drawn at its manifest size and a
+ * 120 mm board is 120 mm on every wall of every building at every rotation. Tiling in screen space
+ * instead would have run the boards across the drawing rather than along the wall.
+ *
+ * Returns false when the tile would be too small to read, which is the same judgement `lod.ts`
+ * makes everywhere else: below a couple of pixels a board is noise, and the flat fill is the
+ * better drawing.
+ */
+function paintSkinnedFace(
+  context: PlanContext,
+  face: Extrusion['faces'][number],
+  height: number,
+  tone: string,
+  skin: FaceSkin,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): boolean {
+  const { metres } = skin;
+  if (metres.w <= 0 || metres.h <= 0) return false;
+  // How tall the face is on screen, in pixels — the axis the lift squashes.
+  if (height * RISE * pxPerMetre < MIN_SKINNED_FACE_PX) return false;
+
+  const [start, end] = face.base;
+  const from = toPx(start);
+  const to = toPx(end);
+  const along = { x: (to.x - from.x) / face.length, y: (to.y - from.y) / face.length };
+  const top = toPx(lift(start, height));
+
+  context.save();
+  tracePath(context, face.quad, toPx);
+  context.clip();
+  /* u runs along the wall, v runs down it from the eaves. One unit is one metre in both. */
+  context.transform(along.x, along.y, 0, RISE * pxPerMetre, top.x, top.y);
+
+  const phase = (face.skinOffset ?? 0) % metres.w;
+  const columns = Math.ceil((face.length + phase) / metres.w);
+  const rows = Math.ceil(height / metres.h);
+  for (let column = 0; column < columns; column += 1) {
+    for (let row = 0; row < rows; row += 1) {
+      // The cast is the type being narrower than the runtime, as everywhere else in this file.
+      context.drawImage(
+        skin.image as PatternCanvas,
+        column * metres.w - phase,
+        row * metres.h,
+        metres.w,
+        metres.h,
+      );
+    }
+  }
+
+  /* The light, and the material's own tone: the skin is photographed flat because only the
+   * renderer knows which way this face points. */
+  context.globalAlpha = FACE_SKIN_TINT;
+  context.fillStyle = faceFill(tone, face.lit);
+  context.fillRect(0, 0, face.length, height);
+  context.globalAlpha = 1;
+
+  context.restore();
+  return true;
+}
+
+/** Below this a face is too shallow on screen to show a material, and a flat tone reads better. */
+const MIN_SKINNED_FACE_PX = 3;
+
+/**
+ * What a thing's vertical faces are made of.
+ *
+ * Each answer comes from what the renderer already knows about the object rather than from a new
+ * table: a boundary has a `BoundaryKind`, a retaining wall and a building have a **material the
+ * user chose**, and only the house — which has no material, because it is not an element — needs a
+ * named default.
+ *
+ * That ordering matters. A shed the user made of painted timber shows painted boards, because
+ * `MATERIAL_ASSETS` already holds the photograph of that product; it is not overridden by a generic
+ * fence skin just because both are timber. `null` is the ordinary answer and means a flat tone,
+ * which is what everything drew before any of this existed.
+ */
+function skinFor(source: ExtrusionSource, pass: PlanPass): FaceSkin | null {
+  const id =
+    source.of === 'boundary'
+      ? BOUNDARY_SKINS[source.run.kind]
+      : source.of === 'level'
+        ? faceAssetFor(source.level.surface?.element.material)
+        : source.of === 'edging'
+          ? faceAssetFor(source.surface.element.material)
+          : faceAssetFor(source.element.material);
+
+  return loadSkin(id, pass);
+}
+
+/** A material's own face photograph, or the tile it is drawn with when it has no modular face. */
+function faceAssetFor(material: string | undefined): AssetId | undefined {
+  const assets = materialAssets(material);
+  return assets?.face ?? assets?.texture;
+}
+
+function loadSkin(id: AssetId | undefined, pass: PlanPass): FaceSkin | null {
+  if (!id) return null;
+  const loaded = pass.assets?.(id)[0];
+  if (!loaded) return null;
+  return { image: loaded.image, metres: ASSET_FAMILIES[id].metres };
+}
+
+/**
+ * A built thing: its walls, and then the plan's own drawing of it sitting on top of them.
+ *
+ * The second half is the part worth understanding. Because the lift is a rigid translation, the top
+ * of an extruded prism is its own footprint moved up the screen — so **the plan picture is the top
+ * of the elevated picture**, and every symbol the flat view already knows how to draw (a shed's two
+ * roof slopes, a gazebo's four hips, a pergola's beams, a retaining wall's top course) is drawn by
+ * the code that already draws it, into a translated context. No symbol needed a second version.
+ */
+function drawExtrusionNode(
+  context: PlanContext,
+  node: RenderExtrusionNode,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+): void {
+  const { extrusion, source } = node;
+  if ((node.contribution === 'post' || node.contribution === 'beam') && source.of === 'element') {
+    const tone = materialFill(source.element);
+    paintFaces(context, extrusion, tone, skinFor(source, pass), pass.pxPerMetre, toPx, false);
+    context.fillStyle = rgbToCss(shiftBrightness(cssToRgb(tone), node.contribution === 'beam' ? 0.07 : -0.12));
+    tracePath(context, extrusion.top, toPx); context.fill();
+    return;
+  }
+
+  /*
+   * A flight of steps is the one thing here that is not a prism: it descends. Handled before the
+   * faces are painted, because a single block the height of the top step is not a smaller version
+   * of a flight, it is a different object.
+   */
+  if (source.of === 'element' && resolveSymbol(source.element) === 'steps') {
+    drawFlight(context, source.element, source.surface, pass, light, toPx, rasterOrigin);
+    return;
+  }
+
+  const tone =
+    source.of === 'element'
+      ? materialFill(source.element)
+      : source.of === 'boundary'
+        ? BOUNDARY_PALETTE[source.run.kind].body
+        : source.of === 'edging'
+          ? materialFill(source.surface.element)
+          : source.level.colour;
+
+  paintFaces(context, extrusion, tone, skinFor(source, pass), pass.pxPerMetre, toPx, pass.contactShadows !== false);
+
+  context.save();
+  context.translate(0, -liftPx(extrusion.height, pass.pxPerMetre));
+
+  if (source.of === 'edging') {
+    drawSurface(context, source.surface, pass, light, toPx, rasterOrigin);
+  } else if (source.of === 'element') {
+    const roofed = drawRoofedStructure(
+      context,
+      source.element,
+      source.surface,
+      pass,
+      light,
+      toPx,
+      rasterOrigin,
+    );
+    if (!roofed) {
+      drawItem(
+        context,
+        { element: source.element, part: 'all', surface: source.surface, visualLayer: 'structure' },
+        pass,
+        light,
+        toPx,
+        rasterOrigin,
+      );
+    }
+  } else if (source.of === 'boundary') {
+    drawBoundaryTop(context, source.run, source.inward, extrusion, pass.pxPerMetre, toPx, node.parentRun);
+  } else if (source.level.surface) {
+    if (pass.contactShadows === false) drawLinearCourse(context,
+      { surface: source.level.surface, course: compileLinearCourse(source.level.surface) }, pass, rasterOrigin);
+    else drawSurface(context, source.level.surface, pass, light, toPx, rasterOrigin);
+  } else {
+    context.fillStyle = source.level.colour;
+    tracePath(context, source.level.outline, toPx);
+    context.fill();
+  }
+
+  context.restore();
+}
+
+/**
+ * A flight of steps, descending.
+ *
+ * ## Why this is not an extrusion
+ *
+ * Everything else that stands up is a prism: one footprint, one height, faces round the sides. A
+ * flight is not. Raised as a prism it comes out a solid block the height of its top step, which
+ * hides the fact that it is a flight at all — and the whole reason a flight exists in the plan is
+ * to *resolve* a level change, so drawing it as a block is drawing the problem instead of the
+ * answer.
+ *
+ * ## How the treads are worked out
+ *
+ * Every number comes from `stepFlight(element.elevation)`, which is the same function the level
+ * change itself is derived from, so the drawing and the rise cannot disagree. The flight is divided
+ * into `risers` bands along its depth, and band `i` counted from the terrace sits at
+ * `elevation × (risers − i) / risers` — so the first band is flush with the terrace it comes off and
+ * the step down from the last band to the ground is the final riser. `risers` bands, `risers`
+ * risers.
+ *
+ * **The terrace end is the `-depth/2` end**, which is a convention `stepsFromTerrace` sets when it
+ * places the flight just beyond the terrace's far edge with the frame's own bearing, and which
+ * `stepNosings` already relies on when it counts its nosings from that edge.
+ *
+ * Each band is drawn far-to-near so a painter with no depth test gets the right picture, and each
+ * one's tread is the flight's own surface raster clipped to the band and lifted — so the paving runs
+ * continuously up the steps rather than restarting on every one.
+ */
+function drawFlight(
+  context: PlanContext,
+  element: DesignElement,
+  surface: RenderSurface | null,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+): void {
+  const { shape } = element;
+  const flight = stepFlight(element.elevation ?? 0);
+
+  if (shape.kind !== 'rect' || !flight || flight.risers < 1) {
+    drawSurface(context, surface, pass, light, toPx, rasterOrigin);
+    return;
+  }
+
+  const { risers } = flight;
+  const bandDepth = shape.depth / risers;
+  const tone = materialFill(element);
+
+  const bands = Array.from({ length: risers }, (_, i) => {
+    const band: PlanGeometry = {
+      kind: 'rect',
+      centre: rectToPolygonCentre(shape, -shape.depth / 2 + bandDepth * (i + 0.5)),
+      width: shape.width,
+      depth: bandDepth,
+      rotation: shape.rotation,
+    };
+    const outline = geometryOutline(band);
+    return {
+      outline,
+      height: (element.elevation ?? 0) * ((risers - i) / risers),
+      depth: depthOf(outline),
+    };
+  });
+
+  // Far to near, so the riser of a nearer tread covers the one behind it.
+  bands.sort((a, b) => a.depth - b.depth);
+
+  for (const band of bands) {
+    paintFaces(context, extrude(band.outline, band.height, light), tone, null, pass.pxPerMetre, toPx, pass.contactShadows !== false);
+
+    context.save();
+    tracePath(context, band.outline, toPx);
+    context.clip();
+    context.translate(0, -liftPx(band.height, pass.pxPerMetre));
+    if (surface) {
+      drawSurface(context, surface, pass, light, toPx, rasterOrigin);
+    } else {
+      context.fillStyle = tone;
+      tracePath(context, band.outline, toPx);
+      context.fill();
+    }
+    context.restore();
+  }
+}
+
+/**
+ * The centre of a band `offset` metres along the flight's own depth axis, in world metres.
+ *
+ * The rect's local +y is its depth, so a band's centre is the flight's centre moved along that axis
+ * by the rect's own rotation — which is what keeps a flight off a rotated house running the right
+ * way.
+ */
+function rectToPolygonCentre(
+  shape: { centre: Point; rotation: number },
+  offset: number,
+): Point {
+  const angle = (shape.rotation * Math.PI) / 180;
+  return {
+    x: shape.centre.x - Math.sin(angle) * offset,
+    y: shape.centre.y + Math.cos(angle) * offset,
+  };
+}
+
+/**
+ * A garden building: its floor at true size, then its roof oversailing it.
+ *
+ * ## Why this is not just `drawItem`
+ *
+ * A roof is bigger than the walls it sits on, and that one fact is most of what makes a shed read
+ * as a building rather than as an extruded block with a line across it. But only the *roof* may
+ * grow: the deck beneath it is the footprint the validator checked and the area the schedule
+ * counts, and it has to stay exactly the size the document says.
+ *
+ * So the rectangle is grown **here, once, for the symbol only**, and every roof painter —
+ * `drawShed`, `drawGazebo`, `drawGardenRoom`, `drawGreenhouse` — draws from its element's own rect
+ * exactly as it always has, knowing nothing about any of this. Threading an overhang through
+ * `drawSymbol` and into five painters would have been the same picture and five more places to get
+ * it wrong.
+ *
+ * Returns false for anything that is not a roofed building, so the caller falls back to the
+ * ordinary path: a pergola is an open frame and an oversailing eaves line round thin air would be
+ * a claim about a roof it does not have.
+ */
+function drawRoofedStructure(
+  context: PlanContext,
+  element: DesignElement,
+  surface: RenderSurface | null,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+): boolean {
+  const symbol = resolveSymbol(element);
+  const { shape } = element;
+  if (!symbol || !ROOFED_SYMBOLS.has(symbol) || shape.kind !== 'rect') return false;
+
+  const grown: DesignElement = {
+    ...element,
+    shape: {
+      ...shape,
+      width: shape.width + STRUCTURE_OVERHANG * 2,
+      depth: shape.depth + STRUCTURE_OVERHANG * 2,
+    },
+  };
+
+  /*
+   * **The boarding is drawn to the roof's extent, not to the footprint's**, and this is the whole
+   * subtlety of giving a garden building an overhang.
+   *
+   * `drawShed` washes its two pitches over the boards at `ROOF_ALPHA` rather than replacing them,
+   * deliberately, so a shed still reads as timber. That works perfectly while the roof and the
+   * boards are the same rectangle. Grow the roof and the oversailing rim has nothing beneath it, so
+   * the wash composites over whatever the building is standing on — and a shed comes out with a
+   * translucent grey frame round it instead of eaves.
+   *
+   * Drawing the boards to the roof line fixes it and is the truthful drawing: what you are looking
+   * at from above *is* the roof's own boarding. The anchor and seed are the element's own, so the
+   * grain stays continuous and deterministic; the footprint the validator checks and the area the
+   * schedule counts are untouched, because neither of them reads this.
+   */
+  drawSurface(
+    context,
+    surface ? { ...surface, element: grown, outline: elementOutline(grown) } : null,
+    pass,
+    light,
+    toPx,
+    rasterOrigin,
+  );
+
+  drawSymbol(context, grown, pass.pxPerMetre, light, pass.assets, toPx);
+  paintEavesShade(context, elementOutline(grown), toPx);
+  return true;
+}
+
+/**
+ * The strip of shade an oversailing roof throws on the wall under it.
+ *
+ * Drawn **after** the roof and only on the edges the camera can see the outside of, which is the
+ * second attempt and the reason the first was wrong. That one filled the whole roof outline,
+ * offset down the screen, *before* the roof and relied on the roof covering it. That works for the
+ * house, whose roof is opaque, and fails completely for a shed, whose roof is drawn at
+ * `ROOF_ALPHA` **over** its boards on purpose — so the shadow showed straight through it and laid a
+ * grey sheet across the whole building.
+ *
+ * Drawing the sliver explicitly depends on nothing being opaque, which is the only version that can
+ * be right for both.
+ */
+function paintEavesShade(
+  context: PlanContext,
+  eaves: Point[],
+  toPx: (point: Point) => Point,
+): void {
+  context.globalAlpha = EAVES_SHADOW_ALPHA;
+  context.fillStyle = SHADOW_TONE;
+  for (const edge of visibleEdges(eaves)) {
+    tracePath(context, footBand(edge.start, edge.end, EAVES_SHADOW_DEPTH), toPx);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+}
+
+/**
+ * The top of a boundary run: the band you look down on, and its posts.
+ *
+ * A per-run twin of the loop in `drawFence`, rather than a call into it, because the runs are no
+ * longer drawn together — each one now sorts into the stack at its own depth, so the near fence can
+ * be in front of the garden and the far one behind it. The gate gaps are still painted out
+ * afterwards by `drawAccess`, which runs over the whole drawing at the end.
+ */
+function drawBoundaryTop(
+  context: PlanContext,
+  run: BoundaryRun,
+  inward: Point,
+  extrusion: Extrusion,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+  parentRun?: BoundaryRun,
+): void {
+  const palette = BOUNDARY_PALETTE[run.kind];
+  const bandPx = run.thickness * pxPerMetre;
+
+  if (palette.dashed || bandPx < MIN_BAND_PX) {
+    const start = toPx(run.start);
+    const end = toPx(run.end);
+    context.strokeStyle = palette.body;
+    context.lineWidth = palette.dashed ? 1.5 : 2.5;
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(start.x, start.y);
+    context.lineTo(end.x, end.y);
+    context.stroke();
+    return;
+  }
+
+  /* The extrusion's own footprint — `boundaryBand`, already resolved — so the top of the wall and
+   * the faces below it cannot land in different places. */
+  context.fillStyle = palette.body;
+  tracePath(context, extrusion.footprint, toPx);
+  context.fill();
+  if (parentRun) {
+    context.strokeStyle = palette.body; context.lineWidth = 0.75; context.stroke();
+  }
+
+  // A wall's coping: the light line along the top that says masonry rather than timber.
+  if (palette.cap) {
+    const inner = (point: Point) => ({
+      x: point.x + inward.x * run.thickness,
+      y: point.y + inward.y * run.thickness,
+    });
+    const from = toPx(inner(run.start));
+    const to = toPx(inner(run.end));
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.lineWidth = Math.max(1, bandPx * 0.3);
+    context.strokeStyle = palette.cap;
+    context.stroke();
+  }
+
+  if (!palette.detail) return;
+
+  const postRadius = Math.max(1.2, Math.min(3.2, pxPerMetre * 0.05));
+  const posts = runPosts(
+    parentRun ?? run,
+    pxPerMetre,
+    { x: (inward.x * run.thickness) / 2, y: (inward.y * run.thickness) / 2 },
+    crownInset(run),
+  );
+
+  context.fillStyle = palette.detail;
+
+  for (const post of posts) {
+    if (parentRun) {
+      const dx = run.end.x - run.start.x, dy = run.end.y - run.start.y;
+      const t = ((post.x - run.start.x) * dx + (post.y - run.start.y) * dy) / (dx * dx + dy * dy);
+      if (t < -1e-5 || t >= 1 - 1e-5) continue;
+    }
+    const at = toPx(post);
+
+    if (run.kind === 'hedge') {
+      // A hedge's "posts" are its crowns: round, overlapping, and read as one mass.
+      const radius = Math.max(postRadius, bandPx / 2);
+      context.save();
+      context.globalAlpha = 0.75;
+      context.beginPath();
+      context.arc(at.x, at.y, radius, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+      continue;
+    }
+
+    context.fillRect(at.x - postRadius, at.y - postRadius, postRadius * 2, postRadius * 2);
+  }
+}
+
+/**
+ * The house: its ground shadow, its walls, and the plan's own house drawing on top of them.
+ *
+ * `drawHouse` is reused whole, into a context translated up by the eaves height, so the roof
+ * planes, their shading and their slate courses are the same picture the flat view draws — which
+ * is the point of deriving the roof rather than storing one. The openings are not drawn over a
+ * roof, and that rule is already inside `drawHouse`: from directly above you cannot see the doors
+ * beneath one.
+ */
+function drawHouseNode(
+  context: PlanContext,
+  node: RenderHouseNode,
+  pass: PlanPass,
+  toPx: (point: Point) => Point,
+): void {
+  paintFaces(context, node.walls, HOUSE_WALL_TONE, loadSkin(HOUSE_WALL_SKIN, pass), pass.pxPerMetre, toPx, pass.contactShadows !== false);
+  drawWallOpenings(context, node, toPx);
+
+  context.save();
+  context.translate(0, -liftPx(node.walls.height, pass.pxPerMetre));
+
+  drawHouse(context, node.house, pass, pass.pxPerMetre, toPx);
+
+  /*
+   * The shade the eaves throw on the wall beneath them: the second half of what makes a roof read
+   * as a roof, where the oversail is the first. A drawing convention in the `houseGroundShadow`
+   * class, not a solar claim, and unconditional for the same reason — a building casts this
+   * whatever the plan knows about where it is.
+   */
+  if (node.house.roof) paintEavesShade(context, node.house.roof.eaves, toPx);
+
+  context.restore();
+}
+
+/**
+ * The doors and windows, on the wall faces the camera can see.
+ *
+ * This is the one thing the elevated house has that the flat diagram cannot show, and the one that
+ * makes it read as a building rather than as a block with a roof on it. Every number comes from the
+ * document: the opening's own span along its wall, its `sillHeight`, which storey its `floorLevel`
+ * puts it on, and `OPENING_HEIGHTS` for how tall its kind is. Nothing here is invented.
+ *
+ * **Only on a wall the camera can see.** An opening resolves to an outward normal, and a wall whose
+ * normal points away is the back of the building — drawing its windows would put the far side's
+ * glazing on the near side's wall, which is the class of mistake that makes a drawing quietly
+ * untrustworthy. A wall seen edge-on has no face to draw on and is skipped by the same test.
+ *
+ * Note this runs *before* the roof, which is drawn lifted above it: an opening is on the wall, and
+ * a roof that oversails hides the top of a tall one, exactly as it does in life.
+ */
+function drawWallOpenings(
+  context: PlanContext,
+  node: RenderHouseNode,
+  toPx: (point: Point) => Point,
+): void {
+  const storeys = Math.max(1, node.house.house.storeys ?? 2);
+
+  for (const { opening, segment, normal } of node.house.openings) {
+    if (normal.y <= 0) continue;
+
+    const bottom = (opening.floorLevel ?? 0) * STOREY_HEIGHT + (opening.sillHeight ?? 0);
+    const top = bottom + (OPENING_HEIGHTS[opening.type] ?? 1.2);
+    // An opening the building is not tall enough to hold is a stored state a resize can reach.
+    if (top > storeys * STOREY_HEIGHT + 0.4) continue;
+
+    const [a, b] = segment;
+    const span = Math.hypot(b.x - a.x, b.y - a.y);
+    if (span <= 0) continue;
+
+    const along = (t: number): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    const face = (t: number, height: number): Point => lift(along(t), height);
+
+    // The frame: the whole opening, in one piece.
+    context.fillStyle = FRAME_TONE;
+    tracePath(context, [face(0, bottom), face(1, bottom), face(1, top), face(0, top)], toPx);
+    context.fill();
+
+    /* The glazing inside it, in panes. A 2.4 m run of bifolds is not one sheet of glass, and the
+     * mullions are most of what tells a door from a painted panel at this size. */
+
+    /*
+     * **The frame is inset by the same width in two directions that are not the same scale.**
+     *
+     * Along the wall a metre is a metre. Up the wall a metre is `RISE` metres of screen, so a
+     * 90 mm frame section inset by 90 mm of *height* lands at 19 mm on screen — a fifth of a pixel,
+     * which is to say invisible, which is exactly what the first version drew. Dividing by `RISE`
+     * asks for 90 mm **as seen**, which is what a frame has to be to read as one.
+     */
+    const insetAlong = Math.min(FRAME_WIDTH, span / 4);
+    const insetUp = Math.min(FRAME_WIDTH / RISE, (top - bottom) / 4);
+    const glassBottom = bottom + insetUp;
+    const glassTop = top - insetUp;
+    if (glassTop <= glassBottom) continue;
+
+    const panes = Math.max(1, Math.round(span / MAX_PANE_WIDTH));
+    const edge = insetAlong / span;
+
+    context.fillStyle = GLAZING_TONE;
+    for (let i = 0; i < panes; i += 1) {
+      const from = edge + ((1 - 2 * edge) * i) / panes + (i > 0 ? edge / 2 : 0);
+      const to = edge + ((1 - 2 * edge) * (i + 1)) / panes - (i < panes - 1 ? edge / 2 : 0);
+      tracePath(
+        context,
+        [face(from, glassBottom), face(to, glassBottom), face(to, glassTop), face(from, glassTop)],
+        toPx,
+      );
+      context.fill();
+    }
+  }
+}
+
+/**
+ * A sprite that stands up: a tree, a bench, a light fitting.
+ *
+ * ## The interim, and why it is drawn this way
+ *
+ * With an elevated asset the placement is trivial and exact — the sprite's frame carries the
+ * object's height above its own footprint, so it is drawn at its anchor and the picture is right.
+ * Until that art exists the library holds a photograph taken from **directly above**, which is a
+ * different thing: it is the whole object flattened onto its own footprint.
+ *
+ * Lifting such a photograph by half the object's height is the honest approximation. The object's
+ * true silhouette runs from its footprint up to the footprint plus its lift, and the middle of that
+ * band is where a flattened picture of it belongs. It reads as a thing standing up, stays attached
+ * to the ground it stands on, and needs no new art — so every existing plan gains depth the moment
+ * the view is switched on.
+ *
+ * **Except for anything drawn on a point.** A tree is a trunk on the recorded spot with a canopy
+ * offset from it, and a shrub photograph is centred on its own stem; lifting either detaches it
+ * from the ground it is standing on and, for a tree, from its own trunk. Those stay where they are
+ * and get their depth from `trunkAndCanopy`'s parallax, which already exists.
+ */
+function drawObjectNode(
+  context: PlanContext,
+  node: RenderObjectNode,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  rasterOrigin: Point,
+): void {
+  if (drawElevatedObject(context, node, pass, light, toPx)) return;
+
+  const lift =
+    node.item.element.shape.kind === 'point' ? 0 : liftPx(node.height / 2, pass.pxPerMetre);
+
+  context.save();
+  context.translate(0, -lift);
+  drawItem(context, node.item, pass, light, toPx, rasterOrigin);
+  context.restore();
+}
+
+/**
+ * The real thing: an object drawn from art taken at the scene's own camera.
+ *
+ * Returns false when there is no elevated twin for this element, or its files have not been
+ * generated, or it has not finished loading — all three being the same answer, which is what lets
+ * the library arrive one family at a time and lets the whole app work with no library at all.
+ *
+ * The footprint handed to `elevatedPlacement` is the **geometry of record**, never the sprite's
+ * natural size: a rect's own width and depth, a point's diameter. The asset is fitted inside that,
+ * exactly as `spriteBox` has always fitted a plan sprite — what differs is only that an elevated
+ * image is taller than its footprint, and `elevatedFrame` is where that is known.
+ */
+function drawElevatedObject(
+  context: PlanContext,
+  node: RenderObjectNode,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+): boolean {
+  const { element } = node.item;
+  const family = elevatedFamilyFor(element);
+  if (!family) return false;
+
+  const variants = pass.assets?.(family) ?? [];
+  if (!variants.length) return false;
+  const sprite = pick(variants, moduleRandom(element.id, 0, 0)());
+
+  const { shape } = element;
+  const footprint =
+    shape.kind === 'rect'
+      ? { width: shape.width, depth: shape.depth }
+      : shape.kind === 'point'
+        ? { width: shape.radius * 2, depth: shape.radius * 2 }
+        : null;
+  if (!footprint) return false;
+
+  const placement = elevatedPlacement(family, elementAnchor(element), footprint);
+  if (!placement) return false;
+
+  /*
+   * Free rotation for a rect, none for a point. A rect's rotation is a fact about the design — a
+   * dining set laid along its terrace — and the face it turns is `height × RISE`, a few pixels of
+   * shading. A point has no rotation of its own to honour.
+   */
+  const rotation = shape.kind === 'rect' ? (shape.rotation * Math.PI) / 180 : 0;
+
+  drawElevatedSprite(context, sprite, placement, rotation, pass, light, toPx);
+  return true;
+}
+
+/**
+ * One elevated image: its contact shadow on the ground, then the picture standing on it.
+ *
+ * The shadow is drawn at the **anchor**, not at the middle of the image, and that is the whole
+ * point of the anchor existing. A seven-metre tree's image is mostly canopy reaching up the screen;
+ * a shadow centred on it would sit in mid-air, halfway up the trunk.
+ */
+function drawElevatedSprite(
+  context: PlanContext,
+  sprite: LoadedAsset,
+  placement: ElevatedPlacement,
+  rotation: number,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+): void {
+  const shadow = pass.assets?.(CONTACT_SHADOW_SPRITE)[0] ?? null;
+  const foot = toPx(placement.pivot);
+
+  if (shadow) {
+    // Sized on the footprint the thing stands on, which is the width of its image.
+    const radius = (placement.width / 2) * pass.pxPerMetre;
+    const reach = radius * CONTACT_SHADOW_SCALE;
+    const offset = radius * CONTACT_SHADOW_OFFSET_RATIO;
+    context.globalAlpha = CONTACT_SHADOW_ALPHA;
+    context.drawImage(
+      shadow.image as PatternCanvas,
+      foot.x - light.x * offset - reach,
+      foot.y - light.y * offset - reach,
+      reach * 2,
+      reach * 2,
+    );
+    context.globalAlpha = 1;
+  }
+
+  const at = toPx({ x: placement.x, y: placement.y });
+  const width = placement.width * pass.pxPerMetre;
+  const height = placement.height * pass.pxPerMetre;
+
+  context.save();
+  // Turned about where it stands, so the foot holds still whatever the rotation is.
+  context.translate(foot.x, foot.y);
+  context.rotate(rotation);
+  context.translate(-foot.x, -foot.y);
+  context.drawImage(sprite.image as PatternCanvas, at.x, at.y, width, height);
+  context.restore();
+}
+
+/**
+ * One instanced plant, lifted off the shadow it stands on.
+ *
+ * The shadow stays on the ground and the plant rises a little way off it, which is the whole trick:
+ * the gap between the two *is* the height, and it costs one translate. Same reasoning as
+ * `drawObjectNode`'s interim, applied to the thousands rather than to the tens.
+ */
+function drawPlantNode(
+  context: PlanContext,
+  node: RenderPlantNode,
+  pass: PlanPass,
+  light: Point,
+  toPx: (point: Point) => Point,
+  shadow: LoadedAsset | null,
+): void {
+  const { plant } = node;
+  const at = toPx(plant.at);
+  const radius = (plant.spread / 2) * pass.pxPerMetre;
+  // Below a pixel and a half a plant is not a plant, it is noise on the ground it stands on.
+  if (radius * 2 < MIN_DRAWN_UNIT_PX) return;
+
+  const variants = plant.assetId ? (pass.assets?.(plant.assetId) ?? []) : [];
+  const sprite = variants.find((asset) => asset.entry.variant === plant.variant) ?? variants[0];
+
+  /*
+   * The elevated path, when this plant's family has been drawn at the scene's own camera: the
+   * image carries the plant's height above its own footprint, so it is placed on its anchor and
+   * nothing is lifted. Falls through to the interim below for a plan sprite.
+   */
+  const placement = sprite
+    ? elevatedPlacement(plant.assetId, plant.at, { width: plant.spread, depth: plant.spread })
+    : null;
+  if (sprite && placement) {
+    drawElevatedSprite(context, sprite, placement, plant.rotation, pass, light, toPx);
+    return;
+  }
+
+  const lift = liftPx(plant.height / 2, pass.pxPerMetre);
+
+  /*
+   * The shadow on the ground and the plant above it, drawn as two calls rather than one.
+   *
+   * `drawSprite` does both together at one point, which is right when a sprite lies flat on its own
+   * footprint. Here the gap between them *is* the height, so they need different y values — and the
+   * shadow must stay where the plant stands, not follow it up the screen.
+   */
+  if (shadow) {
+    const reach = radius * CONTACT_SHADOW_SCALE;
+    const offset = radius * CONTACT_SHADOW_OFFSET_RATIO;
+    context.globalAlpha = CONTACT_SHADOW_ALPHA;
+    // The cast is the type being narrower than the runtime: `drawImage` takes both, and the
+    // composer's own overload names only the canvas it composites layers from.
+    context.drawImage(
+      shadow.image as PatternCanvas,
+      at.x - light.x * offset - reach,
+      at.y - light.y * offset - reach,
+      reach * 2,
+      reach * 2,
+    );
+    context.globalAlpha = 1;
+  }
+
+  if (sprite) {
+    drawSprite(context, sprite, null, at.x, at.y - lift, radius, plant.rotation, light);
+    return;
+  }
+
+  drawBlob(context, {
+    light,
+    form: plant.blob.form,
+    x: at.x,
+    y: at.y - lift,
+    radius,
+    lobes: plant.blob.lobes,
+    tone: cssToRgb(pick(plant.blob.palette, plant.tone)),
+    random: moduleRandom(
+      `${plant.blob.seed}:blob`,
+      Math.round(plant.at.x * 100),
+      Math.round(plant.at.y * 100),
+    ),
+  });
 }
 
 /**
@@ -914,12 +2127,14 @@ function drawHouse(
    * rather than in the cast-shadow layer because it is unconditional — the cast layer only exists
    * when the plan knows where on Earth it is, and a house has to look like a house either way.
    */
-  context.save();
-  context.globalAlpha = HOUSE_SHADOW_ALPHA;
-  tracePath(context, houseGroundShadow(outline, pass.light ?? LIGHT_DIRECTION), toPx);
-  context.fillStyle = SHADOW_TONE;
-  context.fill();
-  context.restore();
+  if (pass.contactShadows !== false) {
+    context.save();
+    context.globalAlpha = HOUSE_SHADOW_ALPHA;
+    tracePath(context, houseGroundShadow(outline, pass.light ?? LIGHT_DIRECTION), toPx);
+    context.fillStyle = SHADOW_TONE;
+    context.fill();
+    context.restore();
+  }
 
   /*
    * A roof, where there is one: Visualise only. A flat grey rectangle is parsed by the eye as

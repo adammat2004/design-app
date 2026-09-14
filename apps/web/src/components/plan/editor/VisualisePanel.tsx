@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useEffect, useRef } from 'react';
 import { MATURITY_LABELS, MATURITY_ORDER } from '@/lib/render/maturity';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
@@ -31,9 +32,24 @@ function clockLabel(minutes: number): string {
 export function VisualisePanel() {
   const sun = useBoundaryStore((state) => state.present.sun);
   const hasLocation = useBoundaryStore((state) => state.present.location !== null);
-  const setSun = useBoundaryStore((state) => state.setSun);
+  const previewMinutes = usePlanEditorStore((state) => state.previewMinutes);
+  const setPreviewMinutes = usePlanEditorStore((state) => state.setPreviewMinutes);
+  const minutes = previewMinutes ?? sun.minutes;
   const maturity = usePlanEditorStore((state) => state.maturity);
   const setMaturity = usePlanEditorStore((state) => state.setMaturity);
+  const pendingTime = useRef<number | null>(null);
+  const timeFrame = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timeFrame.current !== null) cancelAnimationFrame(timeFrame.current);
+  }, []);
+  const previewTime = (value: number) => {
+    pendingTime.current = value;
+    if (timeFrame.current !== null) return;
+    timeFrame.current = requestAnimationFrame(() => {
+      timeFrame.current = null;
+      if (pendingTime.current !== null) setPreviewMinutes(pendingTime.current);
+    });
+  };
 
   return (
     <div
@@ -82,12 +98,12 @@ export function VisualisePanel() {
               min={0}
               max={MINUTES_IN_DAY - 15}
               step={15}
-              value={sun.minutes}
+              value={minutes}
               data-testid="sun-time"
-              onChange={(event) => setSun({ minutes: Number(event.target.value) })}
+              onChange={(event) => previewTime(Number(event.target.value))}
               className="w-40 accent-garden-green"
             />
-            <span className="w-10 tabular-nums text-garden-muted">{clockLabel(sun.minutes)}</span>
+            <span className="w-10 tabular-nums text-garden-muted">{clockLabel(minutes)}</span>
           </label>
         ) : (
           <p className="text-xs text-garden-muted">
