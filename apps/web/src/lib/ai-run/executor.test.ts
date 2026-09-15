@@ -20,7 +20,7 @@ import {
   polylineLength,
   shortestArc,
 } from './interpolate';
-import { prepareRun, type PreparedRun } from './prepare';
+import { MAX_RUN_MS, prepareRun, type PreparedRun } from './prepare';
 
 const PLOT: Point[] = [
   { x: 0, y: 0 },
@@ -304,6 +304,64 @@ describe('prepareRun', () => {
 
     expect(prepared.phases.map((span) => span.phase)).toEqual(['analyse', 'layout']);
   });
+
+  /*
+   * Twelve intents in one request compiles to more than anybody will sit and watch. Skip is always
+   * there, but a control the user has to reach for because the default pacing is wrong is a default
+   * that is wrong.
+   */
+  describe('a run too long to watch', () => {
+    /** Enough moves to blow past the cap several times over. */
+    const long = () =>
+      Array.from({ length: 40 }, (_unused, index) =>
+        op({
+          id: `m${index}`,
+          kind: 'move',
+          elementId: 'e-1',
+          to: { x: 10, y: 4 + (index % 3) },
+        }),
+      );
+
+    it('is squeezed into the budget', () => {
+      const prepared = prepare(long(), [patio()]);
+
+      expect(prepared.total).toBeLessThanOrEqual(MAX_RUN_MS);
+      expect(prepared.total).toBeGreaterThan(0);
+    });
+
+    /*
+     * Scaled, not truncated. Zeroing the tail collapses several operations onto one instant and
+     * makes the last thing the user sees a jump — which is the "spinner then a jump" this whole
+     * feature exists to replace.
+     */
+    it('keeps every operation in order, and none of them instant', () => {
+      const prepared = prepare(long(), [patio()]);
+
+      for (let i = 1; i < prepared.operations.length; i += 1) {
+        expect(prepared.operations[i]!.start).toBeGreaterThan(prepared.operations[i - 1]!.start);
+      }
+      for (const operation of prepared.operations) {
+        expect(operation.end).toBeGreaterThan(operation.start);
+      }
+    });
+
+    it('leaves a run that already fits exactly as it was', () => {
+      const short = [op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 10, y: 6 } })];
+      const prepared = prepare(short, [patio()]);
+
+      expect(prepared.total).toBe(prepared.operations[0]!.end);
+      expect(Number.isInteger(prepared.total)).toBe(true);
+    });
+
+    /** The plan it lands on is the same plan either way: pacing is presentation. */
+    it('changes nothing about what the garden ends up as', () => {
+      const squeezed = prepare(long(), [patio()]);
+      const shape = squeezed.result[0]!.shape as Extract<PlanGeometry, { kind: 'rect' }>;
+
+      expect(squeezed.result).toHaveLength(1);
+      expect(shape.centre.y).toBe(4 + (39 % 3));
+    });
+  });
 });
 
 /* ---------------------------------------------------------------- evaluate */
@@ -563,7 +621,12 @@ describe('the controller', () => {
     expect(finished).toEqual(['complete']);
   });
 
-  it('puts the plan back as it was found when it is stopped', () => {
+  it('keeps what has landed when it is stopped, and abandons the rest', () => {
+    /*
+     * Stop used to restore the run's starting point. It reads as the safer answer and is the worse
+     * one: a Stop that discards teaches people not to press it. Only settled operations are in the
+     * plan, so what stays is a garden the run actually described; going back is Undo's job.
+     */
     const prepared = twoMoves();
     const { commits, finished, clock, controller } = harness(prepared);
     controller.play();
@@ -571,29 +634,21 @@ describe('the controller', () => {
 
     controller.cancel();
 
-    expect(commits.at(-1)!.elements).toBe(prepared.initial);
+    expect(commits.map((entry) => entry.index)).toEqual([0]);
+    expect(commits.at(-1)!.elements[0]!.shape).toMatchObject({ centre: { x: 10, y: 8 } });
     expect(finished).toEqual(['cancelled']);
   });
 
-  it('restores what a replay was asked to protect, not where the replay started', () => {
-    // Stopping a replay half way must not throw away the redesign being replayed.
-    const prepared = twoMoves();
-    const already = prepared.result;
-    const clock = manualClock();
-    const commits: DesignElement[][] = [];
-    const controller = createRunController({
-      prepared,
-      clock,
-      plot: PLOT,
-      restoreTo: already,
-      sink: { commit: (elements) => commits.push(elements), frame: () => {}, select: () => {}, finished: () => {} },
-    });
-
+  it('commits nothing at all when it is stopped before the first operation lands', () => {
+    const { commits, finished, clock, controller } = harness(twoMoves());
     controller.play();
-    clock.advance(300);
+    clock.advance(100);
+
     controller.cancel();
 
-    expect(commits.at(-1)).toBe(already);
+    // Nothing had settled, so there is nothing to keep — and still no restore commit.
+    expect(commits).toEqual([]);
+    expect(finished).toEqual(['cancelled']);
   });
 
   it('selects what the agent is working on, and clears it at the end', () => {

@@ -124,6 +124,47 @@ describe('IntentService', () => {
     expect(body.output_config.format.schema).toBe(INTENT_JSON_SCHEMA);
   });
 
+  /**
+   * "A bit more" is the second thing anybody types, and with no history it refers to nothing.
+   *
+   * Quoted under a heading rather than replayed as alternating turns, because the designer's
+   * previous replies describe a garden that has since been redrawn — sent as assistant turns they
+   * read as statements of current fact and compete with the inventory, which is the only
+   * description of the plan that is still true.
+   */
+  it('gives the model the conversation, ahead of the inventory', async () => {
+    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+
+    await service.interpret('a bit more', plan(), [
+      { role: 'user', text: 'make the seating area bigger' },
+      { role: 'assistant', text: "I'll enlarge the terrace." },
+    ]);
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+
+    expect(prompt).toContain('They said: make the seating area bigger');
+    expect(prompt).toContain("You said: I'll enlarge the terrace.");
+    /* We said this, the garden is now that, they want this — in that order. */
+    expect(prompt.indexOf('EARLIER IN THIS CONVERSATION')).toBeLessThan(prompt.indexOf('id=e-1'));
+    expect(prompt.indexOf('id=e-1')).toBeLessThan(prompt.indexOf('The user says'));
+    /* One user turn still, so the cached system block stays the only thing above it. */
+    expect((create.mock.calls[0]![0] as { messages: unknown[] }).messages).toHaveLength(1);
+  });
+
+  /* A heading with nothing under it invites the model to wonder what was withheld. */
+  it('says nothing about a conversation that has not happened', async () => {
+    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+
+    await service.interpret('make it bigger', plan());
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+    expect(prompt).not.toContain('EARLIER IN THIS CONVERSATION');
+  });
+
   it('does not tell the model any coordinates', async () => {
     const create = vi.fn(() => message(JSON.stringify(envelope)));
     const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
@@ -282,16 +323,51 @@ describe('IntentService', () => {
 describe('the hand-written JSON Schema agrees with the Zod schema', () => {
   const intentBranches = INTENT_JSON_SCHEMA.properties.intents.items.anyOf;
 
+  /**
+   * The property the whole hybrid rests on, asserted structurally rather than trusted.
+   *
+   * "The assistant never writes coordinates" is not a prompt instruction here — there is nowhere in
+   * a `DesignIntent` to put one, so the model could not say where anything goes even if it tried.
+   * Walking the schema is what keeps that true the next time the vocabulary grows: `reshape` takes
+   * a distance and `move` takes an element's id, both of which are relations, and either could have
+   * been written as a point by somebody in a hurry.
+   */
+  it('gives the model nowhere to put a coordinate', () => {
+    const banned = new Set(['x', 'y', 'at', 'centre', 'center', 'points', 'position', 'coordinates']);
+    const seen: string[] = [];
+
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (const entry of node) walk(entry);
+        return;
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'properties' && value && typeof value === 'object') {
+          seen.push(...Object.keys(value));
+        }
+        walk(value);
+      }
+    };
+
+    walk(INTENT_JSON_SCHEMA);
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.filter((name) => banned.has(name))).toEqual([]);
+  });
+
   it('describes every intent kind the Zod union accepts', () => {
     const kinds = intentBranches.map((branch) => branch.properties.kind.const);
 
     expect([...kinds].sort()).toEqual([
       'add',
+      'attach',
       'material',
       'move',
       'recategorise',
       'reduce-cost',
       'remove',
+      'reshape',
       'resize',
     ]);
   });
@@ -311,15 +387,29 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
       },
       { kind: 'remove', target: { elementIds: ['e-1'] } },
       { kind: 'reduce-cost', maxChanges: 3 },
+      {
+        kind: 'move',
+        target: { elementIds: ['e-1'] },
+        towards: 'element',
+        elementId: 'e-2',
+        away: false,
+      },
+      { kind: 'reshape', target: { elementIds: ['e-1'] }, edge: 'towards-house', metres: 1.5 },
+      { kind: 'attach', target: { elementIds: ['e-1'] } },
     ];
 
-    // One at a time: there are seven branches and an envelope takes at most six intents.
+    // One at a time: there are nine branches and an envelope takes at most twelve intents.
     for (const example of examples) {
       expect(DesignIntentSchema.safeParse(example).success, example.kind).toBe(true);
     }
   });
 
-  /* Six is the cap, because a single sentence that produced more is a sentence to push back on. */
+  /*
+   * Twelve is the cap. It was six, which is a sentence's worth of *one* change — and "make this
+   * better for entertaining" is legitimately a terrace, a pergola, two paths and the lighting, so
+   * the old cap turned a whole answer into an arbitrary half of one. It is still a cap: a request
+   * that compiles to more than twelve is one to push back on rather than perform.
+   */
   it('caps how much one message can propose', () => {
     const resize = { kind: 'resize', target: { elementIds: ['e-1'] }, factor: 1.2 };
 
@@ -330,8 +420,8 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
         suggestions: ['a', 'b', 'c'],
       }).success;
 
-    expect(envelopeOf(6)).toBe(true);
-    expect(envelopeOf(7)).toBe(false);
+    expect(envelopeOf(12)).toBe(true);
+    expect(envelopeOf(13)).toBe(false);
   });
 
   it('offers the model only materials and zones that exist', () => {

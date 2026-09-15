@@ -19,6 +19,7 @@ import { toHttpException } from '../intent.service.js';
 import { GARDEN_ACTION_JSON_SCHEMA } from './garden-action-schema.js';
 import { renderGardenInventory } from './garden-inventory.js';
 import { GARDEN_RULES } from './garden-rules.js';
+import { logAssistantUsage } from '../usage.js';
 
 /**
  * The second, and only other, place in the codebase that talks to a language model.
@@ -86,6 +87,9 @@ export class GardenIntentService {
           },
         ],
       });
+
+      /* Measured before the refusal check: a refused turn still cost tokens. See `usage.ts`. */
+      logAssistantUsage('Garden assistant', response, this.logger);
 
       // Before `content`, always: a declined request is a successful HTTP response with an empty
       // or partial body, and indexing into it is how that becomes a crash.

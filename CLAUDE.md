@@ -241,18 +241,29 @@ are both outside the design agent's reach as it stands: too many materials in on
 `materialFor` question, and seating in shade on a north-facing plot wants a *second* sitting area in
 the sun rather than a displaced terrace.
 
-**No _automated_ Anthropic call has ever been made** — every assistant test injects a fake client
+**No Anthropic call is made by the test suite** — every assistant test injects a fake client
 (`Pick<Anthropic, 'messages'>`), constructing real `Anthropic.*Error` classes only to check the
-error mapping. Everything up to the request is exercised. That now covers **three** assistants, the
+error mapping. Everything up to the request is exercised. That covers **three** assistants, the
 third being the strategic brief on the generation path, which is off by default and falls back to the
-deterministic brief on every failure. Of the other two: the
-garden assistant's model call has never been made either, and its deterministic half
-(`anchors.ts`, `garden-planner.service.ts`) is tested against real PostGIS with no model at all,
-which is the point of the split. `apps/api/.env` now carries a key and
-`ASSISTANT_ENABLED` is unset (so, enabled), which means the running app _is_ live-capable; whether
-a real call has been made through the UI is not something the repository records. The first one is
-still worth watching — check `usage.cache_read_input_tokens` before claiming the caching win.
-Server-side `fallbacks` remains off for the same reason: it cannot be tested here.
+deterministic brief on every failure. The garden assistant's deterministic half (`anchors.ts`,
+`garden-planner.service.ts`) is tested against real PostGIS with no model at all, which is the point
+of the split. `apps/api/.env` carries a key and `ASSISTANT_ENABLED` is unset (so, enabled), so the
+running app is live-capable. Server-side `fallbacks` remains off because it cannot be tested here.
+
+**The prompt cache has now been measured, and it works — _this reverses_ "may never hit".**
+Two calls with the identical system prefix, against `claude-opus-5`:
+
+```
+call 1   input=14  cache_write=1417  cache_read=0
+call 2   input=14  cache_write=0     cache_read=1417
+```
+
+So the breakpoint on `ASSISTANT_RULES` writes on the first call of a window and reads the whole
+prefix back on the next. **The estimate that said otherwise was wrong twice over**: it guessed ~800
+tokens from a characters-over-four heuristic (4,176 chars ≈ 1,044 by that rule) where the real
+tokenisation is **1,417** — comfortably over the 1,024-token minimum, and further over it since the
+tone, vocabulary and conversation sections were added. Do not re-derive this from character counts;
+`logAssistantUsage` reports it on every call now.
 
 ## Decisions worth knowing
 
@@ -1491,10 +1502,11 @@ builder", which is deliberately a different value from handing back the fallback
 its briefs against its own slot's constraints, so passing the fallback down would quietly replace a
 per-concept reading with slot A's and change what the generator drew with the feature switched off.
 
-**No real call has been made.** Everything up to the request and everything after the response is
-exercised with a fake client, as it is for the other two assistants — but the first live call is
-still worth watching, and `usage.cache_read_input_tokens` is the number to check before claiming the
-caching win.
+**No real call has been made on this path.** Everything up to the request and everything after the
+response is exercised with a fake client, as it is for the other two assistants. Its own usage is
+reported by `logAssistantUsage` when it does run, and this is the call where the numbers matter most
+for cost: it happens once per *generation* rather than once per question, and step 4 generates the
+moment a user arrives on it.
 
 ## Visual AI agents: watching the plan being redesigned
 
@@ -1675,11 +1687,153 @@ across four fixtures all three give **the same total to four decimal places and 
 principle reads the fields that vary. Offering the parameter would have been a setting the design
 ignores. There is a test pinning the limitation so it fails the day it stops being true.
 
-**What is not built:** the planner still has no `reshape`, `reroute`, `rotate` or attached-move
-intent, which is what keeps four of the seven unperformable repairs unperformable; and a vision
-critic returning `DesignIssue[]` in the same schema is untouched. Revisions are session memory —
-Replay does not survive a reload, deliberately, for the same reason undo history does not. All in
-TODOS.md.
+**What is not built:** the planner has no `reroute` or `rotate` intent, which is what keeps three of
+the seven unperformable repairs unperformable; and a vision critic returning `DesignIssue[]` in the
+same schema is untouched. All in TODOS.md.
+
+## One design agent: talking to the thing that does the work
+
+**There were two AI panels on the editor and they did not know about each other.** "Ask Garden
+Studio" was a chat that handed you a textual diff to tick and Apply; "AI designer" was a control
+surface that could play a scripted demonstration or a review and nothing else. So the thing you
+could talk to could not act, and the thing you could watch acting could not be talked to.
+`DesignAgentPanel` is the join, and `AssistantPanel.tsx` and `AiActivityPanel.tsx` are gone.
+
+**Sending performs. _This reverses_ the approve-first note above**, and the reversal is only
+defensible because the net underneath it was built first — it did not exist as described:
+
+- **The gesture bracket was per _run_, not per request.** A sentence the reviewer then corrected
+  twice opened three brackets, so `endGesture` wrote three undo entries and one press of Undo took
+  back only the reviewer's last tweak. `beginSentence` / `endSentence` on `ai-run-store` now wrap
+  the request's run *and* every review pass. One bracket per thing the user said is the only version
+  where "Undo takes the whole thing back" is true.
+- **Stop deleted its own Undo.** `finish('cancelled')` set `revision: null`, and `undoRun` returns
+  early without one — so the panel's offer to put it back was a sentence the product could not
+  honour. Stop now keeps what has landed and writes a revision; `DesignRevision.complete` is what
+  stops Replay offering to run the part the user stopped, and the Replay button is disabled on it
+  rather than live and inert.
+- **A revision died with the tab.** A redesign autosaves within the second, so a request the
+  designer misread was unrecoverable after a reload. `layout.revision` persists one.
+
+**The reviewer's wind-back cannot use the undo stack, and that is not an implementation detail.**
+Inside a sentence the bracket is still open, so nothing about the run has reached `past` — `undo()`
+would pop the entry *before* the sentence and take back an edit the user made by hand.
+`undoLastRun` winds the elements back directly instead. Neither route emits telemetry: **the
+reviewer winding back its own work is not a person rejecting the design**, in the one table that is
+supposed to record what people did.
+
+**The review pass that follows a request is scoped to what the request touched.** Asking for a
+bigger terrace and watching the designer go on to move the store and rewrite the lighting is the
+moment the user stops feeling they are driving. Faults outside the scope come back as `offers` —
+chips carrying their own intents — and an offer whose `subjects` are not element ids is **dropped at
+build time**, because `DesignIssue.subjects` is documented as "element ids where they exist, else
+zone ids or feature names" and a chip that silently does nothing is worse than an absent one. The
+scorer still reads the whole element list: scope decides what may be *acted on*, never what may be
+looked at, or a subset would quietly change what composition is being judged.
+
+**`composeOutcome` counts the garden, not the proposal.** The old `summarise` counted
+`ProposedChange[]` — a claim about an outcome made before anything was attempted — so a request
+whose last two lines the planner refused still announced four changes. It counts *elements that are
+different*, because one line of a proposal can produce two operations and one operation can be played
+and wound back, and neither is a change to the garden. `DesignRun.summary` is now left unset by
+`runFromProposal`: a run cannot honestly describe its own result before it has run.
+
+**Failures land in the bubble already on screen.** A separate error line beside a stranded
+"thinking…" bubble is two pieces of state saying different things about one request — and the
+abandoned bubble then goes into the history as something the designer supposedly said. A failed turn
+is also left *out* of the history sent back: it carries a transport message, and quoting it as the
+designer's own words is how a model comes to apologise for an outage it had no part in.
+
+**Four turns of memory ship with the panel, not after it.** "A bit more" is the second thing anybody
+types and with no history it resolves to nothing. Quoted under a heading in the one user turn rather
+than replayed as alternating turns: **the designer's previous replies describe a garden that has
+since been redrawn**, so sent as assistant turns they read as current fact and compete with the
+inventory, which is the only description of the plan that is still true. History goes *before* the
+inventory — we said this, the garden is now that, they want this.
+
+**`GET /plan-projects/assistant/availability` is declared above the `:id` routes**, or Nest matches
+`:id/...` first and `ParseUUIDPipe` rejects "availability" as a 400. It cannot tell a missing key
+from a transient upstream failure — `toHttpException` maps four states to 503 — so the no-key copy
+is shown only when the probe says so at load, and a 503 mid-conversation renders as a failed message.
+A probe that cannot reach the server leaves `available` **null**, not false: an API that is not
+running yet is not evidence about a key.
+
+**Reduced motion is a first-class path, and it is why `applyProposal` survived the tick-and-apply
+UI.** With `prefers-reduced-motion: reduce` the changes land at once through it instead of
+animating — same bracket, same outcome message. Without it the feature is unusable for anyone with
+vestibular sensitivity, who would otherwise have twenty seconds of movement they cannot opt out of.
+`applyProposal` gained `withinGesture` for exactly this: a nested `endGesture` would close the
+sentence early and split it into two undo entries.
+
+**The demonstration goes through the conversation rather than round the side of it.** It was a button
+that started a run on its own, which left the user with a garden changing, nothing saying why, no
+Stop, and no record afterwards. `playRun` gives it the same bubbles, bracket and outcome every other
+request gets, and it still calls no model — which is what keeps it working on a machine with no key.
+
+**`MAX_RUN_MS` is 25 s and a long run is _scaled_, not truncated.** Twelve intents compile to more
+than anybody will sit and watch. Zeroing the tail was the first design and is worse twice over: it
+collapses several operations onto one instant, and it makes the last thing the user sees a jump —
+which is the "spinner then a jump" this whole feature exists to replace. Scaling preserves every
+ordering and gap in proportion.
+
+**The at-work block is one element in two placements.** Sticky to the bottom of the transcript on a
+wide screen; below `lg` the whole panel sits *under* the canvas and off the fold, so it becomes a bar
+fixed to the bottom of the viewport — the one position Stop is always reachable from. A pinned copy
+plus a static copy would be two things saying the same thing, and they would disagree the moment one
+missed a frame. It also stays mounted after the run ends, because "stopped" is part of what that
+message has to report. `devIndicators.position` moved to `top-right` because Next's dev overlay owns
+the bottom-left corner the product now uses.
+
+**Three intents were added, and each closes a request the vocabulary could not express:**
+
+- **`reshape`** — move one side of an outline. "Make the border deeper" is not a `resize`: a resize
+  scales about the anchor, so a bed running the width of the garden comes back longer as well.
+  `edge` is a *relation* (towards or away from the house), never a screen axis, because a plot can be
+  drawn at any angle. **Both halves or neither**: the ground it gains is taken off the neighbour with
+  `FillService.subtract`, or the reshape is refused — a border deepened into a lawn that kept its
+  outline is two elements claiming one piece of ground, and because the bed draws over the lawn it
+  *looks* right, so nothing on screen would say the plan had stopped being true.
+- **`attach`** — "take the furniture with it". Meaningful only beside a move or resize in the same
+  request, so `Context.pending` carries elements as the intents so far will leave them. It emits
+  **nothing** when the host did not move: a no-op line would be a change on the diff, an operation on
+  the canvas and a count in the outcome, all for nothing happening.
+- **`move` towards an element** — "nearer the seating", which the house, the fence and a zone
+  centroid cannot express. Named by id, so still a relation.
+
+**`clearOfOthers` now ignores anything standing on the element.** A dining set on a terrace overlaps
+that terrace by design, so counting it as an obstacle made every furnished surface immovable and
+unresizable — the planner refused with "there is no room around it to grow into" about a table the
+user could see was on top of it. That is the fault `attach` exists to answer and it could not be
+reached while the move was refused first.
+
+**`polygonsIntersect` is the wrong predicate for "does the reshape take ground off this".** It
+excludes touching, and a border and the lawn in front of it habitually share their left and right
+edges exactly: every corner lands *on* the other's outline, nothing strictly crosses, and it answers
+"no overlap" about two shapes that plainly meet. A bounding-box pre-filter (conservative, can only
+over-include) plus the PostGIS difference is what decides. Same shape of trap as `ST_Overlaps`.
+
+**`pushEdge` refuses a fold, and comparing the overall spread does not catch one.** A 1.5 m border
+pulled back 3 m has a spread of 1.5 again with its two sides swapped — an outline folded through
+itself, which has a perfectly ordinary vertex list and a quietly wrong area, so nothing downstream
+would report it. The moved side has to still be on the far side of the one that stayed. Same class of
+fault as `setEdgeLength`'s bow tie.
+
+**The persisted revision is reachable, and until it was the promise it carries was untrue.**
+`layout.revision` is written on every sentence and autosaves within the second, but the undo *stack*
+deliberately does not survive a reload and the in-message controls read the run store, which is empty
+on a fresh page. So the record sat in the document with nothing able to act on it — the "tick the
+design ignores" defect again, and this one mattered because "a misread request is recoverable after a
+reload" is half of what made removing the approve-first step defensible. `CarriedOverRevision` offers
+it, on three conditions that each rule out a state where the offer would be wrong: no session
+revision (the message that produced it already carries Undo), the fingerprint still matches
+(`undoRevision` refuses otherwise, so the button would do nothing), and there is a record at all.
+
+**Every model call reports what it cost, and the cache measurement is done.** `logAssistantUsage`
+(`assistant/usage.ts`) is shared by all three assistants — counts only, never the prompt or the key,
+and it **never throws**, because it runs on the success path of a request somebody is waiting on. It
+warns in words when a declared breakpoint neither wrote nor read, which is the finding that would
+otherwise be a zero easy to read past. The measurement itself is in the "prompt cache" note near the
+top of this file: it works, and the estimate that said it might not was wrong.
 
 ## The garden assistant
 

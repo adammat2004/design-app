@@ -26,13 +26,20 @@ export function SelectedElementPanel() {
   const element = usePlanEditorStore(selectedElement);
   const unit = useBoundaryStore((state) => state.unit);
   return (
-    <section data-testid="selected-element" className="bg-white">
-      <div className="flex h-11 items-center border-b border-garden-line px-5">
+    <section
+      data-testid="selected-element"
+      className={
+        element
+          ? 'flex min-h-0 flex-col overflow-hidden rounded-xl border border-garden-line bg-white shadow-sm lg:min-h-[12rem] lg:flex-1'
+          : 'shrink-0 rounded-xl border border-garden-line bg-white shadow-sm'
+      }
+    >
+      <div className="flex h-11 shrink-0 items-center border-b border-garden-line px-5">
         <h2 className="border-b-2 border-garden-green py-3 text-xs font-semibold text-garden-forest">
           Edit
         </h2>
       </div>
-      <div className="p-5">
+      <div className={element ? 'min-h-0 flex-1 overflow-y-auto p-5' : 'p-5'}>
         {element ? (
           <ElementDetails key={element.id} element={element} unit={unit} />
         ) : (

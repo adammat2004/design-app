@@ -127,6 +127,49 @@ async function terraceArea(page: Page, id: string): Promise<number> {
   return parsed;
 }
 
+function boxesOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function boxContains(
+  outer: { x: number; y: number; width: number; height: number },
+  inner: { x: number; y: number; width: number; height: number },
+  slack = 1,
+): boolean {
+  return (
+    inner.x >= outer.x - slack &&
+    inner.y >= outer.y - slack &&
+    inner.x + inner.width <= outer.x + outer.width + slack &&
+    inner.y + inner.height <= outer.y + outer.height + slack
+  );
+}
+
+/**
+ * The designer used to collapse inside a scrolling inspector and paint its chips over Edit.
+ * Both panes must stay in the column, and the composer has to stay inside the designer card.
+ */
+async function assertInspectorPanesDoNotOverlap(page: Page): Promise<void> {
+  const designer = await page.getByTestId('design-agent-panel').boundingBox();
+  const edit = await page.getByTestId('selected-element').boundingBox();
+  expect(designer).not.toBeNull();
+  expect(edit).not.toBeNull();
+  expect(boxesOverlap(designer!, edit!)).toBe(false);
+
+  const suggestions = page.getByTestId('assistant-suggestions');
+  if (await suggestions.isVisible()) {
+    const suggestionsBox = await suggestions.boundingBox();
+    expect(suggestionsBox).not.toBeNull();
+    expect(boxContains(designer!, suggestionsBox!)).toBe(true);
+  }
+
+  const send = await page.getByTestId('assistant-send').boundingBox();
+  expect(send).not.toBeNull();
+  expect(boxContains(designer!, send!)).toBe(true);
+}
+
 test('the AI designer visibly redesigns the plan, and the plan is still the user\'s afterwards', async ({ page }) => {
   test.setTimeout(120_000);
   const errors = await openEditor(page);
@@ -153,6 +196,8 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   // The garden actually changed, and the change is in the document rather than only on screen.
   const areaAfter = await terraceArea(page, terrace.id);
   expect(areaAfter).toBeGreaterThan(areaBefore);
+  await expect(page.getByTestId('assistant-suggestions')).toBeVisible();
+  await assertInspectorPanesDoNotOverlap(page);
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
 
   // Compare shows the plan as it was, and changes neither the plan nor its history.
@@ -169,7 +214,19 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   expect(errors).toEqual([]);
 });
 
-test('a redesign can be stopped, and leaves nothing behind', async ({ page }) => {
+test('the designer and the selected-element editor do not overlap', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = await openEditor(page);
+
+  const terrace = terraceOf(originalLayout);
+  await terraceArea(page, terrace.id);
+  await expect(page.getByTestId('assistant-suggestions')).toBeVisible();
+  await assertInspectorPanesDoNotOverlap(page);
+
+  expect(errors).toEqual([]);
+});
+
+test('a stopped redesign keeps what it had already done, and Undo takes it back', async ({ page }) => {
   test.setTimeout(120_000);
   const errors = await openEditor(page);
 
@@ -178,13 +235,28 @@ test('a redesign can be stopped, and leaves nothing behind', async ({ page }) =>
 
   await page.getByTestId('ai-demo-run').click();
   await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'running');
-  await page.getByTestId('ai-stop').click();
 
+  /*
+   * Stop *after* something has landed. Stopping in the first moment proves nothing — the earlier
+   * version of this test did exactly that and passed whichever way Stop behaved, because the
+   * analyse sweep runs for over a second before the first operation commits anything.
+   */
+  await expect(page.getByTestId('ai-stage-circulation')).toHaveAttribute(
+    'data-state',
+    /current|done/,
+    { timeout: 30_000 },
+  );
+  await page.getByTestId('ai-stop').click();
   await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'cancelled');
+
+  // The layout work it had finished is still there: "stop" means "seen enough", not "undo it all".
+  const areaStopped = await terraceArea(page, terrace.id);
+  expect(areaStopped).toBeGreaterThan(areaBefore);
+
+  // And there is a way back, which is the half that used to be missing.
+  await page.getByTestId('ai-undo').click();
   expect(await terraceArea(page, terrace.id)).toBeCloseTo(areaBefore, 1);
 
-  // Stopping is not an edit: there is nothing on the undo stack to take back.
-  await page.getByTestId('editor-canvas').click({ position: { x: 5, y: 5 } });
   expect(errors).toEqual([]);
 });
 
@@ -261,6 +333,101 @@ test('the design reviewer reads the plan and acts on what it finds', async ({ pa
   await expect(page.getByTestId('ai-review')).toBeEnabled();
   await expect(page.getByTestId('continue')).toBeEnabled();
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+
+  expect(errors).toEqual([]);
+});
+
+/**
+ * The state a marker's machine is actually in.
+ *
+ * `ANTHROPIC_API_KEY` blank is a supported state, not a failure — `pnpm dev` and the whole test
+ * suite work without one. What must not happen is the user typing a request, waiting, and being
+ * told it failed: the panel asks the server up front and says so instead. The availability answer
+ * is stubbed rather than the server restarted, because what is under test is the screen.
+ */
+test('says the designer needs a key rather than failing a request', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.route('**/plan-projects/assistant/availability', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"model":false}' }),
+  );
+
+  const errors = await openEditor(page);
+
+  await expect(page.getByTestId('assistant-empty')).toContainText('needs an API key');
+  await expect(page.getByTestId('assistant-input')).toBeDisabled();
+
+  // The reviewer is a scorer and a planner with no model in it, so it still works.
+  await expect(page.getByTestId('ai-review')).toBeEnabled();
+
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Below `lg` the designer's panel is under the canvas and off the fold.
+ *
+ * Which would leave somebody watching their garden being rewritten with the Stop button somewhere
+ * down the page. This is the one piece of narrow-width behaviour in scope, and it is the one that
+ * matters: everything else on this screen can be scrolled to at leisure.
+ */
+test('keeps Stop reachable on a narrow window', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await openEditor(page);
+
+  await page.getByTestId('ai-demo-run').click();
+  await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'running');
+
+  await page.setViewportSize({ width: 800, height: 700 });
+
+  // Visible without scrolling: the block is fixed to the bottom of the viewport at this width.
+  const stop = page.getByTestId('ai-stop');
+  await expect(stop).toBeInViewport();
+  await stop.click();
+  await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'cancelled');
+
+  expect(errors).toEqual([]);
+});
+
+/**
+ * The half of the persisted revision that had no way back to it.
+ *
+ * `layout.revision` autosaves within the second of a redesign, but the undo *stack* deliberately
+ * does not survive a reload and the in-message controls read session state. So the record sat in
+ * the document unreachable, and "a misread request is recoverable after a reload" — half of what
+ * makes performing-on-send defensible — was not true. This is the test that says it is.
+ */
+test('a redesign can still be undone after a reload', async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors = await openEditor(page);
+
+  const terrace = terraceOf(originalLayout);
+  const areaBefore = await terraceArea(page, terrace.id);
+
+  await page.getByTestId('ai-demo-run').click();
+  await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'running');
+  await page.getByTestId('ai-skip').click();
+  await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'complete');
+
+  const areaAfter = await terraceArea(page, terrace.id);
+  expect(areaAfter).toBeGreaterThan(areaBefore);
+
+  // The record has to be on the server before the reload, or there is nothing to come back to.
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+
+  await page.reload();
+  await expect(page.getByTestId('editor-concept-name')).toBeVisible();
+  await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();
+
+  // The garden is still the redesigned one, and the offer names what was asked for.
+  expect(await terraceArea(page, terrace.id)).toBeCloseTo(areaAfter, 1);
+  const offer = page.getByTestId('ai-carried-revision');
+  await expect(offer).toBeVisible();
+
+  await page.getByTestId('ai-undo-carried').click();
+
+  expect(await terraceArea(page, terrace.id)).toBeCloseTo(areaBefore, 1);
+  // Spent: taking it once leaves nothing to take twice.
+  await expect(offer).toBeHidden();
 
   expect(errors).toEqual([]);
 });

@@ -1,4 +1,9 @@
-import { leavesOf, type AssistantProposal, type DesignRun } from '@garden-studio/schema';
+import {
+  leavesOf,
+  type AssistantProposal,
+  type DesignElement,
+  type DesignRun,
+} from '@garden-studio/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/plan-api';
 import {
@@ -7,19 +12,27 @@ import {
   useAssistantStore,
   type AssistantMessage,
 } from './assistant-store';
-import { useAiRunStore } from './ai-run-store';
+import { resetAiRunStoreForTests, useAiRunStore } from './ai-run-store';
+import { resetPlanEditorStoreForTests, usePlanEditorStore } from './plan-editor-store';
 import { setProjectRevision } from './revision';
 
-/*
- * Two things are mocked, for two different reasons. The API client, so a test can hand back a
- * proposal or a status code without a server; and `flushAll`, so the ordering assertion below has
+/**
+ * The design agent's send pipeline, one test per edge of it.
+ *
+ * Three things are mocked, for three different reasons. The API client, so a test can hand back a
+ * proposal or a status code without a server. `flushAll`, so the ordering assertion below has
  * something to observe — the flush is the part of `send` that is easy to delete by accident and
- * impossible to notice, because the only symptom is an assistant answering about a slightly older
- * garden.
+ * impossible to notice, because the only symptom is a designer answering about a slightly older
+ * garden. And the run store's `playAndWait`, because the executor has its own suite and what is
+ * under test here is the tail either side of it.
  */
 vi.mock('@/lib/plan-api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/plan-api')>('@/lib/plan-api');
-  return { ...actual, proposeChanges: vi.fn() };
+  return {
+    ...actual,
+    proposeChanges: vi.fn(),
+    assistantAvailability: vi.fn(async () => ({ model: true })),
+  };
 });
 
 vi.mock('./project-sync', () => ({ flushAll: vi.fn() }));
@@ -32,9 +45,34 @@ const flushAll = vi.mocked(sync.flushAll);
 /** Everything that happened, in order, so the flush-before-request rule can be asserted. */
 let calls: string[] = [];
 
+const patio: DesignElement = {
+  id: 'e-1',
+  category: 'paved-area',
+  role: 'feature',
+  name: 'Seating patio',
+  zone: 'back',
+  shape: { kind: 'rect', centre: { x: 6, y: 6 }, width: 4, depth: 3, rotation: 0 },
+} as DesignElement;
+
+const bigger = {
+  ...patio,
+  shape: { kind: 'rect' as const, centre: { x: 6, y: 6 }, width: 5, depth: 4, rotation: 0 },
+} as DesignElement;
+
+const resizeChange = {
+  id: 'ch1',
+  kind: 'resize' as const,
+  elementId: 'e-1',
+  label: 'Seating patio',
+  before: '12 m²',
+  after: '20 m²',
+  previous: patio,
+  next: bigger,
+};
+
 function proposal(over: Partial<AssistantProposal> = {}): AssistantProposal {
   return {
-    reply: 'I have proposed one change.',
+    reply: "I'll enlarge the terrace.",
     changes: [],
     suggestions: ['Make it cheaper', 'More lawn', 'Add privacy'],
     unplaceable: [],
@@ -50,9 +88,47 @@ function assistantMessages(): AssistantMessage[] {
   );
 }
 
+/** The last thing the designer said, which is the bubble every outcome is written into. */
+function reply(): AssistantMessage {
+  const all = assistantMessages();
+  return all[all.length - 1]!;
+}
+
+/**
+ * Stands in for the run engine: the plan lands where the run would have left it.
+ *
+ * The real executor is exercised by `executor.test.ts` against a manual clock; what matters here is
+ * that the tail before and after it does the right thing with whatever it reports.
+ */
+function stubRun(options: { result?: DesignElement[]; status?: 'complete' | 'cancelled' } = {}) {
+  const played = vi.fn(async (_run: DesignRun) => {
+    if (options.result) {
+      usePlanEditorStore.setState((current) => ({
+        present: { ...current.present, elements: options.result! },
+      }));
+    }
+    return options.status ?? ('complete' as const);
+  });
+  vi.spyOn(useAiRunStore.getState(), 'playAndWait').mockImplementation(played);
+  return played;
+}
+
+/** The reviewer, answering with nothing to do unless a test says otherwise. */
+function stubReview() {
+  const reviewed = vi.fn(async () => null);
+  vi.spyOn(useAiRunStore.getState(), 'review').mockImplementation(reviewed);
+  return reviewed;
+}
+
 beforeEach(() => {
   calls = [];
+  vi.restoreAllMocks();
   resetAssistantStoreForTests();
+  resetAiRunStoreForTests();
+  resetPlanEditorStoreForTests();
+  usePlanEditorStore.setState((current) => ({
+    present: { ...current.present, elements: [patio] },
+  }));
   setProjectRevision({ projectId: 'p-1', revision: 4 });
 
   flushAll.mockReset().mockImplementation(async () => {
@@ -71,30 +147,73 @@ afterEach(() => {
 
 describe('sending', () => {
   it('shows the question immediately and the answer when it arrives', async () => {
+    stubReview();
     await store().send('make the patio bigger');
 
     expect(store().messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(store().messages[0].text).toBe('make the patio bigger');
-    expect(store().pending).toBe(false);
+    expect(store().messages[0]!.text).toBe('make the patio bigger');
+    expect(reply().text).toBe("I'll enlarge the terrace.");
+    expect(store().phase).toBe('idle');
   });
 
-  it('sends only the sentence, against the loaded plan', async () => {
+  it('sends the sentence and the conversation, against the loaded plan', async () => {
+    stubReview();
     await store().send('  use gravel instead of paving  ');
 
-    expect(proposeChanges).toHaveBeenCalledWith('p-1', 'use gravel instead of paving');
+    expect(proposeChanges).toHaveBeenCalledWith(
+      'p-1',
+      'use gravel instead of paving',
+      [],
+      expect.any(AbortSignal),
+    );
   });
 
   /**
-   * The request carries no geometry, so the assistant reads whatever is stored. An edit still
+   * "A bit more" is the second thing anybody types. With no history it resolves to nothing at all,
+   * which is why memory shipped with the panel rather than after it.
+   */
+  it('sends the last few turns with the next request', async () => {
+    stubReview();
+    await store().send('make the patio bigger');
+    await store().send('a bit more');
+
+    const history = proposeChanges.mock.calls[1]![2]!;
+    expect(history).toEqual([
+      { role: 'user', text: 'make the patio bigger' },
+      { role: 'assistant', text: "I'll enlarge the terrace." },
+    ]);
+  });
+
+  /**
+   * A failed turn carries a transport message, not something the designer said about the garden.
+   * Quoting it back as its own words is how a model comes to apologise for an outage.
+   */
+  it('leaves a failed turn out of the history', async () => {
+    proposeChanges.mockRejectedValueOnce(new ApiError(503, 'nope'));
+    await store().send('make the patio bigger');
+
+    stubReview();
+    await store().send('try again');
+
+    /* The first request survives; the failure notice it produced does not. */
+    expect(proposeChanges.mock.calls[1]![2]).toEqual([
+      { role: 'user', text: 'make the patio bigger' },
+    ]);
+  });
+
+  /**
+   * The request carries no geometry, so the designer reads whatever is stored. An edit still
    * sitting in the autosave debounce would mean it answers about a garden the user cannot see.
    */
   it('flushes unsaved edits before asking', async () => {
+    stubReview();
     await store().send('make the patio bigger');
 
     expect(calls).toEqual(['flush', 'propose']);
   });
 
   it('ignores an empty message and a second send while one is in flight', async () => {
+    stubReview();
     await store().send('   ');
     expect(proposeChanges).not.toHaveBeenCalled();
 
@@ -105,69 +224,160 @@ describe('sending', () => {
     expect(proposeChanges).toHaveBeenCalledTimes(1);
   });
 
-  it('ticks every proposed line to start with', async () => {
-    const element = {
-      id: 'p1',
-      category: 'paved-area' as const,
-      role: 'feature' as const,
-      name: 'Seating patio',
-      shape: {
-        kind: 'rect' as const,
-        centre: { x: 3, y: 3 },
-        width: 3,
-        depth: 2,
-        rotation: 0,
-      },
-      zone: 'left' as const,
-    };
-
-    proposeChanges.mockResolvedValue(
-      proposal({
-        changes: [
-          {
-            id: 'c1',
-            kind: 'resize',
-            elementId: 'p1',
-            label: 'Seating patio',
-            before: '3.0 × 2.0 m',
-            after: '3.8 × 2.5 m',
-            previous: element,
-            next: element,
-          },
-        ],
-      }),
-    );
-
-    await store().send('make the patio bigger');
-
-    expect(assistantMessages()[0].accepted).toEqual({ c1: true });
-  });
-
   it('keeps what could not be placed, with the planner’s reason', async () => {
+    stubReview();
     proposeChanges.mockResolvedValue(
       proposal({
         unplaceable: [
-          {
-            description: 'Shed 2.0 × 1.5 m',
-            reason: 'There is no clear space in the front garden.',
-          },
+          { description: 'Shed 2.0 × 1.5 m', reason: 'There is no clear space in the front garden.' },
         ],
       }),
     );
 
     await store().send('put a shed in the front garden');
 
-    expect(assistantMessages()[0].unplaceable).toHaveLength(1);
+    expect(reply().unplaceable).toHaveLength(1);
+    /* And it reaches the outcome, which is what the panel actually shows. */
+    expect(reply().outcome?.refused).toEqual([
+      { label: 'Shed 2.0 × 1.5 m', reason: 'There is no clear space in the front garden.' },
+    ]);
   });
 });
 
-describe('when the assistant cannot answer', () => {
+describe('the phases of one request', () => {
+  /** One row per edge of the send pipeline, in the order they must occur. */
+  it('goes thinking, performing, reviewing, idle', async () => {
+    const seen: string[] = [];
+    const unsubscribe = useAssistantStore.subscribe((state) => {
+      if (seen[seen.length - 1] !== state.phase) seen.push(state.phase);
+    });
+
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger] });
+    stubReview();
+
+    await store().send('make the patio bigger');
+    unsubscribe();
+
+    expect(seen).toEqual(['thinking', 'performing', 'reviewing', 'idle']);
+  });
+
+  it('marks the bubble at each stage rather than adding a new one', async () => {
+    const statuses: string[] = [];
+    const unsubscribe = useAssistantStore.subscribe((state) => {
+      const last = state.messages[state.messages.length - 1];
+      if (last?.role === 'assistant' && statuses[statuses.length - 1] !== last.status) {
+        statuses.push(last.status);
+      }
+    });
+
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger] });
+    stubReview();
+
+    await store().send('make the patio bigger');
+    unsubscribe();
+
+    expect(statuses).toEqual(['thinking', 'performing', 'reviewing', 'done']);
+    expect(assistantMessages()).toHaveLength(1);
+  });
+
+  /** A question is a real answer. Nothing is performed and nothing claims to have been. */
+  it('performs nothing when the model returned no changes', async () => {
+    const played = stubRun();
+    stubReview();
+
+    await store().send('what is the terrace made of?');
+
+    expect(played).not.toHaveBeenCalled();
+    expect(reply().status).toBe('done');
+    expect(reply().outcome?.text).toBe('Nothing on the plan changed.');
+  });
+
+  it('says what a stopped run kept, and does not then review it', async () => {
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger], status: 'cancelled' });
+    const reviewed = stubReview();
+
+    await store().send('make the patio bigger');
+
+    expect(reply().status).toBe('stopped');
+    expect(reply().outcome?.stopped).toBe(true);
+    expect(reply().outcome?.text).toContain('Stopped part way');
+    /* The user has just said they have seen enough; more unasked-for work is the opposite. */
+    expect(reviewed).not.toHaveBeenCalled();
+  });
+
+  /**
+   * One bracket over the whole sentence — the run *and* every review pass — so Undo takes the
+   * request back rather than the reviewer's last tweak.
+   */
+  it('opens exactly one sentence and closes it', async () => {
+    const begin = vi.spyOn(useAiRunStore.getState(), 'beginSentence');
+    const end = vi.spyOn(useAiRunStore.getState(), 'endSentence');
+
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger] });
+    stubReview();
+
+    await store().send('make the patio bigger');
+
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(end).toHaveBeenCalledWith('make the patio bigger');
+  });
+
+  it('closes the sentence even when the request fails', async () => {
+    const end = vi.spyOn(useAiRunStore.getState(), 'endSentence');
+    proposeChanges.mockRejectedValue(new ApiError(502, 'nope'));
+
+    await store().send('make the patio bigger');
+
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(store().phase).toBe('idle');
+  });
+
+  it('refuses to start over a gesture somebody else is holding', async () => {
+    usePlanEditorStore.getState().beginGesture();
+
+    await store().send('make the patio bigger');
+
+    expect(proposeChanges).not.toHaveBeenCalled();
+    expect(reply().status).toBe('failed');
+    expect(reply().text).toContain('Finish the change');
+  });
+
+  it('scopes the review to the elements the request touched', async () => {
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger] });
+    const reviewed = stubReview();
+
+    await store().send('make the patio bigger');
+
+    expect(reviewed).toHaveBeenCalledWith({ subjects: ['e-1'] });
+  });
+
+  it('turns the proposal into operations rather than applying it', async () => {
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    const played = stubRun({ result: [bigger] });
+    stubReview();
+
+    await store().send('make the patio bigger');
+
+    const run = played.mock.calls[0]![0];
+    // The same edit, as operations: no second request and nothing new on the wire.
+    expect(run.operations.flatMap(leavesOf).map((leaf) => leaf.kind)).toEqual(['select', 'resize']);
+  });
+});
+
+describe('when the designer cannot answer', () => {
   it('reads a 503 as switched off rather than broken', async () => {
     proposeChanges.mockRejectedValue(new ApiError(503, 'Request failed with 503.'));
 
     await store().send('make the patio bigger');
 
-    expect(store().error).toContain('unavailable');
+    expect(reply().status).toBe('failed');
+    expect(reply().text).toContain('unavailable');
   });
 
   it('says something different about being rate limited', async () => {
@@ -175,20 +385,35 @@ describe('when the assistant cannot answer', () => {
 
     await store().send('make the patio bigger');
 
-    expect(store().error).toContain('try again');
+    expect(reply().text).toContain('try again');
   });
 
   /**
-   * No assistant bubble on failure. A fabricated reply in the log would be indistinguishable from
-   * one the model wrote, and the log is the record of how the plan got this way.
+   * The failure lands in the bubble already on screen.
+   *
+   * A separate error line beside a stranded "thinking…" bubble is two pieces of state saying
+   * different things about one request — and the abandoned bubble then goes into the history as
+   * something the designer supposedly said.
    */
-  it('adds no reply to the transcript and stops pending', async () => {
+  it('fails the reply it belongs to, and starts no run', async () => {
+    const played = stubRun();
     proposeChanges.mockRejectedValue(new ApiError(502, 'Request failed with 502.'));
 
     await store().send('make the patio bigger');
 
-    expect(assistantMessages()).toEqual([]);
-    expect(store().pending).toBe(false);
+    expect(assistantMessages()).toHaveLength(1);
+    expect(reply().status).toBe('failed');
+    expect(reply().outcome).toBeNull();
+    expect(played).not.toHaveBeenCalled();
+    expect(store().phase).toBe('idle');
+  });
+
+  it('fails the same way when the network is down', async () => {
+    proposeChanges.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await store().send('make the patio bigger');
+
+    expect(reply().text).toContain('Could not reach');
   });
 
   it('does not ask at all when no plan is loaded', async () => {
@@ -197,21 +422,106 @@ describe('when the assistant cannot answer', () => {
     await store().send('make the patio bigger');
 
     expect(proposeChanges).not.toHaveBeenCalled();
-    expect(store().error).not.toBeNull();
+    expect(reply().status).toBe('failed');
+  });
+});
+
+describe('leaving the screen mid-request', () => {
+  /**
+   * The tail stops where it is. Nothing new starts on a screen nobody is looking at, and the
+   * bracket does not outlive the component that could close it.
+   */
+  it('abandons the tail, starts no run, and closes the bracket', async () => {
+    const played = stubRun({ result: [bigger] });
+    const end = vi.spyOn(useAiRunStore.getState(), 'endSentence');
+
+    /*
+     * The deferred is built up front rather than inside the mock: the request is only issued after
+     * `flushAll` resolves, so a resolver assigned in the executor is still undefined at the moment
+     * a synchronous `abandon()` runs — and the promise would never settle.
+     */
+    let release: (value: AssistantProposal) => void = () => {};
+    const pending = new Promise<AssistantProposal>((resolve) => {
+      release = resolve;
+    });
+    let asked = false;
+    proposeChanges.mockImplementation(() => {
+      asked = true;
+      return pending;
+    });
+
+    const sending = store().send('make the patio bigger');
+    await vi.waitFor(() => expect(asked).toBe(true));
+
+    store().abandon();
+    release(proposal({ changes: [resizeChange] }));
+    await sending;
+
+    expect(played).not.toHaveBeenCalled();
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(store().phase).toBe('idle');
+    /* No invented failure either: nothing went wrong, the screen went away. */
+    expect(reply().status).toBe('thinking');
+  });
+});
+
+describe('when the person has asked not to be animated at', () => {
+  /**
+   * The run applies at once instead of playing. This is why `applyProposal` was kept rather than
+   * deleted with the tick-and-apply UI — without it the feature is unusable for anyone with
+   * vestibular sensitivity.
+   */
+  it('applies the changes with no frames, and reports the same outcome', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+
+    const played = stubRun();
+    stubReview();
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+
+    await store().send('make the patio bigger');
+
+    expect(played).not.toHaveBeenCalled();
+    expect(reply().status).toBe('done');
+    expect(reply().outcome?.changed).toBe(1);
+    /* The garden really did change, rather than the outcome merely saying so. */
+    const shape = usePlanEditorStore.getState().present.elements[0]!.shape;
+    expect(shape).toMatchObject({ width: 5, depth: 4 });
+
+    vi.unstubAllGlobals();
   });
 
-  it('clears the error on the next attempt', async () => {
-    proposeChanges.mockRejectedValueOnce(new ApiError(503, 'Request failed with 503.'));
-    await store().send('make the patio bigger');
-    expect(store().error).not.toBeNull();
+  /** One bracket still, so the whole sentence is one Undo whichever path it took. */
+  it('does not close the sentence bracket when it applies', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: query.includes('reduce'), media: query })),
+    );
 
-    await store().send('try again');
-    expect(store().error).toBeNull();
+    stubReview();
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+
+    const before = usePlanEditorStore.getState().past.length;
+    await store().send('make the patio bigger');
+
+    /* One entry for the sentence, pushed when `endSentence` closed it — never two. */
+    expect(usePlanEditorStore.getState().past.length).toBe(before + 1);
+    expect(usePlanEditorStore.getState().gestureSnapshot).toBeNull();
+
+    vi.unstubAllGlobals();
   });
 });
 
 describe('suggestions', () => {
   it('opens with a generic set and then follows the latest reply', async () => {
+    stubReview();
     const opening = latestSuggestions(store());
     expect(opening.length).toBeGreaterThanOrEqual(3);
 
@@ -226,56 +536,25 @@ describe('suggestions', () => {
   });
 });
 
-describe('watching the changes instead of applying them', () => {
-  const patio = {
-    id: 'e-1', category: 'paved-area', role: 'feature', name: 'Seating patio', zone: 'back',
-    shape: { kind: 'rect', centre: { x: 6, y: 6 }, width: 4, depth: 3, rotation: 0 },
-  };
-  const change = {
-    id: 'ch1', kind: 'resize', elementId: 'e-1', label: 'Seating patio',
-    before: '12 m²', after: '20 m²',
-    previous: patio,
-    next: { ...patio, shape: { kind: 'rect', centre: { x: 6, y: 6 }, width: 5, depth: 4, rotation: 0 } },
-  };
-
-  async function answered() {
-    proposeChanges.mockResolvedValue(proposal({ changes: [change as never] }));
-    await store().send('Make the terrace bigger');
-    return assistantMessages()[0]!;
-  }
-
-  it('hands the accepted lines to the run rather than to the editor', async () => {
-    const message = await answered();
-    const started = vi.fn((_run: DesignRun) => ({ ok: true as const }));
-    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(started);
-
-    store().playMessage(message.id);
-
-    expect(started).toHaveBeenCalledTimes(1);
-    const run = started.mock.calls[0]![0];
-    // The same edit, as operations: no second request and nothing new on the wire.
-    expect(run.operations.flatMap(leavesOf).map((leaf) => leaf.kind)).toEqual(['select', 'resize']);
+describe('availability', () => {
+  it('records that the server has a key', async () => {
+    await store().probeAvailability();
+    expect(store().available).toBe(true);
   });
 
-  it('closes the diff once the run owns the changes', async () => {
-    const message = await answered();
-    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(() => ({ ok: true }));
-
-    store().playMessage(message.id);
-
-    // Leaving Apply live beside a run already performing them invites the plan changing twice.
-    expect(assistantMessages()[0]!.applied).toBe(true);
-    expect(assistantMessages()[0]!.appliedIds).toEqual(['ch1']);
+  it('records that it has none', async () => {
+    vi.mocked(api.assistantAvailability).mockResolvedValueOnce({ model: false });
+    await store().probeAvailability();
+    expect(store().available).toBe(false);
   });
 
-  it('leaves the diff alone when the run was refused', async () => {
-    const message = await answered();
-    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(() => ({
-      ok: false, reason: 'A redesign is already running.',
-    }));
-
-    store().playMessage(message.id);
-
-    expect(assistantMessages()[0]!.applied).toBe(false);
+  /**
+   * An API that is not running yet is not evidence that there is no key. Leaving it null keeps the
+   * ordinary opening on screen and lets the request itself say what is wrong, in its own words.
+   */
+  it('stays undecided when the probe cannot reach the server', async () => {
+    vi.mocked(api.assistantAvailability).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await store().probeAvailability();
+    expect(store().available).toBeNull();
   });
 });

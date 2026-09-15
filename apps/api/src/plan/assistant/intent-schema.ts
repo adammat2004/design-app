@@ -49,11 +49,12 @@ export const INTENT_JSON_SCHEMA = {
     reply: {
       type: 'string',
       description:
-        'One or two sentences to the user, in British English, in the conditional — "I have proposed", never "I have made". The changes have not happened yet.',
+        'One or two sentences to the user, in British English, in the future tense — "I\'ll enlarge the terrace". You are about to do this and they are about to watch it happen. Never the past tense: some lines may be refused, and the editor reports what actually landed.',
     },
     intents: {
       type: 'array',
-      description: 'What to propose. Empty when the message is a question rather than a request.',
+      description:
+        'What to do, ordered the way a designer works: surfaces, then circulation, then planting, then lighting. Empty when the message is a question rather than a request.',
       items: {
         anyOf: [
           {
@@ -76,9 +77,46 @@ export const INTENT_JSON_SCHEMA = {
             properties: {
               kind: { type: 'string', const: 'move' },
               target,
-              towards: { type: 'string', enum: ['house', 'boundary', 'zone'] },
+              towards: { type: 'string', enum: ['house', 'boundary', 'zone', 'element'] },
               zone: { type: 'string', enum: ZONE_IDS },
+              elementId: {
+                type: 'string',
+                description:
+                  'Required when towards is "element": the id, from the inventory, of the thing to move it nearer. Must not be one of the targets.',
+              },
               away: { type: 'boolean', description: 'Move away from it rather than towards it.' },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'target', 'edge', 'metres'],
+            properties: {
+              kind: { type: 'string', const: 'reshape' },
+              target,
+              edge: {
+                type: 'string',
+                enum: ['towards-house', 'away-from-house'],
+                description: 'Which side of the shape to move. Its other sides stay put.',
+              },
+              metres: {
+                type: 'number',
+                description:
+                  'How far to move that side. Positive deepens it, negative pulls it back. Use this for "make the border deeper" — a resize would make it longer as well.',
+              },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'target'],
+            properties: {
+              kind: { type: 'string', const: 'attach' },
+              target: {
+                ...target,
+                description:
+                  'The surfaces whose furniture should travel with them. Use this after moving or resizing something people sit or eat on, so the table does not end up on the grass.',
+              },
             },
           },
           {

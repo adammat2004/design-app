@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Leaf, Sparkles } from 'lucide-react';
 import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
+import { useAssistantStore } from '@/state/assistant-store';
 import { chosenConcept, useConceptsStore } from '@/state/concepts-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { PlanBottomBar } from '../PlanBottomBar';
 import { usePlanHref } from '../ProjectContext';
 import { AddFeaturePalette } from './AddFeaturePalette';
-import { AiActivityPanel } from './AiActivityPanel';
 import { AreaSummaryPanel } from './AreaSummaryPanel';
-import { AssistantPanel } from './AssistantPanel';
+import { DesignAgentPanel } from './DesignAgentPanel';
 import { EditorCanvasLoader } from './EditorCanvasLoader';
 import { EditorToolbar } from './EditorToolbar';
 import { VisualisePanel } from './VisualisePanel';
@@ -40,17 +40,20 @@ export function EditorScreen() {
     if (concept && seededFrom !== concept.id) seedFrom(concept);
   }, [concept, seededFrom, seedFrom]);
 
-  const aiActive = useAiRunStore(selectRunActive);
+  const runActive = useAiRunStore(selectRunActive);
+  const agentPhase = useAssistantStore((state) => state.phase);
+  const aiActive = runActive || agentPhase !== 'idle';
 
   /*
-   * A run outlives this screen only long enough to finish.
+   * A request outlives this screen only long enough to finish.
    *
    * Navigating away mid-redesign is somebody moving on, not somebody objecting — and because the
    * plan only ever holds finished operations, applying the rest is the same garden they would have
    * had by waiting ten more seconds. What must not happen is the gesture bracket staying open after
    * the component that could close it has gone, which would leave the next edit collapsed into it.
+   * `abandon` also stops the tail: nothing new starts on a screen nobody is looking at.
    */
-  useEffect(() => () => useAiRunStore.getState().settle(), []);
+  useEffect(() => () => useAssistantStore.getState().abandon(), []);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -137,22 +140,28 @@ export function EditorScreen() {
         </main>
 
         {/*
-          Wider than the other screens' right column. `xl:w-64` fits a properties panel; it does
-          not fit a conversation, and squeezing the chat into it would make every message three
-          words wide.
+          Wider than the other screens' right column, and wider than it was.
+
+          `xl:w-72` fitted a properties panel and a chat squeezed underneath it; it does not fit a
+          conversation you are meant to hold. At 320–384px a reply is a readable line rather than
+          three words wide, and the canvas absorbs the loss because it fits itself to the plot.
+
+          Two panes, not one scrolling column. A `flex-1 min-h-0` child inside `overflow-y-auto`
+          collapses — the same trap step 2 already recorded — and the conversation then paints over
+          the form underneath. The column clips; each pane scrolls inside itself.
         */}
-        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col gap-4 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-64 lg:shrink-0 lg:overflow-y-auto xl:w-72"}>
+        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col gap-3 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-80 lg:shrink-0 lg:overflow-hidden xl:w-96"}>
           {/*
-            The AI panel above the properties panel, not below it.
+            The designer above the properties panel, not below it.
 
             Properties grow with the selected element — a bed with edging and a retaining wall runs
             to most of a column — so anything under them is below the fold exactly when a run is in
             progress and has selected something. What is happening to the garden has to be readable
-            without scrolling; which material the selected patio is can wait.
+            without scrolling; which material the selected patio is can wait. Each pane now has its
+            own scroll, so that still holds without the two overlapping.
           */}
-          {concept ? <AiActivityPanel /> : null}
+          {concept ? <DesignAgentPanel /> : null}
           <SelectedElementPanel />
-          {concept ? <AssistantPanel /> : null}
         </aside>
       </div>
 
@@ -168,7 +177,7 @@ export function EditorScreen() {
         blockedReason={
           concept
             ? aiActive
-              ? 'Wait for the redesign to finish, or stop it.'
+              ? 'Wait for the designer to finish, or stop it.'
               : null
             : 'Choose a concept on the previous step first.'
         }

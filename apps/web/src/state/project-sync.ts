@@ -92,6 +92,7 @@ const writers: Record<Section, (id: string, at: number) => Promise<SectionPatchR
       elements: state.present.elements,
       seededFrom: state.seededFrom,
       pristine: state.pristine,
+      revision: state.revision,
     });
   },
 
@@ -278,7 +279,8 @@ export function startProjectSync(project: PlanProject): () => void {
         closed ||
         state.present !== previous.present ||
         state.seededFrom !== previous.seededFrom ||
-        state.pristine !== previous.pristine
+        state.pristine !== previous.pristine ||
+        state.revision !== previous.revision
       ) {
         schedule('layout');
       }

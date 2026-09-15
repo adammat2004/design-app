@@ -16,6 +16,8 @@ import {
   housePolygon,
   isLocked,
   materialLabel,
+  polygonArea,
+  polygonContainsPolygon,
   polygonsIntersect,
   translateGeometry,
   type DesignElement,
@@ -27,6 +29,7 @@ import {
   type ProposedChange,
   type Unit,
 } from '@garden-studio/schema';
+import { FillService } from '../generation/fill.service.js';
 import { PlacementService } from '../generation/placement.service.js';
 
 /**
@@ -54,6 +57,16 @@ const MOVE_LADDER = [1 / 3, 1 / 4, 1 / 6, 1 / 10];
 /** Smallest side a resize will produce, matching the editor's own handles. */
 const MIN_SIDE = 0.3;
 
+/**
+ * Area under which a reshape is taken to have cost a neighbour nothing.
+ *
+ * A hundredth of a square metre, which is the same threshold the generator's own containment test
+ * uses. It absorbs what `ST_SimplifyPreserveTopology` shaves off a ring it did not otherwise touch,
+ * so a bed that merely came *near* the lawn does not produce a line of the diff saying the lawn
+ * changed by a millimetre.
+ */
+const TOOK_NOTHING = 0.01;
+
 export interface PlannedChanges {
   changes: ProposedChange[];
   unplaceable: { description: string; reason: string }[];
@@ -67,11 +80,25 @@ interface Context {
   houseCentre: Point | null;
   zones: GardenZone[];
   inScope: GardenZone[];
+  /**
+   * Elements as the intents so far in this request will leave them.
+   *
+   * Every other branch reads the stored document, which is right: they each decide one thing and
+   * the editor applies the lot. `attach` is the exception and cannot be anything else — "take the
+   * furniture with it" is a statement about a move that has already been decided in the same
+   * sentence, so it has to see where the host went. Keyed by id, and empty for a request whose
+   * intents do not touch each other.
+   */
+  pending: Map<string, DesignElement>;
 }
 
 @Injectable()
 export class PlannerService {
-  constructor(private readonly placement: PlacementService) {}
+  constructor(
+    private readonly placement: PlacementService,
+    /** For `reshape`: the strip a deepened bed takes has to come off whatever it took it from. */
+    private readonly fill: FillService,
+  ) {}
 
   async plan(document: PlanDocument, intents: DesignIntent[]): Promise<PlannedChanges> {
     const context = buildContext(document);
@@ -89,6 +116,11 @@ export class PlannerService {
 
       changes.push(...produced.changes);
       unplaceable.push(...produced.unplaceable);
+
+      /* So a later `attach` can see where the move it belongs to actually put things. */
+      for (const produce of produced.changes) {
+        if (produce.elementId) context.pending.set(produce.elementId, produce.next);
+      }
     }
 
     return { changes, unplaceable };
@@ -102,6 +134,10 @@ export class PlannerService {
     switch (intent.kind) {
       case 'resize':
         return this.resize(intent, context, nextId);
+      case 'reshape':
+        return this.reshape(intent, context, nextId);
+      case 'attach':
+        return this.attach(intent, context, nextId);
       case 'move':
         return this.move(intent, context, nextId);
       case 'material':
@@ -155,6 +191,217 @@ export class PlannerService {
 
       const next = scaled(element, achieved);
       result.changes.push(change(nextId(), 'resize', element, next, context));
+    }
+
+    return result;
+  }
+
+  /* ---------------------------------------------------------------- reshape */
+
+  /**
+   * Pushes one side of an outline out, and takes the ground it gains off whatever it took it from.
+   *
+   * **Both halves or neither**, and that is the rule this branch exists to keep. A border deepened
+   * into the lawn beside it, with the lawn left as it was, is two elements claiming one piece of
+   * ground — and because the bed is drawn over the lawn it *looks* right, so nothing on screen
+   * would say the plan had stopped being true. If the neighbour cannot give the strip up cleanly,
+   * the bed is not deepened either.
+   */
+  private async reshape(
+    intent: Extract<DesignIntent, { kind: 'reshape' }>,
+    context: Context,
+    nextId: () => string,
+  ): Promise<PlannedChanges> {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+
+    for (const element of resolve(intent.target.elementIds, context)) {
+      if (isLocked(element)) {
+        result.unplaceable.push({
+          description: `Reshape ${label(element)}`,
+          reason: 'It is the ground cover for a whole area, so its outline is fixed.',
+        });
+        continue;
+      }
+
+      if (element.shape.kind !== 'polygon') {
+        result.unplaceable.push({
+          description: `Reshape ${label(element)}`,
+          reason: 'Only a bed or a panel with a drawn outline can have one side moved.',
+        });
+        continue;
+      }
+
+      const direction = houseDirection(element, context, intent.edge);
+      if (!direction) {
+        result.unplaceable.push({
+          description: `Reshape ${label(element)}`,
+          reason: 'There is no house on the plan to say which side of it that is.',
+        });
+        continue;
+      }
+
+      const next = pushEdge(element, direction, intent.metres);
+      if (!next) {
+        result.unplaceable.push({
+          description: `Reshape ${label(element)}`,
+          reason: 'Pulling that side back that far would leave nothing of it.',
+        });
+        continue;
+      }
+
+      if (!geometryIsLegal(next.shape, context.boundary)) {
+        result.unplaceable.push({
+          description: `Reshape ${label(element)}`,
+          reason: 'That side would end up outside the boundary.',
+        });
+        continue;
+      }
+
+      /*
+       * Who gives up the ground.
+       *
+       * Filtered by bounding box and then asked properly, rather than by `polygonsIntersect`. That
+       * predicate is right about what it measures and wrong for this: it excludes touching, and a
+       * border and the lawn in front of it habitually share their left and right edges exactly —
+       * every corner lands *on* the other's outline, nothing strictly crosses, and it answers "no
+       * overlap" about two shapes that plainly meet. The box test is conservative (it can only
+       * over-include) and the subtraction below is what actually decides.
+       *
+       * Base fills are excluded for the reason `clearOfOthers` excludes them: they are the ground
+       * everything is drawn on, and a hole cut in one is the defect `isLocked` exists to prevent.
+       */
+      const grown = geometryOutline(next.shape);
+      const neighbours = context.document.layout.elements.filter(
+        (other) =>
+          other.id !== element.id &&
+          !other.hidden &&
+          !isLocked(other) &&
+          other.shape.kind === 'polygon' &&
+          boxesOverlap(grown, geometryOutline(other.shape)),
+      );
+
+      const yielded: ProposedChange[] = [];
+      let blocked: string | null = null;
+
+      for (const neighbour of neighbours) {
+        const before = geometryOutline(neighbour.shape);
+        const remaining = await this.fill.subtract(before, grown);
+
+        if (!remaining) {
+          blocked = `${label(neighbour)} beside it cannot give up that strip.`;
+          break;
+        }
+
+        /* It was near enough to ask about but the reshape took nothing off it. Leave it alone. */
+        if (Math.abs(polygonArea(remaining) - polygonArea(before)) < TOOK_NOTHING) continue;
+
+        const trimmed: DesignElement = {
+          ...neighbour,
+          shape: { kind: 'polygon', cornerRadius: 0, points: remaining },
+        };
+        yielded.push(change(nextId(), 'reshape', neighbour, trimmed, context));
+      }
+
+      if (blocked) {
+        result.unplaceable.push({ description: `Reshape ${label(element)}`, reason: blocked });
+        continue;
+      }
+
+      result.changes.push(change(nextId(), 'reshape', element, next, context), ...yielded);
+    }
+
+    return result;
+  }
+
+  /* ---------------------------------------------------------------- attach */
+
+  /**
+   * "And take the furniture with it."
+   *
+   * On its own this produces nothing: it is meaningful only beside a move or a resize in the same
+   * request, where the host has already been changed and whatever stands on it would otherwise be
+   * left behind on bare ground. So the planner reads the host as the *request* will leave it, which
+   * is why the changes already produced are passed in.
+   */
+  private attach(
+    intent: Extract<DesignIntent, { kind: 'attach' }>,
+    context: Context,
+    nextId: () => string,
+  ): PlannedChanges {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+
+    for (const element of resolve(intent.target.elementIds, context)) {
+      /*
+       * Where this request has left the host — and nothing at all if it did not touch it.
+       *
+       * A no-op is the wrong answer here rather than a harmless one. `attach` after a move the
+       * planner refused would emit a line saying the furniture moved by zero: a change on the diff,
+       * an operation on the canvas, and a count in the outcome, all for nothing happening. Saying
+       * the host did not move is both true and the thing the user needs to know.
+       */
+      const host = context.pending.get(element.id);
+      if (!host) {
+        result.unplaceable.push({
+          description: `Move what is on ${label(element)}`,
+          reason: 'It has not moved, so there is nothing to bring with it.',
+        });
+        continue;
+      }
+
+      const was = geometryOutline(element.shape);
+      const now = geometryOutline(host.shape);
+
+      const shift = {
+        x: elementAnchor(host).x - elementAnchor(element).x,
+        y: elementAnchor(host).y - elementAnchor(element).y,
+      };
+
+      const standing = context.document.layout.elements.filter(
+        (other) =>
+          other.id !== element.id &&
+          !other.hidden &&
+          !isLocked(other) &&
+          /* Inside the host as it *was*: that is what "standing on it" means. */
+          polygonContainsPolygon(was, geometryOutline(other.shape)),
+      );
+
+      if (standing.length === 0) {
+        result.unplaceable.push({
+          description: `Move what is on ${label(element)}`,
+          reason: 'There is nothing standing on it.',
+        });
+        continue;
+      }
+
+      for (const piece of standing) {
+        const moved: DesignElement = {
+          ...piece,
+          shape: translateGeometry(piece.shape, shift.x, shift.y),
+        };
+
+        /*
+         * It has to land on the host, not merely near where it was. A host that shrank can leave a
+         * dining set half off the paving even after the shift, and a set on the grass is worse than
+         * one that did not move — the user can see the second and would not notice the first.
+         */
+        if (!polygonContainsPolygon(now, geometryOutline(moved.shape))) {
+          result.unplaceable.push({
+            description: `Move ${label(piece)} with ${label(element)}`,
+            reason: `There is no longer room for it on ${label(element)}.`,
+          });
+          continue;
+        }
+
+        if (!geometryIsLegal(moved.shape, context.boundary)) {
+          result.unplaceable.push({
+            description: `Move ${label(piece)} with ${label(element)}`,
+            reason: 'It would end up outside the boundary.',
+          });
+          continue;
+        }
+
+        result.changes.push(change(nextId(), 'move', piece, moved, context));
+      }
     }
 
     return result;
@@ -221,6 +468,22 @@ export class PlannerService {
     if (intent.towards === 'zone') {
       const zone = context.zones.find((candidate) => candidate.id === intent.zone);
       return zone?.centroid ?? null;
+    }
+
+    /*
+     * Towards another element, named by id and never by position.
+     *
+     * "Nearer the seating" is the commonest placement request there is and the other three
+     * destinations cannot express it. Refused when it names the thing being moved: a move towards
+     * itself has no direction, and the move ladder would report "already as far that way as it will
+     * go" — technically true and completely unhelpful.
+     */
+    if (intent.towards === 'element') {
+      if (!intent.elementId || intent.elementId === element.id) return null;
+      const other = context.document.layout.elements.find(
+        (candidate) => candidate.id === intent.elementId,
+      );
+      return other ? elementAnchor(other) : null;
     }
 
     // 'boundary' — the nearest point on the fence, which is a one-call PostGIS question rather
@@ -507,6 +770,7 @@ function buildContext(document: PlanDocument): Context {
     houseCentre: document.site.house?.centre ?? null,
     zones,
     inScope: zones.filter((zone) => inScopeIds.includes(zone.id)),
+    pending: new Map(),
   };
 }
 
@@ -527,7 +791,7 @@ function categoryWord(element: DesignElement): string {
 
 function change(
   id: string,
-  kind: 'resize' | 'move',
+  kind: 'resize' | 'reshape' | 'move',
   element: DesignElement,
   next: DesignElement,
   context: Context,
@@ -631,17 +895,128 @@ function firstLegalStep(
   return null;
 }
 
-/** Nothing else on the plan is in the way. Base fills are ground, so they do not count. */
+/**
+ * Whether two outlines' bounding boxes overlap at all.
+ *
+ * A conservative pre-filter, and conservative in the safe direction: it can only say yes about
+ * shapes that turn out not to meet, and the geometry engine settles those. What it must never do is
+ * say no about two that do — which is exactly what `polygonsIntersect` does to a border and the
+ * lawn in front of it, because they share their left and right edges and touching is not crossing.
+ */
+function boxesOverlap(a: Point[], b: Point[]): boolean {
+  const box = (ring: Point[]) => ({
+    left: Math.min(...ring.map((point) => point.x)),
+    right: Math.max(...ring.map((point) => point.x)),
+    top: Math.min(...ring.map((point) => point.y)),
+    bottom: Math.max(...ring.map((point) => point.y)),
+  });
+
+  const first = box(a);
+  const second = box(b);
+  return (
+    first.left <= second.right &&
+    second.left <= first.right &&
+    first.top <= second.bottom &&
+    second.top <= first.bottom
+  );
+}
+
+/**
+ * Which way "towards the house" is, from where this element stands.
+ *
+ * A unit vector from the element's anchor to the house, which is the same frame every other
+ * position in this file is expressed in — never a screen axis, because a plot can be drawn at any
+ * angle and a bed "deepened downwards" would mean something different on every plan.
+ *
+ * Null with no house, and null when the element is sitting on the house's own centre, where there
+ * is no direction to give.
+ */
+function houseDirection(
+  element: DesignElement,
+  context: Context,
+  edge: 'towards-house' | 'away-from-house',
+): Point | null {
+  if (!context.houseCentre) return null;
+
+  const anchor = elementAnchor(element);
+  const dx = context.houseCentre.x - anchor.x;
+  const dy = context.houseCentre.y - anchor.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return null;
+
+  const sign = edge === 'towards-house' ? 1 : -1;
+  return { x: (sign * dx) / length, y: (sign * dy) / length };
+}
+
+/**
+ * Moves the corners on one side of an outline, and leaves the rest where they are.
+ *
+ * Which corners: those on the far half along `direction`, measured by projecting each onto it and
+ * splitting at the midpoint of the spread. That is what makes this a *reshape* rather than a
+ * resize — a border deepened away from the house keeps its two ends exactly where the paths meet
+ * it, where scaling the whole outline would drag them along the fence as well.
+ *
+ * Returns null when the push would collapse the shape, rather than emitting a bed of no depth.
+ */
+function pushEdge(element: DesignElement, direction: Point, metres: number): DesignElement | null {
+  const shape = element.shape;
+  if (shape.kind !== 'polygon') return null;
+
+  const along = shape.points.map((point) => point.x * direction.x + point.y * direction.y);
+  const low = Math.min(...along);
+  const high = Math.max(...along);
+  const spread = high - low;
+
+  /* A sliver has no two sides to tell apart, and pushing one of them is meaningless. */
+  if (spread < MIN_SIDE) return null;
+
+  const midpoint = (low + high) / 2;
+  const moving = along.map((value) => value > midpoint);
+  const points = shape.points.map((point, index) =>
+    moving[index]
+      ? { x: point.x + direction.x * metres, y: point.y + direction.y * metres }
+      : point,
+  );
+
+  /*
+   * The moved side must still be on the far side of the one that stayed.
+   *
+   * Comparing the overall spread is not enough and the difference is not academic: pulling a
+   * 1.5 m border back by 3 m leaves a spread of 1.5 again, with the two sides swapped — an outline
+   * folded through itself, which has a perfectly ordinary vertex list and a quietly wrong area, so
+   * nothing downstream would report it. Same class of fault as `setEdgeLength`'s bow tie.
+   */
+  const after = points.map((point) => point.x * direction.x + point.y * direction.y);
+  const movedSide = after.filter((_value, index) => moving[index]!);
+  const fixedSide = after.filter((_value, index) => !moving[index]!);
+  if (movedSide.length === 0 || fixedSide.length === 0) return null;
+  if (Math.min(...movedSide) - Math.max(...fixedSide) < MIN_SIDE) return null;
+
+  return { ...element, shape: { ...shape, points } };
+}
+
+/**
+ * Nothing else on the plan is in the way. Base fills are ground, so they do not count.
+ *
+ * **Nor does anything standing on it.** A dining set on a terrace overlaps that terrace by design,
+ * so counting it as an obstacle made every furnished surface immovable and unresizable — the
+ * planner refused with "there is no room around it to grow into" about a table the user could see
+ * was on top of it. That is the fault `attach` exists to answer, and it cannot answer it while the
+ * move that would need it is refused first. The predicate is containment in the element's own
+ * outline as it stands, which is what "standing on it" means everywhere else in this codebase.
+ */
 function clearOfOthers(
   candidate: DesignElement,
   original: DesignElement,
   context: Context,
 ): boolean {
   const outline = geometryOutline(candidate.shape);
+  const host = geometryOutline(original.shape);
 
   return context.document.layout.elements.every((other) => {
     if (other.id === original.id || other.hidden || isLocked(other)) return true;
     if (other.role === 'fill') return true;
+    if (polygonContainsPolygon(host, geometryOutline(other.shape))) return true;
 
     return !polygonsIntersect(outline, geometryOutline(other.shape));
   });

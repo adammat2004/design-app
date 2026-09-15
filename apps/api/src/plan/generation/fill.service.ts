@@ -397,6 +397,51 @@ export class FillService {
   }
 
   /**
+   * A shape with another cut out of it, as one ring, or `null` if nothing usable survives.
+   *
+   * The twin of `clipTo`, and it exists for the assistant's `reshape`: deepening a border means the
+   * lawn beside it gives up exactly the strip the border gained, or the two simply overlap and the
+   * plan is drawing one piece of ground twice. Both halves or neither — the caller checks this
+   * answered before it emits either change.
+   *
+   * **Refuses a result with a hole in it**, the same guard `borderRegions` keeps and for the same
+   * reason: `PlanGeometry.polygon` cannot express an interior ring, so a doughnut would come back
+   * flattened to its outside edge — which is the *opposite* of the subtraction that was asked for.
+   * Cutting a bed out of the middle of a lawn is a legitimate thing to want and this is not the
+   * operation that can do it; saying so is better than silently returning the lawn unchanged.
+   */
+  async subtract(shape: Point[], cut: Point[]): Promise<Point[] | null> {
+    if (shape.length < 3 || cut.length < 3) return null;
+
+    const rows = await this.db.execute<PartRow>(sql`
+      WITH cut AS MATERIALIZED (
+        SELECT (ST_Dump(
+          ST_Difference(
+            ST_MakeValid(ST_GeomFromText(${polygonToWkt(shape)}::text)),
+            ST_MakeValid(ST_GeomFromText(${polygonToWkt(cut)}::text))
+          )
+        )).geom AS geom
+      ),
+      simplified AS MATERIALIZED (
+        SELECT ST_SimplifyPreserveTopology(cut.geom, ${SIMPLIFY_TOLERANCE}::float8) AS geom
+        FROM cut
+        WHERE ST_GeometryType(cut.geom) = 'ST_Polygon'
+      )
+      SELECT ST_AsGeoJSON(simplified.geom)::text AS ring, ST_Area(simplified.geom)::float8 AS area
+      FROM simplified
+      WHERE NOT ST_IsEmpty(simplified.geom)
+        AND ST_GeometryType(simplified.geom) = 'ST_Polygon'
+        AND ST_NumInteriorRings(simplified.geom) = 0
+        AND ST_Area(simplified.geom) >= ${MIN_FILL_AREA}::float8
+      ORDER BY area DESC
+      LIMIT 1
+    `);
+
+    const first = rows[0];
+    return first ? exteriorRing(first.ring) : null;
+  }
+
+  /**
    * Every ring clipped to `scope`, bucketed by input index, largest piece first.
    *
    * One query for all of them rather than one each: the scope geometry is parsed and validated

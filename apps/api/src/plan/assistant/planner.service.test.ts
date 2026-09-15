@@ -7,6 +7,7 @@ import {
 } from '@garden-studio/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlannerService } from './planner.service.js';
+import { FillService } from '../generation/fill.service.js';
 import { PlacementService } from '../generation/placement.service.js';
 import { connectTestDatabase, DB_UNAVAILABLE_MESSAGE, type TestDatabase } from '../../test/db.js';
 
@@ -94,7 +95,7 @@ describe.skipIf(connection === null)('PlannerService', () => {
 
   beforeAll(() => {
     db = connection!;
-    planner = new PlannerService(new PlacementService(db.db));
+    planner = new PlannerService(new PlacementService(db.db), new FillService(db.db));
   });
 
   afterAll(async () => {
@@ -451,6 +452,354 @@ describe.skipIf(connection === null)('PlannerService', () => {
       if (entry.kind === 'remove' || entry.kind === 'material') continue;
       expect(geometryIsLegal(entry.next.shape, boundary)).toBe(true);
     }
+  });
+  /* ---------------------------------------------------------------- the vocabulary added later */
+
+  /*
+   * Three things a user asks for constantly that the first seven intents could not say. Each is one
+   * intent, one planner branch and one line of the diff — and none of them can hold a coordinate,
+   * which is the property the whole split rests on.
+   */
+  describe('reshape', () => {
+    /** A border along the back fence: wide, shallow, and the thing people ask to deepen. */
+    const border = element({
+      id: 'e-bed',
+      name: 'Rear border',
+      category: 'planting-bed',
+      role: 'fill',
+      fillKind: 'accent',
+      material: 'mixed-border',
+      shape: {
+        kind: 'polygon',
+        cornerRadius: 0,
+        points: [
+          { x: 2, y: 14 },
+          { x: 18, y: 14 },
+          { x: 18, y: 15.5 },
+          { x: 2, y: 15.5 },
+        ],
+      },
+    });
+
+    /** The lawn in front of it, which is where a deeper border has to take its ground from. */
+    const lawn = element({
+      id: 'e-lawn',
+      name: 'Lawn',
+      category: 'lawn',
+      role: 'fill',
+      fillKind: 'accent',
+      material: 'standard-turf',
+      shape: {
+        kind: 'polygon',
+        cornerRadius: 0,
+        points: [
+          { x: 2, y: 9 },
+          { x: 18, y: 9 },
+          { x: 18, y: 14 },
+          { x: 2, y: 14 },
+        ],
+      },
+    });
+
+    /**
+     * The whole reason `reshape` exists: a resize would make it longer as well.
+     *
+     * The ends stay exactly where they are, which on a real plan is where the paths meet it.
+     */
+    it('moves one side and leaves the others where they were', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-bed'] },
+        edge: 'towards-house',
+        metres: 1.5,
+      };
+
+      const { changes } = await planner.plan(plan([border]), [intent]);
+
+      const reshaped = changes.find((entry) => entry.elementId === 'e-bed')!;
+      expect(reshaped.kind).toBe('reshape');
+
+      const shape = reshaped.next.shape;
+      if (shape.kind !== 'polygon') throw new Error('expected a polygon');
+
+      /* The fence side has not moved; the house side has come forward by the metre and a half. */
+      const ys = shape.points.map((point) => point.y).sort((a, b) => a - b);
+      expect(ys[2]).toBeCloseTo(15.5, 6);
+      expect(ys[3]).toBeCloseTo(15.5, 6);
+      expect(ys[0]).toBeCloseTo(12.5, 6);
+
+      /* And it is still 16 m across: no corner moved sideways. */
+      const xs = shape.points.map((point) => point.x);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(16, 6);
+    });
+
+    /**
+     * Both halves or neither.
+     *
+     * A border deepened into the lawn with the lawn left alone is two elements claiming one piece of
+     * ground — and because the bed draws over the lawn it looks right, so nothing on screen would
+     * say the plan had stopped being true.
+     */
+    it('takes the ground it gains off the thing beside it', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-bed'] },
+        edge: 'towards-house',
+        metres: 1.5,
+      };
+
+      const { changes } = await planner.plan(plan([border, lawn]), [intent]);
+
+      expect(changes.map((entry) => entry.elementId).sort()).toEqual(['e-bed', 'e-lawn']);
+
+      const trimmed = changes.find((entry) => entry.elementId === 'e-lawn')!.next.shape;
+      if (trimmed.kind !== 'polygon') throw new Error('expected a polygon');
+
+      /* The lawn now stops where the deeper border starts. */
+      expect(Math.max(...trimmed.points.map((point) => point.y))).toBeCloseTo(12.5, 1);
+    });
+
+    it('refuses to reshape the ground cover a whole area sits on', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-base'] },
+        edge: 'towards-house',
+        metres: 1,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([baseFill]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('ground cover');
+    });
+
+    it('refuses a shape with no drawn outline', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-1'] },
+        edge: 'towards-house',
+        metres: 1,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([patio]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('drawn outline');
+    });
+
+    it('refuses to push a side out through the fence', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-bed'] },
+        edge: 'away-from-house',
+        metres: 4,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([border]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('outside the boundary');
+    });
+
+    /*
+     * Pulling a side back past the one opposite folds the outline through itself.
+     *
+     * A folded outline has a perfectly ordinary vertex list and a quietly wrong area, so nothing
+     * downstream would report it — the same class of fault `setEdgeLength`'s bow-tie guard exists
+     * for. Comparing the overall spread does not catch it: a 1.5 m border pulled back 3 m has a
+     * spread of 1.5 again, with its two sides swapped.
+     */
+    it('refuses a pull-back that would fold it through itself', async () => {
+      const intent: DesignIntent = {
+        kind: 'reshape',
+        target: { elementIds: ['e-bed'] },
+        edge: 'away-from-house',
+        metres: -3,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([border]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('nothing of it');
+    });
+
+  });
+
+  describe('attach', () => {
+    /** A dining set standing on the patio, as the generator's `furnish` pass leaves one. */
+    const diningSet = element({
+      id: 'e-set',
+      name: 'Dining set',
+      category: 'furniture',
+      symbol: 'dining-set',
+      shape: { kind: 'rect', centre: { x: 10, y: 12 }, width: 2.4, depth: 2.4, rotation: 0 },
+    });
+
+    /**
+     * The single most useful thing the old vocabulary could not say.
+     *
+     * `attach` reads the host as the *request* will leave it, so it has to come after the move it
+     * belongs to — which is why the two are asserted together rather than separately.
+     */
+    it('brings the furniture with the surface it stands on', async () => {
+      const intents: DesignIntent[] = [
+        { kind: 'move', target: { elementIds: ['e-1'] }, towards: 'house', away: false },
+        { kind: 'attach', target: { elementIds: ['e-1'] } },
+      ];
+
+      const { changes } = await planner.plan(plan([patio, diningSet]), intents);
+
+      const moved = changes.find((entry) => entry.elementId === 'e-1')!;
+      const set = changes.find((entry) => entry.elementId === 'e-set')!;
+      expect(set).toBeDefined();
+
+      /* It travelled exactly as far as the patio did, in the same direction. */
+      const patioShift = elementAnchor(moved.next).y - elementAnchor(patio).y;
+      const setShift = elementAnchor(set.next).y - elementAnchor(diningSet).y;
+      expect(setShift).toBeCloseTo(patioShift, 6);
+      expect(Math.abs(patioShift)).toBeGreaterThan(0);
+    });
+
+    it('says so when nothing is standing on it', async () => {
+      const intents: DesignIntent[] = [
+        { kind: 'move', target: { elementIds: ['e-1'] }, towards: 'house', away: false },
+        { kind: 'attach', target: { elementIds: ['e-1'] } },
+      ];
+
+      const { changes, unplaceable } = await planner.plan(plan([patio]), intents);
+
+      expect(changes.some((entry) => entry.elementId === 'e-set')).toBe(false);
+      expect(unplaceable[0]!.reason).toContain('nothing standing on it');
+    });
+
+    /**
+     * Alone, or after a move the planner refused, it produces nothing and says why.
+     *
+     * A no-op line would be worse than silence: a change on the diff, an operation on the canvas
+     * and a count in the outcome, all for nothing having happened.
+     */
+    it('emits nothing at all when the host did not move', async () => {
+      const intents: DesignIntent[] = [{ kind: 'attach', target: { elementIds: ['e-1'] } }];
+
+      const { changes, unplaceable } = await planner.plan(plan([patio, diningSet]), intents);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('has not moved');
+    });
+
+    /**
+     * A host that shrank can leave a dining set half off the paving even after the shift.
+     *
+     * A set on the grass is worse than one that did not move: the user can see the second and would
+     * not notice the first.
+     */
+    it('refuses to leave the furniture half off a host that shrank', async () => {
+      /* Shrunk on its own, so the resize is not refused for clashing with the set standing on it. */
+      const roomy = element({
+        id: 'e-1',
+        name: 'Seating patio',
+        material: 'stone-pavers',
+        shape: { kind: 'rect', centre: { x: 10, y: 12 }, width: 6, depth: 5, rotation: 0 },
+      });
+      const small = element({
+        id: 'e-set',
+        name: 'Bench',
+        category: 'furniture',
+        symbol: 'bench',
+        shape: { kind: 'rect', centre: { x: 12.4, y: 12 }, width: 1, depth: 0.5, rotation: 0 },
+      });
+
+      const intents: DesignIntent[] = [
+        { kind: 'resize', target: { elementIds: ['e-1'] }, factor: 0.5 },
+        { kind: 'attach', target: { elementIds: ['e-1'] } },
+      ];
+
+      const { changes, unplaceable } = await planner.plan(plan([roomy, small]), intents);
+
+      expect(changes.some((entry) => entry.elementId === 'e-1')).toBe(true);
+      expect(changes.some((entry) => entry.elementId === 'e-set')).toBe(false);
+      expect(unplaceable.some((entry) => entry.reason.includes('no longer room'))).toBe(true);
+    });
+  });
+
+  describe('move towards another element', () => {
+    const firePit = element({
+      id: 'e-fire',
+      name: 'Fire pit',
+      category: 'water-feature',
+      shape: { kind: 'point', at: { x: 3, y: 14 }, radius: 0.6 },
+    });
+
+    /* "Nearer the seating" is the commonest placement request there is, and had no expression. */
+    it('moves it nearer the thing it was told to', async () => {
+      const intent: DesignIntent = {
+        kind: 'move',
+        target: { elementIds: ['e-fire'] },
+        towards: 'element',
+        elementId: 'e-1',
+        away: false,
+      };
+
+      const { changes } = await planner.plan(plan([patio, firePit]), [intent]);
+
+      expect(changes).toHaveLength(1);
+      const before = Math.hypot(3 - 10, 14 - 12);
+      const after = Math.hypot(
+        elementAnchor(changes[0]!.next).x - 10,
+        elementAnchor(changes[0]!.next).y - 12,
+      );
+      expect(after).toBeLessThan(before);
+    });
+
+    it('moves it away when asked to', async () => {
+      const intent: DesignIntent = {
+        kind: 'move',
+        target: { elementIds: ['e-fire'] },
+        towards: 'element',
+        elementId: 'e-1',
+        away: true,
+      };
+
+      const { changes } = await planner.plan(plan([patio, firePit]), [intent]);
+
+      const before = Math.hypot(3 - 10, 14 - 12);
+      const after = Math.hypot(
+        elementAnchor(changes[0]!.next).x - 10,
+        elementAnchor(changes[0]!.next).y - 12,
+      );
+      expect(after).toBeGreaterThan(before);
+    });
+
+    /* A move towards itself has no direction, and the ladder would report a useless refusal. */
+    it('refuses to move a thing towards itself', async () => {
+      const intent: DesignIntent = {
+        kind: 'move',
+        target: { elementIds: ['e-fire'] },
+        towards: 'element',
+        elementId: 'e-fire',
+        away: false,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([patio, firePit]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('nothing to move it towards');
+    });
+
+    it('refuses an id that names nothing', async () => {
+      const intent: DesignIntent = {
+        kind: 'move',
+        target: { elementIds: ['e-fire'] },
+        towards: 'element',
+        elementId: 'e-nowhere',
+        away: false,
+      };
+
+      const { changes, unplaceable } = await planner.plan(plan([patio, firePit]), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toContain('nothing to move it towards');
+    });
   });
 });
 

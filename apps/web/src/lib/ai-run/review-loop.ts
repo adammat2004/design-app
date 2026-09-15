@@ -41,11 +41,25 @@ export interface ReviewPass {
   kept: boolean;
 }
 
+/**
+ * A fault the reviewer could fix but did not, because it is not what the user asked about.
+ *
+ * The offer is the answer to the question a scoped reviewer otherwise raises: "it found something
+ * wrong and said nothing?" It carries the intents already worked out, so accepting one costs no
+ * second look at the plan.
+ */
+export interface ReviewOffer {
+  issue: DesignIssue;
+  intents: DesignIntent[];
+}
+
 export interface ReviewOutcome {
   passes: ReviewPass[];
   /** Why it stopped, for the panel to say out loud. */
   verdict: 'improved' | 'nothing-to-fix' | 'nothing-worked' | 'stopped';
   score: DesignScore | null;
+  /** Actionable faults outside the scope of this review, offered rather than performed. */
+  offers: ReviewOffer[];
 }
 
 export interface ReviewTools {
@@ -59,6 +73,18 @@ export interface ReviewTools {
   /** Puts the last run back, when the measurement says it was not worth keeping. */
   undo: () => void;
   maxPasses?: number;
+  /**
+   * The element ids the request actually touched, or absent for the whole plan.
+   *
+   * A reviewer that follows a request has to stay near it. Asking for a bigger terrace and watching
+   * the designer go on to move the store and rewrite the lighting is the moment the user stops
+   * feeling they are driving — it reads as the tool taking over rather than answering. So a scoped
+   * pass fixes only faults about what it just changed, and everything else it found comes back as
+   * an offer for the user to accept or ignore.
+   *
+   * "Review my design", asked on its own, passes nothing and the whole plan is in scope.
+   */
+  subjects?: string[];
 }
 
 /**
@@ -153,18 +179,70 @@ export function issueKey(issue: DesignIssue): string {
   return `${issue.code}:${issue.subjects.join(',')}`;
 }
 
-/** The worst thing the reviewer can actually do something about. */
+/**
+ * Whether a fault is about something this review is allowed to touch.
+ *
+ * Any overlap counts, not every subject: a pinched path between the terrace the user just enlarged
+ * and a bed they never mentioned is a fault their own request caused, and refusing it on the
+ * grounds that the bed is out of scope would leave the reviewer unable to clean up after the change
+ * it just made.
+ */
+function inScope(issue: DesignIssue, subjects: string[] | undefined): boolean {
+  if (!subjects) return true;
+  return issue.subjects.some((subject) => subjects.includes(subject));
+}
+
+/** The worst thing the reviewer can actually do something about, inside its scope. */
 export function firstRepairable(
   score: DesignScore,
   tried: Set<string>,
   elements: DesignElement[] = [],
+  subjects?: string[],
 ): DesignIssue | null {
   for (const issue of issuesBySeverity(score)) {
     if (tried.has(issueKey(issue))) continue;
+    if (!inScope(issue, subjects)) continue;
     if (intentsFor(issue, elements).length === 0) continue;
     return issue;
   }
   return null;
+}
+
+/**
+ * What it found and chose not to touch, worth offering.
+ *
+ * **Subjects that are not element ids are dropped rather than rendered.** `DesignIssue.subjects` is
+ * documented as "element ids where they exist, else zone ids or feature names", so a fault about
+ * "the back garden" produces an offer whose intents target an element that does not exist — the
+ * planner refuses every line and the chip does nothing. A chip that does nothing is worse than an
+ * absent one, because the user has to press it to find out.
+ */
+export function offersFrom(
+  score: DesignScore,
+  tried: Set<string>,
+  elements: DesignElement[],
+  subjects: string[] | undefined,
+  limit = 3,
+): ReviewOffer[] {
+  if (!subjects) return [];
+
+  const offers: ReviewOffer[] = [];
+  for (const issue of issuesBySeverity(score)) {
+    if (offers.length >= limit) break;
+    if (tried.has(issueKey(issue))) continue;
+    if (inScope(issue, subjects)) continue;
+
+    const real = issue.subjects.every((subject) =>
+      elements.some((element) => element.id === subject),
+    );
+    if (!real) continue;
+
+    const intents = intentsFor(issue, elements);
+    if (intents.length === 0) continue;
+
+    offers.push({ issue, intents });
+  }
+  return offers;
 }
 
 export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> {
@@ -172,17 +250,26 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
   const passes: ReviewPass[] = [];
   const tried = new Set<string>();
 
+  /*
+   * The whole element list every time, even when the pass is scoped.
+   *
+   * The scorer judges the *composition* — how things relate, what is in the sightline, whether the
+   * planting reads as one garden — so handing it a subset would silently change what it is scoring
+   * rather than narrowing what it reports. Scope decides what the reviewer may act on, never what
+   * it may look at.
+   */
   let score = await tools.score(tools.elements());
 
   for (let pass = 0; pass < limit; pass += 1) {
     /* Read fresh every pass: the run before this one has changed the garden. */
     const current = tools.elements();
-    const issue = firstRepairable(score, tried, current);
+    const issue = firstRepairable(score, tried, current, tools.subjects);
     if (!issue) break;
     tried.add(issueKey(issue));
 
     const changes = await tools.propose(intentsFor(issue, current), current);
     if (changes.length === 0) continue;
+
 
     const run = runFromProposal(changes, issue.message, `review-${pass}`, {
       agent: 'reviewer',
@@ -192,7 +279,9 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
 
     const played = await tools.play(run);
     if (played === 'refused') continue;
-    if (played === 'cancelled') return { passes, verdict: 'stopped', score };
+    if (played === 'cancelled') {
+      return { passes, verdict: 'stopped', score, offers: [] };
+    }
 
     const before = score;
     const after = await tools.score(tools.elements());
@@ -209,11 +298,14 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
     passes.push({ issue, before: before.total, after: after.total, kept });
   }
 
-  if (passes.length === 0) return { passes, verdict: 'nothing-to-fix', score };
+  const offers = offersFrom(score, tried, tools.elements(), tools.subjects);
+
+  if (passes.length === 0) return { passes, verdict: 'nothing-to-fix', score, offers };
   return {
     passes,
     verdict: passes.some((entry) => entry.kept) ? 'improved' : 'nothing-worked',
     score,
+    offers,
   };
 }
 

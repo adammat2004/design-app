@@ -77,6 +77,45 @@ function bindReferences(
   return bindings;
 }
 
+/**
+ * How long a run may take before it stops being something to watch.
+ *
+ * Twenty-five seconds is about the limit of watching a thing happen without starting to wonder
+ * whether it has hung — and the vocabulary now allows twelve intents in one request, which
+ * legitimately compiles to more than that. Skip is always there, but a control the user has to
+ * reach for because the default pacing is wrong is a default that is wrong.
+ */
+export const MAX_RUN_MS = 25_000;
+
+/**
+ * Squeezes a long run into the cap.
+ *
+ * **Scaled uniformly, not truncated.** Zeroing the tail was the first design and it is worse in two
+ * ways: it collapses several operations onto the same instant, where nothing guarantees the order
+ * they are drawn in reads as anything, and it makes the last thing the user sees a jump — which is
+ * exactly the "spinner then a jump" this whole feature exists to replace. Scaling preserves every
+ * ordering and every gap in proportion; a forty-second run simply plays at 1.6×.
+ *
+ * Returns the operations untouched when the run already fits, which is the overwhelming majority:
+ * the demonstration and any one-or-two-change request come in well under.
+ */
+function withinBudget(operations: CompiledOperation[], budget: number): CompiledOperation[] {
+  const total = operations.reduce((latest, operation) => Math.max(latest, operation.end), 0);
+  if (total <= budget) return operations;
+
+  const scale = budget / total;
+  return operations.map((operation) => ({
+    ...operation,
+    start: operation.start * scale,
+    end: operation.end * scale,
+    leaves: operation.leaves.map((leaf) => ({
+      ...leaf,
+      start: leaf.start * scale,
+      end: leaf.end * scale,
+    })),
+  }));
+}
+
 export function prepareRun(
   run: DesignRun,
   initial: DesignElement[],
@@ -132,14 +171,16 @@ export function prepareRun(
     cursor = end === cursor ? cursor : end + (operation.pauseAfter ?? DEFAULT_PAUSE);
   });
 
+  const paced = withinBudget(operations, MAX_RUN_MS);
+
   return {
     run,
     initial,
-    operations,
+    operations: paced,
     bindings,
     refused,
-    total: operations.reduce((latest, operation) => Math.max(latest, operation.end), 0),
-    phases: phaseSpans(operations),
+    total: paced.reduce((latest, operation) => Math.max(latest, operation.end), 0),
+    phases: phaseSpans(paced),
     result: elements,
   };
 }

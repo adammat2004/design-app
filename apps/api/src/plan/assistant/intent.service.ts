@@ -10,6 +10,7 @@ import {
   AssistantIntentEnvelopeSchema,
   computeZones,
   type AssistantIntentEnvelope,
+  type AssistantTurn,
   type GardenZone,
   type PlanDocument,
 } from '@garden-studio/schema';
@@ -18,6 +19,7 @@ import { ANTHROPIC, type AnthropicClient } from './anthropic.module.js';
 import { INTENT_JSON_SCHEMA } from './intent-schema.js';
 import { renderInventory } from './inventory.js';
 import { ASSISTANT_RULES } from './rules.js';
+import { logAssistantUsage } from './usage.js';
 
 /**
  * The one place in the codebase that talks to a language model.
@@ -42,7 +44,11 @@ export class IntentService {
     return this.claude !== null;
   }
 
-  async interpret(message: string, document: PlanDocument): Promise<AssistantIntentEnvelope> {
+  async interpret(
+    message: string,
+    document: PlanDocument,
+    history: AssistantTurn[] = [],
+  ): Promise<AssistantIntentEnvelope> {
     if (!this.claude) {
       throw new ServiceUnavailableException(
         'The design assistant is not configured on this server.',
@@ -77,13 +83,38 @@ export class IntentService {
             cache_control: { type: 'ephemeral' },
           },
         ],
+        /*
+         * What was said, then what is there now, then what they want.
+         *
+         * All three are in one user turn, below the cache breakpoint, rather than as real
+         * alternating turns. The reason is that **the assistant's previous replies described a
+         * garden that has since been redrawn**: sent as assistant turns they read as statements of
+         * current fact and compete with the inventory, which is the only description of the plan
+         * that is still true. Quoted as history under a heading, they are what they actually are —
+         * a record of the conversation, there so that "a bit more" has something to refer to.
+         *
+         * History before the inventory because "we said this, the garden is now that, they want
+         * this" is the order the request is reasoned in.
+         */
         messages: [
           {
             role: 'user',
-            content: `${renderInventory(document, zones)}\n\nThe user says:\n${message}`,
+            content: [
+              renderHistory(history),
+              renderInventory(document, zones),
+              `The user says:\n${message}`,
+            ]
+              .filter((section) => section !== '')
+              .join('\n\n'),
           },
         ],
       });
+
+      /*
+       * Before the refusal check: a refused turn still cost input tokens and still says whether the
+       * cache read anything, and that is exactly the call somebody would otherwise never measure.
+       */
+      logAssistantUsage('Design assistant', response, this.logger);
 
       // Before `content`, always: a declined request is a successful HTTP response with an empty
       // or partial body, and indexing into it is how that becomes a crash.
@@ -130,6 +161,25 @@ export class IntentService {
 
     return parsed.data;
   }
+}
+
+/**
+ * The conversation so far, quoted rather than replayed as turns.
+ *
+ * Empty string for an empty history, so the caller can drop the section entirely — a heading with
+ * nothing under it invites the model to wonder what was withheld.
+ */
+function renderHistory(history: AssistantTurn[]): string {
+  if (history.length === 0) return '';
+
+  const lines = history.map(
+    (turn) => `${turn.role === 'user' ? 'They said' : 'You said'}: ${turn.text}`,
+  );
+  return [
+    'EARLIER IN THIS CONVERSATION',
+    '(Oldest first. The garden has changed since — the inventory below is what is there now.)',
+    ...lines,
+  ].join('\n');
 }
 
 /**

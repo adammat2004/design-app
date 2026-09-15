@@ -55,11 +55,47 @@ export const DesignIntentSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('move'),
     target: IntentTargetSchema,
-    towards: z.enum(['house', 'boundary', 'zone']),
+    /**
+     * What to move it towards.
+     *
+     * `element` is the useful one and was missing: "put the fire pit nearer the seating" is an
+     * ordinary thing to ask, and the other three destinations cannot express it — the house, the
+     * fence and a zone centroid are the only places anything could go. Still a relation, not a
+     * position: the destination is named by id and the planner reads its anchor.
+     */
+    towards: z.enum(['house', 'boundary', 'zone', 'element']),
     /** Required when `towards` is 'zone'; ignored otherwise. */
     zone: ZoneIdSchema.optional(),
+    /** Required when `towards` is 'element'; ignored otherwise. Must name a different element. */
+    elementId: z.string().optional(),
     away: z.boolean().default(false),
   }),
+  /**
+   * Push one side of an outline out, or pull it in.
+   *
+   * The thing a user asks for constantly and the vocabulary could not say: "make the border
+   * deeper". `resize` scales the whole shape about its own centre, which on a bed running the
+   * width of the garden makes it longer as well as deeper — not what anybody means.
+   *
+   * `edge` is a **relation**, like every other position in this file: which side of the shape, said
+   * in terms of the house rather than of the screen. `metres` is a size, which is allowed, because
+   * it is relative to the object rather than a place to put it.
+   */
+  z.object({
+    kind: z.literal('reshape'),
+    target: IntentTargetSchema,
+    edge: z.enum(['towards-house', 'away-from-house']),
+    /** Positive deepens that side; negative pulls it back. */
+    metres: z.number().min(-5).max(5),
+  }),
+  /**
+   * Take the furniture with it.
+   *
+   * On its own, `attach` says "whatever is standing on these things should keep standing on them".
+   * The planner adds the moves; the model does not have to know a dining set is on the terrace, and
+   * could not say where to put it if it did.
+   */
+  z.object({ kind: z.literal('attach'), target: IntentTargetSchema }),
   z.object({
     kind: z.literal('material'),
     target: IntentTargetSchema,
@@ -89,20 +125,33 @@ export type DesignIntent = z.infer<typeof DesignIntentSchema>;
 /**
  * What the model returns.
  *
- * `reply` is the only prose in the system that the model writes. It is deliberately asked for in
- * the conditional — "I've proposed", not "I've made" — because the changes have not happened yet
- * and may not survive the planner.
+ * `reply` is the only prose in the system that the model writes, and it is asked for in the
+ * **future tense** — "I'll enlarge the terrace" — because the designer now performs the work on the
+ * canvas rather than handing over a list to tick. Never the past tense: the planner may still refuse
+ * a line, and what actually landed is counted by the editor and written into the done message.
+ *
+ * Twelve intents rather than six. Six is a sentence's worth of *one* change; a request like "make
+ * this better for entertaining" is legitimately a terrace, a pergola, two paths and the lighting,
+ * and a cap that cuts it in half turns a whole answer into an arbitrary half of one.
  */
 export const AssistantIntentEnvelopeSchema = z.object({
   reply: z.string().min(1).max(600),
-  intents: z.array(DesignIntentSchema).max(6),
+  intents: z.array(DesignIntentSchema).max(12),
   suggestions: z.array(z.string().min(1).max(60)).min(3).max(4),
 });
 export type AssistantIntentEnvelope = z.infer<typeof AssistantIntentEnvelopeSchema>;
 
 /* ---------------------------------------------------------------- the wire contract */
 
-export const ChangeKindSchema = z.enum(['resize', 'move', 'material', 'add', 'remove']);
+/**
+ * What a line of the diff is doing.
+ *
+ * `reshape` joined the five when the planner learned to push one side of an outline out. It is not
+ * a `resize`: a resize scales about the anchor and keeps the shape, where a reshape moves some
+ * corners and not others — and the editor's animation is derived from the elements rather than from
+ * this, so calling it the wrong thing would only mislead a reader.
+ */
+export const ChangeKindSchema = z.enum(['resize', 'reshape', 'move', 'material', 'add', 'remove']);
 export type ChangeKind = z.infer<typeof ChangeKindSchema>;
 
 export const ProposedChangeSchema = z.object({
@@ -139,16 +188,49 @@ export const AssistantProposalSchema = z.object({
 export type AssistantProposal = z.infer<typeof AssistantProposalSchema>;
 
 /**
- * The request. Just the sentence.
+ * One turn of the conversation, as it is sent back on the next request.
+ *
+ * Text only, and short. What the designer needs from a previous turn is what was *said*, not what
+ * was done — the inventory already carries the garden as it now stands, and a turn is only in the
+ * history because the plan it described has since been redrawn. Sending the changes again would be
+ * a second, staler description of the same elements, and the model has no way to tell which of the
+ * two to believe.
+ */
+export const AssistantTurnSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  text: z.string().min(1).max(600),
+});
+export type AssistantTurn = z.infer<typeof AssistantTurnSchema>;
+
+/**
+ * The request: the sentence, and what was said just before it.
  *
  * It used to carry the elements, zones, boundary, house and unit. The server has all five in the
  * stored plan, and sending them again would mean the assistant could be asked to reason about a
- * garden that is not the one saved.
+ * garden that is not the one saved. The history is the one exception, and it is not about the
+ * garden: **"a bit more" is the second thing anybody types**, and with no history it resolves to
+ * nothing at all. Four turns, because the inventory says what the garden is now and older turns
+ * describe a garden that has been redrawn since.
+ *
+ * Optional with a default, so an older client and every existing test still parse.
  */
 export const ProposeRequestSchema = z.object({
   message: z.string().min(1).max(1000),
+  history: z.array(AssistantTurnSchema).max(8).default([]),
 });
 export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
+
+/**
+ * Whether this server can interpret a sentence at all.
+ *
+ * Asked once when the editor opens, so the panel can say "the designer needs an API key" *before*
+ * somebody types a request and waits for it to fail. It reports only what is configured — it
+ * cannot tell a missing key from a transient upstream failure, because `toHttpException` maps four
+ * different states to 503, so a 503 arriving mid-conversation is rendered as a failed message
+ * rather than as "no key".
+ */
+export const AssistantAvailabilitySchema = z.object({ model: z.boolean() });
+export type AssistantAvailability = z.infer<typeof AssistantAvailabilitySchema>;
 
 /**
  * A redesign asked for in the planner's own vocabulary, with no model in the loop.

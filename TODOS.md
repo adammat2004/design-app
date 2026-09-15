@@ -17,8 +17,13 @@ assistant's diff playable as a run, and a design reviewer that finds a fault and
 same accept-only-on-improvement gate the generator's own repair stage uses. See "Visual AI agents"
 in CLAUDE.md for the decisions and the measurements behind them.
 
-What is left is not plumbing: the planner's vocabulary is what limits the reviewer, and the scorer
-cannot currently tell the three concepts apart.
+The two panels became one: you talk to the designer and it performs the work on the canvas. See
+"One design agent" in CLAUDE.md, and note that the safety net it rests on did not exist as described
+until Phase A built it — one bracket per sentence, Stop writing a revision, and a revision that
+survives a reload.
+
+What is left is not plumbing: the scorer cannot tell the three concepts apart, and the reviewer
+still cannot say *where* a thing should go.
 
 - [x] **Phase 0 — measurement.** One editor scene build is ~34 ms on a 50-element garden, almost
       entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.
@@ -36,15 +41,25 @@ cannot currently tell the three concepts apart.
 - [x] **Phase 6 — the review loop.** `POST /:id/design/review`, `POST /:id/assistant/redesign`
       (model-free), and `lib/ai-run/review-loop.ts` with the accept-only-on-improvement gate.
       Measured: two pinched paths widened, 0.851 → 0.872, both kept.
-- [ ] **The intents the planner is missing, and they are what limit the reviewer.** `reshape` (an
-      edge and a distance, with the overlapping lawn giving up the same ground — the rule
-      `deepenBorder` already implements), `reroute` (reusing the generator's route builder),
-      `rotate`, and `attach: true` on a move so furniture travels with the host it stands on. Plus
-      the one the reviewer wants most: **a move that can name another element as its destination**,
-      which is what makes `move-to-zone`, `move-destination` and `move-tree` unperformable today —
-      the scorer says what is wrong and never where the thing should go instead. One `DesignIntent`
-      variant, one planner branch, one `ProposedChange` kind and one row in `UNPERFORMABLE` deleted
-      for each, with PostGIS tests as `planner.service.test.ts` has. **Effort: M.**
+- [x] **One design agent.** `DesignAgentPanel` + `AgentActivity` replace `AssistantPanel` and
+      `AiActivityPanel`; sending performs rather than proposing; four turns of memory; the review
+      pass scoped to what the request touched, with the rest offered as chips; `composeOutcome`
+      counting the garden rather than the proposal; a reduced-motion path through `applyProposal`;
+      `GET /plan-projects/assistant/availability`; a 25 s run cap; a bottom sheet below `lg`.
+- [x] **Three of the missing intents.** `reshape` (an edge and a distance, with the neighbour giving
+      up the same ground through a new `FillService.subtract` — both halves or neither), `attach`
+      (furniture travels with the host it stands on), and **`move` towards another element**.
+      `clearOfOthers` also stopped counting a surface's own furniture as an obstacle, which had made
+      every furnished terrace immovable.
+- [ ] **`reroute` and `rotate`.** The last two of the five. `reroute` reuses the generator's route
+      builder; `rotate` is the one `align` needs. Neither is something a user is likely to ask for
+      before the three above, which is why they were deferred. **Effort: S each.**
+- [ ] **Give `DesignIssue` a destination, so the reviewer can perform the three move repairs.**
+      `move` towards an element now exists, and it is **not** enough on its own — the earlier claim
+      that it would unblock `move-to-zone`, `move-destination` and `move-tree` was wrong. The scorer
+      says what is wrong and never where the thing should go instead, and there is no field on
+      `DesignIssue` to put a destination in. That is a change to the scorer, not to the vocabulary.
+      **Effort: M.**
 - [ ] **The scorer cannot tell the three concepts apart.** `readDesignFor` gives slot A `social`,
       B `open` and C `planted` with different primary zones, and scored across four fixtures all
       three produce **the same total to four decimal places and the same issues** — no principle
@@ -64,10 +79,14 @@ cannot currently tell the three concepts apart.
       keyed on the bed's outline, layers and maturity would cut a drag frame and an operation
       boundary by an order of magnitude. Not specific to this feature — it is the cost of every drag
       in the editor today. **Effort: S.**
-- [ ] **Decide whether a revision should outlive the session.** Replay and Compare are session memory
-      on purpose, matching undo history. Persisting them means `layout.revisions` with a `.default([])`
-      (an addition, so no migration) and a decision about how many to keep. Only worth it if somebody
-      actually wants to replay a redesign the next day. **Effort: S.**
+- [x] **Decide whether a revision should outlive the session.** Decided and built, and the answer
+      splits: **Undo and Compare persist; Replay does not.** `layout.revision` holds one record —
+      the request, the garden `before`, and an `afterFingerprint` — reached from the panel by
+      `CarriedOverRevision`. Not `layout.revisions` capped at three, as the plan first said: measured,
+      one element list is 17KB against an 18.6KB document, so three records holding both sides would
+      quadruple every autosave payload. The hash is what tells "still what the designer left" from
+      "edited since", which is what `undoRevision` gates on. Replaying a redesign the next day would
+      need the whole prepared timeline stored and nobody has asked for it.
 
 ## In flight — plan realism
 
@@ -558,8 +577,10 @@ grade and the shadows that shipped.
       making the shortlist count — a tenth of a point of bonus — cost mean 0.872 → 0.868 and the
       worst plan 0.739 → 0.680, so it was cut back to deciding only between compositions the plot
       scores level.
-      **Not verified**: no live call has been made. `usage.cache_read_input_tokens` on the first one
-      is the number that confirms the prompt-cache breakpoint is earning its place.
+      **Not verified on this path**: no live call has been made through the strategic brief itself.
+      The prompt cache it shares with the other two assistants *has* been measured and works — see
+      the cache note in CLAUDE.md — and `logAssistantUsage` reports this call's own usage when it
+      runs. This is the call where cost matters most: once per generation, not once per question.
 
 - [ ] **Maturity toggle (year 1 vs year 5)**, NOT a seasonal toggle. A density-and-size scalar
       over the planting forms. Answers "how long until it looks like this", which is the second
@@ -582,10 +603,21 @@ grade and the shadows that shipped.
       gives a side the same unrolled strip the wall has. Not done: dragging on *touch* — the stage
       still binds mouse events only, which is a pre-existing gap.
 
-- [ ] **Verify the live Anthropic call.** `ANTHROPIC_API_KEY` is now present in `apps/api/.env`
-      and the path has never been exercised — every assistant test mocks the SDK. Check
-      `usage.cache_read_input_tokens` on the first real call before claiming the caching win.
-      Note `CLAUDE.md` still says there is no key; correct that at the same time.
+- [x] **Verify the live Anthropic call, and measure the prompt cache.** Done, and it **reverses**
+      the guess that preceded it. Two calls with the identical system prefix against `claude-opus-5`:
+      the first wrote 1,417 tokens into the cache and read 0, the second wrote 0 and read **1,417**.
+      So the breakpoint on `ASSISTANT_RULES` earns its place. The estimate that said it might never
+      hit was wrong twice: it took ~800 tokens from a characters-over-four heuristic where the real
+      tokenisation is 1,417, comfortably over the 1,024-token minimum. `logAssistantUsage`
+      (`assistant/usage.ts`) now reports input, output, cache write and cache read on every call
+      from all three assistants, and warns in words when a breakpoint neither writes nor reads —
+      so this cannot quietly stop being true. Counts only: never the prompt, never the key.
+
+- [ ] **Write a DESIGN.md.** Every review of this project's UI calibrates against `globals.css` and
+      prose, so each panel re-decides its own spacing, type sizes and control heights from scratch —
+      which is how the editor came to have two AI panels in two visual registers. A written system
+      would have made that a diff rather than a discovery. **Effort: S**, and it pays for itself on
+      the next panel.
 
 - [x] **Feedback telemetry.** `design_events` (jsonb payload, cascading from the plan),
       `POST /plan-projects/:id/events`, and a batching fire-and-forget emitter in

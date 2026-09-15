@@ -10,6 +10,7 @@ import {
 import { BudgetBandSchema, DesiredFeatureSchema, MaintenanceLevelSchema } from './brief.js';
 import { ConceptExplanationSchema, ConceptStrategySchema } from './design/concept-explanation.js';
 import { DesignScoreSchema } from './design/design-score.js';
+import { hashString } from './prng.js';
 import { formatArea, formatLength, formatLengthValue, type Unit } from './units.js';
 import { ZoneIdSchema } from './zone-id.js';
 
@@ -292,6 +293,39 @@ export const ConceptsSectionSchema = z.object({
 });
 export type ConceptsSection = z.infer<typeof ConceptsSectionSchema>;
 
+/**
+ * The garden as it was before an AI redesign, so the user can get it back after a reload.
+ *
+ * **Why this has to persist at all.** While the designer proposed a diff and waited for Apply, a
+ * misreading cost nothing: you declined it. Now the designer performs the change and autosave
+ * stores it within the second, so a reload with only session memory leaves no route back at all.
+ * Undo history deliberately does not survive a reload; this is the one thing that must.
+ *
+ * **Why it is one record and not a stack, and why it holds only `before`.** A full element list is
+ * about 17 KB on an ordinary garden, and the whole document travels on every autosave — three
+ * revisions holding both sides would quadruple it for a feature used once in a while. One record
+ * with one list is the same order of cost as `pristine`, which is already here for the same kind of
+ * reason.
+ *
+ * `afterFingerprint` is how a reloaded session knows the plan is still what the run left: hash the
+ * loaded elements and compare. Cheap, and it saves storing the second list — which is nearly always
+ * `elements` anyway, since the offer to undo only stands while nothing else has been edited.
+ *
+ * Replay is not covered and is not meant to be: replaying needs the operation timeline, which holds
+ * a copy of the element list per operation. That stays in session memory.
+ */
+export const DesignRevisionRecordSchema = z.object({
+  id: z.string().max(80),
+  /** What the person actually asked for, so the offer can name it. */
+  request: z.string().max(1000),
+  createdAt: z.number().int().nonnegative(),
+  /** The garden before the redesign. What Undo and Compare restore. */
+  before: z.array(DesignElementSchema),
+  /** A hash of the garden the run left, to tell "untouched since" from "edited since". */
+  afterFingerprint: z.string().max(40),
+});
+export type DesignRevisionRecord = z.infer<typeof DesignRevisionRecordSchema>;
+
 export const LayoutSectionSchema = z.object({
   elements: z.array(DesignElementSchema).default([]),
   /** Concept id this layout came from. A change to the chosen concept re-seeds it. */
@@ -301,8 +335,31 @@ export const LayoutSectionSchema = z.object({
    * Stored rather than derived because it cannot be recovered once the concept is regenerated.
    */
   pristine: z.array(DesignElementSchema).nullable().default(null),
+  /**
+   * The last AI redesign, so it can be undone after a reload. An addition with a default, so every
+   * stored plan reads back unchanged and no migration is needed.
+   */
+  revision: DesignRevisionRecordSchema.nullable().default(null),
 });
 export type LayoutSection = z.infer<typeof LayoutSectionSchema>;
+
+/**
+ * A stable hash of what a layout *is*, ignoring key order.
+ *
+ * Only the fields that make a garden a different garden: identity, shape, and the properties the
+ * editor can change. A pattern origin or a re-render does not make it a different plan.
+ */
+export function layoutFingerprint(elements: DesignElement[]): string {
+  const shape = elements.map((element) => [
+    element.id,
+    element.category,
+    element.material ?? '',
+    element.name ?? '',
+    element.hidden === true,
+    JSON.stringify(element.shape),
+  ]);
+  return hashString(JSON.stringify(shape)).toString(36);
+}
 
 /**
  * Whether the editor may reshape this element.

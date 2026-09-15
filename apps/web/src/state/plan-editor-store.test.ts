@@ -636,7 +636,10 @@ describe('the labels toggle', () => {
     usePlanEditorStore.getState().toggleLabels();
     expect(usePlanEditorStore.getState().labelsVisible).toBe(true);
 
-    hydratePlanEditorStore({ elements: [], seededFrom: null, pristine: null }, Date.now());
+    hydratePlanEditorStore(
+      { elements: [], seededFrom: null, pristine: null, revision: null },
+      Date.now(),
+    );
 
     expect(usePlanEditorStore.getState().labelsVisible).toBe(false);
   });

@@ -1,8 +1,9 @@
-import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import {
   ProposeGardenRequestSchema,
   ProposeRequestSchema,
   RedesignRequestSchema,
+  type AssistantAvailability,
   type AssistantProposal,
   type GardenProposal,
   type ProposeGardenRequest,
@@ -28,8 +29,21 @@ export class AssistantController {
   ) {}
 
   /**
-   * Turns a sentence into a reviewable diff. Reads the stored plan and writes nothing — applying a
-   * change is the editor's job, and it arrives later as an ordinary layout patch.
+   * Whether this server can interpret a sentence at all.
+   *
+   * **Above the `:id` routes on purpose.** Nest matches in declaration order, so declared after
+   * them `assistant/availability` would be swallowed by `:id/...` with "availability" taken as a
+   * project id — which `ParseUUIDPipe` then rejects as a 400. It reads no project and needs none:
+   * whether a key is configured is a fact about the server.
+   */
+  @Get('assistant/availability')
+  availability(): AssistantAvailability {
+    return { model: this.assistant.available };
+  }
+
+  /**
+   * Turns a sentence into a diff the editor performs. Reads the stored plan and writes nothing —
+   * changing the garden is the editor's job, and it arrives later as an ordinary layout patch.
    */
   @Post(':id/assistant/messages')
   async propose(
@@ -38,7 +52,7 @@ export class AssistantController {
   ): Promise<AssistantProposal> {
     const project = await this.projects.findOne(id);
 
-    return this.assistant.propose(id, body.message, project.document);
+    return this.assistant.propose(id, body.message, project.document, body.history);
   }
 
   /**

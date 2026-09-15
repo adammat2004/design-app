@@ -7,6 +7,7 @@ import {
   type DesignBrief,
   type GardenBrief,
 } from '@garden-studio/schema';
+import { logAssistantUsage } from '../usage.js';
 import { reconcileBriefs } from '../../generation/design/brief-reconcile.js';
 import type { Requirements, SiteAnalysis } from '../../generation/design/types.js';
 import { ANTHROPIC, type AnthropicClient } from '../anthropic.module.js';
@@ -156,6 +157,12 @@ export class DesignBriefService {
         },
       ],
     });
+
+    /*
+     * Measured here too, and this is the call where it matters most for cost: it runs once per
+     * *generation* rather than once per question, and step 4 generates the moment a user arrives.
+     */
+    logAssistantUsage('Strategic brief', response, this.logger);
 
     // Before `content`, always: a declined request is a successful HTTP response with an empty or
     // partial body, and indexing into it is how that becomes a crash.

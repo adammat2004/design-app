@@ -46,14 +46,6 @@ export interface ControllerOptions {
   clock: Clock;
   sink: RunSink;
   plot?: Point[];
-  /**
-   * What `cancel` restores.
-   *
-   * The run's own starting point for a first play — but for a replay it is the plan the user
-   * already had, which is *not* where the replay began. Stopping a replay half way must not throw
-   * away the redesign it is replaying.
-   */
-  restoreTo?: DesignElement[];
 }
 
 export function createRunController({
@@ -61,7 +53,6 @@ export function createRunController({
   clock,
   sink,
   plot = [],
-  restoreTo,
 }: ControllerOptions): RunController {
   let elapsed = 0;
   let startedAt: number | null = null;
@@ -155,17 +146,23 @@ export function createRunController({
       stop('complete');
     },
 
+    /**
+     * Stops where it is, and **keeps what has landed**.
+     *
+     * It used to restore the run's starting point, which reads as the safer answer and is the worse
+     * one: a Stop that discards teaches people not to press it, so they let a run they have already
+     * seen enough of play to the end and undo it afterwards. In a conversation "stop, I like the
+     * layout, leave the planting" is the ordinary thing to mean.
+     *
+     * Only settled operations are in the plan — the executor commits at boundaries — so what stays
+     * is a garden the run actually described, never a half-applied one. Going back is Undo's job,
+     * and the store writes the revision that makes Undo possible.
+     */
     cancel() {
       if (finished) return;
       cancelFrame?.();
       cancelFrame = null;
       startedAt = null;
-      /*
-       * Restoring is a commit like any other, so it goes through the same bracket the run has held
-       * open all along — which is what makes a cancelled run leave no trace in the undo history
-       * rather than an entry that undoes to itself.
-       */
-      sink.commit(restoreTo ?? prepared.initial, -1);
       sink.frame({ ...evaluateRun(prepared, 0, plot), motion: [], overlays: [], suppress: [], cursor: null, chip: null });
       stop('cancelled');
     },

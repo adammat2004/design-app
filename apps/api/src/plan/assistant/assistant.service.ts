@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type {
   AssistantProposal,
+  AssistantTurn,
   DesignElement,
   DesignIntent,
   PlanDocument,
@@ -73,6 +74,7 @@ export class AssistantService {
     projectId: string,
     message: string,
     document: PlanDocument,
+    history: AssistantTurn[] = [],
   ): Promise<AssistantProposal> {
     /*
      * Availability before the rate limit, not after. A server with no key answers 503 for ever, so
@@ -87,7 +89,7 @@ export class AssistantService {
 
     this.limit.check(projectId);
 
-    const envelope = await this.intent.interpret(message, document);
+    const envelope = await this.intent.interpret(message, document, history);
     const { changes, unplaceable } = await this.planner.plan(document, envelope.intents);
 
     return {

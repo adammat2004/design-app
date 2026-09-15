@@ -17,6 +17,7 @@ export {
   featureElements,
   fillElements,
   isLocked,
+  layoutFingerprint,
   type DesignElement,
   type ElementCategory,
   type ElementRole,

@@ -225,34 +225,13 @@ export function runFromProposal(
     }
   }
 
-  return {
-    id,
-    request,
-    operations,
-    summary: summarise(changes),
-  };
-}
-
-/**
- * What the run did, counted from the changes themselves.
- *
- * Counted rather than composed from the assistant's prose: the reply was written before the planner
- * decided what would fit, and the panel must not claim a change the run did not carry.
- */
-function summarise(changes: ProposedChange[]): string {
-  const counts = new Map<string, number>();
-  for (const change of changes) counts.set(change.kind, (counts.get(change.kind) ?? 0) + 1);
-
-  const words: Record<string, [string, string]> = {
-    add: ['added', 'added'],
-    remove: ['removed', 'removed'],
-    move: ['moved', 'moved'],
-    resize: ['resized', 'resized'],
-    material: ['re-materialised', 're-materialised'],
-  };
-
-  const parts = [...counts.entries()].map(
-    ([kind, count]) => `${count} ${count === 1 ? 'element' : 'elements'} ${words[kind]?.[0] ?? 'changed'}`,
-  );
-  return parts.length === 0 ? 'Nothing changed.' : `${parts.join(', ')}.`;
+  /*
+   * No summary. `DesignRun.summary` is optional and this deliberately leaves it unset.
+   *
+   * There used to be a `summarise` here that counted the proposal — "4 elements resized" — and it
+   * was wrong whenever the planner refused a line, because the count was taken before anything had
+   * been attempted. What the run did is measured afterwards from the garden itself, by
+   * `composeOutcome`. A run cannot honestly describe its own result before it has run.
+   */
+  return { id, request, operations };
 }

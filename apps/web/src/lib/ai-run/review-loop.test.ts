@@ -264,3 +264,95 @@ describe('the loop', () => {
     expect(elements.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+/**
+ * A reviewer that follows a request has to stay near it.
+ *
+ * Asking for a bigger terrace and watching the designer go on to move the store and rewrite the
+ * lighting is the moment the user stops feeling they are driving. What it found and left alone
+ * comes back as an offer, which is the answer to "it saw something wrong and said nothing?".
+ */
+describe('scoping a review to what the request touched', () => {
+  const OTHER: DesignElement = {
+    id: 'e-9',
+    category: 'paved-area',
+    role: 'feature',
+    name: 'Path to the store',
+    zone: 'back',
+    shape: { kind: 'polyline', width: 0.5, points: [{ x: 1, y: 1 }, { x: 6, y: 6 }] },
+  } as DesignElement;
+
+  const outside = issue({
+    code: 'route-pinch',
+    subjects: ['e-9'],
+    message: 'The path to the store is pinched.',
+  });
+
+  it('acts on a fault about an element the request changed', async () => {
+    const { tools, propose } = harness([0.7, 0.9, 0.9]);
+
+    const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
+
+    expect(propose).toHaveBeenCalledTimes(1);
+    expect(outcome.passes).toHaveLength(1);
+    expect(outcome.offers).toEqual([]);
+  });
+
+  it('offers a fault about something else rather than acting on it', async () => {
+    const { tools, propose } = harness([0.7], {
+      score: vi.fn(async () => score(0.7, [outside])),
+      elements: () => [ELEMENT, OTHER],
+    });
+
+    const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
+
+    expect(propose).not.toHaveBeenCalled();
+    expect(outcome.passes).toEqual([]);
+    expect(outcome.offers.map((offer) => offer.issue.message)).toEqual([
+      'The path to the store is pinched.',
+    ]);
+    /* The intents come with it, so accepting costs no second look at the plan. */
+    expect(outcome.offers[0]!.intents[0]).toMatchObject({ kind: 'resize' });
+  });
+
+  it('acts on everything when no scope was given', async () => {
+    const { tools, propose } = harness([0.7, 0.9, 0.9], {
+      score: vi.fn(async () => score(0.7, [outside])),
+      elements: () => [ELEMENT, OTHER],
+    });
+
+    const outcome = await runReviewLoop(tools);
+
+    expect(propose).toHaveBeenCalledTimes(1);
+    /* Nothing is out of scope, so there is nothing to offer. */
+    expect(outcome.offers).toEqual([]);
+  });
+
+  /**
+   * `DesignIssue.subjects` is "element ids where they exist, else zone ids or feature names", so a
+   * fault about "the back garden" would produce an offer whose intents target an element that does
+   * not exist — the planner refuses every line and the chip does nothing. A chip that does nothing
+   * is worse than an absent one, because the user has to press it to find out.
+   */
+  it('drops an offer whose subjects are not element ids', async () => {
+    const zoneFault = issue({ code: 'zone-fragmented', subjects: ['back'] });
+    const { tools } = harness([0.7], {
+      score: vi.fn(async () => score(0.7, [zoneFault])),
+      elements: () => [ELEMENT],
+    });
+
+    const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
+
+    expect(outcome.offers).toEqual([]);
+  });
+
+  /** A fault it already tried is not offered back: it has had its turn. */
+  it('does not offer what it already attempted', async () => {
+    const { tools } = harness([0.7, 0.9, 0.9]);
+
+    const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
+
+    expect(outcome.offers).toEqual([]);
+    expect(outcome.passes[0]!.kept).toBe(true);
+  });
+});

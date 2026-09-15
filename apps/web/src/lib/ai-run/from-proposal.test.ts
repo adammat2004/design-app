@@ -241,11 +241,17 @@ describe('a whole proposal', () => {
     expect(prepared.result).not.toBe(prepared.initial);
   });
 
-  it('counts what it did rather than repeating what the model said', () => {
+  /*
+   * A run used to carry a `summary` counted off the proposal, which is a claim about an outcome
+   * made before anything was attempted — so a request whose last two lines the planner then refused
+   * still reported four changes. What happened is measured afterwards, by `composeOutcome`.
+   */
+  it('makes no claim about its own result, because it has not run yet', () => {
     const run = runFromProposal(changes, 'Say something untrue', 'assistant-m1')!;
 
-    expect(run.summary).toContain('1 element');
-    expect(run.summary).not.toContain('untrue');
+    expect(run.summary).toBeUndefined();
+    /* The request is kept verbatim, as the label for the revision — but it is not an outcome. */
+    expect(run.request).toBe('Say something untrue');
   });
 
   it('is nothing at all when every line was unticked', () => {

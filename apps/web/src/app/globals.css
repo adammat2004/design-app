@@ -25,6 +25,16 @@
   /* Nudges rather than errors — the character counter nearing its cap. Same hex as the
      "replace" status stroke, so the wizard keeps one warm colour rather than two. */
   --color-garden-warn: #d98324;
+  /*
+   * The designer's own colour: what the AI is doing, as opposed to what you have selected.
+   *
+   * The same hex as `COLOUR.ai` in canvas-colours.ts, and there is a test that the two agree —
+   * the panel and the canvas are on screen together, and a cursor drawn in one indigo beside a
+   * stage strip in another reads as two different things happening. Not the selection green,
+   * because both are visible at once and mean opposite things; not the clash red, because the
+   * canvas already uses red for "that edit was refused".
+   */
+  --color-garden-ai: #4338ca;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,7 +1,10 @@
 import {
+  AssistantAvailabilitySchema,
   AssistantProposalSchema,
   ReviewDesignResultSchema,
   RedesignResultSchema,
+  type AssistantAvailability,
+  type AssistantTurn,
   type DesignElement,
   type DesignIntent,
   type RedesignResult,
@@ -210,19 +213,35 @@ export function generateConcepts(
 }
 
 /**
- * Asks the assistant for a diff. Sends only the sentence — the server reads the plan it already
- * has, which is also what stops the assistant reasoning about a garden that is not the saved one.
+ * Asks the designer what to do about a sentence.
+ *
+ * Sends the sentence and the last few turns, and nothing about the garden — the server reads the
+ * plan it already has, which is what stops the designer reasoning about a garden that is not the
+ * saved one. The history is the exception and it is not about the garden: without it "a bit more"
+ * refers to nothing.
  */
 export function proposeChanges(
   id: string,
   message: string,
+  history: AssistantTurn[] = [],
   signal?: AbortSignal,
 ): Promise<AssistantProposal> {
   return request(`/plan-projects/${id}/assistant/messages`, AssistantProposalSchema, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, history }),
     signal,
   });
+}
+
+/**
+ * Whether this server can interpret a sentence at all.
+ *
+ * Asked once when the editor opens so the panel can say the designer needs a key *before* somebody
+ * types a request and waits for it to fail. Not a project route: whether a key is configured is a
+ * fact about the server.
+ */
+export function assistantAvailability(signal?: AbortSignal): Promise<AssistantAvailability> {
+  return request('/plan-projects/assistant/availability', AssistantAvailabilitySchema, { signal });
 }
 
 /**

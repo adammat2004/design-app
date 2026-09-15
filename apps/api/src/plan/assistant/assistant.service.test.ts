@@ -102,6 +102,36 @@ describe('AssistantService', () => {
 
     expect(proposal.reply).toBe('I have proposed two changes.');
   });
+
+  /** The conversation reaches the model, or a follow-up has nothing to refer back to. */
+  it('passes the history through to the interpreter', async () => {
+    const interpret = vi.fn(async () => envelope());
+    const assistant = new AssistantService(
+      { available: true, interpret } as unknown as IntentService,
+      { plan: vi.fn(async () => ({ changes: [], unplaceable: [] })) } as unknown as PlannerService,
+      new AssistantRateLimit(),
+    );
+
+    const document = plan();
+    const history = [{ role: 'user' as const, text: 'make the patio bigger' }];
+    await assistant.propose('p1', 'a bit more', document, history);
+
+    expect(interpret).toHaveBeenCalledWith('a bit more', document, history);
+  });
+
+  /** An older client that sends no history still works: the field is additive, with a default. */
+  it('treats a request with no history as a first turn', async () => {
+    const interpret = vi.fn(async () => envelope());
+    const assistant = new AssistantService(
+      { available: true, interpret } as unknown as IntentService,
+      { plan: vi.fn(async () => ({ changes: [], unplaceable: [] })) } as unknown as PlannerService,
+      new AssistantRateLimit(),
+    );
+
+    await assistant.propose('p1', 'make the patio bigger', plan());
+
+    expect(interpret).toHaveBeenCalledWith('make the patio bigger', expect.anything(), []);
+  });
 });
 
 describe('rate limiting', () => {

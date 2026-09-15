@@ -11,13 +11,20 @@ import {
   type SymbolId,
 } from '@garden-studio/schema';
 import type { Maturity } from '@/lib/render/scene';
-import type { DesignEvent, LayoutSection, Point, ProposedChange } from '@garden-studio/schema';
+import type {
+  DesignEvent,
+  DesignRevisionRecord,
+  LayoutSection,
+  Point,
+  ProposedChange,
+} from '@garden-studio/schema';
 import { draftPolygon, polygonCentroid } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import {
   elementAnchor,
   isLocked,
+  layoutFingerprint,
   type DesignElement,
   type ElementCategory,
   type GeneratedConcept,
@@ -124,6 +131,14 @@ interface PlanEditorState {
   seededFrom: string | null;
   /** The concept exactly as generated, so Reset has something true to go back to. */
   pristine: DesignElement[] | null;
+  /**
+   * The last AI redesign, so it can be undone after a reload.
+   *
+   * On the document rather than in session memory for the reason `pristine` is: the thing it
+   * protects against outlives the tab. A redesign performs immediately and autosaves within the
+   * second, so without this a misread request that the user reloads past is gone for good.
+   */
+  revision: DesignRevisionRecord | null;
 
   /*
    * Ephemeral. Outside history for the reason step 2 keeps its tools out: Undo should rewind the
@@ -207,6 +222,10 @@ interface PlanEditorState {
   beginGesture: () => void;
   /** `silent` suppresses the design event, for a caller that reports its own. */
   endGesture: (options?: { silent?: boolean }) => void;
+  /** Records a redesign, so it can be taken back after a reload. */
+  recordRevision: (record: DesignRevisionRecord) => void;
+  /** Takes the last recorded redesign back. Works across a reload, unlike the history stack. */
+  undoRevision: () => void;
   undo: () => void;
   redo: () => void;
   resetToConcept: () => void;
@@ -231,8 +250,19 @@ interface PlanEditorState {
   clearMeasurement: () => void;
   clearClash: () => void;
 
-  /** Applies the accepted lines of one proposal as a single history entry. */
-  applyProposal: (changes: ProposedChange[], acceptedIds: string[]) => ApplyOutcome;
+  /**
+   * Applies the accepted lines of one proposal as a single history entry.
+   *
+   * `withinGesture` says a bracket is already open and this must not close it. That is the
+   * reduced-motion path: the design agent opens one bracket over the whole sentence, and a nested
+   * `endGesture` here would close it early, push its own undo entry, and leave the review passes
+   * that follow in a second entry — the exact defect one-bracket-per-sentence exists to prevent.
+   */
+  applyProposal: (
+    changes: ProposedChange[],
+    acceptedIds: string[],
+    options?: { withinGesture?: boolean },
+  ) => ApplyOutcome;
 }
 
 /* ---------------------------------------------------------------- the property, read live */
@@ -419,6 +449,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     seededFrom: null,
     pristine: null,
+    revision: null,
 
     mode: 'select',
     selectedId: null,
@@ -459,6 +490,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         future: [],
         seededFrom: concept.id,
         pristine: elements,
+        /* A fresh concept is a different garden; an offer to undo a redesign of the old one is not. */
+        revision: null,
         selectedId: null,
         placingCategory: null,
         placingSymbol: null,
@@ -769,6 +802,32 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         };
       }),
 
+    /**
+     * Records a redesign so it can be undone after a reload.
+     *
+     * Deliberately not a history entry of its own: the run's gesture bracket already wrote one, and
+     * this is the copy that outlives the tab. `before` is the garden the sentence started from, and
+     * `afterFingerprint` is how a reloaded session tells "still what the designer left" from "edited
+     * since".
+     */
+    recordRevision: (record) => set({ revision: record }),
+
+    /**
+     * Puts the plan back to before the last redesign, whether or not this is the same session.
+     *
+     * In-session, Undo does the same thing and does it through the history stack. This is for the
+     * case that stack cannot reach: the user reloaded, or came back the next day, and the redesign
+     * is the thing they want gone. It commits like any other edit, so it is itself undoable.
+     */
+    undoRevision: () => {
+      const { revision, present } = get();
+      if (!revision) return;
+      if (layoutFingerprint(present.elements) !== revision.afterFingerprint) return;
+
+      commit((draft) => ({ ...draft, elements: revision.before }));
+      set({ revision: null, selectedId: null });
+    },
+
     undo: () =>
       set((state) => {
         const previous = state.past.at(-1);
@@ -877,14 +936,15 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      * The whole diff sits inside one gesture bracket, so it costs exactly one Undo however many
      * lines it carried.
      */
-    applyProposal: (changes, acceptedIds) => {
+    applyProposal: (changes, acceptedIds, options = {}) => {
       const outcome: ApplyOutcome = { applied: [], refused: [] };
       const accepted = changes.filter((change) => acceptedIds.includes(change.id));
       if (accepted.length === 0) return outcome;
 
       const boundary = boundaryNow();
 
-      get().beginGesture();
+      const nested = options.withinGesture === true;
+      if (!nested) get().beginGesture();
 
       for (const change of accepted) {
         const draft = get().present;
@@ -952,7 +1012,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         outcome.applied.push(change.id);
       }
 
-      get().endGesture();
+      if (!nested) get().endGesture();
       if (outcome.applied.length > 0) set({ lastSavedAt: Date.now() });
 
       return outcome;
@@ -1111,6 +1171,7 @@ export function resetPlanEditorStoreForTests(): void {
     present: emptyDraft(),
     seededFrom: null,
     pristine: null,
+    revision: null,
     lastSavedAt: Date.now(),
   });
 }
@@ -1138,6 +1199,7 @@ export function hydratePlanEditorStore(section: LayoutSection, savedAt: number):
     present: { elements: section.elements },
     seededFrom: section.seededFrom,
     pristine: section.pristine,
+    revision: section.revision,
     lastSavedAt: savedAt,
   });
 }

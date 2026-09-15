@@ -261,6 +261,21 @@ export function EditorCanvas() {
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
+    /*
+     * Escape stops the designer, and it is checked before everything else.
+     *
+     * Escape means "stop what is happening" everywhere else in this application, and while a
+     * redesign is playing the thing that is happening is the redesign — not the selection, which
+     * the run is moving around on its own anyway. Checked above the `aiActive` guard because that
+     * guard exists to keep the user's *edits* out while the AI has the plan, and stopping it is the
+     * one interaction that must work exactly then.
+     */
+    if (event.key === 'Escape' && aiActive) {
+      event.preventDefault();
+      useAiRunStore.getState().cancel();
+      return;
+    }
+
     /* Delete and the arrow keys are edits like any other — see `elementsDraggable`. */
     if (aiActive || comparing) return;
 

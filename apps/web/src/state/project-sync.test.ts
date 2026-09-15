@@ -136,6 +136,26 @@ describe('debouncing', () => {
     expect(patchLayout).not.toHaveBeenCalled();
   });
 
+  /*
+   * The record that lets a redesign be undone after a reload sits outside the history stack, like
+   * `pristine` and `skipped` — so a subscription watching only `present` would never save it, and
+   * the one thing it exists to survive is exactly a reload.
+   */
+  it('saves the layout when only the redesign record changes', async () => {
+    usePlanEditorStore.getState().recordRevision({
+      id: 'r-1',
+      request: 'Better for entertaining',
+      createdAt: Date.now(),
+      before: [],
+      afterFingerprint: 'abc',
+    });
+
+    await vi.runAllTimersAsync();
+
+    expect(patchLayout).toHaveBeenCalledTimes(1);
+    expect(patchLayout.mock.calls[0]![2]).toMatchObject({ revision: { id: 'r-1' } });
+  });
+
   it('saves once when the edit finishes', async () => {
     const editor = usePlanEditorStore.getState();
     editor.beginGesture();

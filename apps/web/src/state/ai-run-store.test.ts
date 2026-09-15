@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesignRunSchema, type DesignRun } from '@garden-studio/schema';
 import { manualClock, type ManualClock } from '@/lib/ai-run/clock';
-import type { DesignElement } from '@/lib/concepts';
+import { layoutFingerprint, type DesignElement, type GeneratedConcept } from '@/lib/concepts';
 import { resetAiRunStoreForTests, selectRunActive, setRunClockFactory, useAiRunStore } from './ai-run-store';
 import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
 import { setProjectRevision } from './revision';
-import { resetPlanEditorStoreForTests, usePlanEditorStore } from './plan-editor-store';
+import {
+  hydratePlanEditorStore,
+  resetPlanEditorStoreForTests,
+  usePlanEditorStore,
+} from './plan-editor-store';
 
 /*
  * Both mocks follow `project-sync.test.ts`: what is interesting here is the plumbing — which events
@@ -52,6 +56,21 @@ function element(over: Partial<DesignElement> & { id: string }): DesignElement {
     zone: 'back',
     ...over,
   };
+}
+
+/** Enough of a concept to re-seed the editor with. */
+function concept(elements: DesignElement[]): GeneratedConcept {
+  return {
+    id: 'c2-0',
+    name: 'Another garden',
+    recommended: true,
+    summary: 'A second concept.',
+    style: 'Modern',
+    budget: 'medium',
+    maintenance: 'medium',
+    requestedFeaturesIncluded: [],
+    elements,
+  } as GeneratedConcept;
 }
 
 function seed(elements: DesignElement[]): void {
@@ -157,7 +176,13 @@ describe('what a run costs the undo stack', () => {
     expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 6, y: 6 } });
   });
 
-  it('leaves no entry at all when it is stopped', () => {
+  it('keeps what landed when it is stopped, and leaves a way back', () => {
+    /*
+     * Stop used to restore the snapshot, which left no undo entry and no revision. In a
+     * conversation "stop, I like the layout, leave the planting" is the ordinary thing to mean, so
+     * Stop keeps the settled operations — and must leave a revision, or the panel's "Undo to put it
+     * back" is a sentence the product cannot honour.
+     */
     const before = editor().present.elements;
 
     ai().start(TWO_MOVES());
@@ -166,10 +191,39 @@ describe('what a run costs the undo stack', () => {
 
     ai().cancel();
 
-    // Put back as found, and nothing to undo: stopping leaves no trace.
-    expect(editor().present.elements).toBe(before);
-    expect(editor().past).toHaveLength(0);
     expect(ai().status).toBe('cancelled');
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 8, y: 6 } });
+    expect(editor().past).toHaveLength(1);
+
+    const revision = ai().revision!;
+    expect(revision.initial).toBe(before);
+    expect(revision.result).toBe(editor().present.elements);
+    expect(revision.complete).toBe(false);
+  });
+
+  it('undoes a stopped run back to where the sentence began', () => {
+    const before = editor().present.elements;
+
+    ai().start(TWO_MOVES());
+    clock.advance(700);
+    ai().cancel();
+
+    ai().undoRun();
+
+    expect(editor().present.elements).toBe(before);
+  });
+
+  it('will not replay a run the user stopped', () => {
+    // `prepared` is the whole timeline, including the part they stopped.
+    ai().start(TWO_MOVES());
+    clock.advance(700);
+    ai().cancel();
+
+    const stopped = editor().present.elements;
+    ai().replay();
+
+    expect(ai().status).toBe('cancelled');
+    expect(editor().present.elements).toBe(stopped);
   });
 
   it('closes its bracket even when it is stopped before anything landed', () => {
@@ -419,5 +473,179 @@ describe('the design reviewer', () => {
     await ai().review();
 
     expect(reviewDesign).not.toHaveBeenCalled();
+  });
+});
+
+describe('one bracket per sentence', () => {
+  /**
+   * The defect this exists to prevent, found by an outside review of the plan:
+   *
+   * the bracket used to be per *run*, and the reviewer plays each of its passes as a run of its
+   * own. So one thing the user said produced three undo entries, and Undo took back only the
+   * reviewer's last tweak — while the panel promised it took back the lot.
+   */
+  it('costs exactly one undo entry for a request and every review pass', () => {
+    const before = editor().present;
+
+    expect(ai().beginSentence()).toBe(true);
+
+    ai().start(run([op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 8, y: 6 } })]));
+    clock.advance(5000);
+    ai().start(run([op({ id: 'b', kind: 'move', elementId: 'e-1', to: { x: 9, y: 6 } })]));
+    clock.advance(5000);
+    ai().start(run([op({ id: 'c', kind: 'move', elementId: 'e-1', to: { x: 10, y: 6 } })]));
+    clock.advance(5000);
+
+    // Three runs have landed and the bracket is still open.
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 10, y: 6 } });
+    expect(editor().past).toHaveLength(0);
+
+    ai().endSentence();
+
+    expect(editor().past).toHaveLength(1);
+    expect(editor().past[0]).toBe(before);
+
+    editor().undo();
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 6, y: 6 } });
+  });
+
+  it('compares against the garden before the request, not before the last pass', () => {
+    const before = editor().present.elements;
+
+    ai().beginSentence();
+    ai().start(run([op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 8, y: 6 } })]));
+    clock.advance(5000);
+    ai().start(run([op({ id: 'b', kind: 'move', elementId: 'e-1', to: { x: 10, y: 6 } })]));
+    clock.advance(5000);
+    ai().endSentence();
+
+    // Without the sentence, this was the state after the first run.
+    expect(ai().revision!.initial).toBe(before);
+  });
+
+  it('reports the whole sentence once, not once per run', () => {
+    ai().beginSentence();
+    ai().start(run([op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 8, y: 6 } })]));
+    clock.advance(5000);
+    ai().start(run([op({ id: 'b', kind: 'move', elementId: 'e-1', to: { x: 10, y: 6 } })]));
+    clock.advance(5000);
+    ai().endSentence();
+
+    expect(events.mock.calls).toEqual([
+      ['ai_redesign_started'],
+      ['ai_redesign_applied', { delta: 1 }],
+    ]);
+  });
+
+  it('undoes the whole sentence in one press', () => {
+    const before = editor().present.elements;
+
+    ai().beginSentence();
+    ai().start(run([op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 8, y: 6 } })]));
+    clock.advance(5000);
+    ai().start(run([op({ id: 'b', kind: 'move', elementId: 'e-1', to: { x: 10, y: 6 } })]));
+    clock.advance(5000);
+    ai().endSentence();
+
+    ai().undoRun();
+
+    expect(editor().present.elements).toBe(before);
+  });
+
+  it('refuses to open a sentence over somebody else\'s gesture', () => {
+    editor().beginGesture();
+
+    expect(ai().beginSentence()).toBe(false);
+    expect(editor().gestureSnapshot).not.toBeNull();
+  });
+
+  it('refuses a second sentence while one is open', () => {
+    expect(ai().beginSentence()).toBe(true);
+    expect(ai().beginSentence()).toBe(false);
+    ai().endSentence();
+  });
+
+  it('records nothing for a sentence that changed nothing', () => {
+    // The replay shape: wind the plan back, put it right again, no decision to record.
+    ai().beginSentence();
+    ai().endSentence();
+
+    expect(events.mock.calls.map(([kind]) => kind)).toEqual(['ai_redesign_started']);
+    expect(editor().past).toHaveLength(0);
+  });
+});
+
+describe('getting a redesign back after a reload', () => {
+  /**
+   * The failure this exists for, found by an outside review of the plan:
+   *
+   * while the designer proposed a diff, a misreading cost nothing — you declined it. Now it
+   * performs the change and autosave stores it within the second, so a reload with only session
+   * memory leaves no route back at all. The undo stack deliberately does not survive a reload;
+   * this record must.
+   */
+  it('writes a record of the redesign onto the document', () => {
+    const before = editor().present.elements;
+
+    ai().start(TWO_MOVES());
+    clock.advance(5000);
+
+    const record = editor().revision!;
+    expect(record.before).toBe(before);
+    expect(record.request).toBe('Better for entertaining');
+    expect(record.afterFingerprint).toBe(layoutFingerprint(editor().present.elements));
+  });
+
+  it('takes the redesign back in a session that never saw it run', () => {
+    ai().start(TWO_MOVES());
+    clock.advance(5000);
+
+    const saved = {
+      elements: editor().present.elements,
+      seededFrom: editor().seededFrom,
+      pristine: editor().pristine,
+      revision: editor().revision,
+    };
+
+    // A reload: fresh stores, the document read back from the server.
+    resetPlanEditorStoreForTests();
+    resetAiRunStoreForTests();
+    hydratePlanEditorStore(saved, Date.now());
+
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 10, y: 6 } });
+    expect(editor().past).toHaveLength(0);
+
+    editor().undoRevision();
+
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 6, y: 6 } });
+  });
+
+  it('declines to take it back once the plan has moved on', () => {
+    ai().start(TWO_MOVES());
+    clock.advance(5000);
+
+    // A hand edit after the redesign: the offer no longer describes what is on screen.
+    editor().setPosition('e-1', { x: 5, y: 5 });
+    editor().undoRevision();
+
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 5, y: 5 } });
+  });
+
+  it('forgets the offer when a new concept is seeded', () => {
+    ai().start(TWO_MOVES());
+    clock.advance(5000);
+    expect(editor().revision).not.toBeNull();
+
+    editor().seedFrom(concept([element({ id: 'c1-e1' })]));
+
+    // A different garden; an offer to undo a redesign of the old one is not an offer at all.
+    expect(editor().revision).toBeNull();
+  });
+
+  it('records nothing for a sentence that changed nothing', () => {
+    ai().beginSentence();
+    ai().endSentence('nothing happened');
+
+    expect(editor().revision).toBeNull();
   });
 });
