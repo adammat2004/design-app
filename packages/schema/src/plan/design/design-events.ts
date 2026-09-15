@@ -45,6 +45,20 @@ export const DesignEventKindSchema = z.enum([
   'element_deleted',
   'layout_reset',
   'plan_exported',
+  /*
+   * What people do with a redesign the AI performed in front of them.
+   *
+   * These four answer the question the scorer cannot ask about itself: not "was the plan better"
+   * but "did anybody keep it". A redesign that is watched to the end and undone is a clearer
+   * verdict than any number the design agent produces about its own work, and a stopped run says
+   * the user could see where it was going before it got there.
+   *
+   * `delta` is how many elements the run changed. No geometry, as everywhere else here.
+   */
+  'ai_redesign_started',
+  'ai_redesign_applied',
+  'ai_redesign_cancelled',
+  'ai_redesign_undone',
 ]);
 export type DesignEventKind = z.infer<typeof DesignEventKindSchema>;
 

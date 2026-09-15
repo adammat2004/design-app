@@ -5,7 +5,7 @@ import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
 import { resetBriefStoreForTests, useBriefStore } from './brief-store';
 import { resetConceptsStoreForTests } from './concepts-store';
 import { resetFeaturesStoreForTests, useFeaturesStore } from './features-store';
-import { resetPlanEditorStoreForTests } from './plan-editor-store';
+import { resetPlanEditorStoreForTests, usePlanEditorStore } from './plan-editor-store';
 import { flushAll, selectSaving, startProjectSync, useSyncStore } from './project-sync';
 
 /*
@@ -29,6 +29,7 @@ const api = await import('@/lib/plan-api');
 const patchSite = vi.mocked(api.patchSite);
 const patchFeatures = vi.mocked(api.patchFeatures);
 const patchBrief = vi.mocked(api.patchBrief);
+const patchLayout = vi.mocked(api.patchLayout);
 
 function project(revision = 1, overrides: Partial<PlanProject> = {}): PlanProject {
   return {
@@ -60,6 +61,7 @@ beforeEach(() => {
   patchSite.mockReset().mockResolvedValue(saved(2));
   patchFeatures.mockReset().mockResolvedValue(saved(2));
   patchBrief.mockReset().mockResolvedValue(saved(2));
+  patchLayout.mockReset().mockResolvedValue(saved(2));
 
   // Also loads the plan into the stores — the two are one call so the subscriptions cannot see
   // the load as an edit.
@@ -115,6 +117,50 @@ describe('debouncing', () => {
     await vi.runAllTimersAsync();
 
     expect(patchFeatures).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * A gesture is the editor's unit of "an edit in progress" — a drag, an applied assistant diff, a
+   * whole AI redesign. Its intermediate states are not a plan anybody asked to keep, and a gesture
+   * that outlasts the debounce used to upload one.
+   */
+  it('saves nothing while an edit is still in progress', async () => {
+    const editor = usePlanEditorStore.getState();
+    editor.beginGesture();
+    usePlanEditorStore.setState((state) => ({
+      present: { ...state.present, elements: [...state.present.elements] },
+    }));
+
+    await vi.runAllTimersAsync();
+
+    expect(patchLayout).not.toHaveBeenCalled();
+  });
+
+  it('saves once when the edit finishes', async () => {
+    const editor = usePlanEditorStore.getState();
+    editor.beginGesture();
+    usePlanEditorStore.setState((state) => ({
+      present: {
+        ...state.present,
+        elements: [
+          {
+            id: 'e-1',
+            category: 'paved-area',
+            role: 'feature',
+            name: 'Seating patio',
+            zone: 'back',
+            shape: { kind: 'rect', centre: { x: 3, y: 3 }, width: 2, depth: 2, rotation: 0 },
+          },
+        ],
+      },
+    }));
+    await vi.runAllTimersAsync();
+    expect(patchLayout).not.toHaveBeenCalled();
+
+    usePlanEditorStore.getState().endGesture();
+    await vi.runAllTimersAsync();
+
+    expect(patchLayout).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Leaf, Sparkles } from 'lucide-react';
+import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { chosenConcept, useConceptsStore } from '@/state/concepts-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { PlanBottomBar } from '../PlanBottomBar';
 import { usePlanHref } from '../ProjectContext';
 import { AddFeaturePalette } from './AddFeaturePalette';
+import { AiActivityPanel } from './AiActivityPanel';
 import { AreaSummaryPanel } from './AreaSummaryPanel';
 import { AssistantPanel } from './AssistantPanel';
 import { EditorCanvasLoader } from './EditorCanvasLoader';
@@ -37,6 +39,18 @@ export function EditorScreen() {
   useEffect(() => {
     if (concept && seededFrom !== concept.id) seedFrom(concept);
   }, [concept, seededFrom, seedFrom]);
+
+  const aiActive = useAiRunStore(selectRunActive);
+
+  /*
+   * A run outlives this screen only long enough to finish.
+   *
+   * Navigating away mid-redesign is somebody moving on, not somebody objecting — and because the
+   * plan only ever holds finished operations, applying the rest is the same garden they would have
+   * had by waiting ten more seconds. What must not happen is the gesture bracket staying open after
+   * the component that could close it has gone, which would leave the next edit collapsed into it.
+   */
+  useEffect(() => () => useAiRunStore.getState().settle(), []);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -128,6 +142,15 @@ export function EditorScreen() {
           words wide.
         */}
         <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col gap-4 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-64 lg:shrink-0 lg:overflow-y-auto xl:w-72"}>
+          {/*
+            The AI panel above the properties panel, not below it.
+
+            Properties grow with the selected element — a bed with edging and a retaining wall runs
+            to most of a column — so anything under them is below the fold exactly when a run is in
+            progress and has selected something. What is happening to the garden has to be readable
+            without scrolling; which material the selected patio is can wait.
+          */}
+          {concept ? <AiActivityPanel /> : null}
           <SelectedElementPanel />
           {concept ? <AssistantPanel /> : null}
         </aside>
@@ -137,8 +160,18 @@ export function EditorScreen() {
         backHref={planHref('concepts')}
         continueHref={planHref('review')}
         continueLabel="Preview design"
-
-        blockedReason={concept ? null : 'Choose a concept on the previous step first.'}
+        /*
+         * Continue flushes the autosave, and a flush in the middle of a run would upload a garden
+         * half way through being redesigned. Blocked rather than made to wait, so the reason is on
+         * screen instead of the button simply hanging.
+         */
+        blockedReason={
+          concept
+            ? aiActive
+              ? 'Wait for the redesign to finish, or stop it.'
+              : null
+            : 'Choose a concept on the previous step first.'
+        }
       />
     </div>
   );

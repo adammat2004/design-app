@@ -9,6 +9,53 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## In flight — visual AI agents (plan: `~/.claude/plans/i-want-you-to-rippling-tide.md`)
+
+The foundation is built and verified: a shared `DesignOperation` schema, a pure executor, the
+gesture-bracketed store integration, overlays, the activity panel, and a scripted demonstration that
+runs against any generated concept. See "Visual AI agents" in CLAUDE.md for the decisions. What
+remains is connecting it to something that reasons.
+
+- [x] **Phase 0 — measurement.** One editor scene build is ~34 ms on a 50-element garden, almost
+      entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.
+- [x] **Phase 1 — schema, executor, store.** `operations.ts`, `lib/ai-run/`, `ai-run-store`,
+      `endGesture({ silent })`, `allocateElementId`, the autosave-during-gesture fix.
+- [x] **Phase 2 — the visual language.** `MotionLayer`, `AiOverlayLayer`, the label chip, the
+      activity panel, the interaction lockout, the compare banner.
+- [x] **Phase 3 — the whole vocabulary.** Reshape with vertex matching, the three-phase reroute,
+      add and remove transitions, staggered groups, the demonstration script.
+- [x] **Phase 4 — revision controls.** Stop, Skip, Compare, Undo, Replay, and four design events.
+- [ ] **Phase 5 — real operations from the assistant.** `proposedChangeToOperation` is the whole of
+      the first half: `ProposedChange` already carries `previous` and `next` as full elements, so
+      the mapping is pure and belongs in `operations.ts` beside `resolveOperation`. Then
+      `operations?: DesignOperation[]` as an additive field on `AssistantProposalSchema` and a
+      "Play changes" button on the diff, so the existing chat gains the animation with no new model
+      call. Agent and phase come from a deterministic table by change kind and category — never from
+      the model. **Effort: S.**
+- [ ] **Phase 5b — the intents the planner is missing.** `reshape` (an edge and a distance, with the
+      overlapping lawn giving up the same ground — the rule `deepenBorder` already implements),
+      `reroute` (reusing the generator's route builder), `rotate`, and `attach: true` on a move so
+      furniture travels with the host it stands on. One `DesignIntent` variant, one planner branch,
+      one `ProposedChange` kind and one mapping row each, with PostGIS tests as
+      `planner.service.test.ts` has. **Effort: M.**
+- [ ] **Phase 6 — the review loop.** `POST /plan-projects/:id/design/review` taking `{ elements }`
+      and answering `scoreConcept` — side-effect free, like `/validate`. Then map the worst
+      *repairable* `DesignIssue` whose subjects are element ids onto intents, play the result under
+      the reviewer, re-score, and keep it only if the total rose by ≥ 0.01, bounded at two
+      iterations — `repair.ts`'s own gate and budget. Deterministic and model-free; a vision critic
+      returning `DesignIssue[]` in the same schema can be added behind it later, with the client
+      rendering the PNG (`DownloadPlanButton` already does) because the composer lives in the web
+      app. **Effort: M.**
+- [ ] **Memoise the planting sample in `buildRenderScene`.** The measurement above says a scene build
+      is ~34 ms and nearly all of it is re-sampling every bed, whether or not any bed changed. A cache
+      keyed on the bed's outline, layers and maturity would cut a drag frame and an operation
+      boundary by an order of magnitude. Not specific to this feature — it is the cost of every drag
+      in the editor today. **Effort: S.**
+- [ ] **Decide whether a revision should outlive the session.** Replay and Compare are session memory
+      on purpose, matching undo history. Persisting them means `layout.revisions` with a `.default([])`
+      (an addition, so no migration) and a decision about how many to keep. Only worth it if somebody
+      actually wants to replay a redesign the next day. **Effort: S.**
+
 ## In flight — plan realism
 
 - [x] **Phase 0 — foundations.** Green build and test, one-command `script/setup`, CI, TODOS.

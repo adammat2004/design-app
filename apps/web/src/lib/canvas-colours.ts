@@ -24,4 +24,15 @@ export const COLOUR = {
   /** The boundary drawn as an enclosure rather than an outline: rail and posts. */
   fenceRail: '#9a8460',
   fencePost: '#7a6747',
+  /**
+   * What the AI designer draws with while it is working on the plan.
+   *
+   * Its own colour rather than the selection green, because the two are on screen at the same time
+   * and mean different things — one is what *you* have selected, the other is what something else
+   * is doing to your garden. Deliberately not the clash red either: this canvas already uses red
+   * for "that edit was refused", and an AI cursor in the same colour would read as a fault every
+   * time it appeared.
+   */
+  ai: '#4338ca',
+  aiWash: 'rgba(67, 56, 202, 0.08)',
 };

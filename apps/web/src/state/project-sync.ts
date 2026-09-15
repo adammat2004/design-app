@@ -261,7 +261,21 @@ export function startProjectSync(project: PlanProject): () => void {
     }),
 
     usePlanEditorStore.subscribe((state, previous) => {
+      /*
+       * Nothing is saved while a gesture is open, and one save is scheduled when it closes.
+       *
+       * A gesture is the editor's unit of "an edit in progress" — a drag, an applied assistant
+       * diff, a whole AI redesign — and its intermediate states are not a plan anybody asked to
+       * keep. Without this a drag with a pause in it longer than the debounce uploads the layout
+       * from the middle of the drag, and an AI run lasting twenty seconds uploads a dozen of them.
+       * Neither is wrong on disk, because the final state follows; both are pointless traffic, and
+       * one of them can lose a race with the 409 adoption that follows a conflict.
+       */
+      if (state.gestureSnapshot !== null) return;
+
+      const closed = previous.gestureSnapshot !== null;
       if (
+        closed ||
         state.present !== previous.present ||
         state.seededFrom !== previous.seededFrom ||
         state.pristine !== previous.pristine

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { ADDABLE_CATEGORIES } from '@/lib/element-groups';
+import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { usePlanEditorStore, type PlanEditorMode } from '@/state/plan-editor-store';
 import { DownloadPlanButton } from '../DownloadPlanButton';
 import { ToolbarButton, ToolbarGroup } from '../ToolbarButton';
@@ -94,6 +95,8 @@ export function EditorToolbar({
   const undo = usePlanEditorStore((state) => state.undo);
   const redo = usePlanEditorStore((state) => state.redo);
   const resetToConcept = usePlanEditorStore((state) => state.resetToConcept);
+  /* History belongs to the run while it holds the plan; its own controls are in the AI panel. */
+  const aiActive = useAiRunStore(selectRunActive);
   const placingCategory = usePlanEditorStore((state) => state.placingCategory);
   const setPlacing = usePlanEditorStore((state) => state.setPlacing);
 
@@ -199,21 +202,21 @@ export function EditorToolbar({
               testId="editor-undo"
               label="Undo"
               icon={<Undo2 aria-hidden className="h-4 w-4" />}
-              disabled={!canUndo}
+              disabled={!canUndo || aiActive}
               onClick={undo}
             />
             <ToolbarButton
               testId="editor-redo"
               label="Redo"
               icon={<Redo2 aria-hidden className="h-4 w-4" />}
-              disabled={!canRedo}
+              disabled={!canRedo || aiActive}
               onClick={redo}
             />
             <ToolbarButton
               testId="editor-reset"
               label="Reset"
               icon={<RotateCcw aria-hidden className="h-4 w-4" />}
-              disabled={!hasPristine}
+              disabled={!hasPristine || aiActive}
               title="Back to the concept as generated, discarding your edits"
               onClick={resetToConcept}
             />

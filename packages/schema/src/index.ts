@@ -56,6 +56,7 @@ export * from './plan/document.js';
 export * from './plan/validation.js';
 export * from './plan/assistant.js';
 export * from './plan/assistant-garden.js';
+export * from './plan/operations.js';
 export * from './plan/api.js';
 
 export * from './plan/plant-catalogue.js';

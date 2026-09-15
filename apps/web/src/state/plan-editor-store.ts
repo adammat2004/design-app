@@ -2,6 +2,8 @@
 
 import { create } from 'zustand';
 import {
+  FENCE_REFUSAL,
+  LOCKED_REFUSAL,
   SYMBOLS,
   PLANT_CATALOGUE,
   associatePlants,
@@ -72,9 +74,13 @@ export const MIN_ELEMENT_SIDE = 0.3;
  * There is no house message any more, because there is no house rule: a patio, a path or a
  * pergola attached to the building is the ordinary case, and the house is drawn over whatever
  * runs under it. The fence is the one edge left that an element may not cross.
+ *
+ * The two sentences live in `operations.ts` and are imported rather than written here, because an
+ * AI run refuses for exactly these reasons and two copies of a refusal are two copies that can
+ * drift into describing one rule two ways.
  */
-const FENCE_CLASH = 'That goes over the property boundary.';
-const LOCKED_CLASH = 'That is the ground layer for its zone — change its material instead.';
+const FENCE_CLASH = FENCE_REFUSAL;
+const LOCKED_CLASH = LOCKED_REFUSAL;
 
 export type PlanEditorMode = 'select' | 'pan' | 'measure';
 
@@ -91,6 +97,18 @@ let elementCounter = 0;
 function nextElementId(): string {
   elementCounter += 1;
   return `e-${elementCounter}`;
+}
+
+/**
+ * An id for something about to be added to this plan, from the editor's own counter.
+ *
+ * Exposed so an AI run can bind the elements it is going to create *before* it animates them —
+ * a run has to know an added thing's id in advance, because later operations in the same script
+ * move and light the thing it just placed. Going through the same counter is what keeps those ids
+ * `e-N`, which is what `hydratePlanEditorStore` re-seeds from on the next load.
+ */
+export function allocateElementId(): string {
+  return nextElementId();
 }
 
 function emptyDraft(): PlanEditorDraft {
@@ -187,7 +205,8 @@ interface PlanEditorState {
   deleteElement: (id: string) => void;
 
   beginGesture: () => void;
-  endGesture: () => void;
+  /** `silent` suppresses the design event, for a caller that reports its own. */
+  endGesture: (options?: { silent?: boolean }) => void;
   undo: () => void;
   redo: () => void;
   resetToConcept: () => void;
@@ -720,7 +739,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      */
     beginGesture: () => set((state) => ({ gestureSnapshot: state.present })),
 
-    endGesture: () =>
+    endGesture: (options = {}) =>
       set((state) => {
         const snapshot = state.gestureSnapshot;
         // The guides only mean anything mid-gesture.
@@ -732,8 +751,13 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
          * reason: a drag calls `moveElementLive` on every mousemove, and forty rows saying a shed
          * moved two centimetres describe the mouse rather than the decision. What is recorded is
          * what the gesture *did* — see `gestureChange`.
+         *
+         * `silent` is for a caller that reports its own event. An AI run is one gesture containing
+         * a dozen decisions, and `gestureChange` would either say nothing (several elements moved)
+         * or — worse, on a one-operation run — file it as a person moving a shed by hand. The
+         * table's whole value is that it records what *people* did with the design.
          */
-        const change = gestureChange(snapshot.elements, state.present.elements);
+        const change = options.silent ? null : gestureChange(snapshot.elements, state.present.elements);
         if (change) emitDesignEvent(change.kind, change.detail);
 
         return {

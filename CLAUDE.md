@@ -223,6 +223,15 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
   repairs across 15% of concepts, relationships 0.697 → 0.717, mean 0.870 → 0.872, and a plan that
   scored 0.74 now scores 0.92. It helps about one time in six it is tried, which is the
   accept-only-on-improvement gate doing its job.
+- **an AI designer can be watched working on the plan**: a redesign arrives as a `DesignRun` of
+  structured `DesignOperation`s (`packages/schema/src/plan/operations.ts`), a pure executor
+  (`apps/web/src/lib/ai-run/`) turns it into a function of the clock, and the editor animates it
+  against the real `DesignElement[]` — the terrace is selected, enlarged in its own paving, the
+  furniture travels with it, the route is set out and redrawn, a border is deepened and the lawn
+  gives up the same strip, lights are added, the reviewer looks over it and centres the seating.
+  One gesture bracket per run, so the whole thing is one Undo; Stop, Skip, Compare and Replay round
+  it out. `Demo AI redesign` in the editor's AI panel plays a scripted one against whatever concept
+  is on screen. Nothing about the reasoning is in it yet — see "Visual AI agents" below.
 
 **Not built yet:** printing at true scale, a navigable 3D preview, and the optional AI
 photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
@@ -1486,6 +1495,127 @@ per-concept reading with slot A's and change what the generator drew with the fe
 exercised with a fake client, as it is for the other two assistants — but the first live call is
 still worth watching, and `usage.cache_read_input_tokens` is the number to check before claiming the
 caching win.
+
+## Visual AI agents: watching the plan being redesigned
+
+**A redesign is a script of structured operations, not an animation.** `DesignOperation` in
+`packages/schema/src/plan/operations.ts` is the contract between whatever decided on a change and
+the editor that performs it: `select`, `move`, `resize`, `rotate`, `reshape`, `reroute`,
+`setProperty`, `add`, `remove`, `inspect`, `analyse`, `note`, plus `group` for things that happen
+together with a stagger. A `DesignRun` is a list of them with the request that produced it. The same
+executor plays a hand-written demonstration and, later, a planner's output — which is the whole
+reason the reasoning and the motion are separated.
+
+**Three properties are of the type rather than of anybody's good behaviour.** There is nowhere in an
+operation to put a `from`, so it cannot disagree with the plan it lands on — the starting state is
+read from the live elements when it runs, which is also what makes Replay a re-run rather than a
+recording. There is nowhere to put an opacity, a scale or an easing curve, so an operation cannot
+be a renderer instruction in disguise; motion is derived and thrown away. And nothing in the file
+decides legality: `resolveOperation` does, against the same `geometryIsLegal` and `isLocked` a drag
+answers to.
+
+**Every operation is resolved before a pixel of it is drawn, and that is the feature's one hard
+rule.** `prepareRun` folds the whole script through `resolveOperation` against the state each
+operation will actually meet, so a refused one is given zero duration and reported in the panel
+instead of being animated. Animating a change the store would then decline is the single most
+untrustworthy thing this product could do — it is the same reason `applyProposal` reports what it
+refused rather than claiming success, and the reason the planner rather than the model writes
+`unplaceable`.
+
+**The store holds settled states only, and the gesture bracket is the transaction.** One
+`beginGesture` at the start of a run and one `endGesture({ silent: true })` at the end, with raw
+`setState` at each operation boundary in between — exactly what `applyProposal` does, and it buys
+the same thing: **one undo entry however many operations ran**. Cancel restores the snapshot inside
+the bracket, so `sameElements` is true and stopping leaves no trace at all. Replay winds the plan
+back inside a fresh bracket and plays the same prepared run, so the snapshot equals the result and
+no second entry is written. There is **no working copy**, deliberately: a separate draft would mean
+the renderer drawing something other than `present`.
+
+**`silent` exists because `gestureChange` would file a run as a hand edit.** A one-operation run is
+exactly the shape it reports as `element_moved`, and the whole value of `design_events` is that it
+records what *people* did with the design. Runs report themselves instead, with four kinds of their
+own and a `delta` of how many elements changed.
+
+**Autosave is suppressed for the length of any gesture, which fixed a pre-existing bug.** The layout
+subscription used to fire on every `present` change, so a drag with a pause in it longer than the
+800 ms debounce uploaded the layout from the middle of the drag; a twenty-second run would have
+uploaded a dozen. Nothing is scheduled while `gestureSnapshot` is non-null and one save is scheduled
+when it closes.
+
+**Motion is substituted into the real renderer, not drawn over it — and the first version got this
+wrong.** An element being moved is handed to `buildRenderScene` with this instant's geometry, so a
+terrace being enlarged goes on being drawn in its own paving. Drawing it flat on a Konva layer above
+instead was tried, looked at, and is visibly wrong: the plan is photographic, and a grey rectangle
+sliding across it reads as the renderer having broken. `MotionEntry.replacesSettled` is the line.
+Only what the scene cannot express goes on the overlay layer — something fading out, and the old
+route while its replacement is drawn along — because both need a per-element opacity a plan has
+nowhere to put.
+
+**The cost of that was measured before it was designed around.** One editor scene build is **~34 ms**
+for a 50-element garden, and **it is almost entirely planting**: `buildRenderScene` re-samples every
+bed on every call (1,355 plants on the entertaining fixture), and the same call with instancing off
+is 1.3 ms. Sub-linear in element count and much the same whether anything changed. That is already
+what every drag frame costs in the rich renderer, so a run is no worse than a drag — but it is why
+nothing here writes to the store per frame, and why memoising the planting sample is the one change
+that would make this and every drag faster. Recorded in TODOS.
+
+**A run is a function of the clock, and that is what makes it testable.** `evaluateRun(prepared, t)`
+returns motion, overlays, cursor, chip, stage and agent for any instant, touching no store, no timer
+and no canvas — so a nineteen-second redesign is asserted frame by frame in Node with a
+`manualClock`, and Replay, Compare and scrubbing are the same function called differently. Pausing
+is an offset rather than a stopped clock, because `performance.now()` keeps moving while a user
+thinks.
+
+**The overlay outline follows the live shape, and only the corners that move are marked.** Drawn at
+the target instead, the outline reads as a second selection round the first and quietly claims the
+terrace is already the size it is only on its way to being. And a sweeping lawn is a twenty-eight
+point ellipse: marking every corner to show that four of them moved covers the garden in dots and
+says nothing. Both were found by looking at screenshots, not by reasoning.
+
+**The AI has its own colour, and it is neither the selection green nor the clash red.** `COLOUR.ai`
+is an indigo. Green is what *you* have selected and red is "that edit was refused", so an AI cursor
+in either would be saying something the canvas already means. While a run is on, the editor's own
+selection outline, handles and size badge are suppressed — the run does set `selectedId`, which is
+how the properties panel follows the work, but drawing two selections in two colours over one shape
+is the thing to avoid.
+
+**The editor's tools are off while the AI has the plan, and the reason is the bracket rather than
+arbitration.** A drag landing inside the run's gesture would be swept into the run's single undo
+entry, so pressing Undo afterwards would take away the user's own change along with the redesign.
+The honest options are to watch it or to stop it, and both are in the panel. Zoom and pan stay live,
+because the viewport is not the plan.
+
+**The activity panel is a list of stages, never a conversation.** Agents talking to each other on
+screen invents a process the code does not have and competes with the canvas, which is the thing
+worth watching. Every line is read off the operation being run, so the panel cannot claim work the
+plan did not receive. It sits *above* the properties panel because properties grow with the selected
+element and would push it below the fold exactly when a run is in progress.
+
+**The demonstration is written from predicates, never ids.** A generated concept's ids are
+`c<seed>-<index>-eN` and change every regeneration, so a script naming one would work exactly once.
+`buildDemoRun` finds the terrace by asking which paved rectangle sits against the house, computes
+every target relative to what it found, and checks each with `geometryIsLegal` as it builds — so it
+cannot script a refusal and call it a design decision. A plan it cannot work with gets a sentence
+("This plan has no paved terrace for the designers to work from"), not half a run. There is a test
+asserting it resolves clean on five real fixtures. The button is development-only (or `?aiDemo`).
+
+**The minimum side is a rule about resizing, and applying it more widely broke lighting.** The first
+`resolveOperation` refused anything under `MIN_FEATURE_SIDE` in any dimension, which the demo caught
+immediately: a bollard light is 160 mm across and the generator places them routinely. The editor
+only applies that rule in `resizeElementLive` and `setCanopyDiameter`; an AI held to a stricter rule
+than a person is a bug in the rule.
+
+**`polygonArea` is unsigned, so the winding check in `alignRings` needs its own shoelace.** That
+function is documented as always positive because winding "is not meaningful to the UI" — true
+everywhere else and false here, where it is the difference between a bed morphing into its new
+outline and a bed turning inside out half way. A local signed area, for the reason `openingNormal`
+probes rather than assuming. A test caught the silent no-op.
+
+**What is not built:** nothing produces operations except the demonstration script.
+`proposedChangeToOperation` (the assistant's existing `ProposedChange` is one pure function away
+from an operation list), the planner's missing intents (reshape, reroute, rotate, attached moves),
+and the review loop over `scoreConcept` are all recorded in TODOS.md. Revisions are session memory —
+Replay does not survive a reload, deliberately, for the same reason undo history does not.
 
 ## The garden assistant
 

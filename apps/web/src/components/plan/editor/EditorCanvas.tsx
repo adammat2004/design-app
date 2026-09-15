@@ -53,6 +53,10 @@ import {
 } from '../canvas-primitives';
 import { useCanvasViewport } from '../use-canvas-viewport';
 import { ConceptLabels } from '../concepts/ConceptLabels';
+import { AiOverlayLayer } from './AiOverlayLayer';
+import { MotionLayer } from './MotionLayer';
+import type { MotionEntry } from '@/lib/ai-run/evaluate';
+import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { EditorScene } from './EditorScene';
 import { buildRenderScene } from '@/lib/render/build-scene';
 import { browserRendererVersion } from '@/lib/render/diagnostics';
@@ -69,11 +73,28 @@ import { isStageDrag } from '../use-canvas-viewport';
  * Element rendering follows the same rule as step 4 — array order is stacking order, base fills
  * under accents under features — because that order is what guarantees no zone shows bare grid.
  */
+/** Stable empties, so a canvas with no run in progress never re-memoises its element list. */
+const EMPTY_SUPPRESS: string[] = [];
+const EMPTY_MOTION: MotionEntry[] = [];
+
 export function EditorCanvas() {
   const [richReady, setRichReady] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const boundaryDraft = useBoundaryStore((state) => state.present);
   const unit = useBoundaryStore((state) => state.unit);
+
+  /*
+   * What the AI is doing to this plan, if anything.
+   *
+   * Three things it changes here, and no more: which elements the settled renderer draws, whether
+   * the user's own tools are live, and two extra layers on top. The plan itself is written by the
+   * run through the ordinary store, so everything below this line goes on reading `present` exactly
+   * as it did before the feature existed.
+   */
+  const aiFrame = useAiRunStore((state) => state.frame);
+  const aiActive = useAiRunStore(selectRunActive);
+  const comparing = useAiRunStore((state) => state.compare === 'before');
+  const aiRevision = useAiRunStore((state) => state.revision);
 
   /*
    * Selected raw and filtered in a memo, not through a selector.
@@ -83,8 +104,44 @@ export function EditorCanvas() {
    * settles, and the render loop takes the tab down with it. Only reference-stable reads may go
    * inside the hook.
    */
-  const allElements = usePlanEditorStore((state) => state.present.elements);
-  const elements = useMemo(() => allElements.filter((element) => !element.hidden), [allElements]);
+  const storedElements = usePlanEditorStore((state) => state.present.elements);
+
+  /*
+   * Comparing swaps what is drawn and touches nothing else — not `present`, not the history. The
+   * one place in the app where the canvas draws something other than the live plan, and it is
+   * temporary, obvious on screen, and reversible by pressing the same button again.
+   */
+  const allElements = comparing && aiRevision ? aiRevision.initial : storedElements;
+
+  /*
+   * What the real renderer draws while the AI is working.
+   *
+   * An element being moved is **substituted**, not hidden: the renderer is handed the same element
+   * with this instant's geometry, so a terrace being enlarged goes on being drawn in its own paving.
+   * Drawing it flat on a layer above instead was tried and is visibly wrong — the plan is
+   * photographic, and a grey rectangle sliding across it reads as the renderer having broken rather
+   * than as a terrace being enlarged.
+   *
+   * Only what the scene genuinely cannot express is hidden and drawn over the top: something fading
+   * out, and the old route while its replacement is drawn along. Both need a per-element opacity,
+   * which a plan has nowhere to put and should not have.
+   */
+  const motion = aiFrame?.motion ?? EMPTY_MOTION;
+  const suppressed = aiFrame?.suppress ?? EMPTY_SUPPRESS;
+  const elements = useMemo(() => {
+    const substitutes = new Map(
+      motion.filter((entry) => entry.replacesSettled).map((entry) => [entry.element.id, entry.element]),
+    );
+    return allElements
+      .filter((element) => !element.hidden && !suppressed.includes(element.id))
+      .map((element) => substitutes.get(element.id) ?? element);
+  }, [allElements, motion, suppressed]);
+
+  /** Only the entries the scene could not draw for itself. */
+  const overlaidMotion = useMemo(
+    () => motion.filter((entry) => !entry.replacesSettled),
+    [motion],
+  );
   const maturity = usePlanEditorStore((state) => state.maturity);
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
     house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'visualise', maturity, rendererVersion: browserRendererVersion() }),
@@ -109,7 +166,16 @@ export function EditorCanvas() {
   // Hold neighbouring beds and global shadows still during a gesture; refresh on release.
   const exclusions = useMemo(() => exclusionMap(settledElements), [settledElements]);
 
-  const selected = usePlanEditorStore(selectedElement);
+  /*
+   * While the AI has the plan its overlay draws the selection, so the editor's own must not.
+   *
+   * The run *does* set `selectedId` — that is how the properties panel follows the work, and it is
+   * the honest thing for the store to hold. What would be wrong is drawing it twice: the editor's
+   * green outline, its grab handles and its size badge on top of the AI's own outline and handles,
+   * two of everything in two colours over one shape.
+   */
+  const storedSelection = usePlanEditorStore(selectedElement);
+  const selected = aiActive || comparing ? null : storedSelection;
   const selectedId = usePlanEditorStore((state) => state.selectedId);
   const mode = usePlanEditorStore((state) => state.mode);
   const gridVisible = usePlanEditorStore((state) => state.gridVisible);
@@ -195,6 +261,9 @@ export function EditorCanvas() {
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
+    /* Delete and the arrow keys are edits like any other — see `elementsDraggable`. */
+    if (aiActive || comparing) return;
+
     const store = usePlanEditorStore.getState();
     if (!store.selectedId) return;
 
@@ -226,7 +295,16 @@ export function EditorCanvas() {
     store.endGesture();
   }
 
-  const elementsDraggable = !panActive && mode === 'select' && !placingCategory;
+  /*
+   * While the AI has the plan, the user's own tools are off.
+   *
+   * Not because two editors would fight over the geometry — the store would arbitrate that
+   * perfectly well — but because a drag landing inside the run's gesture bracket would be swept
+   * into the run's single undo entry, and pressing Undo afterwards would take away the user's own
+   * change along with the redesign. The honest options are "watch it" or "stop it", and both are in
+   * the panel.
+   */
+  const elementsDraggable = !aiActive && !comparing && !panActive && mode === 'select' && !placingCategory;
 
   /*
    * While placing, elements stop listening entirely.
@@ -237,7 +315,8 @@ export function EditorCanvas() {
    * a perfectly ordinary place to put a patio. Full coverage is what makes this screen's ground
    * look finished; it is also what makes this necessary.
    */
-  const elementsListening = !panActive && mode === 'select' && !placingCategory;
+  const elementsListening =
+    !aiActive && !comparing && !panActive && mode === 'select' && !placingCategory;
 
   return (
     <div
@@ -512,6 +591,17 @@ export function EditorCanvas() {
                 </Group>
               ) : null}
             </Layer>
+
+            {/*
+              The AI's two layers, above everything the editor draws for itself.
+
+              `MotionLayer` holds the elements actually in flight this frame; `AiOverlayLayer` holds
+              the selection, ghosts, vertices, route guides, inspection frame and cursor. Both are
+              pure functions of `frame`, so when no run is going on they render nothing at all and
+              this screen is exactly what it was.
+            */}
+            <MotionLayer entries={overlaidMotion} transform={transform} light={light} />
+            <AiOverlayLayer frame={aiFrame} transform={transform} />
           </Stage>
         ) : null}
       </div>
@@ -533,6 +623,35 @@ export function EditorCanvas() {
             unit={unit}
             zones={zonesVisible ? zones : undefined}
           />
+        ) : null}
+
+        {/*
+          The AI's own label, in HTML for the reason the size badge is: text on a canvas cannot be
+          selected, scaled by the user's own font settings, or read by a screen reader.
+        */}
+        {aiFrame?.chip && aiFrame.cursor ? (
+          <span
+            data-testid="ai-label-chip"
+            role="status"
+            className="absolute flex items-center gap-2 rounded-sm bg-garden-forest py-1.5 pr-3 pl-2 text-xs font-semibold whitespace-nowrap text-white shadow-md"
+            style={{
+              left: metresToPx(aiFrame.cursor, transform).x + 26,
+              top: metresToPx(aiFrame.cursor, transform).y - 34,
+            }}
+          >
+            <span aria-hidden className="h-3.5 w-0.5 rounded-full" style={{ background: COLOUR.ai }} />
+            {aiFrame.chip}
+          </span>
+        ) : null}
+
+        {comparing ? (
+          <p
+            data-testid="ai-compare-banner"
+            role="status"
+            className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full border border-garden-line bg-white px-4 py-1.5 text-xs font-medium text-garden-ink shadow-sm"
+          >
+            Showing the plan before the AI designer&rsquo;s changes
+          </p>
         ) : null}
 
         {clash ? (

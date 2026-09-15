@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, SendHorizontal, Sparkles } from 'lucide-react';
+import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { latestSuggestions, useAssistantStore } from '@/state/assistant-store';
 import { AssistantBubble, UserBubble } from './AssistantMessage';
 
@@ -17,6 +18,12 @@ import { AssistantBubble, UserBubble } from './AssistantMessage';
 export function AssistantPanel() {
   const messages = useAssistantStore((state) => state.messages);
   const pending = useAssistantStore((state) => state.pending);
+  /*
+   * The assistant reads the stored plan, and a run is in the middle of rewriting it — so a question
+   * asked now would be answered about a garden that no longer exists by the time the diff arrives.
+   */
+  const aiActive = useAiRunStore(selectRunActive);
+  const busy = pending || aiActive;
   const send = useAssistantStore((state) => state.send);
   const error = useAssistantStore((state) => state.error);
   /*
@@ -36,7 +43,7 @@ export function AssistantPanel() {
   }, [messages.length, pending]);
 
   function submit(text: string) {
-    if (text.trim() === '' || pending) return;
+    if (text.trim() === '' || pending || aiActive) return;
     setDraft('');
     void send(text);
   }
@@ -131,13 +138,13 @@ export function AssistantPanel() {
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Ask for a change…"
           aria-label="Ask the design assistant for a change"
-          disabled={pending}
+          disabled={busy}
           className="min-w-0 flex-1 rounded-full border border-garden-line bg-white px-3 py-1.5 text-[11px] text-garden-ink placeholder:text-garden-muted focus-visible:border-garden-green focus-visible:outline-none disabled:opacity-50"
         />
         <button
           type="submit"
           data-testid="assistant-send"
-          disabled={pending || draft.trim() === ''}
+          disabled={busy || draft.trim() === ''}
           aria-label="Send"
           className="shrink-0 rounded-full bg-garden-forest p-2 text-white hover:bg-garden-green focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         >
