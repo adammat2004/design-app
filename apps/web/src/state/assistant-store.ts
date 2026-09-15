@@ -3,6 +3,8 @@
 import type { ProposedChange } from '@garden-studio/schema';
 import { create } from 'zustand';
 import { ApiError, proposeChanges } from '@/lib/plan-api';
+import { runFromProposal } from '@/lib/ai-run/from-proposal';
+import { useAiRunStore } from './ai-run-store';
 import { usePlanEditorStore } from './plan-editor-store';
 import { flushAll } from './project-sync';
 import { projectRevision } from './revision';
@@ -75,6 +77,8 @@ interface AssistantState {
   send: (text: string) => Promise<void>;
   toggleChange: (messageId: string, changeId: string) => void;
   applyMessage: (messageId: string) => void;
+  /** The same lines, performed on the canvas rather than landing at once. */
+  playMessage: (messageId: string) => void;
   clear: () => void;
 }
 
@@ -168,6 +172,39 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
         };
       }),
     })),
+
+  /**
+   * The same accepted lines, performed on the canvas instead of landing at once.
+   *
+   * No second request and no new field on the wire: `ProposedChange` already carries the element on
+   * both sides, which is everything an operation needs. The run applies each change at its own
+   * boundary through the ordinary store, so what the plan ends up holding is what Apply would have
+   * given — this is the same edit, watched.
+   */
+  playMessage: (messageId) => {
+    const message = get().messages.find((candidate) => candidate.id === messageId);
+    if (!message || message.role !== 'assistant' || message.applied) return;
+
+    const accepted = message.changes.filter((change) => message.accepted[change.id]);
+    const run = runFromProposal(accepted, message.text, `assistant-${message.id}`);
+    if (!run) return;
+
+    const started = useAiRunStore.getState().start(run);
+    if (!started.ok) return;
+
+    /*
+     * Marked applied on the way in rather than when the run ends. The changes are the run's now;
+     * leaving the Apply button live beside a redesign already performing them invites the plan
+     * being changed twice, and Stop puts everything back regardless.
+     */
+    set((state) => ({
+      messages: state.messages.map((candidate) =>
+        candidate.id === messageId && candidate.role === 'assistant'
+          ? { ...candidate, applied: true, appliedIds: accepted.map((change) => change.id), refused: [] }
+          : candidate,
+      ),
+    }));
+  },
 
   /**
    * Hands the accepted lines to the editor and records what actually landed.

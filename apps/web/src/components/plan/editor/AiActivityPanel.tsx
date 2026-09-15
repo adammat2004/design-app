@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import {
+  ClipboardCheck,
   Columns2,
   Pause,
   Play,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { AgentRole, RunPhase } from '@garden-studio/schema';
 import { buildDemoRun } from '@/lib/ai-run/demo-script';
+import { issueKey } from '@/lib/ai-run/review-loop';
 import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
@@ -56,6 +58,8 @@ export function AiActivityPanel() {
   const refused = useAiRunStore((state) => state.refused);
   const comparing = useAiRunStore((state) => state.compare === 'before');
   const blocked = useAiRunStore((state) => state.blocked);
+  const reviewing = useAiRunStore((state) => state.reviewing);
+  const reviewOutcome = useAiRunStore((state) => state.reviewOutcome);
 
   const elements = usePlanEditorStore((state) => state.present.elements);
   const site = useBoundaryStore((state) => state.present);
@@ -122,10 +126,55 @@ export function AiActivityPanel() {
         </button>
       ) : null}
 
+      {!active ? (
+        <button
+          type="button"
+          data-testid="ai-review"
+          onClick={() => void useAiRunStore.getState().review()}
+          disabled={reviewing || elements.length === 0}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-garden-line px-4 py-2 text-sm font-semibold text-garden-ink transition-colors hover:bg-garden-sage disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none"
+        >
+          <ClipboardCheck aria-hidden className="h-4 w-4" />
+          {reviewing ? 'Reviewing the design…' : 'Ask the reviewer'}
+        </button>
+      ) : null}
+
       {blocked && !active ? (
         <p data-testid="ai-blocked" role="status" className="mt-3 text-sm text-garden-warn">
           {blocked}
         </p>
+      ) : null}
+
+      {/*
+        What the reviewer found, kept or not.
+
+        A pass that was played and wound back is still reported — the user watched it happen, and a
+        panel that only listed the changes it kept would be pretending the rest never occurred.
+      */}
+      {!active && reviewOutcome ? (
+        <div className="mt-3 border-t border-garden-line pt-3" data-testid="ai-review-outcome" data-verdict={reviewOutcome.verdict}>
+          {reviewOutcome.passes.length === 0 ? (
+            <p className="text-sm text-garden-muted">
+              {reviewOutcome.verdict === 'nothing-to-fix'
+                ? 'The reviewer found nothing it could improve.'
+                : 'The reviewer stopped before it finished.'}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {/* Keyed on the fault *and* what it was about: two pinched paths are two faults. */}
+              {reviewOutcome.passes.map((pass) => (
+                <li key={issueKey(pass.issue)} className="text-xs">
+                  <span className="block text-garden-ink">{pass.issue.message}</span>
+                  <span className={pass.kept ? 'text-garden-green' : 'text-garden-muted'}>
+                    {pass.kept
+                      ? `Kept — the design scores ${pass.after.toFixed(2)}, up from ${pass.before.toFixed(2)}.`
+                      : 'Tried, and put back: it did not measurably improve the design.'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : null}
 
       {/* ---- the stages, while there is something to narrate ---- */}

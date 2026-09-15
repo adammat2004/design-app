@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowRight, Check, CircleAlert, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, Play, Sparkles, X } from 'lucide-react';
 import type {
   AssistantMessage as AssistantMessageModel,
   UserMessage,
 } from '@/state/assistant-store';
+import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { useAssistantStore } from '@/state/assistant-store';
 
 /**
@@ -36,6 +37,8 @@ export function UserBubble({ message }: { message: UserMessage }) {
 export function AssistantBubble({ message }: { message: AssistantMessageModel }) {
   const toggleChange = useAssistantStore((state) => state.toggleChange);
   const applyMessage = useAssistantStore((state) => state.applyMessage);
+  const playMessage = useAssistantStore((state) => state.playMessage);
+  const runActive = useAiRunStore(selectRunActive);
 
   const acceptedCount = message.changes.filter((change) => message.accepted[change.id]).length;
 
@@ -144,19 +147,39 @@ export function AssistantBubble({ message }: { message: AssistantMessageModel })
 
             {message.applied ? null : (
               <>
-                <button
-                  type="button"
-                  data-testid={`apply-${message.id}`}
-                  disabled={acceptedCount === 0}
-                  onClick={() => applyMessage(message.id)}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full bg-garden-forest px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-garden-green focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Check aria-hidden className="h-3 w-3" />
-                  Apply{' '}
-                  {acceptedCount === message.changes.length
-                    ? 'changes'
-                    : `${acceptedCount} change${acceptedCount === 1 ? '' : 's'}`}
-                </button>
+                <div className="mt-2 flex gap-1.5">
+                  <button
+                    type="button"
+                    data-testid={`apply-${message.id}`}
+                    disabled={acceptedCount === 0}
+                    onClick={() => applyMessage(message.id)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-garden-forest px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-garden-green focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Check aria-hidden className="h-3 w-3" />
+                    Apply{' '}
+                    {acceptedCount === message.changes.length
+                      ? 'changes'
+                      : `${acceptedCount} change${acceptedCount === 1 ? '' : 's'}`}
+                  </button>
+                  {/*
+                    The same changes, watched rather than landed.
+
+                    No second request: the diff already carries each element on both sides, so this
+                    is the identical edit performed on the canvas. Disabled while a redesign is
+                    already running, because the plan it was written about is being rewritten.
+                  */}
+                  <button
+                    type="button"
+                    data-testid={`play-${message.id}`}
+                    disabled={acceptedCount === 0 || runActive}
+                    title={runActive ? 'Wait for the redesign to finish, or stop it.' : 'Watch these changes being made'}
+                    onClick={() => playMessage(message.id)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-garden-line px-3 py-1.5 text-[11px] font-semibold text-garden-ink hover:bg-garden-sage focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Play aria-hidden className="h-3 w-3" />
+                    Watch
+                  </button>
+                </div>
                 <p className="mt-1 text-center text-[9px] text-garden-muted">
                   AI suggestions can be reviewed before applying.
                 </p>

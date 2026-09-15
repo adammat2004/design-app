@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ConceptsSectionSchema, GeneratedConceptSchema, LayoutSectionSchema } from './concepts.js';
+import { ConceptsSectionSchema, DesignElementSchema, GeneratedConceptSchema, LayoutSectionSchema } from './concepts.js';
+import { DesignScoreSchema } from './design/design-score.js';
 import { PlanDocumentSchema } from './document.js';
 import { FeaturesSectionSchema } from './features.js';
 import { GardenBriefSchema } from './brief.js';
@@ -93,3 +94,20 @@ export const GenerateConceptsResultSchema = z.object({
   concepts: z.array(GeneratedConceptSchema),
 });
 export type GenerateConceptsResult = z.infer<typeof GenerateConceptsResultSchema>;
+
+/**
+ * Ask what is wrong with a layout, without changing anything.
+ *
+ * The elements travel in the body rather than being read from the stored plan, and that is the
+ * point: the review is asked *during* a redesign, about a garden that has not been saved and
+ * should not be. Side-effect free, like `POST /plan-projects/validate` — and for the same reason,
+ * which is that "would this be any good?" is a question the editor has to be able to ask without
+ * committing to the answer.
+ */
+export const ReviewDesignSchema = z.object({
+  elements: z.array(DesignElementSchema).max(400),
+});
+export type ReviewDesign = z.infer<typeof ReviewDesignSchema>;
+
+export const ReviewDesignResultSchema = z.object({ score: DesignScoreSchema });
+export type ReviewDesignResult = z.infer<typeof ReviewDesignResultSchema>;

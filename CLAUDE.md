@@ -1611,11 +1611,75 @@ everywhere else and false here, where it is the difference between a bed morphin
 outline and a bed turning inside out half way. A local signed area, for the reason `openingNormal`
 probes rather than assuming. A test caught the silent no-op.
 
-**What is not built:** nothing produces operations except the demonstration script.
-`proposedChangeToOperation` (the assistant's existing `ProposedChange` is one pure function away
-from an operation list), the planner's missing intents (reshape, reroute, rotate, attached moves),
-and the review loop over `scoreConcept` are all recorded in TODOS.md. Revisions are session memory —
-Replay does not survive a reload, deliberately, for the same reason undo history does not.
+**The assistant's diff plays as a run, with nothing new on the wire.** `ProposedChange` already
+carries the element on both sides, so `runFromProposal` is a pure client-side function and the chat
+gained a **Watch** button beside Apply for no extra request and no second model call. The plan said
+to put `operations` on `AssistantProposalSchema`; that was wrong twice — it would make `assistant.ts`
+and `operations.ts` import each other, the cycle `zone-id.ts` exists to avoid, and it would put a
+presentation decision in the contract between the two halves of the system.
+
+**The operation is derived from the two elements, never from the change's own `kind`.** The planner's
+`kind` is what it meant to do; `previous` and `next` are what differ. A "move" of a bed is a new list
+of corners, so it is drawn as the reshape the document says it is. The corners are *compared* rather
+than assumed different, because every line of the diff carries a whole element on each side — a
+material swap on a bed arrives with an outline too, and morphing it into the identical outline is a
+second of nothing in a run whose whole claim is that each movement means something.
+
+**There is a reviewer, and it is `scoreConcept` on the live layout.** `POST /plan-projects/:id/design/review`
+takes the *elements* rather than reading the stored plan, because the question is asked mid-redesign
+about a garden saved nowhere; side-effect free, like `/validate`. Everything it stands on
+(`analyseSite`, `readDesignFor`, `scoreConcept`) is pure and query-free, so the endpoint needs no
+database and its test needs nothing running. `readDesignFor` had been written for exactly this and
+had zero call sites.
+
+**`POST /:id/assistant/redesign` is the planner with no model in front of it.** The reviewer has
+already decided what is wrong and which element it is about, so there is no sentence to interpret —
+which means no key, no rate limit (that budget caps a bill this route does not incur) and no prose.
+It takes `elements` too: a reviewer asks while the editor is holding a gesture open and nothing has
+been saved, and planning against the stored layout produced corrections computed from widths the
+user had already changed. **Found by measurement, not by reading the code.**
+
+**The loop is `repair.ts`'s shape, performed where a person can see it**: worst repairable fault,
+one change, measure again, keep it **only if the total actually rose** by the same 0.002, bounded at
+two passes. A change that is not kept is still played — the user watched the reviewer try something,
+and quietly leaving it in while saying it did not help would be the reviewer marking its own
+homework. Every dependency is injected, so the gate is tested with no server, no clock and no canvas.
+
+**Three repairs are performable and seven are not, and which is which was measured.** `shrink-terrace`,
+`widen-path` and `drop-optional` are faults whose fix the scorer fully specifies. The three *move*
+kinds are not: the scorer says what is wrong and never where the thing should go instead, and mapped
+to "towards the boundary" across four generated fixtures the planner refused **every one** with "It
+is already as far that way as it will go" — the things these faults are about are against a fence
+already. `UNPERFORMABLE` names all seven with a reason, the way `repair.ts` names its own two.
+
+**A correction has to clear the fault it was aimed at.** A flat 1.3 factor on a path pinched to
+0.5 m gives 0.65 m, which is still too narrow — so the fault survived, the score did not move, and
+the loop wound back its own correction. It looked like a reviewer with nothing to say rather than one
+aiming too low. `intentsFor` reads the element and computes the factor that reaches a metre. Measured
+after: two pinched paths widened, 0.851 → 0.862 → 0.872, both kept.
+
+**A fault is a code *and* its subjects.** Keyed on the code alone, a plan with three pinched paths
+had one widened and the other two written off as already tried — and the panel rendered two React
+children with the same key. The same mistake twice, in the loop and in the list that narrates it.
+
+**On a generated plan the reviewer usually finds nothing it can fix, and that is the honest result
+rather than a bug.** Generated plans score 0.85–0.90 and their remaining faults are the two the
+design agent already records as out of reach: too many materials is a `materialFor` question, and
+seating in shade wants a *second* sitting area in the sun. The reviewer earns its place on a plan
+somebody has edited.
+
+**The scorer gives the same answer for all three brief slots, so `review` takes no slot.** The
+obvious signature takes the strategy a concept was designed to, so a retreat is not marked down for
+entertaining badly. The briefs genuinely differ — A is `social`, B `open`, C `planted` — but scored
+across four fixtures all three give **the same total to four decimal places and the same issues**: no
+principle reads the fields that vary. Offering the parameter would have been a setting the design
+ignores. There is a test pinning the limitation so it fails the day it stops being true.
+
+**What is not built:** the planner still has no `reshape`, `reroute`, `rotate` or attached-move
+intent, which is what keeps four of the seven unperformable repairs unperformable; and a vision
+critic returning `DesignIssue[]` in the same schema is untouched. Revisions are session memory —
+Replay does not survive a reload, deliberately, for the same reason undo history does not. All in
+TODOS.md.
 
 ## The garden assistant
 

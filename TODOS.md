@@ -11,10 +11,14 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ## In flight — visual AI agents (plan: `~/.claude/plans/i-want-you-to-rippling-tide.md`)
 
-The foundation is built and verified: a shared `DesignOperation` schema, a pure executor, the
-gesture-bracketed store integration, overlays, the activity panel, and a scripted demonstration that
-runs against any generated concept. See "Visual AI agents" in CLAUDE.md for the decisions. What
-remains is connecting it to something that reasons.
+All six phases are built and verified. A shared `DesignOperation` schema, a pure executor, the
+gesture-bracketed store integration, overlays, the activity panel, a scripted demonstration, the
+assistant's diff playable as a run, and a design reviewer that finds a fault and fixes it under the
+same accept-only-on-improvement gate the generator's own repair stage uses. See "Visual AI agents"
+in CLAUDE.md for the decisions and the measurements behind them.
+
+What is left is not plumbing: the planner's vocabulary is what limits the reviewer, and the scorer
+cannot currently tell the three concepts apart.
 
 - [x] **Phase 0 — measurement.** One editor scene build is ~34 ms on a 50-element garden, almost
       entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.
@@ -25,27 +29,36 @@ remains is connecting it to something that reasons.
 - [x] **Phase 3 — the whole vocabulary.** Reshape with vertex matching, the three-phase reroute,
       add and remove transitions, staggered groups, the demonstration script.
 - [x] **Phase 4 — revision controls.** Stop, Skip, Compare, Undo, Replay, and four design events.
-- [ ] **Phase 5 — real operations from the assistant.** `proposedChangeToOperation` is the whole of
-      the first half: `ProposedChange` already carries `previous` and `next` as full elements, so
-      the mapping is pure and belongs in `operations.ts` beside `resolveOperation`. Then
-      `operations?: DesignOperation[]` as an additive field on `AssistantProposalSchema` and a
-      "Play changes" button on the diff, so the existing chat gains the animation with no new model
-      call. Agent and phase come from a deterministic table by change kind and category — never from
-      the model. **Effort: S.**
-- [ ] **Phase 5b — the intents the planner is missing.** `reshape` (an edge and a distance, with the
-      overlapping lawn giving up the same ground — the rule `deepenBorder` already implements),
-      `reroute` (reusing the generator's route builder), `rotate`, and `attach: true` on a move so
-      furniture travels with the host it stands on. One `DesignIntent` variant, one planner branch,
-      one `ProposedChange` kind and one mapping row each, with PostGIS tests as
-      `planner.service.test.ts` has. **Effort: M.**
-- [ ] **Phase 6 — the review loop.** `POST /plan-projects/:id/design/review` taking `{ elements }`
-      and answering `scoreConcept` — side-effect free, like `/validate`. Then map the worst
-      *repairable* `DesignIssue` whose subjects are element ids onto intents, play the result under
-      the reviewer, re-score, and keep it only if the total rose by ≥ 0.01, bounded at two
-      iterations — `repair.ts`'s own gate and budget. Deterministic and model-free; a vision critic
-      returning `DesignIssue[]` in the same schema can be added behind it later, with the client
-      rendering the PNG (`DownloadPlanButton` already does) because the composer lives in the web
-      app. **Effort: M.**
+- [x] **Phase 5 — real operations from the assistant.** `runFromProposal` (client-side, in
+      `lib/ai-run/from-proposal.ts` — putting it in the schema would have made `assistant.ts` and
+      `operations.ts` import each other) and a **Watch** button beside Apply on the diff. No new
+      field on the wire and no second model call.
+- [x] **Phase 6 — the review loop.** `POST /:id/design/review`, `POST /:id/assistant/redesign`
+      (model-free), and `lib/ai-run/review-loop.ts` with the accept-only-on-improvement gate.
+      Measured: two pinched paths widened, 0.851 → 0.872, both kept.
+- [ ] **The intents the planner is missing, and they are what limit the reviewer.** `reshape` (an
+      edge and a distance, with the overlapping lawn giving up the same ground — the rule
+      `deepenBorder` already implements), `reroute` (reusing the generator's route builder),
+      `rotate`, and `attach: true` on a move so furniture travels with the host it stands on. Plus
+      the one the reviewer wants most: **a move that can name another element as its destination**,
+      which is what makes `move-to-zone`, `move-destination` and `move-tree` unperformable today —
+      the scorer says what is wrong and never where the thing should go instead. One `DesignIntent`
+      variant, one planner branch, one `ProposedChange` kind and one row in `UNPERFORMABLE` deleted
+      for each, with PostGIS tests as `planner.service.test.ts` has. **Effort: M.**
+- [ ] **The scorer cannot tell the three concepts apart.** `readDesignFor` gives slot A `social`,
+      B `open` and C `planted` with different primary zones, and scored across four fixtures all
+      three produce **the same total to four decimal places and the same issues** — no principle
+      reads `emphasis` or `primaryZone`. So the three cards are judged against one standard, and
+      "slot C is scored as a planted garden" is not true. `design-review.service.ts` takes no brief
+      slot because of it, and `design-review.service.test.ts` pins the limitation so it fails when
+      this is fixed. **Effort: M**, and it is a question about the scorer rather than about the
+      review endpoint.
+- [ ] **A vision critic behind the same interface.** The loop consumes `DesignIssue[]`; a critic
+      that returns them from a rendered picture rather than from geometry would drop straight in.
+      The client renders the PNG (`DownloadPlanButton` already does) because the composer lives in
+      the web app, and posts it with the element inventory; one vision call in `intent.service.ts`'s
+      style returns issues validated so every subject is a real element id and every code is in
+      `DesignIssueCodeSchema`. Tested with a fake client, never a live call. **Effort: L.**
 - [ ] **Memoise the planting sample in `buildRenderScene`.** The measurement above says a scene build
       is ~34 ms and nearly all of it is re-sampling every bed, whether or not any bed changed. A cache
       keyed on the bed's outline, layers and maturity would cut a drag frame and an operation

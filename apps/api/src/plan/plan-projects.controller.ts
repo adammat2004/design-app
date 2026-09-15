@@ -26,9 +26,13 @@ import {
   type SectionPatchResult,
   type ValidateDocument,
   type ValidationResult,
+  ReviewDesignSchema,
+  type ReviewDesign,
+  type ReviewDesignResult,
 } from '@garden-studio/schema';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { DesignEventsService } from './design-events.service.js';
+import { DesignReviewService } from './design-review.service.js';
 import { PlanProjectsService } from './plan-projects.service.js';
 
 const createBody = new ZodValidationPipe(CreatePlanProjectSchema);
@@ -41,12 +45,14 @@ const selectionBody = new ZodValidationPipe(PatchConceptSelectionSchema);
 const validateBody = new ZodValidationPipe(ValidateDocumentSchema);
 const generateBody = new ZodValidationPipe(GenerateConceptsSchema);
 const eventsBody = new ZodValidationPipe(RecordDesignEventsSchema);
+const reviewBody = new ZodValidationPipe(ReviewDesignSchema);
 
 @Controller('plan-projects')
 export class PlanProjectsController {
   constructor(
     private readonly projects: PlanProjectsService,
     private readonly events: DesignEventsService,
+    private readonly reviewer: DesignReviewService,
   ) {}
 
   @Post()
@@ -150,5 +156,22 @@ export class PlanProjectsController {
     @Body(eventsBody) body: RecordDesignEvents,
   ): Promise<RecordDesignEventsResult> {
     return this.events.record(id, body.events);
+  }
+
+  /**
+   * A designer's reading of a layout, written nowhere.
+   *
+   * The elements come in the body rather than being read from the stored plan, because the question
+   * is asked *during* a redesign — about a garden that has not been saved and should not be until
+   * somebody decides to keep it. Side-effect free for the same reason `POST /validate` is: the
+   * editor has to be able to ask "is this any good" without committing to the answer.
+   */
+  @Post(':id/design/review')
+  async review(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(reviewBody) body: ReviewDesign,
+  ): Promise<ReviewDesignResult> {
+    const project = await this.projects.findOne(id);
+    return { score: this.reviewer.review(project.document, body.elements) };
   }
 }

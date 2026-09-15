@@ -1,5 +1,11 @@
 import {
   AssistantProposalSchema,
+  ReviewDesignResultSchema,
+  RedesignResultSchema,
+  type DesignElement,
+  type DesignIntent,
+  type RedesignResult,
+  type ReviewDesignResult,
   GardenProposalSchema,
   GenerateConceptsResultSchema,
   PlanProjectSchema,
@@ -215,6 +221,42 @@ export function proposeChanges(
   return request(`/plan-projects/${id}/assistant/messages`, AssistantProposalSchema, {
     method: 'POST',
     body: JSON.stringify({ message }),
+    signal,
+  });
+}
+
+/**
+ * Asks what is wrong with a layout. Writes nothing, and takes the elements rather than reading
+ * the stored plan — the question is asked mid-redesign, about a garden saved nowhere yet.
+ */
+export function reviewDesign(
+  id: string,
+  elements: DesignElement[],
+  signal?: AbortSignal,
+): Promise<ReviewDesignResult> {
+  return request(`/plan-projects/${id}/design/review`, ReviewDesignResultSchema, {
+    method: 'POST',
+    body: JSON.stringify({ elements }),
+    signal,
+  });
+}
+
+/**
+ * Asks the planner for a diff directly, in intents rather than in a sentence.
+ *
+ * No model, so no key, no rate limit and nothing that can fail for reasons outside this machine —
+ * which is what lets the design reviewer's corrections work on a server that has never had an
+ * Anthropic key.
+ */
+export function requestRedesign(
+  id: string,
+  intents: DesignIntent[],
+  elements: DesignElement[],
+  signal?: AbortSignal,
+): Promise<RedesignResult> {
+  return request(`/plan-projects/${id}/assistant/redesign`, RedesignResultSchema, {
+    method: 'POST',
+    body: JSON.stringify({ intents, elements }),
     signal,
   });
 }

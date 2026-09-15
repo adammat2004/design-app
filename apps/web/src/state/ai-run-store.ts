@@ -6,10 +6,13 @@ import { browserClock, type Clock } from '@/lib/ai-run/clock';
 import { createRunController, type RunController } from '@/lib/ai-run/controller';
 import type { RunFrame } from '@/lib/ai-run/evaluate';
 import { prepareRun, type PreparedRun } from '@/lib/ai-run/prepare';
+import { runReviewLoop, type ReviewOutcome } from '@/lib/ai-run/review-loop';
+import { requestRedesign, reviewDesign } from '@/lib/plan-api';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { useBoundaryStore } from './boundary-store';
 import { emitDesignEvent } from './design-events';
 import { allocateElementId, usePlanEditorStore } from './plan-editor-store';
+import { projectRevision } from './revision';
 
 /**
  * A redesign the user can watch happen.
@@ -55,6 +58,10 @@ interface AiRunState {
   revision: DesignRevision | null;
   /** Why the last attempt to start could not, for the panel to say out loud. */
   blocked: string | null;
+  /** True while the reviewer is reading, between its runs. */
+  reviewing: boolean;
+  /** What the reviewer found and what it did about it, for the panel. */
+  reviewOutcome: ReviewOutcome | null;
 
   start: (run: DesignRun) => { ok: true } | { ok: false; reason: string };
   pause: () => void;
@@ -65,6 +72,10 @@ interface AiRunState {
   undoRun: () => void;
   toggleCompare: () => void;
   dismiss: () => void;
+  /** Plays a run and resolves when it ends. What the review loop is built on. */
+  playAndWait: (run: DesignRun) => Promise<'complete' | 'cancelled' | 'refused'>;
+  /** The design reviewer: read the plan, fix the worst thing it can, keep it only if it helped. */
+  review: () => Promise<void>;
   /** Ends any run immediately, keeping its work. For a screen going away under it. */
   settle: () => void;
 }
@@ -72,6 +83,21 @@ interface AiRunState {
 /** The controller is a live object with a frame loop; it has no business in a store snapshot. */
 let controller: RunController | null = null;
 let replaying = false;
+
+/**
+ * Resolved when the run in progress ends, so the review loop can wait for it.
+ *
+ * A promise rather than a store subscription: "play this and tell me how it went" is what the loop
+ * needs, and watching `status` for a transition means reasoning about which transition, from which
+ * state, and what happens if two arrive in one tick.
+ */
+let settle: ((status: 'complete' | 'cancelled') => void) | null = null;
+
+function finishWaiters(status: 'complete' | 'cancelled'): void {
+  const waiting = settle;
+  settle = null;
+  waiting?.(status);
+}
 
 /** Swappable so the whole store can be driven by a manual clock in a test. */
 let clockFactory: () => Clock = browserClock;
@@ -99,6 +125,8 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
   compare: 'after',
   revision: null,
   blocked: null,
+  reviewing: false,
+  reviewOutcome: null,
 
   start: (run) => {
     const state = get();
@@ -237,10 +265,11 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
           })),
         frame: (frame) => set({ frame }),
         select: (id) => usePlanEditorStore.getState().select(id),
-        finished: () => {
+        finished: (status) => {
           usePlanEditorStore.getState().endGesture({ silent: true });
           replaying = false;
           set({ status: 'complete', frame: null });
+          finishWaiters(status);
         },
       },
     });
@@ -266,6 +295,54 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
       state.revision ? { compare: state.compare === 'after' ? 'before' : 'after' } : state,
     ),
 
+  playAndWait: (run) => {
+    const started = get().start(run);
+    if (!started.ok) return Promise.resolve('refused' as const);
+    return new Promise((resolve) => {
+      settle = resolve;
+    });
+  },
+
+  /**
+   * The design reviewer, doing what the generator's own repair stage does — in front of the user.
+   *
+   * Everything it decides comes from `review-loop.ts`, which knows nothing about stores, servers or
+   * canvases; this supplies the four things it cannot have: where the plan is, who can score it,
+   * who can turn a fault into a diff, and how to play one. That split is what lets the gate — keep
+   * the change only if the score measurably rose — be tested without any of them.
+   */
+  review: async () => {
+    const target = projectRevision();
+    if (!target || get().reviewing || selectRunActive(get())) return;
+
+    set({ reviewing: true, reviewOutcome: null, blocked: null });
+    try {
+      /*
+       * The reviewer reads the elements it is handed rather than the stored plan, so there is no
+       * flush here and nothing is saved on its account. A redesign it decides to wind back should
+       * leave no trace on the server at all.
+       */
+      const outcome = await runReviewLoop({
+        elements: () => usePlanEditorStore.getState().present.elements,
+        score: async (elements) => (await reviewDesign(target.projectId, elements)).score,
+        propose: async (intents, elements) =>
+          (await requestRedesign(target.projectId, intents, elements)).changes,
+        play: (run) => get().playAndWait(run),
+        undo: () => get().undoRun(),
+      });
+      set({ reviewOutcome: outcome });
+    } catch {
+      /*
+       * A reviewer that cannot reach the server says so and changes nothing. It is an opinion about
+       * the garden, not a step the user is waiting on — failing loudly here would interrupt an
+       * editing session over something nobody asked for.
+       */
+      set({ blocked: 'The design reviewer could not be reached.' });
+    } finally {
+      set({ reviewing: false });
+    }
+  },
+
   dismiss: () => set({ revision: null, refused: [], compare: 'after', blocked: null, frame: null }),
 }));
 
@@ -286,6 +363,7 @@ function finish(
   if (status === 'cancelled') {
     emitDesignEvent('ai_redesign_cancelled');
     set({ status: 'cancelled', frame: null, revision: null });
+    finishWaiters('cancelled');
     return;
   }
 
@@ -307,6 +385,7 @@ function finish(
       summary: prepared.run.summary ?? null,
     },
   });
+  finishWaiters('complete');
 }
 
 /** Whether the AI currently has the plan, which is what locks the editor's own tools. */
@@ -320,6 +399,7 @@ export function resetAiRunStoreForTests(): void {
   controller = null;
   replaying = false;
   clockFactory = browserClock;
+  finishWaiters('cancelled');
   useAiRunStore.setState({
     status: 'idle',
     prepared: null,
@@ -328,5 +408,7 @@ export function resetAiRunStoreForTests(): void {
     compare: 'after',
     revision: null,
     blocked: null,
+    reviewing: false,
+    reviewOutcome: null,
   });
 }

@@ -4,18 +4,29 @@ import { manualClock, type ManualClock } from '@/lib/ai-run/clock';
 import type { DesignElement } from '@/lib/concepts';
 import { resetAiRunStoreForTests, selectRunActive, setRunClockFactory, useAiRunStore } from './ai-run-store';
 import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
+import { setProjectRevision } from './revision';
 import { resetPlanEditorStoreForTests, usePlanEditorStore } from './plan-editor-store';
 
 /*
- * The design-event emitter is mocked for the reason `project-sync.test.ts` mocks the API client:
- * what is interesting here is *which* events a run reports, not that a batcher batches.
+ * Both mocks follow `project-sync.test.ts`: what is interesting here is the plumbing — which events
+ * a run reports, and how the loop moves the plan — not that a batcher batches or a client fetches.
+ * The reviewer's own judgement is tested against fakes in `review-loop.test.ts`.
  */
+vi.mock('@/lib/plan-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/plan-api')>('@/lib/plan-api');
+  return { ...actual, reviewDesign: vi.fn(), requestRedesign: vi.fn() };
+});
+
+/* The emitter, for the same reason. */
 vi.mock('./design-events', async () => {
   const actual = await vi.importActual<typeof import('./design-events')>('./design-events');
   return { ...actual, emitDesignEvent: vi.fn() };
 });
 
 const events = vi.mocked((await import('./design-events')).emitDesignEvent);
+const api = await import('@/lib/plan-api');
+const reviewDesign = vi.mocked(api.reviewDesign);
+const requestRedesign = vi.mocked(api.requestRedesign);
 
 const editor = () => usePlanEditorStore.getState();
 const ai = () => useAiRunStore.getState();
@@ -70,6 +81,10 @@ beforeEach(() => {
 
   clock = manualClock();
   setRunClockFactory(() => clock);
+
+  reviewDesign.mockReset();
+  requestRedesign.mockReset();
+  setProjectRevision({ projectId: '11111111-2222-3333-4444-555555555555', revision: 1 });
 
   mapProperty();
   seed([element({ id: 'e-1' })]);
@@ -327,5 +342,82 @@ describe('what is left afterwards', () => {
 
     // Not the garden before the redesign: stopping a replay must not undo the thing being replayed.
     expect(editor().present.elements).toBe(result);
+  });
+});
+
+describe('the design reviewer', () => {
+  /** A score the fake server hands back, with one fault the loop knows how to act on. */
+  function score(total: number, issues = [{
+    code: 'terrace-oversized', principle: 'proportion', severity: 'major',
+    message: 'The terrace takes most of the garden.',
+    subjects: ['e-1'], repair: 'shrink-terrace',
+  }]) {
+    return { score: { total, categories: {}, issues, tier: 'realised' } };
+  }
+
+  const moved = {
+    changes: [{
+      id: 'ch1', kind: 'move', elementId: 'e-1', label: 'Seating patio',
+      before: 'here', after: 'there',
+      previous: element({ id: 'e-1' }),
+      next: element({ id: 'e-1', shape: { kind: 'rect', centre: { x: 9, y: 6 }, width: 4, depth: 3, rotation: 0 } }),
+    }],
+    unplaceable: [],
+  };
+
+  it('plays the reviewer\'s correction and keeps it when the plan measurably improved', async () => {
+    reviewDesign.mockResolvedValueOnce(score(0.70) as never).mockResolvedValue(score(0.85) as never);
+    requestRedesign.mockResolvedValue(moved as never);
+
+    const running = ai().review();
+    // The run is live and animating; the loop is waiting on it, not polling.
+    await vi.waitFor(() => expect(selectRunActive(ai())).toBe(true));
+    clock.advance(10_000);
+    await running;
+
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 9, y: 6 } });
+    expect(ai().reviewOutcome).toMatchObject({ verdict: 'improved' });
+    expect(ai().reviewing).toBe(false);
+  });
+
+  it('puts its own change back when the measurement does not support it', async () => {
+    reviewDesign.mockResolvedValueOnce(score(0.80) as never).mockResolvedValue(score(0.79) as never);
+    requestRedesign.mockResolvedValue(moved as never);
+
+    const running = ai().review();
+    await vi.waitFor(() => expect(selectRunActive(ai())).toBe(true));
+    clock.advance(10_000);
+    await running;
+
+    // Back where it started, and no entry left on the undo stack for the user to trip over.
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 6, y: 6 } });
+    expect(ai().reviewOutcome).toMatchObject({ verdict: 'nothing-worked' });
+  });
+
+  it('changes nothing when it has no complaint', async () => {
+    reviewDesign.mockResolvedValue(score(0.9, []) as never);
+
+    await ai().review();
+
+    expect(requestRedesign).not.toHaveBeenCalled();
+    expect(ai().reviewOutcome).toMatchObject({ verdict: 'nothing-to-fix' });
+    expect(editor().past).toHaveLength(0);
+  });
+
+  it('says so rather than throwing when the server cannot be reached', async () => {
+    reviewDesign.mockRejectedValue(new Error('offline'));
+
+    await ai().review();
+
+    expect(ai().blocked).toBe('The design reviewer could not be reached.');
+    expect(ai().reviewing).toBe(false);
+    expect(editor().present.elements[0]!.shape).toMatchObject({ centre: { x: 6, y: 6 } });
+  });
+
+  it('will not review while a redesign is already running', async () => {
+    ai().start(TWO_MOVES());
+    await ai().review();
+
+    expect(reviewDesign).not.toHaveBeenCalled();
   });
 });

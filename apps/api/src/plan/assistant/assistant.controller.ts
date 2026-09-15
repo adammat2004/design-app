@@ -2,10 +2,13 @@ import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import {
   ProposeGardenRequestSchema,
   ProposeRequestSchema,
+  RedesignRequestSchema,
   type AssistantProposal,
   type GardenProposal,
   type ProposeGardenRequest,
   type ProposeRequest,
+  type RedesignRequest,
+  type RedesignResult,
 } from '@garden-studio/schema';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { PlanProjectsService } from '../plan-projects.service.js';
@@ -14,6 +17,7 @@ import { GardenAssistantService } from './garden/garden-assistant.service.js';
 
 const proposeBody = new ZodValidationPipe(ProposeRequestSchema);
 const gardenBody = new ZodValidationPipe(ProposeGardenRequestSchema);
+const redesignBody = new ZodValidationPipe(RedesignRequestSchema);
 
 @Controller('plan-projects')
 export class AssistantController {
@@ -53,5 +57,21 @@ export class AssistantController {
     const project = await this.projects.findOne(id);
 
     return this.garden.propose(id, body.message, project.document);
+  }
+
+  /**
+   * The same planner, asked directly in intents rather than through a sentence.
+   *
+   * This is what the design reviewer uses: it has already decided what is wrong and which element
+   * it is about, so there is nothing to interpret. Writes nothing, like the route above — what
+   * comes back is a diff the editor may animate, apply, or throw away.
+   */
+  @Post(':id/assistant/redesign')
+  async redesign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(redesignBody) body: RedesignRequest,
+  ): Promise<RedesignResult> {
+    const project = await this.projects.findOne(id);
+    return this.assistant.redesign(project.document, body.intents, body.elements);
   }
 }

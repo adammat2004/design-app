@@ -10,6 +10,7 @@ import { GardenPlannerService } from './assistant/garden/garden-planner.service.
 import { IntentService } from './assistant/intent.service.js';
 import { PlannerService } from './assistant/planner.service.js';
 import { DesignEventsService } from './design-events.service.js';
+import { DesignReviewService } from './design-review.service.js';
 import { ConceptsService } from './generation/concepts.service.js';
 import { FillService } from './generation/fill.service.js';
 import { PlacementService } from './generation/placement.service.js';
@@ -44,6 +45,7 @@ import { PlanProjectsService } from './plan-projects.service.js';
     GardenAssistantService,
     DesignBriefService,
     DesignEventsService,
+    DesignReviewService,
   ],
   exports: [GeometryValidationService, ConceptsService, PlanProjectsService, AssistantService],
 })

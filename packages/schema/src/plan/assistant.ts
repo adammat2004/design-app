@@ -149,3 +149,37 @@ export const ProposeRequestSchema = z.object({
   message: z.string().min(1).max(1000),
 });
 export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
+
+/**
+ * A redesign asked for in the planner's own vocabulary, with no model in the loop.
+ *
+ * The design reviewer is a scorer, not a conversation: it reads a layout, names a fault and the
+ * elements it is about, and the fix for that fault is a `DesignIntent` chosen from a table. There
+ * is no sentence anywhere in that, so there is nothing for a language model to do — and routing it
+ * through one would make a deterministic, offline, free correction into a paid call that can fail.
+ *
+ * The planner is the same one the chat uses, so a reviewer's correction is placed by exactly the
+ * rules a user's request is: `geometryIsLegal`, the same placer, the same refusal to invent a
+ * position for something that does not fit.
+ */
+export const RedesignRequestSchema = z.object({
+  intents: z.array(DesignIntentSchema).min(1).max(6),
+  /**
+   * The layout to plan against, where it is not the one on the server.
+   *
+   * The reviewer asks about a garden mid-redesign, which is saved nowhere: the run holds the
+   * editor's gesture open and autosave is suppressed for its duration. Without this the planner
+   * would answer about the last *stored* plan — which is how this was first built, and the symptom
+   * was a correction computed from widths the user had already changed. Absent means the stored
+   * layout, which is what the chat wants.
+   */
+  elements: z.array(DesignElementSchema).max(400).optional(),
+});
+export type RedesignRequest = z.infer<typeof RedesignRequestSchema>;
+
+/** What it answers: the planner's facts, and none of the model's prose. */
+export const RedesignResultSchema = z.object({
+  changes: z.array(ProposedChangeSchema).default([]),
+  unplaceable: z.array(z.object({ description: z.string(), reason: z.string() })).default([]),
+});
+export type RedesignResult = z.infer<typeof RedesignResultSchema>;

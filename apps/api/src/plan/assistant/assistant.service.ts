@@ -1,5 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import type { AssistantProposal, PlanDocument } from '@garden-studio/schema';
+import type {
+  AssistantProposal,
+  DesignElement,
+  DesignIntent,
+  PlanDocument,
+  RedesignResult,
+} from '@garden-studio/schema';
 import { IntentService } from './intent.service.js';
 import { PlannerService } from './planner.service.js';
 import { AssistantRateLimit } from './rate-limit.js';
@@ -24,6 +30,43 @@ export class AssistantService {
 
   get available(): boolean {
     return this.intent.available;
+  }
+
+  /**
+   * A redesign asked for in intents, with no model anywhere in it.
+   *
+   * The design reviewer reads a layout, names a fault and the elements it concerns, and the fix is
+   * a `DesignIntent` looked up in a table — there is no sentence in any of that for a model to
+   * write. Three consequences, all deliberate:
+   *
+   *   - **No availability check.** `propose` answers 503 without a key because there is genuinely
+   *     nothing it can do; this route works on a server that has never had one, which is the state
+   *     `pnpm dev` and a marker's machine are both in.
+   *   - **No rate limit.** That budget exists to cap a bill, and this costs nothing. Counting it
+   *     here would have the reviewer's corrections starve the chat of its allowance.
+   *   - **No prose.** The planner's `unplaceable` entries are returned verbatim and nothing is
+   *     assembled around them. A reply written here would be the server inventing a voice for a
+   *     caller that is a scorer.
+   *
+   * Everything downstream is the same: the same planner, the same placer, the same
+   * `geometryIsLegal`. A correction the reviewer asks for is placed by exactly the rules a
+   * person's request is.
+   */
+  async redesign(
+    document: PlanDocument,
+    intents: DesignIntent[],
+    elements?: DesignElement[],
+  ): Promise<RedesignResult> {
+    /*
+     * Planned against the layout the caller is actually looking at.
+     *
+     * A reviewer asks mid-redesign, when the editor is holding a gesture open and nothing has been
+     * saved — so the stored layout is the plan as it was several changes ago. Answering from that
+     * produces a correction computed against widths and positions the user has already moved on
+     * from, which is a worse failure than refusing: it looks like it worked.
+     */
+    const against = elements ? { ...document, layout: { ...document.layout, elements } } : document;
+    return this.planner.plan(against, intents);
   }
 
   async propose(

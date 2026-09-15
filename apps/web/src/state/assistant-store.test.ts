@@ -1,4 +1,4 @@
-import type { AssistantProposal } from '@garden-studio/schema';
+import { leavesOf, type AssistantProposal, type DesignRun } from '@garden-studio/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/plan-api';
 import {
@@ -7,6 +7,7 @@ import {
   useAssistantStore,
   type AssistantMessage,
 } from './assistant-store';
+import { useAiRunStore } from './ai-run-store';
 import { setProjectRevision } from './revision';
 
 /*
@@ -222,5 +223,59 @@ describe('suggestions', () => {
   /** Zustand v5 compares snapshots by identity, so the opening set must not be rebuilt per call. */
   it('returns a stable opening array', () => {
     expect(latestSuggestions(store())).toBe(latestSuggestions(store()));
+  });
+});
+
+describe('watching the changes instead of applying them', () => {
+  const patio = {
+    id: 'e-1', category: 'paved-area', role: 'feature', name: 'Seating patio', zone: 'back',
+    shape: { kind: 'rect', centre: { x: 6, y: 6 }, width: 4, depth: 3, rotation: 0 },
+  };
+  const change = {
+    id: 'ch1', kind: 'resize', elementId: 'e-1', label: 'Seating patio',
+    before: '12 m²', after: '20 m²',
+    previous: patio,
+    next: { ...patio, shape: { kind: 'rect', centre: { x: 6, y: 6 }, width: 5, depth: 4, rotation: 0 } },
+  };
+
+  async function answered() {
+    proposeChanges.mockResolvedValue(proposal({ changes: [change as never] }));
+    await store().send('Make the terrace bigger');
+    return assistantMessages()[0]!;
+  }
+
+  it('hands the accepted lines to the run rather than to the editor', async () => {
+    const message = await answered();
+    const started = vi.fn((_run: DesignRun) => ({ ok: true as const }));
+    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(started);
+
+    store().playMessage(message.id);
+
+    expect(started).toHaveBeenCalledTimes(1);
+    const run = started.mock.calls[0]![0];
+    // The same edit, as operations: no second request and nothing new on the wire.
+    expect(run.operations.flatMap(leavesOf).map((leaf) => leaf.kind)).toEqual(['select', 'resize']);
+  });
+
+  it('closes the diff once the run owns the changes', async () => {
+    const message = await answered();
+    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(() => ({ ok: true }));
+
+    store().playMessage(message.id);
+
+    // Leaving Apply live beside a run already performing them invites the plan changing twice.
+    expect(assistantMessages()[0]!.applied).toBe(true);
+    expect(assistantMessages()[0]!.appliedIds).toEqual(['ch1']);
+  });
+
+  it('leaves the diff alone when the run was refused', async () => {
+    const message = await answered();
+    vi.spyOn(useAiRunStore.getState(), 'start').mockImplementation(() => ({
+      ok: false, reason: 'A redesign is already running.',
+    }));
+
+    store().playMessage(message.id);
+
+    expect(assistantMessages()[0]!.applied).toBe(false);
   });
 });
