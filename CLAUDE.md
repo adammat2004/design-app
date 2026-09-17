@@ -637,6 +637,20 @@ surfaces so they must sit above them, and a tree stands up out of the ground so 
 over the shadow it casts. Inserting at the fill-to-feature seam inside the existing layer preserves
 the "array order is stacking order" guarantee; two Konva layers would not.
 
+**The editor's stage has a layer budget: four, and only one of them is spare.** Konva warns above
+five, and it warned — the visual-agents work mounted two layers of its own on a stage that was
+already at four with the grid on. Every Konva `Layer` is a full-size canvas at device-pixel ratio
+plus a hit canvas, composited by the browser every frame whether or not it draws anything; two of
+the old layers held one child each and existed only for stacking order, which a `Group` gives for
+free. The four now: the **backdrop** (grid and plot outline — never listens, never animates, and
+its own `visible` is bound to whether it has anything to draw, because a hidden layer leaves the
+page where a hidden group does not), the **elements** (the only interactive layer, shadows spliced
+in as above), the **chrome** (fence first, then house, handles, guides and tape — redraws on
+selection), and the **AI's** (mounted only during a run, the one thing animating at frame rate,
+which is exactly what a layer of its own is for). A new drawing pass goes in a `Group` inside one
+of those, never in a new `Layer`; `ai-redesign.spec.ts` counts the canvases and fails on the
+warning.
+
 **The shadow raster covers the plot, not the shadows.** Anchoring to the shadows' own bounding box
 would move the raster's origin every time the time of day changed, shifting every pixel of the
 layer sideways as its extent grew and shrank. It is also clipped to the boundary: a shadow really
@@ -885,6 +899,44 @@ change is omitted and an `unplaceable` entry is added with a reason the planner 
 is no clear 4.2 × 4 m space left in the back garden"), which the service appends to the reply. It
 never fabricates a position, never silently drops the request, and never re-prompts — a second
 call cannot help, because the model still cannot see geometry.
+
+**The structured-output schema has a size budget, and it has already been exceeded once.** Adding
+the `reroute` and `rotate` verbs took `INTENT_JSON_SCHEMA` to eleven `anyOf` branches and twelve
+optional properties, and every assistant message then failed with
+`400 invalid_request_error` — *"The compiled grammar is too large, which would cause performance
+issues."* **Nothing in the schema was invalid**: no unsupported keyword, no numeric or string bound,
+no recursion, every object already closed with an explicit `required`. It was simply too big for the
+grammar compiler, and the published limits name unsupported *keywords* rather than any cap on size,
+so a static reading of the docs could not have found it.
+
+**An optional property is the expensive kind.** A required key is one thing to parse; an optional one
+means the grammar must accept the object with it *and* without it, so k optionals in an object are
+2^k shapes, multiplied again by anything nested. The fix was therefore to make nine fields
+**required with an honest empty value** — `""`, `[]`, `false`, `0`, and the default the model would
+otherwise have omitted — and to pull the nine inlined copies of `target` into one `$defs` entry.
+Census went 22 objects / 12 optionals → **14 / 2**, and the same request compiled. No verb was taken
+away from the user, which was the other option and the wrong one.
+
+**Zod is deliberately untouched by that.** Every one of those fields is still `.optional()` or
+`.default()` there, because a `DesignIntent` built by hand — by the repair service, by a test — should
+not have to carry placeholders. The empty values parse, and every read of them in
+`planner.service.ts` is a truthiness or length check, so `""` behaves exactly as absent. Both halves
+have tests; a future `!== undefined` written in good faith would break it silently.
+
+**`pnpm --filter @garden-studio/api probe:assistant` is how you find out for the price of one token.**
+It sends one request carrying nothing but the schema and prints the API's own sentence back. Run it
+before landing anything that grows the schema, and run `probe:assistant garden` as the control — if
+the known-good schema also fails, the schema is not the variable and the next place to look is the
+model or the key. The budget is also pinned as a unit test, so the usual case is that a red test on a
+laptop replaces a 400 in front of a user.
+
+**A 4xx from Anthropic is a 503, not a 502, and the difference is what the user is told.** 502 renders
+in the chat as *"the designer replied with something unusable — try rephrasing"*, which is sound for
+a refusal or unparseable JSON and useless for a rejected request: the model never read the message,
+and it will refuse the next one identically. The three failures above spent three attempts telling
+the user to rephrase. `toHttpException` now splits on `error.status`, and the `APIError` branch logs
+`type`, `message` and `requestID` rather than the status alone — all three come off the *response*,
+so the rule about never logging the key or a full prompt still holds.
 
 **Do not disable thinking.** It is on by default on Opus 5, and with it off the model can write a
 tool call into its visible text: the turn succeeds, nothing runs, no error is raised. Cost is

@@ -1,6 +1,6 @@
 'use client';
 
-import { Group, Layer } from 'react-konva';
+import { Group } from 'react-konva';
 import { elementAnchor, type Point } from '@garden-studio/schema';
 import type { MotionEntry } from '@/lib/ai-run/evaluate';
 import { metresToPx, type CanvasTransform } from '@/lib/canvas-transform';
@@ -9,7 +9,9 @@ import { ElementDrawing } from '../ElementDrawing';
 /**
  * The elements the AI is moving this instant, drawn above the settled plan.
  *
- * Why a separate layer rather than letting the real renderer draw the change frame by frame: one
+ * A group on the AI's own layer (see `EditorCanvas`), which shares that layer with the overlays.
+ *
+ * Why it is drawn here at all rather than letting the real renderer draw the change frame by frame: one
  * scene build for this garden costs about 34 ms, nearly all of it re-sampling the planting in every
  * bed, and the Pixi compositor rebuilds its whole display list whenever the scene's content
  * fingerprint moves. Thirty of those a second is not a budget that exists. **Measured before it was
@@ -25,7 +27,7 @@ import { ElementDrawing } from '../ElementDrawing';
  * `scale` is applied to the Konva node, never to the geometry. An element popping in is a drawing
  * effect; scaling its `shape` would mean the plan briefly held a size nobody specified.
  */
-export function MotionLayer({
+export function MotionGroup({
   entries,
   transform,
   light,
@@ -37,7 +39,7 @@ export function MotionLayer({
   if (entries.length === 0) return null;
 
   return (
-    <Layer listening={false}>
+    <Group listening={false}>
       {entries.map((entry) => {
         const anchor = metresToPx(elementAnchor(entry.element), transform);
         return (
@@ -60,6 +62,6 @@ export function MotionLayer({
           </Group>
         );
       })}
-    </Layer>
+    </Group>
   );
 }

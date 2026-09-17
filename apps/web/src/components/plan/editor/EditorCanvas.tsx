@@ -53,8 +53,8 @@ import {
 } from '../canvas-primitives';
 import { useCanvasViewport } from '../use-canvas-viewport';
 import { ConceptLabels } from '../concepts/ConceptLabels';
-import { AiOverlayLayer } from './AiOverlayLayer';
-import { MotionLayer } from './MotionLayer';
+import { AiOverlayGroup } from './AiOverlayGroup';
+import { MotionGroup } from './MotionGroup';
 import type { MotionEntry } from '@/lib/ai-run/evaluate';
 import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { EditorScene } from './EditorScene';
@@ -365,6 +365,15 @@ export function EditorCanvas() {
         {canRender ? <EditorScene scene={richScene} site={boundaryDraft}
           transform={{ ...transform, offsetX: transform.offsetX + panOffset.x, offsetY: transform.offsetY + panOffset.y }}
           onReady={setRichReady} /> : null}
+        {/*
+          The stage has a layer budget: three idle, four during an AI run. Konva warns above five,
+          and every layer is a full-size canvas at device-pixel ratio plus a hit canvas, composited
+          by the browser every frame whether or not it draws anything. The four are the backdrop
+          (never listens, never animates), the elements (the only interactive one), the chrome
+          (redraws on selection) and the AI's (mounted per run, the only one animating at frame
+          rate). A new drawing pass goes in a `Group` inside one of those, never in a new `Layer` —
+          `ai-redesign.spec.ts` counts them.
+        */}
         {canRender ? (
           <Stage
             ref={stageRef}
@@ -385,14 +394,26 @@ export function EditorCanvas() {
             onWheel={handleWheel}
           >
             {/*
-              Graph paper, clipped to the plot.
+              The backdrop: graph paper and the plot outline, on one layer that never listens.
 
-              Full-bleed it reads as the drawing being *on* graph paper; clipped to the boundary it
-              reads as a measured surface, which is what it is for. Konva runs `beginPath` before
-              the clip function and `clip` after, so this only traces the path.
+              These were two layers until the stage went past Konva's five-layer advice (see the
+              budget note above). Merged rather than dropped: nothing here composites with anything
+              but source-over, so one canvas paints the identical picture, and both halves were
+              already `listening={false}`. The layer's own `visible` is what keeps an idle editor
+              at zero composited backdrop canvases — a hidden *layer* takes its canvas out of the
+              page where a hidden group does not — which is exactly what two separately hidden
+              layers used to give.
             */}
-            {gridVisible ? (
-              <Layer listening={false}>
+            <Layer listening={false} visible={gridVisible || !richReady}>
+              {/*
+                Graph paper, clipped to the plot.
+
+                Full-bleed it reads as the drawing being *on* graph paper; clipped to the boundary
+                it reads as a measured surface, which is what it is for. Konva runs `beginPath`
+                before the clip function and `clip` after, so this only traces the path — and it
+                restores the context afterwards, which is why the plot below is unclipped.
+              */}
+              {gridVisible ? (
                 <Group
                   clipFunc={(context) => {
                     if (polygon.length < 3) return;
@@ -412,21 +433,21 @@ export function EditorCanvas() {
                     height={size.height}
                   />
                 </Group>
-              </Layer>
-            ) : null}
-
-            {/* The property from step 1, as locked background context. */}
-            <Layer listening={false} visible={!richReady}>
-              {polygon.length >= 3 ? (
-                <Line
-                  points={polygonToKonvaPoints(polygon, transform)}
-                  closed
-                  fill={COLOUR.fill}
-                  stroke={COLOUR.stroke}
-                  strokeWidth={1}
-                  lineJoin="round"
-                />
               ) : null}
+
+              {/* The property from step 1, as locked background context. */}
+              <Group visible={!richReady}>
+                {polygon.length >= 3 ? (
+                  <Line
+                    points={polygonToKonvaPoints(polygon, transform)}
+                    closed
+                    fill={COLOUR.fill}
+                    stroke={COLOUR.stroke}
+                    strokeWidth={1}
+                    lineJoin="round"
+                  />
+                ) : null}
+              </Group>
             </Layer>
 
             {/*
@@ -478,21 +499,31 @@ export function EditorCanvas() {
             </Layer>
 
             {/*
-              The fence sits *above* the surfaces, not below them. A boundary drawn underneath is
-              covered by the base fill that runs to the edge of the zone, which is every generated
-              concept — so the garden would lose its edge exactly where it needs one.
+              The chrome: everything drawn over the design that is not the design — the fence, the
+              house, and the editor's own handles, guides and tape.
             */}
-            <Layer listening={false} visible={!richReady}>
-              <FenceLine
-                polygon={polygon}
-                runs={boundaryRuns(boundaryDraft)}
-                transform={transform}
-                light={light}
-                gaps={gateGaps(boundaryDraft)}
-              />
-            </Layer>
-
             <Layer>
+              {/*
+                The fence sits *above* the surfaces, not below them. A boundary drawn underneath is
+                covered by the base fill that runs to the edge of the zone, which is every generated
+                concept — so the garden would lose its edge exactly where it needs one.
+
+                First child of this layer rather than a layer of its own: the same place in the
+                stack, one fewer canvas. It cannot live in the elements layer — under the fills it
+                is covered, over the objects it crosses a canopy that overhangs the boundary. And a
+                hidden group returns from `drawScene` before it touches a child, so on the rich
+                path, where the fence is never drawn, it costs nothing.
+              */}
+              <Group listening={false} visible={!richReady}>
+                <FenceLine
+                  polygon={polygon}
+                  runs={boundaryRuns(boundaryDraft)}
+                  transform={transform}
+                  light={light}
+                  gaps={gateGaps(boundaryDraft)}
+                />
+              </Group>
+
               {!richReady && houseOutline && boundaryDraft.house ? (
                 <>
                   <HouseShape
@@ -615,15 +646,27 @@ export function EditorCanvas() {
             </Layer>
 
             {/*
-              The AI's two layers, above everything the editor draws for itself.
+              The AI's layer, above everything the editor draws for itself, mounted only while a
+              run is going on.
 
-              `MotionLayer` holds the elements actually in flight this frame; `AiOverlayLayer` holds
-              the selection, ghosts, vertices, route guides, inspection frame and cursor. Both are
-              pure functions of `frame`, so when no run is going on they render nothing at all and
-              this screen is exactly what it was.
+              `MotionGroup` holds the elements actually in flight this frame; `AiOverlayGroup` holds
+              the selection, ghosts, vertices, route guides, inspection frame and cursor. They were
+              a layer each until the stage went past Konva's five-layer advice; one is also the
+              right shape, since they are two halves of one picture and always appear together.
+              Gated on `frame` alone, which is safe because `overlaidMotion` is derived from it —
+              no frame, no motion — and when there is no run this screen is exactly what it was.
+
+              A layer of its own rather than the top of the chrome layer, though: this is the one
+              thing on the canvas that animates at frame rate, and drawing it into the chrome would
+              re-stroke the dimension guides' text nodes sixty times a second. Isolating that is
+              what a Konva layer is for.
             */}
-            <MotionLayer entries={overlaidMotion} transform={transform} light={light} />
-            <AiOverlayLayer frame={aiFrame} transform={transform} />
+            {aiFrame ? (
+              <Layer listening={false}>
+                <MotionGroup entries={overlaidMotion} transform={transform} light={light} />
+                <AiOverlayGroup frame={aiFrame} transform={transform} />
+              </Layer>
+            ) : null}
           </Stage>
         ) : null}
       </div>

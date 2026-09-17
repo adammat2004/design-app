@@ -35,7 +35,7 @@ laying a route — which is the third commonest fault in the harness.
       entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.
 - [x] **Phase 1 — schema, executor, store.** `operations.ts`, `lib/ai-run/`, `ai-run-store`,
       `endGesture({ silent })`, `allocateElementId`, the autosave-during-gesture fix.
-- [x] **Phase 2 — the visual language.** `MotionLayer`, `AiOverlayLayer`, the label chip, the
+- [x] **Phase 2 — the visual language.** `MotionGroup`, `AiOverlayGroup`, the label chip, the
       activity panel, the interaction lockout, the compare banner.
 - [x] **Phase 3 — the whole vocabulary.** Reshape with vertex matching, the three-phase reroute,
       add and remove transitions, staggered groups, the demonstration script.

@@ -99,12 +99,38 @@ function terraceOf(layout: PlanDocument['layout']) {
     })[0]!;
 }
 
-async function openEditor(page: Page): Promise<string[]> {
+/**
+ * Everything the page complains about, so a test can demand silence.
+ *
+ * Konva's layer advisory is collected alongside real errors on purpose. The editor has a layer
+ * budget (see the note above the Stage in `EditorCanvas.tsx`), a run is what pushed it over once,
+ * and every layer is a full-size canvas — so this is a regression only a browser can see. Matched
+ * on Konva's own prefix rather than on `type() === 'warning'`, which keeps React's development
+ * warnings out of it.
+ */
+function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
+    if (message.text().startsWith('Konva warning')) errors.push(message.text());
   });
+  return errors;
+}
+
+/**
+ * One scene canvas per Konva layer, and nothing else sits directly under Konva's container.
+ *
+ * Scoped to `.konvajs-content >` deliberately: the editor also holds the Pixi canvas and the 2D
+ * overlay, which are the canvases `openEditor` waits on, and counting those would measure the
+ * renderer rather than the stage.
+ */
+function konvaLayers(page: Page) {
+  return page.locator('[data-testid="editor-canvas"] .konvajs-content > canvas');
+}
+
+async function openEditor(page: Page): Promise<string[]> {
+  const errors = watchConsole(page);
   await page.goto(`/plan/${projectId}/editor?aiDemo`);
   await expect(page.getByTestId('editor-concept-name')).toBeVisible();
   await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();
@@ -178,11 +204,16 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   const areaBefore = await terraceArea(page, terrace.id);
   expect(areaBefore).toBeGreaterThan(0);
 
+  // Three layers idle: backdrop, elements, chrome. The budget is stated above the Stage.
+  await expect(konvaLayers(page)).toHaveCount(3);
+
   await page.getByTestId('ai-demo-run').click();
 
-  // It announces itself: a stage in progress, a designer at work, a label on the canvas.
+  // It announces itself: a stage in progress, a designer at work, a label on the canvas — and
+  // exactly one layer of its own, not two.
   await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'running');
   await expect(page.getByTestId('ai-label-chip')).toBeVisible();
+  await expect(konvaLayers(page)).toHaveCount(4);
   await expect(page.locator('[data-testid^="ai-stage-"][data-state="current"]').first()).toBeVisible();
   await expect(page.locator('[data-testid^="ai-agent-"][data-state="active"]').first()).toBeVisible();
 
@@ -192,6 +223,8 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   await page.getByTestId('ai-skip').click();
   await expect(page.getByTestId('ai-activity-panel')).toHaveAttribute('data-status', 'complete');
   await expect(page.getByTestId('ai-label-chip')).toBeHidden();
+  // And its layer goes with it: the run leaves the stage as it found it.
+  await expect(konvaLayers(page)).toHaveCount(3);
 
   // The garden actually changed, and the change is in the document rather than only on screen.
   const areaAfter = await terraceArea(page, terrace.id);
@@ -276,11 +309,7 @@ test('the design reviewer finds a real fault and fixes it', async ({ page, reque
     ),
   );
 
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
+  const errors = watchConsole(page);
   await page.goto(`/plan/${seeded.id}/editor?aiDemo`);
   await expect(page.getByTestId('editor-concept-name')).toBeVisible();
   await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();

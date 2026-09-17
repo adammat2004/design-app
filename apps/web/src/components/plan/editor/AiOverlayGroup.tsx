@@ -1,6 +1,6 @@
 'use client';
 
-import { Arrow, Circle, Group, Layer, Line, Rect } from 'react-konva';
+import { Arrow, Circle, Group, Line, Rect } from 'react-konva';
 import type { Point } from '@garden-studio/schema';
 import type { RunFrame, RunOverlay } from '@/lib/ai-run/evaluate';
 import { COLOUR } from '@/lib/canvas-colours';
@@ -18,11 +18,15 @@ import { metresToPx, polygonToKonvaPoints, type CanvasTransform } from '@/lib/ca
  * before it is built, an inspection frame, a crosshair. Anything that reads as "computer" rather
  * than as "designer" is the wrong answer, because the claim being made is that a professional is
  * operating the same editor the user has.
+ *
+ * A group on the AI's own layer (see `EditorCanvas`), above `MotionGroup` on the same layer. The
+ * `!frame` guard stays although that layer only mounts with a frame: the component is total either
+ * way, and a caller should not have to know how the layer is gated.
  */
 
 const HANDLE = 5;
 
-export function AiOverlayLayer({
+export function AiOverlayGroup({
   frame,
   transform,
 }: {
@@ -32,12 +36,12 @@ export function AiOverlayLayer({
   if (!frame) return null;
 
   return (
-    <Layer listening={false}>
+    <Group listening={false}>
       {frame.overlays.map((overlay) => (
         <Overlay key={overlay.key} overlay={overlay} transform={transform} />
       ))}
       {frame.cursor ? <Cursor at={frame.cursor} transform={transform} /> : null}
-    </Layer>
+    </Group>
   );
 }
 

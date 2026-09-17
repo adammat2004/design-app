@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { PlanDocumentSchema, type PlanDocument } from '@garden-studio/schema';
 import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { IntentService } from './intent.service.js';
 import { INTENT_JSON_SCHEMA } from './intent-schema.js';
 import { AssistantIntentEnvelopeSchema, DesignIntentSchema } from '@garden-studio/schema';
@@ -303,7 +304,7 @@ describe('IntentService', () => {
     await expect(service.interpret('hello', plan())).rejects.toMatchObject({ status: 503 });
   });
 
-  it('502s on any other API error', async () => {
+  it('502s when the far end has trouble with a request it accepted', async () => {
     const service = new IntentService(
       client(() => {
         throw new Anthropic.InternalServerError(500, null, 'boom', new Headers());
@@ -312,6 +313,33 @@ describe('IntentService', () => {
     );
 
     await expect(service.interpret('hello', plan())).rejects.toMatchObject({ status: 502 });
+  });
+
+  /**
+   * A rejected *request* is 503, not 502, and the difference is what the user is told.
+   *
+   * 502 renders in the chat as "the designer replied with something unusable — try rephrasing",
+   * which is sound advice for a refusal or unparseable JSON and useless for this: Anthropic never
+   * read the message. It objected to what we built, so it will object again to every send until
+   * somebody fixes it here, and "unavailable" is the honest word for that.
+   *
+   * This is not hypothetical. A schema that grew two verbs too many produced exactly this 400 on
+   * every message, and the chat spent three attempts telling the user to rephrase.
+   */
+  it('503s when Anthropic rejects the request we built, rather than blaming the wording', async () => {
+    const service = new IntentService(
+      client(() => {
+        throw new Anthropic.BadRequestError(
+          400,
+          { type: 'error', error: { type: 'invalid_request_error', message: 'too large' } },
+          'The compiled grammar is too large.',
+          new Headers(),
+        );
+      }),
+      config(),
+    );
+
+    await expect(service.interpret('hello', plan())).rejects.toMatchObject({ status: 503 });
   });
 });
 
@@ -365,22 +393,143 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
     expect(seen.filter((name) => banned.has(name))).toEqual([]);
   });
 
-  it('describes every intent kind the Zod union accepts', () => {
-    const kinds = intentBranches.map((branch) => branch.properties.kind.const);
+  /**
+   * Derived from the Zod union, never restated.
+   *
+   * This compared against a hand-written list of eleven strings, which could only ever catch the
+   * harmless direction — a branch on the wire with no Zod branch behind it. The dangerous direction
+   * is a verb the planner can execute and the model has no way to ask for: the assistant quietly
+   * declines to do something it was built for, and nothing anywhere says why. Reading the list off
+   * `DesignIntentSchema` is what makes both directions the same assertion.
+   */
+  it('describes exactly the intent kinds the Zod union accepts', () => {
+    const zodKinds = DesignIntentSchema.options.map(
+      (option) => (option.shape.kind as z.ZodLiteral<string>).value,
+    );
+    const wireKinds = intentBranches.map((branch) => branch.properties.kind.const);
 
-    expect([...kinds].sort()).toEqual([
-      'add',
-      'attach',
-      'material',
-      'move',
-      'recategorise',
-      'reduce-cost',
-      'remove',
-      'reroute',
-      'reshape',
-      'resize',
-      'rotate',
-    ]);
+    expect([...wireKinds].sort()).toEqual([...zodKinds].sort());
+    /* And each exactly once — a duplicated branch is grammar paid for twice. */
+    expect(new Set(wireKinds).size).toBe(wireKinds.length);
+  });
+
+  /**
+   * The budget, checked on a laptop rather than in the editor.
+   *
+   * Anthropic refused this schema outright once it grew past what its grammar compiler would build:
+   * `400 invalid_request_error` — *"The compiled grammar is too large."* Nothing in the schema was
+   * invalid; it was simply too big, and the only symptom a user saw was the chat telling them to
+   * rephrase.
+   *
+   * These are **not** published limits — the structured-outputs docs give no cap on branches or
+   * optionals. They are the measured shape of the schema on the day it compiled again, kept so the
+   * next verb is added deliberately. An optional property is the expensive kind: k of them in one
+   * object are 2^k shapes for the compiler, which is why that number is the tightest of the three.
+   *
+   * If a change genuinely needs one of these raised, raise it **and** run
+   * `pnpm --filter @garden-studio/api probe:assistant` before landing. A number nudged up to make a
+   * red test green is exactly how the last 400 was earned.
+   */
+  it('stays inside the grammar budget', () => {
+    const tally = { objects: 0, optionals: 0, branches: 0, refs: 0 };
+
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) return void node.forEach(walk);
+
+      const record = node as Record<string, unknown>;
+      if (record.type === 'object') {
+        tally.objects += 1;
+        const properties = Object.keys((record.properties ?? {}) as Record<string, unknown>);
+        tally.optionals += properties.length - ((record.required ?? []) as string[]).length;
+      }
+      if (Array.isArray(record.anyOf)) tally.branches += record.anyOf.length;
+      if (typeof record.$ref === 'string') tally.refs += 1;
+
+      Object.values(record).forEach(walk);
+    };
+    walk(INTENT_JSON_SCHEMA);
+
+    expect(tally.branches).toBeLessThanOrEqual(11);
+    expect(tally.objects).toBeLessThanOrEqual(14);
+    expect(tally.optionals).toBeLessThanOrEqual(2);
+    /* Nine inlined copies of `target` became nine references. Losing them undoes half the fix. */
+    expect(tally.refs).toBe(9);
+  });
+
+  /**
+   * Every reference resolves, and none of them leaves the document.
+   *
+   * External `$ref` is unsupported by structured outputs, and a dangling internal one is a 400 with
+   * a message about the whole schema rather than the pointer — both far cheaper to catch here.
+   */
+  it('references only definitions it carries', () => {
+    const defined = Object.keys(INTENT_JSON_SCHEMA.$defs);
+    const used: string[] = [];
+
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) return void node.forEach(walk);
+      const record = node as Record<string, unknown>;
+      if (typeof record.$ref === 'string') used.push(record.$ref);
+      Object.values(record).forEach(walk);
+    };
+    walk(INTENT_JSON_SCHEMA);
+
+    expect(used.length).toBeGreaterThan(0);
+    for (const ref of used) {
+      expect(ref.startsWith('#/$defs/'), ref).toBe(true);
+      expect(defined).toContain(ref.slice('#/$defs/'.length));
+    }
+    /* And nothing defined but unused, which is grammar built for nobody. */
+    expect(defined.every((name) => used.includes(`#/$defs/${name}`))).toBe(true);
+  });
+
+  /**
+   * What the wire *obliges* the model to send is what Zod has to accept.
+   *
+   * Nine fields were made required to shrink the grammar, each carrying an honest empty value when
+   * it does not apply. If Zod ever tightened — a `.min(1)` on an id, say — the model would start
+   * sending something the parse rejects, and the failure would read as "the designer replied with
+   * something unusable" rather than as the schema change it was.
+   */
+  it('parses the empty values the wire schema forces the model to send', () => {
+    const forced = [
+      {
+        kind: 'move',
+        target: { elementIds: ['e-1'] },
+        towards: 'house',
+        elementId: '',
+        away: false,
+      },
+      {
+        kind: 'reroute',
+        target: { elementIds: ['e-1'] },
+        objective: 'direct',
+        avoidElementIds: [],
+        connectElementId: '',
+      },
+      { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house', elementId: '' },
+      { kind: 'reduce-cost', maxChanges: 5 },
+      {
+        kind: 'add',
+        category: 'structure',
+        name: 'Shed',
+        footprint: { kind: 'point', width: 0, depth: 0, radius: 1.2 },
+        affinity: 'any',
+      },
+    ];
+
+    for (const intent of forced) {
+      const parsed = DesignIntentSchema.safeParse(intent);
+      expect(parsed.success, `${intent.kind}: ${parsed.success ? '' : parsed.error.message}`).toBe(
+        true,
+      );
+    }
+
+    /* The placeholder keys are stripped rather than carried: a point has no width. */
+    const point = DesignIntentSchema.parse(forced[4]!) as { footprint: Record<string, unknown> };
+    expect(point.footprint).toEqual({ kind: 'point', radius: 1.2 });
   });
 
   it('accepts one example of every branch', () => {

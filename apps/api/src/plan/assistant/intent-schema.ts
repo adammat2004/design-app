@@ -16,34 +16,60 @@ import { ELEMENT_CATEGORIES, MATERIAL_IDS, ZONE_IDS } from './vocabulary.js';
  *    make something ten times bigger gets told what it actually got.
  */
 
-const target = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['elementIds'],
-  properties: {
-    elementIds: {
-      type: 'array',
-      description: 'Ids copied exactly from the inventory. Never invent one.',
-      items: { type: 'string' },
+/**
+ * The one shape every verb that acts on existing elements takes, written once.
+ *
+ * It was inlined at nine sites, which is nine objects for the grammar compiler to build instead of
+ * one. `$defs` with an internal `$ref` is on the structured-outputs supported list; an *external*
+ * `$ref` is not, and none is used here — every reference below is `#/$defs/...`.
+ */
+const $defs = {
+  target: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['elementIds'],
+    properties: {
+      elementIds: {
+        type: 'array',
+        description: 'Ids copied exactly from the inventory. Never invent one.',
+        items: { type: 'string' },
+      },
     },
   },
 } as const;
 
+/**
+ * A reference, and deliberately nothing beside it.
+ *
+ * Draft 2020-12 allows keywords next to `$ref`, but this compiler is not documented as honouring
+ * them and `allOf` with `$ref` is explicitly unsupported — so a branch with something extra to say
+ * about its target says it on the branch. See `attach`.
+ */
+const target = { $ref: '#/$defs/target' } as const;
+
 const footprint = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind'],
+  /*
+   * All four required, with `0` standing for "not this kind of footprint".
+   *
+   * Zod keeps the honest shape — `IntentFootprintSchema` is a discriminated union where a point has
+   * a radius and no width — and a `z.object` strips keys outside its own branch, so the `0`s never
+   * reach the planner and the `.min(0.3)` bounds are never consulted for a key that is not there.
+   */
+  required: ['kind', 'width', 'depth', 'radius'],
   properties: {
     kind: { type: 'string', enum: ['rect', 'point', 'strip'] },
-    width: { type: 'number', description: 'Metres. For rect and strip.' },
-    depth: { type: 'number', description: 'Metres. For rect.' },
-    radius: { type: 'number', description: 'Metres. For point.' },
+    width: { type: 'number', description: 'Metres, for rect and strip. 0 for a point.' },
+    depth: { type: 'number', description: 'Metres, for rect. 0 for a point or a strip.' },
+    radius: { type: 'number', description: 'Metres, for point. 0 for a rect or a strip.' },
   },
 } as const;
 
 export const INTENT_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
+  $defs,
   required: ['reply', 'intents', 'suggestions'],
   properties: {
     reply: {
@@ -73,7 +99,7 @@ export const INTENT_JSON_SCHEMA = {
           {
             type: 'object',
             additionalProperties: false,
-            required: ['kind', 'target', 'towards'],
+            required: ['kind', 'target', 'towards', 'elementId', 'away'],
             properties: {
               kind: { type: 'string', const: 'move' },
               target,
@@ -82,9 +108,12 @@ export const INTENT_JSON_SCHEMA = {
               elementId: {
                 type: 'string',
                 description:
-                  'Required when towards is "element": the id, from the inventory, of the thing to move it nearer. Must not be one of the targets.',
+                  'The id, from the inventory, of the thing to move it nearer, when towards is "element". Empty string otherwise. Must not be one of the targets.',
               },
-              away: { type: 'boolean', description: 'Move away from it rather than towards it.' },
+              away: {
+                type: 'boolean',
+                description: 'Move away from it rather than towards it. False unless asked.',
+              },
             },
           },
           {
@@ -110,13 +139,11 @@ export const INTENT_JSON_SCHEMA = {
             type: 'object',
             additionalProperties: false,
             required: ['kind', 'target'],
+            description:
+              'Take the furniture with it. The targets are the surfaces whose furniture should travel with them — use this after moving or resizing something people sit or eat on, so the table does not end up on the grass.',
             properties: {
               kind: { type: 'string', const: 'attach' },
-              target: {
-                ...target,
-                description:
-                  'The surfaces whose furniture should travel with them. Use this after moving or resizing something people sit or eat on, so the table does not end up on the grass.',
-              },
+              target,
             },
           },
           {
@@ -142,7 +169,7 @@ export const INTENT_JSON_SCHEMA = {
           {
             type: 'object',
             additionalProperties: false,
-            required: ['kind', 'category', 'name', 'footprint'],
+            required: ['kind', 'category', 'name', 'footprint', 'affinity'],
             properties: {
               kind: { type: 'string', const: 'add' },
               category: { type: 'string', enum: ELEMENT_CATEGORIES },
@@ -152,13 +179,14 @@ export const INTENT_JSON_SCHEMA = {
               affinity: {
                 type: 'string',
                 enum: ['near-house', 'far-from-house', 'along-boundary', 'any'],
+                description: 'Where it wants to sit. "any" unless they said.',
               },
             },
           },
           {
             type: 'object',
             additionalProperties: false,
-            required: ['kind', 'target', 'objective'],
+            required: ['kind', 'target', 'objective', 'avoidElementIds', 'connectElementId'],
             properties: {
               kind: { type: 'string', const: 'reroute' },
               target,
@@ -170,19 +198,21 @@ export const INTENT_JSON_SCHEMA = {
               },
               avoidElementIds: {
                 type: 'array',
-                description: 'With objective "avoid": the elements the path should stop crossing.',
+                description:
+                  'With objective "avoid": the elements the path should stop crossing. Empty otherwise.',
                 items: { type: 'string' },
               },
               connectElementId: {
                 type: 'string',
-                description: 'With objective "connect": the element the path should reach.',
+                description:
+                  'With objective "connect": the element the path should reach. Empty string otherwise.',
               },
             },
           },
           {
             type: 'object',
             additionalProperties: false,
-            required: ['kind', 'target', 'to'],
+            required: ['kind', 'target', 'to', 'elementId'],
             properties: {
               kind: { type: 'string', const: 'rotate' },
               target,
@@ -195,7 +225,7 @@ export const INTENT_JSON_SCHEMA = {
               elementId: {
                 type: 'string',
                 description:
-                  'With to "element": the element to line up with. Not the target itself.',
+                  'With to "element": the element to line up with. Empty string otherwise. Not the target itself.',
               },
             },
           },
@@ -211,10 +241,13 @@ export const INTENT_JSON_SCHEMA = {
           {
             type: 'object',
             additionalProperties: false,
-            required: ['kind'],
+            required: ['kind', 'maxChanges'],
             properties: {
               kind: { type: 'string', const: 'reduce-cost' },
-              maxChanges: { type: 'integer' },
+              maxChanges: {
+                type: 'integer',
+                description: 'How many things to change at most. 5 unless they said otherwise.',
+              },
             },
           },
         ],

@@ -1100,6 +1100,90 @@ describe.skipIf(connection === null)('PlannerService', () => {
       expect(geometryIsLegal(proposed.next.shape, boundary)).toBe(true);
     }
   });
+
+  /**
+   * The wire schema forces the model to send a value for every field, including the ones that do
+   * not apply to the verb it chose — an empty string for an id, an empty list, `false`, `0`. That
+   * was the price of getting the grammar small enough for Anthropic to compile it at all.
+   *
+   * Every read of those fields in `planner.service.ts` is a truthiness or length check rather than
+   * an existence check, so the placeholders already behave exactly as an absent key does. These
+   * tests state that rather than leaving it to be rediscovered: a future `!== undefined` written in
+   * good faith would turn "move it nearer the house" into "there is nothing to move it towards",
+   * and nothing else in the suite would notice.
+   */
+  describe('the placeholders the wire schema forces', () => {
+    it('treats an empty elementId on a move as no element at all', async () => {
+      const withPlaceholder = await planner.plan(plan([patio]), [
+        {
+          kind: 'move',
+          target: { elementIds: ['e-1'] },
+          towards: 'house',
+          elementId: '',
+          away: false,
+        },
+      ]);
+      const without = await planner.plan(plan([patio]), [
+        { kind: 'move', target: { elementIds: ['e-1'] }, towards: 'house', away: false },
+      ]);
+
+      expect(withPlaceholder.changes).toHaveLength(without.changes.length);
+      expect(withPlaceholder.changes[0]?.next.shape).toEqual(without.changes[0]?.next.shape);
+      expect(withPlaceholder.unplaceable).toEqual(without.unplaceable);
+    });
+
+    it('treats an empty elementId on a rotate as no element at all', async () => {
+      const withPlaceholder = await planner.plan(plan([patio]), [
+        { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house', elementId: '' },
+      ]);
+      const without = await planner.plan(plan([patio]), [
+        { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' },
+      ]);
+
+      expect(withPlaceholder.changes).toHaveLength(without.changes.length);
+      expect(withPlaceholder.changes[0]?.next.shape).toEqual(without.changes[0]?.next.shape);
+    });
+
+    it('treats an empty avoid list and an empty connect id as no preference', async () => {
+      const path = element({
+        id: 'e-9',
+        category: 'paved-area',
+        shape: {
+          kind: 'polyline',
+          points: [
+            { x: 4, y: 12 },
+            { x: 14, y: 12 },
+          ],
+          width: 1.2,
+        },
+      });
+
+      const withPlaceholders = await planner.plan(plan([path]), [
+        {
+          kind: 'reroute',
+          target: { elementIds: ['e-9'] },
+          objective: 'direct',
+          avoidElementIds: [],
+          connectElementId: '',
+        },
+      ]);
+      const without = await planner.plan(plan([path]), [
+        { kind: 'reroute', target: { elementIds: ['e-9'] }, objective: 'direct' },
+      ]);
+
+      expect(withPlaceholders.changes).toHaveLength(without.changes.length);
+      expect(withPlaceholders.unplaceable).toEqual(without.unplaceable);
+    });
+
+    it('treats a stated maxChanges of 5 as the default it replaced', async () => {
+      const stated = await planner.plan(plan([patio]), [{ kind: 'reduce-cost', maxChanges: 5 }]);
+      const omitted = await planner.plan(plan([patio]), [
+        { kind: 'reduce-cost' } as unknown as DesignIntent,
+      ]);
+
+      expect(stated.changes).toHaveLength(omitted.changes.length);
+    });
+  });
 });
 
 if (connection === null) {

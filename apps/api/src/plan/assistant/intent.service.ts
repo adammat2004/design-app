@@ -214,7 +214,41 @@ export function toHttpException(error: unknown, logger: Logger): Error {
   }
 
   if (error instanceof Anthropic.APIError) {
-    logger.error(`Assistant API error ${error.status ?? '?'}.`);
+    /*
+     * Say what it actually objected to.
+     *
+     * This logged the status and nothing else, which is one line that cannot tell an invalid schema
+     * from a billing problem from an overload — and a 400 arrived in production that took a whole
+     * investigation to attribute because of it. `message` is the sentence the API returned, `type`
+     * is its own classification (`invalid_request_error` and friends) and `requestID` — note the
+     * capitalisation, it is not `request_id` — is what support asks for first.
+     *
+     * All three come off the **response**. `error.request` and `error.headers` do not and are
+     * deliberately untouched: CLAUDE.md's rule is never to log the key or a full prompt.
+     */
+    logger.error(
+      `Assistant API error ${error.status ?? '?'}` +
+        `${error.type ? ` (${error.type})` : ''}: ${error.message}` +
+        `${error.requestID ? ` [request ${error.requestID}]` : ''}`,
+    );
+
+    /*
+     * A 4xx is our bug, not the model's answer and not the user's wording.
+     *
+     * Anthropic refused the request we built — an unsupported schema, a bad parameter — so it will
+     * refuse it again on the next send and every send after that. 502 renders in the chat as "try
+     * rephrasing", which is advice that cannot work; 503 renders as "unavailable", which is the
+     * honest word for a feature that is broken until somebody fixes it here. A 5xx keeps 502: that
+     * one really is the far end having trouble with a request it accepted.
+     *
+     * The cost is that 503 now carries a fifth meaning, which `AssistantAvailabilitySchema`'s own
+     * comment already flags as overloaded. Worth it: every one of the five is "you cannot use this
+     * right now and it is not your fault", which is exactly what the copy says.
+     */
+    if (error.status !== undefined && error.status >= 400 && error.status < 500) {
+      return new ServiceUnavailableException('The design assistant is not configured correctly.');
+    }
+
     return new BadGatewayException('The assistant failed to answer.');
   }
 
