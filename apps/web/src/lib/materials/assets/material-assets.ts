@@ -243,8 +243,26 @@ export const ELEVATED_TWINS: Partial<Record<AssetId, AssetId>> = {
   'plant-shrub-topiary': 'vis-shrub-evergreen',
   'plant-grass': 'vis-grass',
   'plant-grass-tall': 'vis-grass',
+  /*
+   * The herbaceous layer. Left out of the first wave and it was the bulk of the planting: the
+   * audit measured 8,271 plant instances a run still drawn as flat plan art inside Visualise,
+   * which is why a bed of perennials lay flat around shrubs that stood up.
+   */
+  'plant-perennial': 'vis-perennial-mound',
+  'plant-perennial-ferny': 'vis-perennial-mound',
+  'plant-perennial-spire': 'vis-perennial-spire',
+  'plant-perennial-upright': 'vis-perennial-spire',
+  'plant-flower': 'vis-flower',
+  'plant-ground-cover': 'vis-ground-cover',
+  'plant-ground-cover-spreading': 'vis-ground-cover',
   'tree-canopy': 'vis-tree-deciduous',
   'tree-multistem': 'vis-tree-multistem',
+  /* One broadleaf crown serves all three: the species was chosen before the twin is looked up. */
+  'tree-ornamental': 'vis-tree-ornamental',
+  'tree-japanese-maple': 'vis-tree-ornamental',
+  'tree-fruit': 'vis-tree-ornamental',
+  'tree-conifer': 'vis-tree-conifer',
+  'feature-hot-tub': 'vis-hot-tub',
   'furniture-dining-6': 'vis-dining-6',
   'furniture-dining-4': 'vis-dining-6',
   'furniture-sofa-set': 'vis-sofa-set',

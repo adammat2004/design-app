@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { DesiredFeatureSchema, type DesiredFeature, StyleDirectionSchema } from '../brief.js';
+import {
+  DesiredFeatureSchema,
+  MaintenanceLevelSchema,
+  StyleDirectionSchema,
+  type DesiredFeature,
+} from '../brief.js';
 import {
   BriefEmphasisSchema,
   BriefSlotSchema,
@@ -75,6 +80,20 @@ export const DesignBriefSchema = z.object({
   featurePriorities: z.array(FeaturePrioritySchema).default([]),
   excludedFeatures: z.array(ExcludedFeatureSchema).default([]),
   style: StyleDirectionSchema.nullable().default(null),
+  /**
+   * How much upkeep this concept is allowed to ask of its owner, or `null` when nobody said.
+   *
+   * The **resolved** level rather than the raw answer: `resolveConstraints` caps what an archetype
+   * declares against what the user asked for, and there must go on being exactly one of those — a
+   * badge saying one thing while the palette does another is the defect that whole resolver exists
+   * to prevent. The brief builder copies it across so the scorer can read it without reaching for
+   * `GardenBrief.maintenance` itself and becoming the second source.
+   *
+   * `null` is a refusal, not a default. A plan whose owner never answered is judged on the other
+   * principles rather than marked against a level nobody chose — the same rule `site.location` sets
+   * for shade, and the reason `maintenanceFit` is conditional.
+   */
+  upkeep: MaintenanceLevelSchema.nullable().default(null),
   /** One paragraph saying what this concept is trying to be. Deterministic, or model-written. */
   rationale: z.string().max(400).default(''),
 });

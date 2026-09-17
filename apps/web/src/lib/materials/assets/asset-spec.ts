@@ -1243,6 +1243,123 @@ export const ASSET_FAMILIES = {
     prompt: `${ELEVATED_PLANTER} A square garden planter about six hundred millimetres across, its rim and a little of its outer face visible, holding a clipped evergreen ball that stands proud of it. Variant one a dark powder-coated metal trough, variant two an oak sleeper planter.`,
   },
 
+  /* ---- the herbaceous layer, and the reason Visualise stopped being half flat ----
+   *
+   * The first elevated wave drew the things you notice — trees, shrubs, grasses, furniture — and
+   * left the layer that actually covers a bed. Measured on the quality fixtures, **8,271 plant
+   * instances per run were still being drawn with flat plan art inside Visualise**: perennials,
+   * flowers and ground cover, which are most of the planting in every generated garden. The result
+   * was a view where a shrub stood up and the border around it lay flat, which reads worse than a
+   * consistently flat drawing would.
+   *
+   * Many-to-one wherever the difference does not survive the camera, exactly as `plant-grass` and
+   * `plant-grass-tall` already share `vis-grass`: from twelve degrees off vertical a mounded
+   * perennial and a ferny one are the same silhouette at the same height, and the palette's tint
+   * carries what is left. Variety comes from the variant, never from a tint — elevated art is never
+   * `recolourable`, because these carry their own light and a multiply would darken what is already
+   * shaded.
+   */
+  'vis-perennial-mound': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'perennial', tags: ['mounded'] },
+    metres: { w: 0.6, h: 0.6 },
+    heightMetres: 0.6,
+    sizePx: { w: 422, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_PLANT} A mounded herbaceous perennial about six hundred millimetres across and as tall, a dense soft dome of leaves standing off the ground with the stems just visible beneath the near edge. Each variant a different perennial: hardy geranium, alchemilla, heuchera.`,
+  },
+  'vis-perennial-spire': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'perennial', tags: ['spire', 'flowering'] },
+    metres: { w: 0.5, h: 0.5 },
+    heightMetres: 1,
+    sizePx: { w: 359, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_PLANT} An upright flowering perennial about half a metre across and a metre tall, a clump of vertical flower spikes rising clear of a basal rosette, the spikes seen down their length so their height is unmistakable. Each variant a different perennial: salvia, veronicastrum, lupin.`,
+  },
+  'vis-flower': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'flower', tags: ['accent'] },
+    metres: { w: 0.35, h: 0.35 },
+    heightMetres: 0.5,
+    sizePx: { w: 393, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_PLANT} A small flowering accent plant about a third of a metre across, a loose posy of open flowers held above a low tuft of foliage on slender stems. Each variant a different colour: white, soft yellow, deep pink.`,
+  },
+  'vis-ground-cover': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'ground-cover', tags: ['mat'] },
+    metres: { w: 0.5, h: 0.5 },
+    heightMetres: 0.25,
+    sizePx: { w: 463, h: 512 },
+    variants: 3,
+    transparent: true,
+    prompt: `${ELEVATED_PLANT} A low spreading ground-cover plant about half a metre across and only a quarter of a metre tall, a flat dense mat of small leaves hugging the ground with a soft irregular outline. Each variant a different ground cover: vinca, ajuga, creeping thyme.`,
+  },
+
+  /* ---- the rest of the trees ----
+   *
+   * `vis-tree-deciduous` and `vis-tree-multistem` were the whole tree library, so every ornamental,
+   * fruit and evergreen tree in a generated plan fell back to its flat canopy — the most
+   * conspicuous possible place for the two cameras to disagree, since a tree is the largest single
+   * object in most gardens. Ornamental, maple and fruit share one family: at this camera they are
+   * one broadleaf crown on a short trunk, and `canopiesForSymbol` has already chosen the species
+   * before the twin is looked up, so nothing about that choice is lost.
+   */
+  'vis-tree-ornamental': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'tree-deciduous', tags: ['ornamental'] },
+    metres: { w: 4, h: 4 },
+    heightMetres: 5,
+    sizePx: { w: 809, h: 1024 },
+    variants: 2,
+    transparent: true,
+    prompt: `${ELEVATED_TREE} A small ornamental garden tree about four metres across and five metres tall, a rounded open crown on a short single trunk. Variant one in fresh green leaf, variant two carrying pale blossom across the top of the crown.`,
+  },
+  'vis-tree-conifer': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'vegetation', type: 'tree-evergreen', tags: ['conifer'] },
+    metres: { w: 3, h: 3 },
+    heightMetres: 6,
+    sizePx: { w: 719, h: 1024 },
+    variants: 2,
+    transparent: true,
+    /*
+     * Described as what a conifer looks like *from above*, never as its outline from the side.
+     *
+     * The first attempt said "a dense conical crown narrowing to a point at the top" and got two
+     * textbook side elevations — a Christmas-tree silhouette — which every automated check passed,
+     * because they measure framing and aspect and cannot see a viewpoint. It is the failure the
+     * style doc already records (the model rounding twelve degrees to a three-quarter shot), and a
+     * conifer invites it more than anything else in the library: its side view is the way the shape
+     * is always drawn. So the words describe tiers radiating around a centre and the growing tip
+     * seen end-on, and the silhouette is not mentioned at all.
+     */
+    prompt: `${ELEVATED_TREE} An evergreen conifer about three metres across and six metres tall, looked down on from almost directly above: concentric tiers of dark needled branches radiating outwards like the spokes of a wheel from a single central leader, the growing tip seen end-on in the middle of the crown and the lower tiers spreading widest at the outside. The circular spread of the branches is the shape that reads, NOT a triangular outline and NOT a Christmas-tree silhouette seen from the side. Each variant a slightly different form: one tighter and denser, one more open.`,
+  },
+
+  /* ---- the one product in the structure library; see `hot-tub` in the plan camera ---- */
+  'vis-hot-tub': {
+    kind: 'sprite',
+    camera: 'elevated',
+    taxon: { group: 'feature', type: 'hot-tub' },
+    metres: { w: 2.4, h: 2.4 },
+    heightMetres: 0.9,
+    sizePx: { w: 711, h: 768 },
+    variants: 1,
+    transparent: true,
+    prompt: `${ELEVATED} A square garden hot tub about two and a half metres across, a dark grey cabinet with a moulded surround, its still water surface and moulded seats visible from above and a little of its near side showing below, with the cover off and no steam.`,
+  },
+
   /* ---- skins: the materials the extrusions wear ----
    *
    * Textures, and lit flat like every other texture here — which is the point. A skin goes onto a
@@ -1296,11 +1413,28 @@ export type AssetId = keyof typeof ASSET_FAMILIES;
 
 export const ASSET_IDS = Object.keys(ASSET_FAMILIES) as AssetId[];
 
-/** The file an asset variant is written to, relative to `public/assets/`. */
+/**
+ * The file an asset variant is written to, relative to `public/assets/`.
+ *
+ * **Camera first, then kind.** The two cameras are two libraries drawn to two different
+ * specifications, and which one a file belongs to is the thing you most need to know about it —
+ * so a directory listing answers it without reading the manifest, and `plan/` can be deployed,
+ * measured or preloaded as a unit while `elevated/` is not.
+ *
+ * _This reverses_ `docs/visualise-asset-style.md` §10, which made the `vis-`/`skin-` id prefix the
+ * only camera marker precisely so that no second place had to be kept in step. The prefix stays and
+ * is still what `--only vis-` matches; what changed is that the library got big enough (181 files
+ * across two cameras) for "which of these am I looking at" to be a question a listing should answer.
+ *
+ * Nothing resolves an asset *by* this path — the catalogue's `file` field is the only path the
+ * renderer reads — so this function and the catalogue are the whole of the change, and a stale
+ * catalogue entry fails to the procedural fallback rather than to an error.
+ */
 export function assetFile(id: AssetId, variant: number): string {
   const family: AssetFamily = ASSET_FAMILIES[id];
+  const camera = family.camera ?? 'plan';
   const dir = family.kind === 'sprite' ? 'sprites' : 'textures';
-  return `${dir}/${id}-${variant}.webp`;
+  return `${camera}/${dir}/${id}-${variant}.webp`;
 }
 
 /**

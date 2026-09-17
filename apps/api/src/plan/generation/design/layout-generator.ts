@@ -18,7 +18,13 @@ import { fitInSlot, type FitContext, type Footprint } from '../layout/fit.js';
 import type { DesignFrame, LocalBox } from '../layout/frame.js';
 import { rectSize, type LayoutSketch, type Slot, type SketchRequest } from '../layout/sketch.js';
 import { circulationFor } from '../room-policy.js';
-import { closestPointOnRing, routeBetween, PATH_STANDOFF } from './circulation.js';
+import {
+  accessName,
+  closestPointOnRing,
+  routeBetween,
+  terraceStarts,
+  PATH_STANDOFF,
+} from './circulation.js';
 import { planZones } from './zone-planner.js';
 import {
   NO_ADJUSTMENTS,
@@ -354,14 +360,14 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
           ignore,
           scope: request.scope,
           width: widthOf(route.width),
-          skip: adjustments.reroute[accessName(room)] ?? 0,
+          skip: adjustments.reroute[accessName(room.name)] ?? 0,
         });
         if (geometry) break;
       }
       if (!geometry) continue;
 
       obstacles.push(geometryOutline(geometry));
-      routes.push({ id: nextId(), name: accessName(room), geometry });
+      routes.push({ id: nextId(), name: accessName(room.name), geometry });
       connected.add(room.id);
     }
   }
@@ -428,39 +434,6 @@ function record(
     name: spec.planName ?? feature,
     category: spec.category,
   };
-}
-
-/**
- * What an access-guarantee route is called.
- *
- * Derived from the room rather than counted, because the name is the key the `reroute` repair uses
- * to say *which* path to approach differently — an index would move the moment a repair elsewhere
- * changed how many rooms got placed.
- */
-function accessName(room: PlacedItem): string {
-  return `Path to ${room.name.toLowerCase()}`;
-}
-
-/**
- * Where on the terrace a path to a room may set off from.
- *
- * The nearest point on the edge first, which is the route a person would take, then quarter points
- * round the rest of it — the answer to a terrace whose obvious corner is blocked by the dining set
- * standing on it, which one start point turns into no path at all. The same thirteen the realised
- * pipeline uses, in the same order, because a preview that searched less hard would report a room
- * as unreachable that the built plan then reaches.
- */
-function terraceStarts(terrace: Point[], destination: Point[]): Point[] {
-  return [
-    closestPointOnRing(terrace, polygonCentroid(destination), 0),
-    ...terrace.flatMap((a, i) => {
-      const b = terrace[(i + 1) % terrace.length]!;
-      return [0.25, 0.5, 0.75].map((t) => ({
-        x: a.x + (b.x - a.x) * t,
-        y: a.y + (b.y - a.y) * t,
-      }));
-    }),
-  ];
 }
 
 function footprintOf(spec: (typeof FEATURE_SPECS)[DesiredFeature]): Footprint {

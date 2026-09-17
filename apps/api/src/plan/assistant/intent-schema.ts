@@ -158,6 +158,50 @@ export const INTENT_JSON_SCHEMA = {
           {
             type: 'object',
             additionalProperties: false,
+            required: ['kind', 'target', 'objective'],
+            properties: {
+              kind: { type: 'string', const: 'reroute' },
+              target,
+              objective: {
+                type: 'string',
+                enum: ['direct', 'avoid', 'connect'],
+                description:
+                  'What the path should achieve: a straighter line, getting clear of things, or reaching something else. Never the points of the path — the planner draws those.',
+              },
+              avoidElementIds: {
+                type: 'array',
+                description: 'With objective "avoid": the elements the path should stop crossing.',
+                items: { type: 'string' },
+              },
+              connectElementId: {
+                type: 'string',
+                description: 'With objective "connect": the element the path should reach.',
+              },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'target', 'to'],
+            properties: {
+              kind: { type: 'string', const: 'rotate' },
+              target,
+              to: {
+                type: 'string',
+                enum: ['house', 'boundary', 'element'],
+                description:
+                  'What to square it to. There is no angle: the planner turns it the shortest way that lines it up and still fits.',
+              },
+              elementId: {
+                type: 'string',
+                description:
+                  'With to "element": the element to line up with. Not the target itself.',
+              },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
             required: ['kind', 'target'],
             properties: {
               kind: { type: 'string', const: 'remove' },

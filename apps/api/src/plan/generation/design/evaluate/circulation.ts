@@ -2,11 +2,11 @@ import {
   distanceToSegment,
   pointInPolygon,
   polygonsIntersect,
-  type DesignIssue,
+  type CirculationStyle,
   type Point,
 } from '@garden-studio/schema';
 import { MIN_ROUTE_WIDTH, type DesignSubject, type SubjectItem } from './subject.js';
-import type { PrincipleResult } from './result.js';
+import type { MeasuredIssue, PrincipleResult } from './result.js';
 
 /**
  * Can you get round this garden, and does every path go somewhere?
@@ -27,11 +27,24 @@ import type { PrincipleResult } from './result.js';
  * - **purpose** — no route that ends nowhere.
  */
 
-/** A route may be this much longer than the straight line before it reads as a detour. */
-const DETOUR_LIMIT = 1.4;
-
-/** Beyond this it is not a route with character, it is a route that got lost. */
-const DETOUR_BAD = 2.2;
+/**
+ * How much longer than the straight line a route may run, by what the concept says it is.
+ *
+ * Directness used to be rewarded unconditionally, which marked down every plan for doing what its
+ * own brief asked: `brief.circulation` is set per concept slot — `perimeter` for a planted reading,
+ * `meander` for a naturalistic one — and was read by nothing. A garden you cannot see all of at once
+ * is the naturalistic move rather than a route that got lost, and a scorer that calls it a fault is
+ * reporting a difference of opinion as a defect.
+ *
+ * Still bounded, and generously rather than infinitely. Twice round the lawn is a wander whatever
+ * the style, which is what keeps this a tolerance rather than an exemption.
+ */
+const DETOUR: Record<CirculationStyle, { limit: number; bad: number }> = {
+  direct: { limit: 1.4, bad: 2.2 },
+  axis: { limit: 1.4, bad: 2.2 },
+  perimeter: { limit: 1.9, bad: 2.8 },
+  meander: { limit: 1.9, bad: 2.8 },
+};
 
 /** Within this of the terrace, a feature needs no path of its own: you are already standing on it. */
 const NO_PATH_NEEDED = 2.5;
@@ -39,8 +52,18 @@ const NO_PATH_NEEDED = 2.5;
 /** How close two obstacles either side of a route may come before it is a pinch point. */
 const PINCH = 0.9;
 
+/**
+ * How wide a route a correction should come back with.
+ *
+ * Deliberately not `MIN_ROUTE_WIDTH`, which is read off the narrowest route the generator draws on
+ * purpose: aiming at it lands exactly on the threshold and the next rounding error puts the fault
+ * straight back. A metre is a path two people pass on. It lived in the web review loop until issues
+ * could carry what a good answer satisfies; it belongs with the measurement that asks for it.
+ */
+export const COMFORTABLE_ROUTE = 1;
+
 export function scoreCirculation(subject: DesignSubject): PrincipleResult {
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   const { routes, items } = subject;
@@ -61,6 +84,8 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
         message: `Nothing connects ${label(item)} to the rest of the garden.`,
         subjects: [item.id],
         repair: 'reroute',
+        /* Not a route to redraw but one to lay: what a correction has to do is reach this. */
+        guidance: { connect: item.id, minWidthM: COMFORTABLE_ROUTE },
       });
     }
     parts.push(served / needsAccess.length);
@@ -68,11 +93,12 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
 
   /* ---- directness ---- */
   if (routes.length > 0) {
+    const { limit, bad } = DETOUR[subject.brief.circulation];
     let direct = 0;
     for (const route of routes) {
       const ratio = route.span > 0.5 ? route.length / route.span : 1;
-      direct += ratio <= DETOUR_LIMIT ? 1 : Math.max(0, 1 - (ratio - DETOUR_LIMIT) / DETOUR_LIMIT);
-      if (ratio > DETOUR_BAD) {
+      direct += ratio <= limit ? 1 : Math.max(0, 1 - (ratio - limit) / limit);
+      if (ratio > bad) {
         issues.push({
           code: 'route-detour',
           principle: 'circulation',
@@ -95,6 +121,7 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
         message: `${route.name} is ${route.width.toFixed(2)} m wide, under the ${MIN_ROUTE_WIDTH} m a wheelbarrow needs.`,
         subjects: [route.id],
         repair: 'widen-path',
+        guidance: { minWidthM: COMFORTABLE_ROUTE },
       });
     }
     parts.push(1 - narrow.length / routes.length);
@@ -120,6 +147,7 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
           message: `${route.name} runs through ${throughFeature.name || 'a structure'}.`,
           subjects: [route.id, throughFeature.id],
           repair: 'reroute',
+          guidance: { avoid: [throughFeature.id] },
         });
       } else if (throughBed) {
         issues.push({
@@ -129,6 +157,7 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
           message: `${route.name} cuts through a planting bed.`,
           subjects: [route.id, throughBed.id],
           repair: 'reroute',
+          guidance: { avoid: [throughBed.id] },
         });
       } else {
         clear += 1;
@@ -137,8 +166,10 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
     parts.push(clear / routes.length);
 
     /* ---- pinch points ---- */
-    const pinched = routes.filter((route) => pinchAlong(route.centreline, subject));
-    for (const route of pinched) {
+    const pinched = routes
+      .map((route) => ({ route, between: pinchAlong(route.centreline, subject) }))
+      .filter((entry) => entry.between !== null);
+    for (const { route, between } of pinched) {
       issues.push({
         code: 'route-pinch',
         principle: 'circulation',
@@ -146,6 +177,8 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
         message: `${route.name} squeezes between two things with under ${PINCH} m to spare.`,
         subjects: [route.id],
         repair: 'reroute',
+        /* The two it is caught between, which is what a redrawn route has to get clear of. */
+        guidance: { avoid: [between!.left, between!.right] },
       });
     }
     parts.push(1 - pinched.length / routes.length);
@@ -216,12 +249,15 @@ function nearestOn(ring: Point[], point: Point): number {
  * ten centimetres of every route across fifty candidates is the kind of cost that makes a scorer
  * too slow to run on all of them.
  */
-function pinchAlong(centreline: Point[], subject: DesignSubject): boolean {
+function pinchAlong(
+  centreline: Point[],
+  subject: DesignSubject,
+): { left: string; right: string } | null {
   const blockers = [
     ...subject.items.filter((item) => item.category === 'structure'),
     ...subject.beds,
   ];
-  if (blockers.length < 2) return false;
+  if (blockers.length < 2) return null;
 
   for (let i = 0; i < centreline.length; i += 1) {
     const point = centreline[i]!;
@@ -235,18 +271,29 @@ function pinchAlong(centreline: Point[], subject: DesignSubject): boolean {
 
     let left = Infinity;
     let right = Infinity;
+    /* The two it is actually squeezing between, so the fault can name what to route round. */
+    let leftId: string | null = null;
+    let rightId: string | null = null;
+
     for (const blocker of blockers) {
       const distance = nearestOn(blocker.ring, point);
       if (distance >= PINCH) continue;
       // Cross product sign: which side of the route's direction this blocker's centre lies.
       const side = (dx * (blocker.centre.y - point.y) - dy * (blocker.centre.x - point.x)) / length;
-      if (side >= 0) right = Math.min(right, distance);
-      else left = Math.min(left, distance);
+      if (side >= 0) {
+        if (distance < right) {
+          right = distance;
+          rightId = blocker.id;
+        }
+      } else if (distance < left) {
+        left = distance;
+        leftId = blocker.id;
+      }
     }
 
-    if (left + right < PINCH) return true;
+    if (left + right < PINCH && leftId && rightId) return { left: leftId, right: rightId };
   }
-  return false;
+  return null;
 }
 
 /**

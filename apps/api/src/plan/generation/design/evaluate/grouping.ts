@@ -1,5 +1,11 @@
-import { polygonArea, type DesignIssue } from '@garden-studio/schema';
-import { clamp01, meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import { polygonArea } from '@garden-studio/schema';
+import {
+  clamp01,
+  meanOf,
+  NOT_APPLICABLE,
+  type PrincipleResult,
+  type MeasuredIssue,
+} from './result.js';
 import type { DesignSubject, SubjectItem } from './subject.js';
 
 /**
@@ -31,7 +37,7 @@ const ROOM_SPREAD = 7;
 const SPLIT_SPREAD = 14;
 
 export function scoreGrouping(subject: DesignSubject): PrincipleResult {
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const identified = subject.items.filter((item) => item.zone !== null);
   if (identified.length === 0) return NOT_APPLICABLE;
 

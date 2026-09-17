@@ -5,6 +5,7 @@ import {
   computeZones,
   defaultMaterial,
   describeElement,
+  distanceToSegment,
   effectiveZoneIds,
   elementAnchor,
   elementArea,
@@ -16,6 +17,7 @@ import {
   housePolygon,
   isLocked,
   materialLabel,
+  pointInPolygon,
   polygonArea,
   polygonContainsPolygon,
   polygonsIntersect,
@@ -29,6 +31,18 @@ import {
   type ProposedChange,
   type Unit,
 } from '@garden-studio/schema';
+import {
+  bearingOfElement,
+  nearestEdgeBearing,
+  offBearing,
+  squareTo,
+} from '../generation/design/bearing.js';
+import {
+  PATH_STANDOFF,
+  routeCandidates,
+  terraceStarts,
+  type RouteCandidate,
+} from '../generation/design/circulation.js';
 import { FillService } from '../generation/fill.service.js';
 import { PlacementService } from '../generation/placement.service.js';
 
@@ -150,7 +164,229 @@ export class PlannerService {
         return this.reduceCost(intent, context, nextId);
       case 'add':
         return this.add(intent, context, nextId);
+      case 'reroute':
+        return this.reroute(intent, context, nextId);
+      case 'rotate':
+        return this.rotate(intent, context, nextId);
     }
+  }
+
+  /* ---------------------------------------------------------------- reroute */
+
+  /**
+   * Redraw a path so that it does something better than it does now.
+   *
+   * **The router is the generator's own.** `routeCandidates` enumerates every legal line between the
+   * path's ends — straight, then the two L-shapes, from each of thirteen starting points along the
+   * host it leaves — and this picks among them by the stated objective. That is the whole reason a
+   * rerouted path is a path the generator could have drawn: it comes out of the same enumeration, is
+   * checked against the same boundary and the same obstacles, and no coordinate in it was written
+   * by anything that read the user's sentence.
+   *
+   * The ends are recovered from the polyline rather than restated. A path's own endpoints are its
+   * own geometry, not a position anybody supplied — and where an end sits on something, that thing
+   * becomes the ring the route starts from or stops short of, so a redrawn path still leaves the
+   * terrace and still arrives at the shed.
+   */
+  private reroute(
+    intent: Extract<DesignIntent, { kind: 'reroute' }>,
+    context: Context,
+    nextId: () => string,
+  ): PlannedChanges {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+
+    for (const element of resolve(intent.target.elementIds, context)) {
+      const shape = element.shape;
+      if (shape.kind !== 'polyline' || shape.points.length < 2) {
+        result.unplaceable.push({
+          description: `Redraw ${label(element)}`,
+          reason: 'It is not a path, so there is no route to redraw.',
+        });
+        continue;
+      }
+
+      const ends = [shape.points[0]!, shape.points[shape.points.length - 1]!];
+      const startHost = hostAt(ends[0]!, element, context);
+      const destination = this.rerouteDestination(intent, element, ends[1]!, context);
+
+      if (!destination) {
+        result.unplaceable.push({
+          description: `Redraw ${label(element)}`,
+          reason: 'There is nothing at the far end of it to route to.',
+        });
+        continue;
+      }
+
+      const obstacles = context.document.layout.elements
+        .filter(
+          (other) =>
+            other.id !== element.id &&
+            !other.hidden &&
+            other.role !== 'fill' &&
+            other.shape.kind !== 'polyline',
+        )
+        .map((other) => geometryOutline(other.shape));
+
+      const ignore = [destination.ring, ...(startHost ? [geometryOutline(startHost.shape)] : [])];
+      const starts = startHost
+        ? terraceStarts(geometryOutline(startHost.shape), destination.ring)
+        : [ends[0]!];
+
+      const candidates = routeCandidates({
+        start: ends[0]!,
+        starts,
+        destination: destination.ring,
+        obstacles,
+        boundary: context.boundary,
+        ignore,
+        width: shape.width,
+      });
+
+      const chosen = pickRoute(intent, candidates, context);
+      if (!chosen) {
+        result.unplaceable.push({
+          description: `Redraw ${label(element)}`,
+          reason: 'There is no clear line between its ends that does better than the one it takes.',
+        });
+        continue;
+      }
+
+      if (samePoints(chosen.geometry, shape)) {
+        result.unplaceable.push({
+          description: `Redraw ${label(element)}`,
+          reason: 'It already takes the most direct legal line between its ends.',
+        });
+        continue;
+      }
+
+      const next: DesignElement = { ...element, shape: chosen.geometry };
+      result.changes.push(change(nextId(), 'reroute', element, next, context));
+    }
+
+    return result;
+  }
+
+  /** What the far end of a rerouted path should reach: the named element, or what it reaches now. */
+  private rerouteDestination(
+    intent: Extract<DesignIntent, { kind: 'reroute' }>,
+    element: DesignElement,
+    end: Point,
+    context: Context,
+  ): { ring: Point[] } | null {
+    if (intent.objective === 'connect' && intent.connectElementId) {
+      const target = context.document.layout.elements.find(
+        (candidate) => candidate.id === intent.connectElementId,
+      );
+      return target && target.id !== element.id ? { ring: geometryOutline(target.shape) } : null;
+    }
+
+    /*
+     * A path that ends in open ground cannot be rerouted, and refusing is the honest answer rather
+     * than a limitation. There is nothing to route *to*: stepping stones across a lawn end where
+     * they end. The first version invented a small ring round the last point so the router had a
+     * destination, and it shrank the path by the standoff every time — a change the user watches
+     * happen and cannot see, and one that would eat the path if asked twice.
+     */
+    const host = hostAt(end, element, context);
+    return host ? { ring: geometryOutline(host.shape) } : null;
+  }
+
+  /* ---------------------------------------------------------------- rotate */
+
+  /**
+   * Turn something to line up with something else.
+   *
+   * Quarter turns only, nearest first, and the first that is legal and clear wins — so "square it to
+   * the house" moves a terrace as little as it can rather than spinning it to whichever of the four
+   * the arithmetic happened to produce. Rectangles only, which is what `resolveOperation` and the
+   * editor's own rotate handle both already accept: a polygon has no rotation to set, and turning
+   * its points would be a reshape wearing the wrong name.
+   */
+  private rotate(
+    intent: Extract<DesignIntent, { kind: 'rotate' }>,
+    context: Context,
+    nextId: () => string,
+  ): PlannedChanges {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+
+    for (const element of resolve(intent.target.elementIds, context)) {
+      if (isLocked(element)) {
+        result.unplaceable.push({
+          description: `Turn ${label(element)}`,
+          reason: 'It is the ground cover for a whole area, so it stays where it is.',
+        });
+        continue;
+      }
+
+      if (element.shape.kind !== 'rect') {
+        result.unplaceable.push({
+          description: `Turn ${label(element)}`,
+          reason: 'Only a rectangle has an angle to set; this one is drawn as an outline.',
+        });
+        continue;
+      }
+
+      const bearing = this.alignmentBearing(intent, element, context);
+      if (bearing === null) {
+        result.unplaceable.push({
+          description: `Turn ${label(element)}`,
+          reason: 'There is nothing there to line it up with.',
+        });
+        continue;
+      }
+
+      const current = element.shape.rotation;
+      if (offBearing(current, bearing) < ALIGNED_ENOUGH) {
+        result.unplaceable.push({
+          description: `Turn ${label(element)}`,
+          reason: 'It is already square to that.',
+        });
+        continue;
+      }
+
+      const turned = squareTo(bearing, current)
+        .map((rotation) => ({
+          ...element,
+          shape: { ...element.shape, rotation },
+        }))
+        .find(
+          (candidate) =>
+            geometryIsLegal(candidate.shape, context.boundary) &&
+            clearOfOthers(candidate, element, context),
+        );
+
+      if (!turned) {
+        result.unplaceable.push({
+          description: `Turn ${label(element)}`,
+          reason: 'There is not room around it to turn it without hitting something.',
+        });
+        continue;
+      }
+
+      result.changes.push(change(nextId(), 'rotate', element, turned, context));
+    }
+
+    return result;
+  }
+
+  /** What "square to that" resolves to, in degrees clockwise. */
+  private alignmentBearing(
+    intent: Extract<DesignIntent, { kind: 'rotate' }>,
+    element: DesignElement,
+    context: Context,
+  ): number | null {
+    const anchor = elementAnchor(element);
+
+    if (intent.to === 'house') {
+      return context.house ? nearestEdgeBearing(context.house, anchor) : null;
+    }
+    if (intent.to === 'boundary') return nearestEdgeBearing(context.boundary, anchor);
+
+    if (!intent.elementId || intent.elementId === element.id) return null;
+    const other = context.document.layout.elements.find(
+      (candidate) => candidate.id === intent.elementId,
+    );
+    return other ? bearingOfElement(other) : null;
   }
 
   /* ---------------------------------------------------------------- resize */
@@ -774,6 +1010,103 @@ function buildContext(document: PlanDocument): Context {
   };
 }
 
+/**
+ * How near a path's end has to be to something for that thing to be what it leaves or reaches.
+ *
+ * `PATH_STANDOFF` plus a little: the router stops a path 50 mm short of its destination on purpose,
+ * so an end that reaches a shed sits just outside the shed. Anything within half a metre of a ring
+ * is touching it as far as a person reading the plan is concerned.
+ */
+const HOST_REACH = 0.5;
+
+/** Degrees off a bearing that still reads as square to it. Matches the style principle's own. */
+const ALIGNED_ENOUGH = 2;
+
+/** How far a redrawn route may differ from the old one and still be the same route. */
+const SAME_ROUTE = PATH_STANDOFF * 2;
+
+/** What a path's end is on, where it is on anything. */
+function hostAt(end: Point, route: DesignElement, context: Context): DesignElement | null {
+  let best: DesignElement | null = null;
+  let bestDistance = HOST_REACH;
+
+  for (const other of context.document.layout.elements) {
+    if (other.id === route.id || other.hidden) continue;
+    if (other.role === 'fill' || other.shape.kind === 'polyline') continue;
+
+    const ring = geometryOutline(other.shape);
+    if (ring.length < 3) continue;
+
+    const distance = pointInPolygon(end, ring)
+      ? 0
+      : Math.min(
+          ...ring.map((point, i) => distanceToSegment(end, point, ring[(i + 1) % ring.length]!)),
+        );
+
+    if (distance > bestDistance) continue;
+    bestDistance = distance;
+    best = other;
+  }
+
+  return best;
+}
+
+/**
+ * Which of the legal routes answers the objective.
+ *
+ * `direct` is the shortest way round, which is what the word means and what the circulation
+ * principle measures. `avoid` keeps only the ones that stay clear of what was named, then takes the
+ * most direct of those — an objective that returned a wandering route because it happened to dodge
+ * the right bed would be answering half the request. `connect` has already been answered by the
+ * destination the caller resolved, so it too comes down to directness.
+ *
+ * Ties break on the candidate's own order, which is the router's preference: straight before the
+ * L-shapes, nearest start before the rest.
+ */
+function pickRoute(
+  intent: Extract<DesignIntent, { kind: 'reroute' }>,
+  candidates: RouteCandidate[],
+  context: Context,
+): RouteCandidate | null {
+  let field = candidates;
+
+  if (intent.objective === 'avoid' && intent.avoidElementIds?.length) {
+    const rings = intent.avoidElementIds
+      .map((id) => context.document.layout.elements.find((element) => element.id === id))
+      .filter((element): element is DesignElement => element !== undefined)
+      .map((element) => geometryOutline(element.shape));
+
+    field = candidates.filter((candidate) => {
+      const strip = geometryOutline(candidate.geometry);
+      return !rings.some((ring) => polygonsIntersect(strip, ring));
+    });
+  }
+
+  return field.reduce<RouteCandidate | null>(
+    (best, candidate) => (best === null || candidate.detour < best.detour ? candidate : best),
+    null,
+  );
+}
+
+/**
+ * Whether a redrawn route is the route it started as.
+ *
+ * To a tolerance rather than exactly, and the tolerance is the router's own standoff. A route ends
+ * `PATH_STANDOFF` short of what it reaches, so re-deriving the end of a path that already arrives
+ * there moves it by fifty millimetres — which is not a reroute, it is the same line recomputed, and
+ * proposing it would put a change in the diff that the user watches happen and cannot see.
+ */
+function samePoints(
+  next: PlanGeometry,
+  before: Extract<PlanGeometry, { kind: 'polyline' }>,
+): boolean {
+  if (next.kind !== 'polyline' || next.points.length !== before.points.length) return false;
+  return next.points.every(
+    (point, i) =>
+      Math.hypot(point.x - before.points[i]!.x, point.y - before.points[i]!.y) <= SAME_ROUTE,
+  );
+}
+
 /** Ids the model named, kept only where they name something real. */
 function resolve(ids: string[], context: Context): DesignElement[] {
   const byId = new Map(context.document.layout.elements.map((element) => [element.id, element]));
@@ -791,7 +1124,7 @@ function categoryWord(element: DesignElement): string {
 
 function change(
   id: string,
-  kind: 'resize' | 'reshape' | 'move',
+  kind: 'resize' | 'reshape' | 'move' | 'rotate' | 'reroute',
   element: DesignElement,
   next: DesignElement,
   context: Context,

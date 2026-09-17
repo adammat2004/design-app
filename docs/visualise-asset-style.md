@@ -198,12 +198,26 @@ zoom needs and no more.
 
 ```
 family id   vis-<subject>              skin-<subject>
-file        sprites/vis-<subject>-<n>.webp
-            textures/skin-<subject>-<n>.webp
+file        elevated/sprites/vis-<subject>-<n>.webp
+            elevated/textures/skin-<subject>-<n>.webp
 ```
 
-`vis-` marks the camera, so a query, a directory listing and a catalogue row all say which
-specification a file was drawn to without looking anything up.
+`vis-` marks the camera on the id, so a query and a catalogue row both say which specification a
+family was drawn to without looking anything up. It is also what `--only vis-` matches, which is a
+plain `startsWith` on the id and is unaffected by anything below.
+
+**The directory is camera-first, and _this reverses_ the flat `sprites/` ⁄ `textures/` layout this
+section used to specify.** The old reasoning was that the prefix already said everything a directory
+could, so a second place to keep in step would be pure cost. That held while the elevated library was
+a handful of files. At 181 files across two cameras — 149 plan, 32 elevated — the cost changed sides:
+"which of these am I looking at" became a question a listing should answer, and `plan/` is now a unit
+that can be deployed, measured or preloaded on its own while `elevated/` is not.
+
+There is exactly one place the layout is decided — `assetFile` in `asset-spec.ts` — and the
+generator derives its output directories from that function rather than restating them. Nothing
+resolves an asset *by* path: the catalogue's `file` field is the only path the renderer reads, and a
+stale entry falls back to the procedural pattern rather than erroring. That is what made the move a
+one-function change plus a catalogue rewrite.
 
 ---
 

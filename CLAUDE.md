@@ -144,9 +144,9 @@ house by `computeZones`, so storing them could only create something stale.
   depth-sorted `RenderScene.stack` replaces the old pass order in that view, which is what lets a
   canopy fall across a roof and a border hide behind the fence in front of it. The plan view is
   untouched and its `stack` is empty. The matching **elevated asset library** (`vis-*`, `skin-*`)
-  is specified in `docs/visualise-asset-style.md` and `asset-spec.ts` but **not yet generated** —
-  until it is, Visualise falls back per family to the plan sprite. See "Visualise is elevated"
-  below.
+  is specified in `docs/visualise-asset-style.md` and `asset-spec.ts` and **is generated** — 28
+  `vis-*` and 4 `skin-*` files. A family with no twin still falls back to its plan sprite, which is
+  what lets the library arrive in waves. See "Visualise is elevated" and "The two cameras" below.
 
 **There is a measurement of how a plan composes, and it is the seed of the evaluation harness.**
 `measureComposition` (`packages/schema/src/plan/composition.ts`, beside `quantities.ts`) samples a
@@ -176,13 +176,21 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
 - **there is a designer's reading of every plan, and a benchmark over the generator**: a pure
   TypeScript design agent (`apps/api/src/plan/generation/design/`, `knowledge/`) that analyses the
   site, infers what the garden is *for*, ranks the requested features by tier, writes a strategy per
-  concept slot, and scores the finished elements against nine landscape-design principles — with the
+  concept slot, and scores the finished elements against ten landscape-design principles — with the
   faults it found, each a measured sentence. `GeneratedConcept` carries `strategy`, `score` and
   `explanation`; step 4 shows the decisions and why a feature was left out.
   `pnpm --filter @garden-studio/api eval:generator` is the harness: 13 cases × 3 seeds, reporting
   validity, composition bands, score per principle, inclusion, determinism and latency. Today's
-  numbers: **117/117 valid, deterministic, mean score 0.851, no critical faults, 85% of requested
-  features drawn, 4.6 s for the largest fixture.** Nothing here moves a coordinate.
+  numbers: **117/117 valid, deterministic, mean score 0.860, no critical faults, 86% of requested
+  features drawn.** Nothing here moves a coordinate.
+- **the scorer judges a garden against its own brief, and there is a benchmark over the scorer
+  itself.** The weights follow what the concept is *for* (`knowledge/weight-profiles.ts`), four
+  principles read the fields that vary by concept slot, and `maintenanceFit` is the tenth principle.
+  `pnpm --filter @garden-studio/api eval:scorer` measures it against nine hand-built gardens with no
+  database and no generator (`design/evaluate/gallery.ts`). **Measured**: the three concept slots
+  were identical to three decimal places and now differ on every garden; a well-composed plan given
+  to the wrong brief dropped from 0.97 to 0.89 under that brief while scoring 0.97+ under the other
+  three; the composition pairs still separate by 0.31 to 0.39. See "The scorer reads the brief".
 - **the layout is chosen rather than cycled**: seven composition archetypes
   (`apps/api/src/plan/generation/knowledge/archetypes/`), each answering for itself whether a plot
   can hold it — a refusal is honoured — with the brief's style weighed evenly against the site. Four
@@ -2092,7 +2100,7 @@ concept's gravel panel.
 
 **There is a designer's reading of every plan now, and it runs after the plan rather than instead of
 it.** `apps/api/src/plan/generation/design/` reads the site, reads the brief, writes a strategy and
-then scores the finished elements against nine landscape-design principles; `knowledge/` holds the
+then scores the finished elements against ten landscape-design principles; `knowledge/` holds the
 tables it reasons from. `build` calls it at the end and attaches `strategy`, `score` and
 `explanation` to the concept. **Not one coordinate moves because of it** — `elements` is already
 final when the agent sees it, every outline it reads came from `geometryOutline`, and deleting both
@@ -2158,6 +2166,252 @@ list in **brief order** — so a fire pit ticked before a terrace could displace
 per-band number the budget adjusts, and `withinCapacity` cuts by tier with a reason, never an
 essential. `featureAttempts` is still what the generator runs; the agent's version is what a
 candidate loop will consume.
+
+## The scorer reads the brief
+
+**There is no universal definition of the perfect garden, and the scorer used to behave as though
+there were.** One weight table, every concept, every client. The consequence was measured rather than
+suspected: the three concept slots differ in `emphasis`, `primaryZone` and `circulation`, no
+principle read any of those, and across four completely different briefs every garden in the gallery
+scored the same to within **0.016**. Three cards judged against one standard are not three answers.
+
+**`weightProfile` shifts the base table and renormalises** (`knowledge/weight-profiles.ts`). The
+shift is a pair of small tables read off `intent` and `emphasis`, which are themselves derived from
+what the user ticked — so nothing here is anybody's opinion at generation time, let alone a model's.
+Multipliers run 0.7 to 1.6, because these are emphases rather than different scorers: a shed in the
+sightline is a fault on an entertaining plan too. The eight principles that always apply are scaled
+to sum to one and the two conditional ones keep their base share on top, so two gardens judged by
+different profiles are still on one scale.
+
+**The weights applied are on the score.** `DesignScore.weights` is optional, so a stored score still
+parses, and it exists because a weighted mean whose weights are invisible cannot be explained: "why
+did A score 0.82 and B 0.74" is answerable from `categories × weights` plus `issues` and from nothing
+less. `issuesBySeverity` takes the same weights as its second key, which is how the repair stage came
+to read the brief without knowing it exists.
+
+**Four principles now read the fields that vary by slot**, and each is the smallest honest reading:
+
+- **proportion ← `emphasis`**, through `knowledge/emphasis-bands.ts`, which *narrows* the traced
+  bands and never widens them. Outside the traced band is `hard-excessive`: this plan is out of
+  proportion for any garden. Inside it and outside the emphasis's is `composition-off-brief`: it is
+  the wrong proportion for *this* one. The `open` narrowing asks for 0.20 lawn, deliberately just
+  under the traced plan's own 0.21 — a narrowing that asked for more than the professional design
+  has would be using the brief to argue with the one plan this system is calibrated against.
+- **circulation ← `brief.circulation`**. Directness was rewarded unconditionally, which marked down
+  every naturalistic plan for doing what its own brief asked; `perimeter` and `meander` get a 1.9
+  detour tolerance against `direct`'s 1.4. Still bounded: twice round the lawn is a wander whatever
+  the style.
+- **hierarchy ← `primaryZone`**, measured on the room the concept says it is organised around rather
+  than on whatever happened to be biggest. **An open panel is not a rival to a room**, and that is
+  the whole of why the rule is safe — a lawn is the largest single thing in nearly every garden
+  drawn, so counting it would report every concept built round dining or play as failing to be about
+  that thing.
+- **relationships ← `emphasis`**, through `RelationshipRule.group` and `EMPHASIS_RULE_WEIGHT`. The
+  *severity* still reads the rule's own weight, so a fault does not change how bad it is depending on
+  which slot it turned up in — only how much of the score it costs.
+
+**`maintenanceFit` is the tenth principle, and it is a ceiling rather than a target.**
+`cappedMaintenance` already decides that a stated upkeep level is the most a concept may ask, and
+this is that rule measured: a garden asking less than was offered is not a fault, because somebody
+who ticked "high effort" is saying they are willing rather than that they demand weeding. It is
+conditional on `brief.upkeep`, which is the **resolved** level copied across by the brief builder —
+reading `GardenBrief.maintenance` in the scorer would be the second source `resolveConstraints`
+exists to prevent. The ceilings were calibrated against an ordinary garden rather than chosen: a
+third planting, a third lawn and four borders measures about 0.65, so a medium ceiling of 0.6 would
+have fired on nearly every good plan and therefore said nothing.
+
+**Do not express an emphasis twice.** The pass made this mistake three times and the measurement
+caught it each time — discounting `circulation` under `planted`, `proportion` under `social`, and
+raising the bed-depth floor under `planted` were each a second expression of something the brief
+already said through the detour tolerance, the emphasis bands and the planting band. The first two
+put two of three cards on the same composition on a deep plot; the third scored a plan with legal
+1.4 m borders **zero** for buildability. Each is recorded where it was removed.
+
+**`BRIEF_WEIGHTS=0` runs the old fixed table**, for the reason `DESIGN_REPAIR=0` exists: brief-driven
+weights change which candidate the loop picks, so a benchmark taken after they landed cannot say
+which of two things moved a number. It is how the one repeated composition in the fixture set was
+traced to the social profile rather than to the new principle.
+
+**The gallery is the benchmark over the scorer, and it needs nothing running.** Nine gardens built by
+hand on one plot (`design/evaluate/gallery.ts`, helpers in `test-garden.ts`), four good/poor pairs
+that hold their contents constant plus a floor, each carrying the `GardenBrief` it answers. A scorer
+that can only be exercised through a generator can only be calibrated against that generator's own
+output, which is the circularity `composition-rules.ts` already refuses. `pnpm eval:scorer` prints
+it; `scripts/eval-scorer.baseline.md` holds the before and after, and `gallery.test.ts` asserts the
+relations. Nothing asserts an absolute number: a scorer pinned to 0.814 is one nobody can improve.
+
+**The reviewer judges the plan against the strategy the user chose.** `slotOf` reads
+`concepts.chosenConceptId` and that concept's `strategy.briefId`; there is deliberately no request
+parameter, because a client passing a slot could disagree with the plan it is editing. That reverses
+the note in `design-review.service.ts` that said the parameter would be a setting the design ignores
+— it was, and now it is not.
+
+**The plot the gallery is built on has the house across its full width**, which is not an accident: on
+a plot with side returns the back zone is fenced to the house's width, so a border drawn against the
+room's own edge is metres short of the fence and the style principle reads it as an island floating
+in the middle of the garden. A terraced house is both an ordinary British garden and the one whose
+room edges *are* its boundaries.
+
+## A fault says what a correction would have to achieve
+
+**The scorer could say what was wrong and never where the thing should go**, which is why seven of
+the ten `RepairKind`s were unperformable in the editor. That was measured rather than assumed: the
+only destinations an intent could name were the house, the boundary and a zone the scorer never
+mentioned, and mapped to "towards the boundary" across four fixtures the planner refused every move
+fault with "it is already as far that way as it will go" — the things these faults are about are
+against a fence already.
+
+**`DesignIssue.guidance` is what a valid correction would satisfy, and every field is a relation.**
+Near these elements, clear of those, out of the view, screened from that edge, inside this host, at
+least this wide, this much bigger. There is nowhere on it to put an x, a y, a centre or a ring — the
+same property `DesignIntent`, `GardenAction` and `DesignBrief` have, and it is tested the same way by
+walking the schema's property names. A distance is a relation rather than a position: "three metres
+from the table" is true wherever the table is. The reviewer describes the relationship; the
+deterministic planner finds geometry that satisfies it, and says so when nothing does.
+
+**Every emitter that names a repair now names a destination for it**, and the two that never could
+say why: `no-focal` is about nothing being at the far end, and nothing there has an id.
+
+**The empty `subjects` list was the quiet half of the same defect.** Every proportion fault and both
+featureFit faults carried none, and a repair resolves an issue to elements *through* its subjects —
+so an issue about "the garden" resolved to no garden at all, and `drop-optional` was unreachable in
+both repair layers despite being named by the scorer. A share is about the whole plan and the thing
+to change is always the terrace or the grass; naming it is what turns a reading into a correction.
+`missing-essential` names the **optional things standing in the way**, never the missing essential —
+a feature that is not in the drawing has no id, and removing another essential to make room would be
+answering the fault by committing it again. An empty list where nothing optional was placed is now
+the correct answer rather than the old defect, and the test says so in those terms.
+
+**`DesignIssue.source` names which critic found it**, defaulted to `geometry`. There is one critic
+and it measures geometry; a vision critic reading the rendered picture would produce issues in this
+same shape, and the point of the field is that the repair pipeline never has to know which it was.
+It is stamped **once**, in `scoreSubject`, on the way out — the principles emit `MeasuredIssue`,
+which is the issue without it, so thirty emitters are not thirty chances to write something else.
+
+**`COMFORTABLE_ROUTE` moved from the web review loop to `circulation.ts`.** A path narrow enough to
+complain about should come back wide enough to walk down, and the constant belongs with the
+measurement that asks for it rather than with the client that used to guess. It is deliberately not
+`MIN_ROUTE_WIDTH`, which is read off the narrowest route the generator draws on purpose: aiming at
+it lands exactly on the threshold and the next rounding error puts the fault straight back.
+
+## Rerouting and turning: the last two verbs
+
+**The executor has animated a turn and a redraw since the operations schema was written, and nothing
+upstream could ask for one.** `DesignOperation` has had `rotate` and `reroute` from the start,
+`from-proposal` derives both from a geometry diff, and the only thing that ever produced either was
+the hand-written demonstration — because `DesignIntent` had no way to say "square that up" or
+"straighten that path". Both are now intents, and both are the same shape as every other one: a
+relation, never a number that behaves like a position.
+
+**`reroute` names an objective and never a line.** `direct`, `avoid` and `connect`. The planner
+recovers the path's own ends, finds what they sit on, and asks **the generator's own router** for
+every legal line between them — `routeCandidates` is `routeBetween` with the enumeration exposed, so
+`routeBetween(request)` is exactly `routeCandidates(request)[skip]` and the order *is* the
+preference. A rerouted path is therefore a path the generator could have drawn, checked against the
+same boundary and the same obstacles. `follow-edge` was the obvious fourth objective and is absent
+because the router cannot draw it: an objective the planner has to refuse every time is a tick the
+design ignores.
+
+**A path with nothing at its far end cannot be rerouted, and refusing is the answer rather than a
+limitation.** Stepping stones across a lawn end where they end; there is nothing to route *to*. The
+first version invented a small ring round the last point so the router had a destination, and it
+shrank the path by `PATH_STANDOFF` every time — a change the user watches happen and cannot see, and
+one that would eat the path if asked twice. `samePoints` compares to that same standoff for the same
+reason.
+
+**"Already the straightest line" is not a claim the router can make**, and a test asserting it was
+wrong rather than a defect. A reroute searches from thirteen points along whatever the path leaves,
+so a line that is straight from where it happens to start is very often not the shortest line between
+the two things it joins. What is pinned instead is that a reroute never returns a longer route.
+
+**`rotate` takes no angle, and that is the point.** A free rotation is the one number in this
+vocabulary that behaves like a coordinate — "put it at 37°" is a position in the same way "put it at
+x 4.2" is. What people say is "square it to the house", "line it up with the fence", "turn it to
+match the pergola", so the intent is `to: 'house' | 'boundary' | 'element'` and the planner resolves
+each against real geometry. Quarter turns only, nearest first, first that is legal and clear wins —
+so a terrace moves as little as it can rather than spinning to whichever of the four the arithmetic
+produced.
+
+**`design/bearing.ts` is the one place a direction is read**, and it reads *what is nearest*: square
+to the house on an L-shaped building means square to the wall you are standing by, not to whichever
+wall the outline lists first. There was exactly one bearing in the system before it —
+`frame.wallBearing`, computed inside the generator's design frame, which the assistant's planner does
+not have — which is why `align` was unperformable.
+
+**`terraceStarts` and `accessName` were two copies each**, one in the preview and one in realisation,
+with a comment in each saying the other must search exactly as hard and produce exactly the same key.
+They are in `circulation.ts` now. A preview that tried fewer starts reports a room as unreachable
+that the built plan then reaches, and a repair keyed on a name the two spelled differently reaches
+nothing.
+
+## Repair: measuring several corrections rather than taking the first
+
+**Every correction this system has ever made was first-fit, and the user watched it being wrong.**
+The editor's review loop mapped a fault to one intent, the planner returned the first legal step in
+that direction, the change was *animated*, and only then was it scored — and wound back about half
+the time. So the designer was seen trying something a measurement taken two seconds earlier would
+have ruled out.
+
+**`POST /plan-projects/:id/design/repair` takes a fault and answers with the best change to it.**
+`DesignRepairService` turns the issue's guidance into candidate *intents*, runs each through the same
+`PlannerService` the chat uses, scores the result with the same reviewer, and returns the winner with
+a `predicted` score — or nothing, with a reason and a count of how hard it looked. Side-effect free,
+model-free and unrate-limited, for the same reasons `/assistant/redesign` is.
+
+**Nothing in it writes geometry.** Every candidate is built by the planner from the ordinary intent
+vocabulary and checked by the same `geometryIsLegal` the editor refuses on. The service *chooses*; it
+does not place. That is what keeps "the planner is authoritative about geometry" true of a search
+that happens somewhere else.
+
+**Acceptance is three conditions and dropping any one has a name.** The fault has to get better, or
+the loop is free to "fix" a pinched path by enlarging a terrace at the other end of the garden. The
+total has to rise by the same 0.002 `repair.ts` uses, or a change that trades one fault for another
+of equal weight counts as progress. And no *major* fault about another principle may appear, which is
+the condition measured on what appeared rather than on how many.
+
+**The prediction is a claim the client checks, not one it trusts.** The editor plays the run and
+re-scores; the two can honestly disagree, because the plan the prediction was made against is not
+always the plan the run landed on. What the prediction buys is the pass that never happens: a
+correction nothing could improve is reported rather than performed.
+
+**`REPAIR_CAPABILITIES` is one table where there were three.** `repair.ts` had `UNAVAILABLE`,
+`review-loop.ts` had `UNPERFORMABLE`, and `intentsFor` had a third opinion expressed as the set of
+`switch` branches somebody had remembered to write — so a repair kind was performable if and only if
+all three happened to agree, and seven of the ten were not. A capability is stated per side because
+the two genuinely differ: the generator adjusts a *candidate* and cannot turn a rectangle, because
+every placement it makes inherits the frame's bearing; the editor changes *elements* and cannot
+redraw the composition's beds.
+
+**`add-route` is the one verb with no planner behind it, and the reviewer says so.** `route-missing`
+is the third commonest fault in the harness and its subject is the thing nobody can reach rather than
+a path — so the correction is to *lay* a route, and `DesignIntent.add` builds a footprint at a
+sampled point, which is a different question. The refusal names the limitation rather than saying
+"there is no legal change", which would sound like the plot's fault.
+
+**An offer carries the fault and nothing else.** It used to carry the intents the reviewer had worked
+out at offer time, against a plan the user then went on editing — so accepting a chip a minute later
+applied an answer to a garden that no longer existed. The correction is measured when the chip is
+pressed.
+
+**Every line the panel says is read off something measured.** "Checking the composition" while the
+score is in flight, the fault's own sentence, "Testing 8 corrections" from the count the server
+actually scored, and then the operation labels the run already provided. `ReviewPass` gained
+`played`, `considered` and `reason` so the bubble can report the third outcome the loop could not
+have before: *looked, found nothing worth doing, did nothing*.
+
+**`prepare.ts` and `from-proposal.ts` moved into `packages/schema/src/plan/run/`.** Both only ever
+imported from the schema package, and putting them there is what makes one test able to run the
+server's planner output through the client's executor — the gap recorded as "nothing joins the API
+half to the web half". `apps/web/src/lib/ai-run/` keeps a re-export of each, so no import path in the
+web app changed. Note this is **not** the cycle the "Visual AI agents" section refuses: that one was
+about putting `operations` on `AssistantProposalSchema`, which would make `assistant.ts` and
+`operations.ts` import each other. A third module depending on both is fine.
+
+**`pipeline.test.ts` is the one test that joins the halves.** A fake Anthropic client's intents →
+`IntentService` → the real planner against PostGIS → `runFromProposal` → `prepareRun`, asserting
+`refused` is empty. That property — *the editor never refuses what the planner proposed* — is the one
+an illegal operation would break, and it was previously asserted only about changes a test had
+written by hand.
 
 ## Compositions, and choosing between them
 
@@ -3001,6 +3255,45 @@ plan sprite, so a half-finished library and **no library at all** both draw.
 **`elevatedTwin` keys on the catalogue, not the registry**: what has been generated, not what has
 finished loading. Loading is asynchronous and per-wave, so keying on it would have a bed swap species
 halfway through a preload.
+
+**The camera separation held at every level except the one that mattered, and the 2D Plan shipped a
+commit drawing the elevated library.** `EditorCanvas` built its scene with `view: 'visualise'`, and
+that canvas is what renders when the tab is `plan` — so the flat diagram was drawn with `vis-*`
+sprites, `skin-*` faces and the oblique lifted stack, and because Konva's own drawing is suppressed
+once `richReady` flips, that was every visible pixel. **Every test passed**, and that is the whole
+lesson: `assetsMatching` defaulted correctly, `buildPlants` ran only when instanced, `stack` was
+empty outside Visualise, and each of those was pinned. None of them can see a caller asking for the
+wrong camera. A guarantee that holds only while one call site passes the right string is not a
+guarantee.
+
+Three things came out of it, and the second is the one worth copying:
+
+- **The test states the property, not the mechanism.** `build-scene.test.ts` asserts that a plan
+  scene contains no elevated `assetId` *and* an empty `stack` — with a **control** asserting the same
+  garden in Visualise does draw elevated art, because otherwise the test passes just as happily on a
+  broken twin table or an empty catalogue.
+- **The call site's answer is visible from outside.** `EditorScene` exposes `data-view`, and
+  `visualise.spec.ts` asserts the Plan tab's scene is `plan`. Nothing below the call site could ever
+  have caught this, so the assertion has to live above it — in a browser, which is where this class
+  of bug already lives (see the Konva hit-testing note).
+- **`audit:assets` asks the question in both directions.** It had `planCameraPlanting` — is Visualise
+  still drawing flat art, a gap that degrades gracefully — and nothing asking whether the plan is
+  drawing elevated art, which is not a gap but a wrong drawing. `elevatedInPlan` is on the one line
+  the console prints, because a wrong camera is invisible unless something says so out loud.
+
+**The same divergence was one layer down in the shadows.** The composer softens a cast shadow only
+in Visualise (`view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0`) and both Pixi backends
+hardcoded the soft value — so a plan's shadows were soft on screen and hard in the PNG. Soft is a
+presentation choice; a diagram draws the edge. Worth knowing that the export disagreeing with the
+screen is the *symptom* both faults shared, and the cheapest thing to check after touching either.
+
+**The library is sorted by camera on disk: `public/assets/{plan,elevated}/{sprites,textures}`.**
+_This reverses_ `docs/visualise-asset-style.md` §10, which made the `vis-`/`skin-` prefix the only
+marker so that no second place had to be kept in step — right at a handful of files, wrong at 181
+across two cameras. `assetFile` is the single place layout is decided and the generator **derives**
+its output directories from that function rather than restating them. Be clear about what this does
+not buy: nothing resolves an asset by path, so it cannot prevent the fault above. It buys a listing
+that answers the question, and a `plan/` that can be preloaded on its own.
 
 **An elevated asset's frame is derived, never declared.** `elevatedFrame` is
 `{ w: metres.w, h: metres.h + heightMetres × RISE }`, and the bottom `metres.h` of the image is the

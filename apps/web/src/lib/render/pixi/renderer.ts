@@ -273,7 +273,10 @@ export class LegacySceneRenderer {
         boundary: scene.boundary,
         pxPerMetre: view.pxPerMetre,
         pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-        softnessMetres: PRESENTATION_SHADOW_SOFTNESS,
+        // The composer's own rule, and it has to be the same one or the screen and the PNG
+        // disagree about a plan's shadows: soft is a presentation choice Visualise makes, and a
+        // diagram draws the hard edge. See `drawShadowLayer` in `render-plan.ts`.
+        softnessMetres: scene.view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0,
       },
       makeCanvas,
     );

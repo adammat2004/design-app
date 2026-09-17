@@ -101,11 +101,13 @@ import { conceptSeed, makeRng, sqlSeed } from './rng.js';
 import { archetypesForSlots } from './design/archetype-selector.js';
 import { chooseLayouts } from './design/choose.js';
 import {
+  accessName,
   closestPointOnRing,
   isIgnored,
   PATH_STANDOFF,
   routeBetween,
   routeFromHouse,
+  terraceStarts,
   withinRing,
 } from './design/circulation.js';
 import type { DesignBrief } from '@garden-studio/schema';
@@ -1242,19 +1244,10 @@ export class ConceptsService {
         const purpose =
           target.symbol === 'shed' || target.symbol === 'raised-bed' ? 'utility' : 'secondary';
         const route = circulationFor(purpose, constraints);
-        const starts = [
-          closestPointOnRing(terraceOutline, polygonCentroid(destination), 0),
-          ...terraceOutline.flatMap((a, i) => {
-            const b = terraceOutline[(i + 1) % terraceOutline.length]!;
-            return [0.25, 0.5, 0.75].map((t) => ({
-              x: a.x + (b.x - a.x) * t,
-              y: a.y + (b.y - a.y) * t,
-            }));
-          }),
-        ];
+        const starts = terraceStarts(terraceOutline, destination);
         const ignore = [terraceOutline, destination, ...thresholds];
         /* The same name the preview gave this route, so a `reroute` repair reaches the same path. */
-        const name = `Path to ${(target.name ?? 'garden room').toLowerCase()}`;
+        const name = accessName(target.name ?? 'garden room');
         /* Lazily: the nearest start succeeds most of the time, and each one it does not costs
          * four polylines tested against every obstacle on the plot. See the preview's own copy. */
         let path: PlanGeometry | null = null;

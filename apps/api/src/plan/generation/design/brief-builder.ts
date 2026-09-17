@@ -139,6 +139,15 @@ export function buildBrief(
     })),
     excludedFeatures: cut,
     style: brief.style,
+    /*
+     * The **resolved** upkeep, not the raw answer, and only when the user gave one.
+     *
+     * `resolveConstraints` is the single source for what a concept may ask of its owner — it caps
+     * what the archetype declares against what was asked for — and reading `brief.maintenance` here
+     * would be the second source that whole resolver exists to prevent. Null where nobody answered,
+     * so `maintenanceFit` is absent rather than marking a plan against a level nobody chose.
+     */
+    upkeep: brief.maintenance === null ? null : requirements.constraints.maintenance,
     rationale: rationaleFor(emphasis, requirements, primaryZone, cut.length),
   });
 }

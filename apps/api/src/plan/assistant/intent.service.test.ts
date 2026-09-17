@@ -333,7 +333,16 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
    * been written as a point by somebody in a hurry.
    */
   it('gives the model nowhere to put a coordinate', () => {
-    const banned = new Set(['x', 'y', 'at', 'centre', 'center', 'points', 'position', 'coordinates']);
+    const banned = new Set([
+      'x',
+      'y',
+      'at',
+      'centre',
+      'center',
+      'points',
+      'position',
+      'coordinates',
+    ]);
     const seen: string[] = [];
 
     const walk = (node: unknown): void => {
@@ -367,8 +376,10 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
       'recategorise',
       'reduce-cost',
       'remove',
+      'reroute',
       'reshape',
       'resize',
+      'rotate',
     ]);
   });
 
@@ -396,6 +407,15 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
       },
       { kind: 'reshape', target: { elementIds: ['e-1'] }, edge: 'towards-house', metres: 1.5 },
       { kind: 'attach', target: { elementIds: ['e-1'] } },
+      { kind: 'reroute', target: { elementIds: ['e-1'] }, objective: 'direct' },
+      {
+        kind: 'reroute',
+        target: { elementIds: ['e-1'] },
+        objective: 'avoid',
+        avoidElementIds: ['e-2'],
+      },
+      { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' },
+      { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'element', elementId: 'e-2' },
     ];
 
     // One at a time: there are nine branches and an envelope takes at most twelve intents.

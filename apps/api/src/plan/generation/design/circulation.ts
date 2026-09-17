@@ -1,8 +1,10 @@
 import {
+  distanceToSegment,
   geometryOutline,
   polygonCentroid,
   polygonContainsPolygon,
   polygonsIntersect,
+  polylineLength,
   type PlanGeometry,
   type Point,
 } from '@garden-studio/schema';
@@ -72,6 +74,44 @@ export interface RouteRequest {
  * Deterministic and first-legal rather than best: the order *is* the preference.
  */
 export function routeBetween(request: RouteRequest): PlanGeometry | null {
+  const { skip = 0 } = request;
+  return routeCandidates(request)[skip]?.geometry ?? null;
+}
+
+/**
+ * A legal route, with what is measurable about it.
+ *
+ * The metrics are the ones the scorer's circulation principle reads, computed here so a planner can
+ * *choose* by them rather than take the first shape that fits. `detour` is length over the straight
+ * line; `clearance` is how close the strip comes to the nearest thing it had to miss.
+ */
+export interface RouteCandidate {
+  geometry: PlanGeometry;
+  length: number;
+  span: number;
+  /** Length over the straight line between the ends. One is a straight route. */
+  detour: number;
+  /** How close the strip passes to the nearest obstacle it is not allowed to touch, in metres. */
+  clearance: number;
+  /** Which of the four shapes this is, in the order they are preferred. */
+  shape: 'via' | 'straight' | 'along-start' | 'along-end';
+  /** Which of the caller's `starts` it set off from. */
+  startIndex: number;
+}
+
+/**
+ * Every legal route from the given starts to the destination, in preference order.
+ *
+ * `routeBetween` is this taking the `skip`-th, and that equivalence is asserted — the order **is**
+ * the preference, and a repair that asks for "the second approach that would have worked" is
+ * counting entries in this list. Extracted so the assistant's planner can do the thing the repair
+ * stage never could: look at all of them and pick the one that answers a stated objective, rather
+ * than counting past the ones it does not want.
+ *
+ * Deterministic and query-free. Four shapes per start, each checked against rings the caller already
+ * has, so enumerating thirteen starts costs fifty-two containment tests and no database at all.
+ */
+export function routeCandidates(request: RouteRequest & { starts?: Point[] }): RouteCandidate[] {
   const {
     start,
     destination,
@@ -81,53 +121,71 @@ export function routeBetween(request: RouteRequest): PlanGeometry | null {
     ignore = [],
     scope = null,
     width = PATH_WIDTH,
-    skip = 0,
+    starts,
   } = request;
 
-  const aimFrom = via[via.length - 1] ?? start;
-  const end = closestPointOnRing(destination, aimFrom, PATH_STANDOFF);
+  const from = starts && starts.length > 0 ? starts : [start];
+  const found: RouteCandidate[] = [];
 
-  if (Math.hypot(start.x - end.x, start.y - end.y) < MIN_ROUTE_LENGTH) return null;
+  for (const [startIndex, origin] of from.entries()) {
+    const aimFrom = via[via.length - 1] ?? origin;
+    const end = closestPointOnRing(destination, aimFrom, PATH_STANDOFF);
 
-  const routes: Point[][] = [];
-  if (via.length > 0) routes.push([start, ...via, end]);
-  routes.push(
-    [start, end],
-    [start, { x: start.x, y: end.y }, end],
-    [start, { x: end.x, y: start.y }, end],
-  );
+    if (Math.hypot(origin.x - end.x, origin.y - end.y) < MIN_ROUTE_LENGTH) continue;
 
-  let passed = 0;
-  for (const points of routes) {
-    const distinct = points.filter(
-      (point, i) =>
-        i === 0 || Math.hypot(point.x - points[i - 1]!.x, point.y - points[i - 1]!.y) > 0.01,
+    const shapes: { shape: RouteCandidate['shape']; points: Point[] }[] = [];
+    if (via.length > 0) shapes.push({ shape: 'via', points: [origin, ...via, end] });
+    shapes.push(
+      { shape: 'straight', points: [origin, end] },
+      { shape: 'along-start', points: [origin, { x: origin.x, y: end.y }, end] },
+      { shape: 'along-end', points: [origin, { x: end.x, y: origin.y }, end] },
     );
-    const geometry: PlanGeometry = { kind: 'polyline', points: distinct, width };
-    const strip = geometryOutline(geometry);
-    if (strip.length < 3) continue;
-    if (!withinRing(strip, boundary)) continue;
-    if (scope && !withinRing(strip, scope)) continue;
-    if (
-      obstacles.some(
-        (obstacle) => !isIgnored(obstacle, ignore) && polygonsIntersect(strip, obstacle),
-      )
-    ) {
-      continue;
+
+    for (const { shape, points } of shapes) {
+      const distinct = points.filter(
+        (point, i) =>
+          i === 0 || Math.hypot(point.x - points[i - 1]!.x, point.y - points[i - 1]!.y) > 0.01,
+      );
+      const geometry: PlanGeometry = { kind: 'polyline', points: distinct, width };
+      const strip = geometryOutline(geometry);
+      if (strip.length < 3) continue;
+      if (!withinRing(strip, boundary)) continue;
+      if (scope && !withinRing(strip, scope)) continue;
+
+      const blocking = obstacles.filter((obstacle) => !isIgnored(obstacle, ignore));
+      if (blocking.some((obstacle) => polygonsIntersect(strip, obstacle))) continue;
+
+      const length = polylineLength(distinct);
+      const span = Math.hypot(origin.x - end.x, origin.y - end.y);
+      found.push({
+        geometry,
+        length,
+        span,
+        detour: span > 0.5 ? length / span : 1,
+        clearance: clearanceOf(strip, blocking),
+        shape,
+        startIndex,
+      });
     }
-    /*
-     * Legal. Take it unless the caller asked to see past this many — and note the counter advances
-     * only on legal routes, so `skip: 1` means "the second route that would have worked" rather
-     * than "the second shape I tried", which is the only reading a repair can act on.
-     */
-    if (passed < skip) {
-      passed += 1;
-      continue;
-    }
-    return geometry;
   }
 
-  return null;
+  return found;
+}
+
+/** How close the strip passes to the nearest thing it had to miss; `Infinity` when nothing is near. */
+function clearanceOf(strip: Point[], obstacles: Point[][]): number {
+  let best = Infinity;
+  for (const obstacle of obstacles) {
+    for (const point of strip) {
+      for (let i = 0; i < obstacle.length; i += 1) {
+        best = Math.min(
+          best,
+          distanceToSegment(point, obstacle[i]!, obstacle[(i + 1) % obstacle.length]!),
+        );
+      }
+    }
+  }
+  return best;
 }
 
 /**
@@ -154,6 +212,46 @@ export function routeFromHouse(
     /* The house and the thing being reached are both allowed to be touched. */
     ignore: [...(rest.ignore ?? []), houseRing, destination],
   });
+}
+
+/**
+ * Where on a terrace a path to somewhere else may set off from.
+ *
+ * The nearest point on the edge first, which is the route a person would take, then quarter points
+ * round the rest of it — the answer to a terrace whose obvious corner is blocked by the dining set
+ * standing on it, which one start point turns into no path at all.
+ *
+ * **One copy, and it was two.** The preview and the realised pipeline each had their own, with a
+ * comment in each saying the other must search exactly as hard: a preview that tried fewer starts
+ * reports a room as unreachable that the built plan then reaches, and the candidate is chosen on a
+ * reading its own realisation contradicts. Two functions that must agree by hand are the thing this
+ * codebase keeps writing down as a defect.
+ */
+export function terraceStarts(terrace: Point[], destination: Point[]): Point[] {
+  if (terrace.length < 3 || destination.length < 3) return [];
+
+  return [
+    closestPointOnRing(terrace, polygonCentroid(destination), 0),
+    ...terrace.flatMap((a, i) => {
+      const b = terrace[(i + 1) % terrace.length]!;
+      return [0.25, 0.5, 0.75].map((t) => ({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+      }));
+    }),
+  ];
+}
+
+/**
+ * What a route to this room is called.
+ *
+ * Derived from the room rather than counted, because the name is the key the `reroute` repair uses
+ * to say *which* path to approach differently — an index would move the moment a repair elsewhere
+ * changed how many rooms got placed. Shared for the same reason `terraceStarts` is: the preview and
+ * the realisation have to produce the same key or an accepted repair quietly reaches nothing.
+ */
+export function accessName(room: string): string {
+  return `Path to ${room.toLowerCase()}`;
 }
 
 /** The point on `ring`'s outline nearest `from`, pulled `standoff` back towards `from`. */

@@ -143,8 +143,15 @@ export function EditorCanvas() {
     [motion],
   );
   const maturity = usePlanEditorStore((state) => state.maturity);
+  /*
+   * **`view: 'plan'`, and the value is the whole of what this tab is.** "Rich" here means the
+   * photographic renderer — Pixi drawing the same ground rasters the composer paints — never the
+   * elevated camera. Built as `'visualise'` this tab drew `vis-*` sprites, `skin-*` faces and the
+   * oblique lifted stack, so the 2D Plan was a 2.5D picture and the PNG export (which passes the
+   * real view) disagreed with what was on screen. See the note in CLAUDE.md.
+   */
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
-    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'visualise', maturity, rendererVersion: browserRendererVersion() }),
+    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'plan', maturity, rendererVersion: browserRendererVersion() }),
   [boundaryDraft, elements, maturity]);
 
   /*

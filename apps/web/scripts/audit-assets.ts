@@ -43,8 +43,25 @@ async function main() {
         record.count++; record.maxHeight = Math.max(record.maxHeight, plant.height);
         planPlants.set(plant.assetId, record);
       }
+      /*
+       * The mirror of `planCameraPlanting`, and the one this report was missing.
+       *
+       * That field asks whether Visualise is still drawing flat art — a gap in the twin table,
+       * which degrades gracefully. This asks the opposite and far worse question: whether the 2D
+       * Plan is drawing *elevated* art, which is not a gap but a wrong drawing. It went unasked,
+       * and the Plan tab shipped a commit built at `view: 'visualise'` with every test passing.
+       * Anything but an empty list here is a defect.
+       */
+      const planScene = buildRenderScene(qualityScene(fixture), { view: 'plan' });
+      const elevatedInPlan = planScene.plants
+        .filter((plant) => plant.assetId &&
+          (ASSET_FAMILIES[plant.assetId] as AssetFamily).camera === 'elevated')
+        .map((plant) => ({ id: plant.id, assetId: plant.assetId }));
+
       return { fixture, sampledPlants: scene.plants.length,
         planCameraPlanting: [...planPlants].map(([id, value]) => ({ id, ...value })),
+        elevatedInPlanScene: elevatedInPlan,
+        planSceneStack: planScene.stack.length,
         standingFallbacks: scene.stack.filter((node) => node.kind === 'object' &&
           !elevatedFamilyFor(node.item.element)).map((node) => ({ id: node.id, layer: node.visualLayer })) };
     }), rows };
@@ -81,9 +98,16 @@ async function main() {
 
   await elevatedSheet(output);
 
+  /*
+   * `elevatedInPlan` is on the one line a person actually reads, not only in the JSON. The whole
+   * lesson of this check is that a wrong camera is invisible unless something says it out loud.
+   */
   console.log(JSON.stringify({ files: report.files, families: report.families,
     missingFiles: report.missingFiles, incompleteFamilies: report.incompleteFamilies,
     elevated: report.rows.filter((r) => r.camera === 'elevated').length,
+    elevatedInPlan: report.fixtureCoverage.flatMap((f) => f.elevatedInPlanScene),
+    planCameraPlantingInVisualise: report.fixtureCoverage
+      .reduce((total, f) => total + f.planCameraPlanting.reduce((n, p) => n + p.count, 0), 0),
     framingWarnings: report.rows.flatMap((r) => r.framingWarnings) }));
 }
 

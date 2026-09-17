@@ -1,6 +1,12 @@
 import { z } from 'zod';
-import { ConceptsSectionSchema, DesignElementSchema, GeneratedConceptSchema, LayoutSectionSchema } from './concepts.js';
-import { DesignScoreSchema } from './design/design-score.js';
+import {
+  ConceptsSectionSchema,
+  DesignElementSchema,
+  GeneratedConceptSchema,
+  LayoutSectionSchema,
+} from './concepts.js';
+import { ProposedChangeSchema } from './assistant.js';
+import { DesignIssueSchema, DesignScoreSchema } from './design/design-score.js';
 import { PlanDocumentSchema } from './document.js';
 import { FeaturesSectionSchema } from './features.js';
 import { GardenBriefSchema } from './brief.js';
@@ -111,3 +117,48 @@ export type ReviewDesign = z.infer<typeof ReviewDesignSchema>;
 
 export const ReviewDesignResultSchema = z.object({ score: DesignScoreSchema });
 export type ReviewDesignResult = z.infer<typeof ReviewDesignResultSchema>;
+
+/**
+ * Ask for the best correction to one fault, rather than for a change of a stated kind.
+ *
+ * The difference from `/assistant/redesign` is what is being asked. That route takes intents and
+ * answers with what they come to, which is what a *sentence* turns into. This takes a fault and
+ * answers with the best legal change to it — so the search for which correction to make happens
+ * where the scorer is, on the plan as it stands, instead of on a client that would have to fetch a
+ * score, guess a factor, watch the change, fetch another score and put it back.
+ *
+ * The issue is sent rather than looked up because the reviewer is holding a garden that has been
+ * saved nowhere; the same reason `elements` is sent, and the same reason both routes are
+ * side-effect free.
+ */
+export const RepairDesignSchema = z.object({
+  issue: DesignIssueSchema,
+  elements: z.array(DesignElementSchema).max(400),
+});
+export type RepairDesign = z.infer<typeof RepairDesignSchema>;
+
+export const RepairDesignResultSchema = z.object({
+  /** The winning candidate's diff, or empty when nothing beat the gate. */
+  changes: z.array(ProposedChangeSchema).default([]),
+  /**
+   * What the server measured about the winner, before anything was drawn.
+   *
+   * It is a *prediction* and the client re-scores after playing it — the editor is the authority on
+   * what actually landed. What this buys is the thing the loop could not do: when no candidate
+   * improved the plan, the user is not shown a change being made and then taken back.
+   */
+  predicted: z
+    .object({
+      before: z.number().min(0).max(1),
+      after: z.number().min(0).max(1),
+      /** Whether the fault it was aimed at is gone, as opposed to merely less bad. */
+      resolved: z.boolean(),
+    })
+    .nullable()
+    .default(null),
+  /** How many legal candidates were scored. Narrated, so the count has to be the real one. */
+  considered: z.number().int().min(0).default(0),
+  /** Why nothing came back, in the planner's own words. Null when something did. */
+  reason: z.string().nullable().default(null),
+});
+export type RepairDesignResult = z.infer<typeof RepairDesignResultSchema>;

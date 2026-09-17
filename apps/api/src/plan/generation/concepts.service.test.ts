@@ -487,8 +487,30 @@ describe.skipIf(connection === null)('ConceptsService', () => {
     expect(chosen(formal)).toBe('formal_axis');
 
     for (const set of [modern, cottage, formal]) {
-      expect(new Set(set.map((concept) => concept.strategy!.archetype)).size).toBe(3);
-      // Different templates, not the same layout with a different badge: the main panel differs.
+      /*
+       * At least two compositions, not always three.
+       *
+       * It was three until the weights began following the brief, and the change is traceable: run
+       * the same fixture with `BRIEF_WEIGHTS=0` and the modern set still comes back with three.
+       * Under the social reading of this brief a destination garden now out-scores a formal axis on
+       * a 20 × 30 m plot, and slot C then pays the repeat penalty and takes it anyway — which is the
+       * behaviour `diversity.ts` documents for a plot that genuinely supports one composition, and
+       * the drawings still differ, which the panel comparison below is what actually checks.
+       * `choose.test.ts` holds the general promise across every scenario.
+       */
+      const archetypes = new Set(set.map((concept) => concept.strategy!.archetype));
+      expect(archetypes.size).toBeGreaterThan(1);
+
+      /*
+       * Different templates, not the same layout with a different badge: as many different main
+       * panels as there are different compositions.
+       *
+       * Asserted against the composition count rather than at three, because two slots on the same
+       * archetype legitimately draw the same open panel — the panel is the composition's own sketch,
+       * and what differs between two candidates of one archetype is everything else. On the modern
+       * set those two concepts come back with 56 and 49 elements, different furniture and a second
+       * water feature in one of them; only the lawn outline coincides.
+       */
       const panels = set.map((concept) =>
         JSON.stringify(
           concept.elements.find(
@@ -498,7 +520,9 @@ describe.skipIf(connection === null)('ConceptsService', () => {
           )?.shape,
         ),
       );
-      expect(new Set(panels).size).toBe(3);
+      expect(new Set(panels).size).toBe(archetypes.size);
+      // And the plans themselves are three, whatever they share.
+      expect(new Set(set.map((concept) => JSON.stringify(concept.elements))).size).toBe(3);
     }
   });
 

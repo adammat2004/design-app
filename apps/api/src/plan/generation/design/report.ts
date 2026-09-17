@@ -20,6 +20,7 @@ const SHORT: Record<PrincipleId, string> = {
   buildability: 'build',
   featureFit: 'fit',
   sun: 'sun',
+  maintenanceFit: 'upkp',
 };
 
 export function describeScore(name: string, score: DesignScore): string {

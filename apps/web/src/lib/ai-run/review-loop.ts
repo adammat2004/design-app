@@ -1,12 +1,11 @@
 import {
   issuesBySeverity,
-  type PlanGeometry,
+  performableInEditor,
   type DesignElement,
-  type DesignIntent,
   type DesignIssue,
   type DesignRun,
   type DesignScore,
-  type ProposedChange,
+  type RepairDesignResult,
 } from '@garden-studio/schema';
 import { runFromProposal } from './from-proposal';
 
@@ -20,6 +19,16 @@ import { runFromProposal } from './from-proposal';
  * reason this is worth having rather than being a second generator with a different name — a
  * reviewer that always changes something is a reviewer whose opinion is worthless, and one that
  * can make a plan worse is actively harmful.
+ *
+ * **The search moved to the server, and that is the change worth understanding.** This loop used to
+ * map a fault to one intent, take whatever the planner's first legal step was, *animate* it, and
+ * only then measure — so about half the time the user watched the designer do something that a
+ * measurement taken beforehand would have ruled out. `POST /design/repair` scores several
+ * corrections against the real plan and answers with the best one, or with nothing and a reason. A
+ * change that helps nothing is now never played at all.
+ *
+ * The editor is still the authority on what landed: the run is played and the plan re-scored, and
+ * the server's prediction is a claim this loop checks rather than one it trusts.
  *
  * Every dependency is injected, so the interesting half is testable with no server, no model, no
  * clock and no canvas — the same split `planner.service.test.ts` gets from taking `DesignIntent`
@@ -39,18 +48,29 @@ export interface ReviewPass {
   after: number;
   /** Whether the change was kept. False means it was played and then wound back. */
   kept: boolean;
+  /**
+   * Whether anything was animated at all.
+   *
+   * False where the server found nothing worth doing, which is the pass the old loop could not
+   * have: it had no way to know a correction was pointless without performing it first.
+   */
+  played: boolean;
+  /** How many corrections the server scored. Narrated, so it has to be the real count. */
+  considered: number;
+  /** Why nothing was done, in the planner's own words. Null when something was. */
+  reason: string | null;
 }
 
 /**
  * A fault the reviewer could fix but did not, because it is not what the user asked about.
  *
  * The offer is the answer to the question a scoped reviewer otherwise raises: "it found something
- * wrong and said nothing?" It carries the intents already worked out, so accepting one costs no
- * second look at the plan.
+ * wrong and said nothing?" It carries only the issue now: what to do about it is the server's to
+ * work out, and working it out twice — once to offer and once to accept — would be two searches for
+ * one decision, against a plan that may have changed in between.
  */
 export interface ReviewOffer {
   issue: DesignIssue;
-  intents: DesignIntent[];
 }
 
 export interface ReviewOutcome {
@@ -66,12 +86,20 @@ export interface ReviewTools {
   /** The current plan, read fresh each time: a run has changed it since the last look. */
   elements: () => DesignElement[];
   score: (elements: DesignElement[]) => Promise<DesignScore>;
-  /** Asks the planner for a diff, against the layout as it stands rather than as it was saved. */
-  propose: (intents: DesignIntent[], elements: DesignElement[]) => Promise<ProposedChange[]>;
+  /** Asks the server for the best correction to one fault, measured against the plan as it stands. */
+  repair: (issue: DesignIssue, elements: DesignElement[]) => Promise<RepairDesignResult>;
   /** Plays a run to the end. Resolves with what happened to it. */
   play: (run: DesignRun) => Promise<'complete' | 'cancelled' | 'refused'>;
   /** Puts the last run back, when the measurement says it was not worth keeping. */
   undo: () => void;
+  /**
+   * What the reviewer is doing, as it does it.
+   *
+   * Every string this is called with is read off something that was actually measured — the fault's
+   * own sentence, the count of corrections scored, the element being changed. A narration that
+   * described a step the code does not take would be the agent chatter this panel exists without.
+   */
+  narrate?: (status: string | null) => void;
   maxPasses?: number;
   /**
    * The element ids the request actually touched, or absent for the whole plan.
@@ -85,87 +113,6 @@ export interface ReviewTools {
    * "Review my design", asked on its own, passes nothing and the whole plan is in scope.
    */
   subjects?: string[];
-}
-
-/**
- * What the reviewer cannot perform, and why. Every one of these was decided by measurement.
- *
- * Stating the gap rather than hiding it behind a no-op is the same discipline `repair.ts` keeps
- * with its own `UNAVAILABLE` list: a limitation that is written down can be closed, and one that
- * looks like an action but silently achieves nothing is the "tick the design ignores" defect this
- * codebase keeps catching itself committing.
- */
-export const UNPERFORMABLE: Partial<Record<NonNullable<DesignIssue['repair']>, string>> = {
-  /*
-   * **Measured, not assumed.** The scorer says "move this" and never says where to; the only
-   * destinations an intent can name are the house, the boundary, or a zone the scorer did not
-   * mention. Mapped to `towards: 'boundary'` across four generated fixtures, the planner refused
-   * every single one with "It is already as far that way as it will go" — the things these faults
-   * are about are against a fence already. Picking a zone instead would be inventing the
-   * correction rather than performing it. What is actually needed is an intent that can say
-   * "towards that other element", which does not exist.
-   */
-  'move-to-zone': 'the scorer says what is wrong but not where the thing should go instead',
-  'move-destination': 'the scorer says what is wrong but not where the thing should go instead',
-  'move-tree': 'the scorer says what is wrong but not where the thing should go instead',
-  /* A rotation, which no intent expresses. */
-  align: 'no intent can turn a thing',
-  /* Different beds are the composition's business, not an edit to one element. */
-  'merge-beds': 'redrawing the beds is the composition\'s decision, not an edit to one of them',
-  /* Two coordinated reshapes — the thing `deepenBorder` had to be written by hand to do. */
-  'enlarge-lawn': 'the lawn can only grow by taking ground from whatever is beside it',
-  /* There is no reroute intent; the planner cannot yet redraw a route. */
-  reroute: 'the planner has no way to redraw a route yet',
-};
-
-/**
- * A path narrow enough to complain about should come back wide enough to walk down.
- *
- * Not `MIN_ROUTE_WIDTH`: that constant lives in the scorer and is read off the narrowest route the
- * generator legitimately draws, so aiming at it lands exactly on the threshold and the next
- * rounding error puts the fault straight back. A metre is a path two people pass on.
- */
-const COMFORTABLE_ROUTE = 1;
-
-/**
- * What to do about a fault, in the planner's vocabulary.
- *
- * Three kinds, and only three. Each is a fault whose fix the scorer fully specifies — "it is too
- * big", "it is too narrow", "there is one thing too many" all say what to do as well as what is
- * wrong. Everything else is in `UNPERFORMABLE` above with its reason.
- *
- * **The elements are read, not just their ids.** A relative factor chosen without looking at the
- * thing is a guess: 1.3 on a path pinched to 0.5 m gives 0.65 m, which is still too narrow, so the
- * fault survives, the score does not move and the loop winds its own correction back. Measured —
- * that is precisely how the first version behaved, and it looked like a reviewer with nothing to
- * say rather than one aiming too low.
- */
-export function intentsFor(issue: DesignIssue, elements: DesignElement[] = []): DesignIntent[] {
-  const target = { elementIds: issue.subjects.slice(0, 8) };
-  if (target.elementIds.length === 0) return [];
-
-  switch (issue.repair) {
-    case 'shrink-terrace':
-      return [{ kind: 'resize', target, factor: 0.85 }];
-
-    case 'widen-path': {
-      const widths = target.elementIds
-        .map((id) => elements.find((element) => element.id === id)?.shape)
-        .filter((shape) => shape?.kind === 'polyline')
-        .map((shape) => (shape as Extract<PlanGeometry, { kind: 'polyline' }>).width);
-
-      const narrowest = widths.length > 0 ? Math.min(...widths) : 0;
-      /* Clamped to what the intent will carry; 1.3 is the fallback when the width is unknown. */
-      const factor = narrowest > 0 ? Math.min(4, Math.max(1.05, COMFORTABLE_ROUTE / narrowest)) : 1.3;
-      return [{ kind: 'resize', target, factor }];
-    }
-
-    case 'drop-optional':
-      return [{ kind: 'remove', target }];
-
-    default:
-      return [];
-  }
 }
 
 /**
@@ -192,6 +139,25 @@ function inScope(issue: DesignIssue, subjects: string[] | undefined): boolean {
   return issue.subjects.some((subject) => subjects.includes(subject));
 }
 
+/**
+ * Whether this fault is one the editor's planner can carry out at all.
+ *
+ * `REPAIR_CAPABILITIES` in the schema is the one table now. There used to be three — one here, one
+ * in the generator's repair stage, and a third expressed as the set of branches somebody had
+ * remembered to write in `intentsFor` — and a repair kind was performable if and only if all three
+ * happened to agree.
+ */
+function actionable(issue: DesignIssue, elements: DesignElement[]): boolean {
+  if (!performableInEditor(issue.repair)) return false;
+  /*
+   * And it has to name something. `DesignIssue.subjects` is documented as "element ids where they
+   * exist, else zone ids or feature names", so a fault about "the back garden" resolves to nothing
+   * the planner can change — and an offer for it would be a chip that does nothing, which is worse
+   * than an absent one because the user has to press it to find out.
+   */
+  return issue.subjects.some((subject) => elements.some((element) => element.id === subject));
+}
+
 /** The worst thing the reviewer can actually do something about, inside its scope. */
 export function firstRepairable(
   score: DesignScore,
@@ -202,21 +168,13 @@ export function firstRepairable(
   for (const issue of issuesBySeverity(score)) {
     if (tried.has(issueKey(issue))) continue;
     if (!inScope(issue, subjects)) continue;
-    if (intentsFor(issue, elements).length === 0) continue;
+    if (!actionable(issue, elements)) continue;
     return issue;
   }
   return null;
 }
 
-/**
- * What it found and chose not to touch, worth offering.
- *
- * **Subjects that are not element ids are dropped rather than rendered.** `DesignIssue.subjects` is
- * documented as "element ids where they exist, else zone ids or feature names", so a fault about
- * "the back garden" produces an offer whose intents target an element that does not exist — the
- * planner refuses every line and the chip does nothing. A chip that does nothing is worse than an
- * absent one, because the user has to press it to find out.
- */
+/** What it found and chose not to touch, worth offering. */
 export function offersFrom(
   score: DesignScore,
   tried: Set<string>,
@@ -231,16 +189,9 @@ export function offersFrom(
     if (offers.length >= limit) break;
     if (tried.has(issueKey(issue))) continue;
     if (inScope(issue, subjects)) continue;
+    if (!actionable(issue, elements)) continue;
 
-    const real = issue.subjects.every((subject) =>
-      elements.some((element) => element.id === subject),
-    );
-    if (!real) continue;
-
-    const intents = intentsFor(issue, elements);
-    if (intents.length === 0) continue;
-
-    offers.push({ issue, intents });
+    offers.push({ issue });
   }
   return offers;
 }
@@ -249,6 +200,7 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
   const limit = tools.maxPasses ?? MAX_PASSES;
   const passes: ReviewPass[] = [];
   const tried = new Set<string>();
+  const say = (status: string | null) => tools.narrate?.(status);
 
   /*
    * The whole element list every time, even when the pass is scoped.
@@ -258,6 +210,7 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
    * rather than narrowing what it reports. Scope decides what the reviewer may act on, never what
    * it may look at.
    */
+  say('Checking the composition');
   let score = await tools.score(tools.elements());
 
   for (let pass = 0; pass < limit; pass += 1) {
@@ -267,11 +220,29 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
     if (!issue) break;
     tried.add(issueKey(issue));
 
-    const changes = await tools.propose(intentsFor(issue, current), current);
-    if (changes.length === 0) continue;
+    say(issue.message);
+    const repair = await tools.repair(issue, current);
 
+    /*
+     * Nothing worth doing, so nothing is done — and this is the pass the old loop could not have.
+     * It had no way to know a correction was pointless without performing it, so the user watched
+     * the designer try something and put it back about half the time.
+     */
+    if (repair.changes.length === 0) {
+      passes.push({
+        issue,
+        before: score.total,
+        after: score.total,
+        kept: false,
+        played: false,
+        considered: repair.considered,
+        reason: repair.reason,
+      });
+      continue;
+    }
 
-    const run = runFromProposal(changes, issue.message, `review-${pass}`, {
+    say(testedSentence(repair));
+    const run = runFromProposal(repair.changes, issue.message, `review-${pass}`, {
       agent: 'reviewer',
       phase: 'review',
     });
@@ -280,6 +251,7 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
     const played = await tools.play(run);
     if (played === 'refused') continue;
     if (played === 'cancelled') {
+      say(null);
       return { passes, verdict: 'stopped', score, offers: [] };
     }
 
@@ -288,16 +260,26 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
     const kept = after.total > before.total + WORTHWHILE && !worseCriticals(before, after);
 
     /*
-     * Wound back rather than kept, when the measurement does not support it. The change was played
-     * either way — the user has already watched the reviewer try something — and saying "that did
-     * not help" while leaving it in place would be the reviewer marking its own homework.
+     * Wound back rather than kept, when the measurement does not support it. The server predicted
+     * this would help and the editor is the authority on whether it did — the two can honestly
+     * disagree, because the plan the prediction was made against is not always the plan the run
+     * landed on.
      */
     if (kept) score = after;
     else tools.undo();
 
-    passes.push({ issue, before: before.total, after: after.total, kept });
+    passes.push({
+      issue,
+      before: before.total,
+      after: after.total,
+      kept,
+      played: true,
+      considered: repair.considered,
+      reason: null,
+    });
   }
 
+  say(null);
   const offers = offersFrom(score, tried, tools.elements(), tools.subjects);
 
   if (passes.length === 0) return { passes, verdict: 'nothing-to-fix', score, offers };
@@ -307,6 +289,12 @@ export async function runReviewLoop(tools: ReviewTools): Promise<ReviewOutcome> 
     score,
     offers,
   };
+}
+
+/** How hard the server looked, said out loud. The count is the one it actually scored. */
+function testedSentence(repair: RepairDesignResult): string {
+  if (repair.considered <= 1) return 'Testing a correction';
+  return `Testing ${repair.considered} corrections`;
 }
 
 /** A repair that trades a minor fault for a critical one is not a repair. */

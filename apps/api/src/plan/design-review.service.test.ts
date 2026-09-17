@@ -19,7 +19,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 function fixture(name: string): PlanDocument {
   return readPlanDocument(
-    JSON.parse(readFileSync(resolve(here, `../../../web/scripts/fixtures/${name}.plan.json`), 'utf8')),
+    JSON.parse(
+      readFileSync(resolve(here, `../../../web/scripts/fixtures/${name}.plan.json`), 'utf8'),
+    ),
   );
 }
 
@@ -45,7 +47,9 @@ describe('DesignReviewService', () => {
     const ids = new Set(document.layout.elements.map((element) => element.id));
     const score = reviewer.review(document, document.layout.elements);
 
-    const named = score.issues.flatMap((issue) => issue.subjects).filter((subject) => ids.has(subject));
+    const named = score.issues
+      .flatMap((issue) => issue.subjects)
+      .filter((subject) => ids.has(subject));
     expect(score.issues.length).toBeGreaterThan(0);
     expect(named.length).toBeGreaterThan(0);
   });
@@ -90,15 +94,15 @@ describe('DesignReviewService', () => {
     expect(score.total).toBeLessThanOrEqual(0.5);
   });
 
-  it('gives the same answer whichever of the three strategies it is pointed at', () => {
+  it('gives a different answer for the three strategies', () => {
     /*
-     * Pinning a limitation rather than a feature, so it fails the day it stops being true.
+     * This test used to assert the opposite, and pinned a limitation rather than a feature so that
+     * it would fail the day it stopped being true. It has.
      *
-     * The three briefs genuinely differ — A is `social`, B `open`, C `planted`, and the primary
-     * zone moves with them — but no principle in the scorer reads the fields that vary, so all
-     * three give the same total on every fixture. That is why `review` takes no slot: a parameter
-     * that cannot change the answer is a setting the design ignores. When a principle starts
-     * reading `emphasis`, this test breaks and the parameter goes back.
+     * The three briefs always differed — A is `social`, B `open`, C `planted`, and the primary zone
+     * moves with them — and no principle read the fields that varied, so every slot returned the
+     * same total on every fixture. Now the weights follow the brief and four principles read it, so
+     * a retreat is no longer marked against the standard an entertaining garden is held to.
      */
     const document = fixture('entertaining');
     const analysis = analyseSite(document);
@@ -110,6 +114,49 @@ describe('DesignReviewService', () => {
       return scoreConcept(document.layout.elements, analysis, brief, 'realised').total;
     });
 
-    expect(new Set(totals).size).toBe(1);
+    expect(new Set(totals).size).toBeGreaterThan(1);
+  });
+
+  it('judges the plan against the strategy the user actually chose', () => {
+    /*
+     * The slot is not a request parameter: the document already records which of the three cards
+     * was taken, and a client passing one could disagree with the plan it is editing.
+     */
+    const document = fixture('entertaining');
+    const concept = document.concepts.concepts[0];
+    if (!concept?.strategy) return;
+
+    const analysis = analyseSite(document);
+    const slotOf = { A: 0, B: 1, C: 2 } as const;
+    const slot = slotOf[concept.strategy.briefId];
+
+    const chosen: PlanDocument = {
+      ...document,
+      concepts: { ...document.concepts, chosenConceptId: concept.id },
+    };
+
+    const { brief } = readDesignFor(
+      document,
+      resolveConstraints(document.brief, archetypeFor(slot, 0), analysis.scale.designedArea),
+      slot,
+    );
+
+    expect(reviewer.review(chosen, document.layout.elements).total).toBe(
+      scoreConcept(document.layout.elements, analysis, brief, 'realised').total,
+    );
+  });
+
+  it('falls back to the recommendation when no concept was chosen', () => {
+    const document = fixture('entertaining');
+    const analysis = analyseSite(document);
+    const { brief } = readDesignFor(
+      document,
+      resolveConstraints(document.brief, archetypeFor(0, 0), analysis.scale.designedArea),
+      0,
+    );
+
+    expect(reviewer.review(document, document.layout.elements).total).toBe(
+      scoreConcept(document.layout.elements, analysis, brief, 'realised').total,
+    );
   });
 });

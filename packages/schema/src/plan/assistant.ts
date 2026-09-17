@@ -114,6 +114,44 @@ export const DesignIntentSchema = z.discriminatedUnion('kind', [
     zone: ZoneIdSchema.optional(),
     affinity: z.enum(['near-house', 'far-from-house', 'along-boundary', 'any']).default('any'),
   }),
+  /**
+   * Redraw a route so that it does something better than it does now.
+   *
+   * **The objective, never the line.** A polyline is a list of coordinates and the model may not
+   * write one, so what it says is what the path should *achieve*: go more directly, get clear of
+   * these things, reach that one. The planner enumerates every legal route the router can draw
+   * between the path's own ends and picks by the objective — which is the same set the generator
+   * chooses from, so a rerouted path is a path the generator could have drawn.
+   *
+   * Three objectives and no more. `follow-edge` was the obvious fourth and is absent because the
+   * router cannot draw it: an objective the planner has to refuse every time is a tick the design
+   * ignores, which is the defect this codebase keeps catching itself committing.
+   */
+  z.object({
+    kind: z.literal('reroute'),
+    target: IntentTargetSchema,
+    objective: z.enum(['direct', 'avoid', 'connect']).default('direct'),
+    /** Required by `avoid`: what the route should stop crossing or squeezing past. */
+    avoidElementIds: z.array(z.string()).max(8).optional(),
+    /** Required by `connect`: the element the route should reach instead. */
+    connectElementId: z.string().optional(),
+  }),
+  /**
+   * Turn something to line up with something else.
+   *
+   * No angle, and that is the point. A free rotation is the one number in this vocabulary that
+   * behaves like a coordinate — "put it at 37°" is a position in the same way "put it at x 4.2" is —
+   * and no garden request needs one. What people say is "square it to the house", "line it up with
+   * the fence", "turn it to match the pergola", and the planner resolves each against real geometry
+   * and tries the quarter turns nearest where the thing already sits.
+   */
+  z.object({
+    kind: z.literal('rotate'),
+    target: IntentTargetSchema,
+    to: z.enum(['house', 'boundary', 'element']),
+    /** Required when `to` is 'element'; ignored otherwise. Must name a different element. */
+    elementId: z.string().optional(),
+  }),
   z.object({ kind: z.literal('remove'), target: IntentTargetSchema }),
   z.object({
     kind: z.literal('reduce-cost'),
@@ -150,8 +188,21 @@ export type AssistantIntentEnvelope = z.infer<typeof AssistantIntentEnvelopeSche
  * a `resize`: a resize scales about the anchor and keeps the shape, where a reshape moves some
  * corners and not others — and the editor's animation is derived from the elements rather than from
  * this, so calling it the wrong thing would only mislead a reader.
+ *
+ * `rotate` and `reroute` joined for the same reason: the executor has drawn both since the
+ * operations schema was written, and `from-proposal` derives them from the geometry either way, so
+ * these two names exist to stop the diff line calling a turn a move.
  */
-export const ChangeKindSchema = z.enum(['resize', 'reshape', 'move', 'material', 'add', 'remove']);
+export const ChangeKindSchema = z.enum([
+  'resize',
+  'reshape',
+  'move',
+  'rotate',
+  'reroute',
+  'material',
+  'add',
+  'remove',
+]);
 export type ChangeKind = z.infer<typeof ChangeKindSchema>;
 
 export const ProposedChangeSchema = z.object({

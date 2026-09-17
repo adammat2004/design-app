@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DesignElement, DesignIssue, DesignScore, ProposedChange } from '@garden-studio/schema';
+import type {
+  DesignElement,
+  DesignIssue,
+  DesignScore,
+  ProposedChange,
+} from '@garden-studio/schema';
 import {
-  UNPERFORMABLE,
   firstRepairable,
-  intentsFor,
   issueKey,
+  offersFrom,
   runReviewLoop,
   type ReviewTools,
 } from './review-loop';
+import { REPAIR_CAPABILITIES, REPAIR_KINDS, performableInEditor } from '@garden-studio/schema';
 
 /**
  * The loop, with the server, the scorer and the canvas all faked.
@@ -25,6 +30,7 @@ function issue(over: Partial<DesignIssue> = {}): DesignIssue {
     message: 'The path to the store is 0.5 m wide.',
     subjects: ['e-7'],
     repair: 'widen-path',
+    source: 'geometry',
     ...over,
   } as DesignIssue;
 }
@@ -51,95 +57,95 @@ function change(): ProposedChange {
     before: 'in the middle',
     after: 'against the fence',
     previous: ELEMENT,
-    next: { ...ELEMENT, shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 2, depth: 2, rotation: 0 } },
+    next: {
+      ...ELEMENT,
+      shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 2, depth: 2, rotation: 0 },
+    },
   } as ProposedChange;
+}
+
+/** What the server answers when it found a correction worth making. */
+function repaired(changes: ProposedChange[] = [change()]) {
+  return {
+    changes,
+    predicted: { before: 0.7, after: 0.8, resolved: true },
+    considered: 4,
+    reason: null,
+  };
+}
+
+/** What it answers when it looked and found nothing worth doing. */
+function nothing(reason = 'Nothing that could be done about it makes the design better.') {
+  return { changes: [], predicted: null, considered: 3, reason };
 }
 
 /** A loop with everything faked, and scores handed out in the order the test wants them. */
 function harness(totals: number[], over: Partial<ReviewTools> = {}) {
   const undo = vi.fn();
   const play = vi.fn(async () => 'complete' as const);
-  const propose = vi.fn(async () => [change()]);
+  const repair = vi.fn(async () => repaired());
   let call = 0;
 
   const tools: ReviewTools = {
     elements: () => [ELEMENT],
     score: vi.fn(async () => score(totals[Math.min(call++, totals.length - 1)]!)),
-    propose,
+    repair,
     play,
     undo,
     ...over,
   };
-  return { tools, undo, play, propose };
+  return { tools, undo, play, repair };
 }
 
 describe('what the reviewer can act on', () => {
-  it('turns a fault it can fix into the planner\'s own vocabulary', () => {
-    expect(intentsFor(issue({ repair: 'shrink-terrace' }))).toEqual([
-      { kind: 'resize', target: { elementIds: ['e-7'] }, factor: 0.85 },
-    ]);
-    expect(intentsFor(issue({ repair: 'drop-optional' }))).toEqual([
-      { kind: 'remove', target: { elementIds: ['e-7'] } },
-    ]);
-  });
+  /*
+   * There used to be three tables saying what a repair could do — one here, one in the generator's
+   * repair stage, and a third expressed as the set of branches somebody had remembered to write in
+   * `intentsFor`. A repair kind was performable if and only if all three happened to agree. There is
+   * one now, in the schema, and these read it rather than restating it.
+   */
 
-  it('says nothing about the faults no intent expresses, and states why for each', () => {
-    /*
-     * Stated rather than silently doing nothing. The three move kinds are the ones measurement put
-     * here: mapped to "towards the boundary" across four generated fixtures, the planner refused
-     * every one with "It is already as far that way as it will go" — the scorer says what is wrong
-     * and never where the thing should go instead.
-     */
-    for (const repair of ['align', 'merge-beds', 'enlarge-lawn', 'reroute',
-      'move-to-zone', 'move-destination', 'move-tree'] as const) {
-      expect(intentsFor(issue({ repair }))).toEqual([]);
-      expect(UNPERFORMABLE[repair]).toBeTruthy();
+  it('has an answer for every kind of fault the scorer can name', () => {
+    for (const kind of REPAIR_KINDS) {
+      expect(REPAIR_CAPABILITIES[kind], kind).toBeDefined();
+      expect(REPAIR_CAPABILITIES[kind].editor.length, kind).toBeGreaterThan(0);
     }
   });
 
-  it('performs exactly the faults whose fix the scorer fully specifies', () => {
-    for (const repair of ['shrink-terrace', 'widen-path', 'drop-optional'] as const) {
-      expect(intentsFor(issue({ repair })).length).toBe(1);
-      expect(UNPERFORMABLE[repair]).toBeUndefined();
+  it('states why for each fault it cannot perform, rather than silently doing nothing', () => {
+    const cannot = REPAIR_KINDS.filter((kind) => !performableInEditor(kind));
+    expect(cannot.length).toBeGreaterThan(0);
+
+    for (const kind of cannot) {
+      /* A sentence a person can read, not a boolean. A limitation written down can be closed. */
+      expect(REPAIR_CAPABILITIES[kind].editor.length, kind).toBeGreaterThan(20);
     }
   });
 
-  it('widens a pinched path enough to actually clear the fault', () => {
+  it('can now perform the three move faults it never could', () => {
     /*
-     * Measured. A flat 1.3 on a path pinched to 0.5 m gives 0.65 m, which is still too narrow — so
-     * the fault survived, the score did not move, and the loop wound back its own correction. It
-     * looked like a reviewer with nothing to say rather than one aiming too low.
+     * Measured before `IssueGuidance` existed: mapped to "towards the boundary" — the only
+     * destination an intent could name — the planner refused every move fault across four generated
+     * fixtures with "it is already as far that way as it will go".
      */
-    const path: DesignElement = {
-      id: 'e-7', category: 'paved-area', role: 'feature', zone: 'back',
-      shape: { kind: 'polyline', width: 0.5, points: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
-    } as DesignElement;
-
-    const [intent] = intentsFor(issue({ repair: 'widen-path' }), [path]);
-
-    expect(intent).toMatchObject({ kind: 'resize', factor: 2 });
-    // 0.5 x 2 is a metre: a path two people pass on, not one a rounding error re-breaks.
-    expect(0.5 * (intent as { factor: number }).factor).toBeCloseTo(1, 6);
-  });
-
-  it('falls back to a modest widening when it cannot see the path', () => {
-    expect(intentsFor(issue({ repair: 'widen-path' }))).toEqual([
-      { kind: 'resize', target: { elementIds: ['e-7'] }, factor: 1.3 },
-    ]);
-  });
-
-  it('ignores a fault that names nothing it could act on', () => {
-    // Issues may name a zone or a feature rather than an element; those cannot become an intent.
-    expect(intentsFor(issue({ subjects: [] }))).toEqual([]);
+    for (const kind of ['move-to-zone', 'move-destination', 'move-tree', 'align'] as const) {
+      expect(performableInEditor(kind), kind).toBe(true);
+    }
   });
 
   it('takes the worst fault first', () => {
-    const worst = issue({ code: 'terrace-oversized', severity: 'critical', repair: 'shrink-terrace' });
+    const worst = issue({
+      code: 'terrace-oversized',
+      severity: 'critical',
+      repair: 'shrink-terrace',
+    });
     const lesser = issue({ severity: 'minor' });
     const both = score(0.7, [lesser, worst]);
 
-    expect(firstRepairable(both, new Set())?.code).toBe('terrace-oversized');
-    expect(firstRepairable(both, new Set([issueKey(worst)]))?.code).toBe('route-too-narrow');
+    expect(firstRepairable(both, new Set(), [ELEMENT])?.code).toBe('terrace-oversized');
+    expect(firstRepairable(both, new Set([issueKey(worst)]), [ELEMENT])?.code).toBe(
+      'route-too-narrow',
+    );
   });
 
   it('tells two faults of the same kind apart', () => {
@@ -150,22 +156,32 @@ describe('what the reviewer can act on', () => {
     const first = issue({ subjects: ['e-7'] });
     const second = issue({ subjects: ['e-9'] });
     const both = score(0.7, [first, second]);
+    const plan = [ELEMENT, { ...ELEMENT, id: 'e-9' }];
 
-    expect(firstRepairable(both, new Set([issueKey(first)]))?.subjects).toEqual(['e-9']);
-    expect(firstRepairable(both, new Set([issueKey(first), issueKey(second)]))).toBeNull();
+    expect(firstRepairable(both, new Set([issueKey(first)]), plan)?.subjects).toEqual(['e-9']);
+    expect(firstRepairable(both, new Set([issueKey(first), issueKey(second)]), plan)).toBeNull();
   });
 
-  it('skips a fault it has no intent for rather than stalling on it', () => {
-    const unfixable = issue({ code: 'misaligned', severity: 'critical', repair: 'align' });
+  it('skips a fault nothing can perform rather than stalling on it', () => {
+    const unfixable = issue({ code: 'bed-islands', severity: 'critical', repair: 'merge-beds' });
     const fixable = issue({ severity: 'minor' });
 
-    expect(firstRepairable(score(0.7, [unfixable, fixable]), new Set())?.code).toBe('route-too-narrow');
+    expect(firstRepairable(score(0.7, [unfixable, fixable]), new Set(), [ELEMENT])?.code).toBe(
+      'route-too-narrow',
+    );
+  });
+
+  it('ignores a fault that names nothing on the plan', () => {
+    /* Issues may name a zone or a feature rather than an element; those name nothing to change. */
+    const zoneFault = issue({ code: 'zone-fragmented', subjects: ['back'] });
+    expect(firstRepairable(score(0.7, [zoneFault]), new Set(), [ELEMENT])).toBeNull();
+    expect(offersFrom(score(0.7, [zoneFault]), new Set(), [ELEMENT], ['e-7'])).toEqual([]);
   });
 });
 
 describe('the loop', () => {
   it('keeps a change that measurably improved the plan', async () => {
-    const { tools, undo } = harness([0.70, 0.80, 0.80]);
+    const { tools, undo } = harness([0.7, 0.8, 0.8]);
     const outcome = await runReviewLoop(tools);
 
     expect(outcome.verdict).toBe('improved');
@@ -174,7 +190,7 @@ describe('the loop', () => {
   });
 
   it('winds back a change that did not', async () => {
-    const { tools, undo } = harness([0.80, 0.79]);
+    const { tools, undo } = harness([0.8, 0.79]);
     const outcome = await runReviewLoop(tools);
 
     expect(undo).toHaveBeenCalledTimes(1);
@@ -213,7 +229,10 @@ describe('the loop', () => {
       issue({ subjects: ['e-2'] }),
       issue({ code: 'terrace-oversized', repair: 'shrink-terrace' }),
     ];
+    /* Each fault has to name something on the plan, or the loop is right to skip it. */
+    const plan = [{ ...ELEMENT, id: 'e-1' }, { ...ELEMENT, id: 'e-2' }, ELEMENT];
     const { tools, play } = harness([0], {
+      elements: () => plan,
       score: vi.fn(async () => score(0.5 + call++ * 0.1, many)),
     });
 
@@ -231,18 +250,54 @@ describe('the loop', () => {
     expect(outcome.verdict).toBe('nothing-to-fix');
   });
 
-  it('gives up on a fault the planner could not place, and tries the next', async () => {
-    const two = [issue({ subjects: ['e-1'] }), issue({ code: 'terrace-oversized', repair: 'shrink-terrace' })];
+  it('plays nothing at all when the server found nothing worth doing', async () => {
+    /*
+     * The pass the old loop could not have. It mapped a fault to one intent, took whatever the
+     * planner's first legal step was and *animated* it, and only then measured — so about half the
+     * time the user watched the designer try something a measurement taken beforehand would have
+     * ruled out. The search happens on the server now, and a correction that helps nothing is
+     * reported rather than performed.
+     */
+    const { tools, play, undo } = harness([0.7], { repair: vi.fn(async () => nothing()) });
+
+    const outcome = await runReviewLoop(tools);
+
+    expect(play).not.toHaveBeenCalled();
+    expect(undo).not.toHaveBeenCalled();
+    expect(outcome.passes[0]).toMatchObject({ played: false, kept: false, considered: 3 });
+    expect(outcome.passes[0]!.reason).toContain('makes the design better');
+    expect(outcome.verdict).toBe('nothing-worked');
+  });
+
+  it('gives up on a fault nothing could be done about, and tries the next', async () => {
+    const two = [
+      issue({ subjects: ['e-7'] }),
+      issue({ code: 'terrace-oversized', repair: 'shrink-terrace' }),
+    ];
     let call = 0;
     const { tools, play } = harness([0], {
       score: vi.fn(async () => score(0.5, two)),
-      propose: vi.fn(async () => (call++ === 0 ? [] : [change()])),
+      repair: vi.fn(async () => (call++ === 0 ? nothing() : repaired())),
     });
 
     await runReviewLoop(tools);
 
     // The first fault produced no change at all; the second was still tried.
     expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('says what it is doing, and only what it actually did', async () => {
+    const said: (string | null)[] = [];
+    const { tools } = harness([0.7, 0.9, 0.9]);
+
+    await runReviewLoop({ ...tools, narrate: (status) => said.push(status) });
+
+    /* Every line is read off something measured: the fault's own sentence, the server's own count. */
+    expect(said[0]).toBe('Checking the composition');
+    expect(said).toContain('The path to the store is 0.5 m wide.');
+    expect(said).toContain('Testing 4 corrections');
+    /* And it stops claiming to be doing anything when it is not. */
+    expect(said[said.length - 1]).toBeNull();
   });
 
   it('stops where the user stopped it, and keeps what it had', async () => {
@@ -279,7 +334,14 @@ describe('scoping a review to what the request touched', () => {
     role: 'feature',
     name: 'Path to the store',
     zone: 'back',
-    shape: { kind: 'polyline', width: 0.5, points: [{ x: 1, y: 1 }, { x: 6, y: 6 }] },
+    shape: {
+      kind: 'polyline',
+      width: 0.5,
+      points: [
+        { x: 1, y: 1 },
+        { x: 6, y: 6 },
+      ],
+    },
   } as DesignElement;
 
   const outside = issue({
@@ -289,50 +351,53 @@ describe('scoping a review to what the request touched', () => {
   });
 
   it('acts on a fault about an element the request changed', async () => {
-    const { tools, propose } = harness([0.7, 0.9, 0.9]);
+    const { tools, repair } = harness([0.7, 0.9, 0.9]);
 
     const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
 
-    expect(propose).toHaveBeenCalledTimes(1);
+    expect(repair).toHaveBeenCalledTimes(1);
     expect(outcome.passes).toHaveLength(1);
     expect(outcome.offers).toEqual([]);
   });
 
   it('offers a fault about something else rather than acting on it', async () => {
-    const { tools, propose } = harness([0.7], {
+    const { tools, repair } = harness([0.7], {
       score: vi.fn(async () => score(0.7, [outside])),
       elements: () => [ELEMENT, OTHER],
     });
 
     const outcome = await runReviewLoop({ ...tools, subjects: ['e-7'] });
 
-    expect(propose).not.toHaveBeenCalled();
+    expect(repair).not.toHaveBeenCalled();
     expect(outcome.passes).toEqual([]);
     expect(outcome.offers.map((offer) => offer.issue.message)).toEqual([
       'The path to the store is pinched.',
     ]);
-    /* The intents come with it, so accepting costs no second look at the plan. */
-    expect(outcome.offers[0]!.intents[0]).toMatchObject({ kind: 'resize' });
+    /*
+     * It carries the fault and nothing else. It used to carry the intents the reviewer had worked
+     * out at offer time, against a plan the user then went on editing — so accepting a minute later
+     * applied an answer to a garden that no longer existed.
+     */
+    expect(Object.keys(outcome.offers[0]!)).toEqual(['issue']);
   });
 
   it('acts on everything when no scope was given', async () => {
-    const { tools, propose } = harness([0.7, 0.9, 0.9], {
+    const { tools, repair } = harness([0.7, 0.9, 0.9], {
       score: vi.fn(async () => score(0.7, [outside])),
       elements: () => [ELEMENT, OTHER],
     });
 
     const outcome = await runReviewLoop(tools);
 
-    expect(propose).toHaveBeenCalledTimes(1);
+    expect(repair).toHaveBeenCalledTimes(1);
     /* Nothing is out of scope, so there is nothing to offer. */
     expect(outcome.offers).toEqual([]);
   });
 
   /**
    * `DesignIssue.subjects` is "element ids where they exist, else zone ids or feature names", so a
-   * fault about "the back garden" would produce an offer whose intents target an element that does
-   * not exist — the planner refuses every line and the chip does nothing. A chip that does nothing
-   * is worse than an absent one, because the user has to press it to find out.
+   * fault about "the back garden" names nothing the planner can change — and a chip for it does
+   * nothing, which is worse than an absent one because the user has to press it to find out.
    */
   it('drops an offer whose subjects are not element ids', async () => {
     const zoneFault = issue({ code: 'zone-fragmented', subjects: ['back'] });

@@ -1,11 +1,11 @@
 {
-  "version": "0b27a0b0a29d",
-  "generatedAt": "2026-09-13T14:22:05.756Z",
+  "version": "76ea8c4d81b7",
+  "generatedAt": "2026-09-16T09:52:45.026Z",
   "assets": [
     {
       "id": "face-concrete-slab",
       "variant": 1,
-      "file": "textures/face-concrete-slab-1.webp",
+      "file": "plan/textures/face-concrete-slab-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#aaa59e"
@@ -13,7 +13,7 @@
     {
       "id": "face-concrete-slab",
       "variant": 2,
-      "file": "textures/face-concrete-slab-2.webp",
+      "file": "plan/textures/face-concrete-slab-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#b2aea8"
@@ -21,7 +21,7 @@
     {
       "id": "face-concrete-slab",
       "variant": 3,
-      "file": "textures/face-concrete-slab-3.webp",
+      "file": "plan/textures/face-concrete-slab-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#cfcecf"
@@ -29,7 +29,7 @@
     {
       "id": "face-decking-wood",
       "variant": 1,
-      "file": "textures/face-decking-wood-1.webp",
+      "file": "plan/textures/face-decking-wood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#a96b34"
@@ -37,7 +37,7 @@
     {
       "id": "face-decking-wood",
       "variant": 2,
-      "file": "textures/face-decking-wood-2.webp",
+      "file": "plan/textures/face-decking-wood-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#a76129"
@@ -45,7 +45,7 @@
     {
       "id": "face-edging-brick",
       "variant": 1,
-      "file": "textures/face-edging-brick-1.webp",
+      "file": "plan/textures/face-edging-brick-1.webp",
       "widthPx": 256,
       "heightPx": 512,
       "meanColour": "#ab5833",
@@ -58,7 +58,7 @@
     {
       "id": "face-edging-brick",
       "variant": 2,
-      "file": "textures/face-edging-brick-2.webp",
+      "file": "plan/textures/face-edging-brick-2.webp",
       "widthPx": 256,
       "heightPx": 512,
       "meanColour": "#b46d48",
@@ -71,7 +71,7 @@
     {
       "id": "face-edging-setts",
       "variant": 1,
-      "file": "textures/face-edging-setts-1.webp",
+      "file": "plan/textures/face-edging-setts-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#777a7d",
@@ -84,7 +84,7 @@
     {
       "id": "face-edging-setts",
       "variant": 2,
-      "file": "textures/face-edging-setts-2.webp",
+      "file": "plan/textures/face-edging-setts-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#80858a",
@@ -97,7 +97,7 @@
     {
       "id": "face-hardwood",
       "variant": 1,
-      "file": "textures/face-hardwood-1.webp",
+      "file": "plan/textures/face-hardwood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#754120"
@@ -105,7 +105,7 @@
     {
       "id": "face-hardwood",
       "variant": 2,
-      "file": "textures/face-hardwood-2.webp",
+      "file": "plan/textures/face-hardwood-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#693a1d",
@@ -118,7 +118,7 @@
     {
       "id": "face-kerb-concrete",
       "variant": 1,
-      "file": "textures/face-kerb-concrete-1.webp",
+      "file": "plan/textures/face-kerb-concrete-1.webp",
       "widthPx": 768,
       "heightPx": 256,
       "meanColour": "#b2b1b0",
@@ -131,7 +131,7 @@
     {
       "id": "face-kerb-concrete",
       "variant": 2,
-      "file": "textures/face-kerb-concrete-2.webp",
+      "file": "plan/textures/face-kerb-concrete-2.webp",
       "widthPx": 768,
       "heightPx": 256,
       "meanColour": "#aeaca7",
@@ -144,7 +144,7 @@
     {
       "id": "face-painted-timber",
       "variant": 1,
-      "file": "textures/face-painted-timber-1.webp",
+      "file": "plan/textures/face-painted-timber-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#b0bba8"
@@ -152,7 +152,7 @@
     {
       "id": "face-painted-timber",
       "variant": 2,
-      "file": "textures/face-painted-timber-2.webp",
+      "file": "plan/textures/face-painted-timber-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#9ea59e",
@@ -165,7 +165,7 @@
     {
       "id": "face-porcelain-tile",
       "variant": 1,
-      "file": "textures/face-porcelain-tile-1.webp",
+      "file": "plan/textures/face-porcelain-tile-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#d7d2c8"
@@ -173,7 +173,7 @@
     {
       "id": "face-porcelain-tile",
       "variant": 2,
-      "file": "textures/face-porcelain-tile-2.webp",
+      "file": "plan/textures/face-porcelain-tile-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#c7c3bc"
@@ -181,7 +181,7 @@
     {
       "id": "face-sleeper-timber",
       "variant": 1,
-      "file": "textures/face-sleeper-timber-1.webp",
+      "file": "plan/textures/face-sleeper-timber-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#887971",
@@ -194,7 +194,7 @@
     {
       "id": "face-sleeper-timber",
       "variant": 2,
-      "file": "textures/face-sleeper-timber-2.webp",
+      "file": "plan/textures/face-sleeper-timber-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#8a837f",
@@ -207,7 +207,7 @@
     {
       "id": "face-softwood",
       "variant": 1,
-      "file": "textures/face-softwood-1.webp",
+      "file": "plan/textures/face-softwood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#c7bcaa"
@@ -215,7 +215,7 @@
     {
       "id": "face-softwood",
       "variant": 2,
-      "file": "textures/face-softwood-2.webp",
+      "file": "plan/textures/face-softwood-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
       "meanColour": "#c0b696",
@@ -228,7 +228,7 @@
     {
       "id": "face-stepping-stone",
       "variant": 1,
-      "file": "textures/face-stepping-stone-1.webp",
+      "file": "plan/textures/face-stepping-stone-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#a39885"
@@ -236,7 +236,7 @@
     {
       "id": "face-stepping-stone",
       "variant": 2,
-      "file": "textures/face-stepping-stone-2.webp",
+      "file": "plan/textures/face-stepping-stone-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#a19583"
@@ -244,7 +244,7 @@
     {
       "id": "face-stepping-stone",
       "variant": 3,
-      "file": "textures/face-stepping-stone-3.webp",
+      "file": "plan/textures/face-stepping-stone-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#b7a890"
@@ -252,7 +252,7 @@
     {
       "id": "face-stone-paver",
       "variant": 1,
-      "file": "textures/face-stone-paver-1.webp",
+      "file": "plan/textures/face-stone-paver-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#bab1a0"
@@ -260,7 +260,7 @@
     {
       "id": "face-stone-paver",
       "variant": 2,
-      "file": "textures/face-stone-paver-2.webp",
+      "file": "plan/textures/face-stone-paver-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#bdb6a9"
@@ -268,7 +268,7 @@
     {
       "id": "face-stone-paver",
       "variant": 3,
-      "file": "textures/face-stone-paver-3.webp",
+      "file": "plan/textures/face-stone-paver-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#cabfac"
@@ -276,7 +276,7 @@
     {
       "id": "face-stone-paver",
       "variant": 4,
-      "file": "textures/face-stone-paver-4.webp",
+      "file": "plan/textures/face-stone-paver-4.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#c4bdb2"
@@ -284,7 +284,7 @@
     {
       "id": "face-stone-setts",
       "variant": 1,
-      "file": "textures/face-stone-setts-1.webp",
+      "file": "plan/textures/face-stone-setts-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#8b8882",
@@ -297,7 +297,7 @@
     {
       "id": "face-stone-setts",
       "variant": 2,
-      "file": "textures/face-stone-setts-2.webp",
+      "file": "plan/textures/face-stone-setts-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#7a7d7b",
@@ -310,7 +310,7 @@
     {
       "id": "face-stone-setts",
       "variant": 3,
-      "file": "textures/face-stone-setts-3.webp",
+      "file": "plan/textures/face-stone-setts-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#797876",
@@ -323,7 +323,7 @@
     {
       "id": "face-walling-stone",
       "variant": 1,
-      "file": "textures/face-walling-stone-1.webp",
+      "file": "plan/textures/face-walling-stone-1.webp",
       "widthPx": 768,
       "heightPx": 256,
       "meanColour": "#a39d85",
@@ -336,7 +336,7 @@
     {
       "id": "face-walling-stone",
       "variant": 2,
-      "file": "textures/face-walling-stone-2.webp",
+      "file": "plan/textures/face-walling-stone-2.webp",
       "widthPx": 768,
       "heightPx": 256,
       "meanColour": "#a8a294",
@@ -349,7 +349,7 @@
     {
       "id": "face-walling-stone",
       "variant": 3,
-      "file": "textures/face-walling-stone-3.webp",
+      "file": "plan/textures/face-walling-stone-3.webp",
       "widthPx": 768,
       "heightPx": 256,
       "meanColour": "#a6a393",
@@ -362,7 +362,7 @@
     {
       "id": "feature-hot-tub",
       "variant": 1,
-      "file": "sprites/feature-hot-tub-1.webp",
+      "file": "plan/sprites/feature-hot-tub-1.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#8b99a1",
@@ -376,7 +376,7 @@
     {
       "id": "feature-hot-tub",
       "variant": 2,
-      "file": "sprites/feature-hot-tub-2.webp",
+      "file": "plan/sprites/feature-hot-tub-2.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#8899a0",
@@ -390,7 +390,7 @@
     {
       "id": "furniture-bbq",
       "variant": 1,
-      "file": "sprites/furniture-bbq-1.webp",
+      "file": "plan/sprites/furniture-bbq-1.webp",
       "widthPx": 512,
       "heightPx": 256,
       "meanColour": "#a8a6a2",
@@ -399,7 +399,7 @@
     {
       "id": "furniture-bench",
       "variant": 1,
-      "file": "sprites/furniture-bench-1.webp",
+      "file": "plan/sprites/furniture-bench-1.webp",
       "widthPx": 512,
       "heightPx": 192,
       "meanColour": "#ab713b",
@@ -408,7 +408,7 @@
     {
       "id": "furniture-dining-4",
       "variant": 1,
-      "file": "sprites/furniture-dining-4-1.webp",
+      "file": "plan/sprites/furniture-dining-4-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#aa7c4c",
@@ -417,7 +417,7 @@
     {
       "id": "furniture-dining-4",
       "variant": 2,
-      "file": "sprites/furniture-dining-4-2.webp",
+      "file": "plan/sprites/furniture-dining-4-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#707170",
@@ -426,7 +426,7 @@
     {
       "id": "furniture-dining-6",
       "variant": 1,
-      "file": "sprites/furniture-dining-6-1.webp",
+      "file": "plan/sprites/furniture-dining-6-1.webp",
       "widthPx": 512,
       "heightPx": 384,
       "meanColour": "#c2894b",
@@ -435,7 +435,7 @@
     {
       "id": "furniture-fire-pit",
       "variant": 1,
-      "file": "sprites/furniture-fire-pit-1.webp",
+      "file": "plan/sprites/furniture-fire-pit-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#2e1b17",
@@ -444,7 +444,7 @@
     {
       "id": "furniture-lounger",
       "variant": 1,
-      "file": "sprites/furniture-lounger-1.webp",
+      "file": "plan/sprites/furniture-lounger-1.webp",
       "widthPx": 256,
       "heightPx": 512,
       "meanColour": "#e8ddcd",
@@ -453,7 +453,7 @@
     {
       "id": "furniture-lounger",
       "variant": 2,
-      "file": "sprites/furniture-lounger-2.webp",
+      "file": "plan/sprites/furniture-lounger-2.webp",
       "widthPx": 256,
       "heightPx": 512,
       "meanColour": "#8a7d6f",
@@ -462,7 +462,7 @@
     {
       "id": "furniture-parasol",
       "variant": 1,
-      "file": "sprites/furniture-parasol-1.webp",
+      "file": "plan/sprites/furniture-parasol-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#e1d8cb",
@@ -471,7 +471,7 @@
     {
       "id": "furniture-planter",
       "variant": 1,
-      "file": "sprites/furniture-planter-1.webp",
+      "file": "plan/sprites/furniture-planter-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#54501e",
@@ -480,7 +480,7 @@
     {
       "id": "furniture-planter",
       "variant": 2,
-      "file": "sprites/furniture-planter-2.webp",
+      "file": "plan/sprites/furniture-planter-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#7f836f",
@@ -489,7 +489,7 @@
     {
       "id": "furniture-sofa-set",
       "variant": 1,
-      "file": "sprites/furniture-sofa-set-1.webp",
+      "file": "plan/sprites/furniture-sofa-set-1.webp",
       "widthPx": 512,
       "heightPx": 410,
       "meanColour": "#8b8580",
@@ -498,7 +498,7 @@
     {
       "id": "furniture-sofa-set",
       "variant": 2,
-      "file": "sprites/furniture-sofa-set-2.webp",
+      "file": "plan/sprites/furniture-sofa-set-2.webp",
       "widthPx": 512,
       "heightPx": 410,
       "meanColour": "#af957c",
@@ -507,7 +507,7 @@
     {
       "id": "fx-light-pool",
       "variant": 1,
-      "file": "sprites/fx-light-pool-1.webp",
+      "file": "plan/sprites/fx-light-pool-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#ffecc6",
@@ -521,7 +521,7 @@
     {
       "id": "fx-soft-shadow",
       "variant": 1,
-      "file": "sprites/fx-soft-shadow-1.webp",
+      "file": "plan/sprites/fx-soft-shadow-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#000000",
@@ -530,7 +530,7 @@
     {
       "id": "hedge-crown-beech",
       "variant": 1,
-      "file": "sprites/hedge-crown-beech-1.webp",
+      "file": "plan/sprites/hedge-crown-beech-1.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#536a2a",
@@ -544,7 +544,7 @@
     {
       "id": "hedge-crown-beech",
       "variant": 2,
-      "file": "sprites/hedge-crown-beech-2.webp",
+      "file": "plan/sprites/hedge-crown-beech-2.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#4d652a",
@@ -558,7 +558,7 @@
     {
       "id": "hedge-crown-yew",
       "variant": 1,
-      "file": "sprites/hedge-crown-yew-1.webp",
+      "file": "plan/sprites/hedge-crown-yew-1.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#36472d",
@@ -572,7 +572,7 @@
     {
       "id": "hedge-crown-yew",
       "variant": 2,
-      "file": "sprites/hedge-crown-yew-2.webp",
+      "file": "plan/sprites/hedge-crown-yew-2.webp",
       "widthPx": 384,
       "heightPx": 384,
       "meanColour": "#304226",
@@ -586,7 +586,7 @@
     {
       "id": "light-bollard",
       "variant": 1,
-      "file": "sprites/light-bollard-1.webp",
+      "file": "plan/sprites/light-bollard-1.webp",
       "widthPx": 192,
       "heightPx": 192,
       "meanColour": "#313232",
@@ -600,7 +600,7 @@
     {
       "id": "light-bollard",
       "variant": 2,
-      "file": "sprites/light-bollard-2.webp",
+      "file": "plan/sprites/light-bollard-2.webp",
       "widthPx": 192,
       "heightPx": 192,
       "meanColour": "#786148",
@@ -614,7 +614,7 @@
     {
       "id": "light-recessed",
       "variant": 1,
-      "file": "sprites/light-recessed-1.webp",
+      "file": "plan/sprites/light-recessed-1.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#868583",
@@ -628,7 +628,7 @@
     {
       "id": "light-recessed",
       "variant": 2,
-      "file": "sprites/light-recessed-2.webp",
+      "file": "plan/sprites/light-recessed-2.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#897351",
@@ -642,7 +642,7 @@
     {
       "id": "light-spike",
       "variant": 1,
-      "file": "sprites/light-spike-1.webp",
+      "file": "plan/sprites/light-spike-1.webp",
       "widthPx": 192,
       "heightPx": 192,
       "meanColour": "#5b5b5b",
@@ -656,7 +656,7 @@
     {
       "id": "light-spike",
       "variant": 2,
-      "file": "sprites/light-spike-2.webp",
+      "file": "plan/sprites/light-spike-2.webp",
       "widthPx": 192,
       "heightPx": 192,
       "meanColour": "#7f7e7c",
@@ -670,7 +670,7 @@
     {
       "id": "light-wall",
       "variant": 1,
-      "file": "sprites/light-wall-1.webp",
+      "file": "plan/sprites/light-wall-1.webp",
       "widthPx": 256,
       "heightPx": 140,
       "meanColour": "#383839",
@@ -684,7 +684,7 @@
     {
       "id": "light-wall",
       "variant": 2,
-      "file": "sprites/light-wall-2.webp",
+      "file": "plan/sprites/light-wall-2.webp",
       "widthPx": 256,
       "heightPx": 140,
       "meanColour": "#9f9c9a",
@@ -698,7 +698,7 @@
     {
       "id": "plant-flower",
       "variant": 1,
-      "file": "sprites/plant-flower-1.webp",
+      "file": "plan/sprites/plant-flower-1.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#9faa79",
@@ -707,7 +707,7 @@
     {
       "id": "plant-flower",
       "variant": 2,
-      "file": "sprites/plant-flower-2.webp",
+      "file": "plan/sprites/plant-flower-2.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#919a29",
@@ -716,7 +716,7 @@
     {
       "id": "plant-flower",
       "variant": 3,
-      "file": "sprites/plant-flower-3.webp",
+      "file": "plan/sprites/plant-flower-3.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#6b605b",
@@ -725,7 +725,7 @@
     {
       "id": "plant-flower",
       "variant": 4,
-      "file": "sprites/plant-flower-4.webp",
+      "file": "plan/sprites/plant-flower-4.webp",
       "widthPx": 128,
       "heightPx": 128,
       "meanColour": "#92481d",
@@ -734,7 +734,7 @@
     {
       "id": "plant-grass",
       "variant": 1,
-      "file": "sprites/plant-grass-1.webp",
+      "file": "plan/sprites/plant-grass-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#c9c79b",
@@ -743,7 +743,7 @@
     {
       "id": "plant-grass",
       "variant": 2,
-      "file": "sprites/plant-grass-2.webp",
+      "file": "plan/sprites/plant-grass-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#afb18e",
@@ -752,7 +752,7 @@
     {
       "id": "plant-grass",
       "variant": 3,
-      "file": "sprites/plant-grass-3.webp",
+      "file": "plan/sprites/plant-grass-3.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#cbcaa0",
@@ -761,7 +761,7 @@
     {
       "id": "plant-grass",
       "variant": 4,
-      "file": "sprites/plant-grass-4.webp",
+      "file": "plan/sprites/plant-grass-4.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#a9b181",
@@ -770,7 +770,7 @@
     {
       "id": "plant-grass",
       "variant": 5,
-      "file": "sprites/plant-grass-5.webp",
+      "file": "plan/sprites/plant-grass-5.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#adaf7f",
@@ -779,7 +779,7 @@
     {
       "id": "plant-grass-tall",
       "variant": 1,
-      "file": "sprites/plant-grass-tall-1.webp",
+      "file": "plan/sprites/plant-grass-tall-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#7a7952",
@@ -793,7 +793,7 @@
     {
       "id": "plant-grass-tall",
       "variant": 2,
-      "file": "sprites/plant-grass-tall-2.webp",
+      "file": "plan/sprites/plant-grass-tall-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#757653",
@@ -807,7 +807,7 @@
     {
       "id": "plant-grass-tall",
       "variant": 3,
-      "file": "sprites/plant-grass-tall-3.webp",
+      "file": "plan/sprites/plant-grass-tall-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#6c7453",
@@ -821,7 +821,7 @@
     {
       "id": "plant-ground-cover",
       "variant": 1,
-      "file": "sprites/plant-ground-cover-1.webp",
+      "file": "plan/sprites/plant-ground-cover-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#517f32",
@@ -830,7 +830,7 @@
     {
       "id": "plant-ground-cover",
       "variant": 2,
-      "file": "sprites/plant-ground-cover-2.webp",
+      "file": "plan/sprites/plant-ground-cover-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#51603b",
@@ -839,7 +839,7 @@
     {
       "id": "plant-ground-cover",
       "variant": 3,
-      "file": "sprites/plant-ground-cover-3.webp",
+      "file": "plan/sprites/plant-ground-cover-3.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#53812f",
@@ -848,7 +848,7 @@
     {
       "id": "plant-ground-cover",
       "variant": 4,
-      "file": "sprites/plant-ground-cover-4.webp",
+      "file": "plan/sprites/plant-ground-cover-4.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#46672f",
@@ -857,7 +857,7 @@
     {
       "id": "plant-ground-cover-spreading",
       "variant": 1,
-      "file": "sprites/plant-ground-cover-spreading-1.webp",
+      "file": "plan/sprites/plant-ground-cover-spreading-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5d6e40",
@@ -871,7 +871,7 @@
     {
       "id": "plant-ground-cover-spreading",
       "variant": 2,
-      "file": "sprites/plant-ground-cover-spreading-2.webp",
+      "file": "plan/sprites/plant-ground-cover-spreading-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#676f4b",
@@ -885,7 +885,7 @@
     {
       "id": "plant-ground-cover-spreading",
       "variant": 3,
-      "file": "sprites/plant-ground-cover-spreading-3.webp",
+      "file": "plan/sprites/plant-ground-cover-spreading-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#6a7655",
@@ -899,7 +899,7 @@
     {
       "id": "plant-perennial",
       "variant": 1,
-      "file": "sprites/plant-perennial-1.webp",
+      "file": "plan/sprites/plant-perennial-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#70696a",
@@ -908,7 +908,7 @@
     {
       "id": "plant-perennial",
       "variant": 2,
-      "file": "sprites/plant-perennial-2.webp",
+      "file": "plan/sprites/plant-perennial-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#54604c",
@@ -917,7 +917,7 @@
     {
       "id": "plant-perennial",
       "variant": 3,
-      "file": "sprites/plant-perennial-3.webp",
+      "file": "plan/sprites/plant-perennial-3.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#718050",
@@ -926,7 +926,7 @@
     {
       "id": "plant-perennial",
       "variant": 4,
-      "file": "sprites/plant-perennial-4.webp",
+      "file": "plan/sprites/plant-perennial-4.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#7d7756",
@@ -935,7 +935,7 @@
     {
       "id": "plant-perennial",
       "variant": 5,
-      "file": "sprites/plant-perennial-5.webp",
+      "file": "plan/sprites/plant-perennial-5.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#647562",
@@ -944,7 +944,7 @@
     {
       "id": "plant-perennial",
       "variant": 6,
-      "file": "sprites/plant-perennial-6.webp",
+      "file": "plan/sprites/plant-perennial-6.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#698531",
@@ -953,7 +953,7 @@
     {
       "id": "plant-perennial-ferny",
       "variant": 1,
-      "file": "sprites/plant-perennial-ferny-1.webp",
+      "file": "plan/sprites/plant-perennial-ferny-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5b7141",
@@ -967,7 +967,7 @@
     {
       "id": "plant-perennial-ferny",
       "variant": 2,
-      "file": "sprites/plant-perennial-ferny-2.webp",
+      "file": "plan/sprites/plant-perennial-ferny-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#757b53",
@@ -981,7 +981,7 @@
     {
       "id": "plant-perennial-ferny",
       "variant": 3,
-      "file": "sprites/plant-perennial-ferny-3.webp",
+      "file": "plan/sprites/plant-perennial-ferny-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#657951",
@@ -995,7 +995,7 @@
     {
       "id": "plant-perennial-spire",
       "variant": 1,
-      "file": "sprites/plant-perennial-spire-1.webp",
+      "file": "plan/sprites/plant-perennial-spire-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5c6f49",
@@ -1009,7 +1009,7 @@
     {
       "id": "plant-perennial-spire",
       "variant": 2,
-      "file": "sprites/plant-perennial-spire-2.webp",
+      "file": "plan/sprites/plant-perennial-spire-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5c7651",
@@ -1023,7 +1023,7 @@
     {
       "id": "plant-perennial-spire",
       "variant": 3,
-      "file": "sprites/plant-perennial-spire-3.webp",
+      "file": "plan/sprites/plant-perennial-spire-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5b7157",
@@ -1037,7 +1037,7 @@
     {
       "id": "plant-perennial-upright",
       "variant": 1,
-      "file": "sprites/plant-perennial-upright-1.webp",
+      "file": "plan/sprites/plant-perennial-upright-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#536a48",
@@ -1051,7 +1051,7 @@
     {
       "id": "plant-perennial-upright",
       "variant": 2,
-      "file": "sprites/plant-perennial-upright-2.webp",
+      "file": "plan/sprites/plant-perennial-upright-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5d6b4f",
@@ -1065,7 +1065,7 @@
     {
       "id": "plant-perennial-upright",
       "variant": 3,
-      "file": "sprites/plant-perennial-upright-3.webp",
+      "file": "plan/sprites/plant-perennial-upright-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#646941",
@@ -1079,7 +1079,7 @@
     {
       "id": "plant-shrub",
       "variant": 1,
-      "file": "sprites/plant-shrub-1.webp",
+      "file": "plan/sprites/plant-shrub-1.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#63923a",
@@ -1088,7 +1088,7 @@
     {
       "id": "plant-shrub",
       "variant": 2,
-      "file": "sprites/plant-shrub-2.webp",
+      "file": "plan/sprites/plant-shrub-2.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#5c7d39",
@@ -1097,7 +1097,7 @@
     {
       "id": "plant-shrub",
       "variant": 3,
-      "file": "sprites/plant-shrub-3.webp",
+      "file": "plan/sprites/plant-shrub-3.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#557a35",
@@ -1106,7 +1106,7 @@
     {
       "id": "plant-shrub",
       "variant": 4,
-      "file": "sprites/plant-shrub-4.webp",
+      "file": "plan/sprites/plant-shrub-4.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#5b792f",
@@ -1115,7 +1115,7 @@
     {
       "id": "plant-shrub",
       "variant": 5,
-      "file": "sprites/plant-shrub-5.webp",
+      "file": "plan/sprites/plant-shrub-5.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#64882c",
@@ -1124,7 +1124,7 @@
     {
       "id": "plant-shrub",
       "variant": 6,
-      "file": "sprites/plant-shrub-6.webp",
+      "file": "plan/sprites/plant-shrub-6.webp",
       "widthPx": 256,
       "heightPx": 256,
       "meanColour": "#578131",
@@ -1133,7 +1133,7 @@
     {
       "id": "plant-shrub-architectural",
       "variant": 1,
-      "file": "sprites/plant-shrub-architectural-1.webp",
+      "file": "plan/sprites/plant-shrub-architectural-1.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#5a6f54",
@@ -1147,7 +1147,7 @@
     {
       "id": "plant-shrub-architectural",
       "variant": 2,
-      "file": "sprites/plant-shrub-architectural-2.webp",
+      "file": "plan/sprites/plant-shrub-architectural-2.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#6c6c58",
@@ -1161,7 +1161,7 @@
     {
       "id": "plant-shrub-architectural",
       "variant": 3,
-      "file": "sprites/plant-shrub-architectural-3.webp",
+      "file": "plan/sprites/plant-shrub-architectural-3.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#6f8264",
@@ -1175,7 +1175,7 @@
     {
       "id": "plant-shrub-deciduous",
       "variant": 1,
-      "file": "sprites/plant-shrub-deciduous-1.webp",
+      "file": "plan/sprites/plant-shrub-deciduous-1.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#667446",
@@ -1189,7 +1189,7 @@
     {
       "id": "plant-shrub-deciduous",
       "variant": 2,
-      "file": "sprites/plant-shrub-deciduous-2.webp",
+      "file": "plan/sprites/plant-shrub-deciduous-2.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#65683e",
@@ -1203,7 +1203,7 @@
     {
       "id": "plant-shrub-deciduous",
       "variant": 3,
-      "file": "sprites/plant-shrub-deciduous-3.webp",
+      "file": "plan/sprites/plant-shrub-deciduous-3.webp",
       "widthPx": 640,
       "heightPx": 640,
       "meanColour": "#5f7250",
@@ -1217,7 +1217,7 @@
     {
       "id": "plant-shrub-topiary",
       "variant": 1,
-      "file": "sprites/plant-shrub-topiary-1.webp",
+      "file": "plan/sprites/plant-shrub-topiary-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#415e25",
@@ -1231,7 +1231,7 @@
     {
       "id": "plant-shrub-topiary",
       "variant": 2,
-      "file": "sprites/plant-shrub-topiary-2.webp",
+      "file": "plan/sprites/plant-shrub-topiary-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#3d532e",
@@ -1245,7 +1245,7 @@
     {
       "id": "play-raised-bed",
       "variant": 1,
-      "file": "sprites/play-raised-bed-1.webp",
+      "file": "plan/sprites/play-raised-bed-1.webp",
       "widthPx": 512,
       "heightPx": 256,
       "meanColour": "#4f4f18",
@@ -1254,7 +1254,7 @@
     {
       "id": "play-slide",
       "variant": 1,
-      "file": "sprites/play-slide-1.webp",
+      "file": "plan/sprites/play-slide-1.webp",
       "widthPx": 256,
       "heightPx": 555,
       "meanColour": "#767d3d",
@@ -1263,7 +1263,7 @@
     {
       "id": "play-swing",
       "variant": 1,
-      "file": "sprites/play-swing-1.webp",
+      "file": "plan/sprites/play-swing-1.webp",
       "widthPx": 512,
       "heightPx": 342,
       "meanColour": "#8a6b4e",
@@ -1272,7 +1272,7 @@
     {
       "id": "play-trampoline",
       "variant": 1,
-      "file": "sprites/play-trampoline-1.webp",
+      "file": "plan/sprites/play-trampoline-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#394b5e",
@@ -1281,7 +1281,7 @@
     {
       "id": "skin-fence-boards",
       "variant": 1,
-      "file": "textures/skin-fence-boards-1.webp",
+      "file": "elevated/textures/skin-fence-boards-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#a89e8f",
@@ -1295,7 +1295,7 @@
     {
       "id": "skin-render",
       "variant": 1,
-      "file": "textures/skin-render-1.webp",
+      "file": "elevated/textures/skin-render-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#ebe5db",
@@ -1309,7 +1309,7 @@
     {
       "id": "skin-roof-felt",
       "variant": 1,
-      "file": "textures/skin-roof-felt-1.webp",
+      "file": "elevated/textures/skin-roof-felt-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#4c4c4d",
@@ -1323,7 +1323,7 @@
     {
       "id": "skin-roof-slate",
       "variant": 1,
-      "file": "textures/skin-roof-slate-1.webp",
+      "file": "elevated/textures/skin-roof-slate-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#666e74",
@@ -1337,7 +1337,7 @@
     {
       "id": "tex-artificial-turf",
       "variant": 1,
-      "file": "textures/tex-artificial-turf-1.webp",
+      "file": "plan/textures/tex-artificial-turf-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#457a14",
@@ -1346,7 +1346,7 @@
     {
       "id": "tex-bark-mulch",
       "variant": 1,
-      "file": "textures/tex-bark-mulch-1.webp",
+      "file": "plan/textures/tex-bark-mulch-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#693d27",
@@ -1355,7 +1355,7 @@
     {
       "id": "tex-decorative-gravel",
       "variant": 1,
-      "file": "textures/tex-decorative-gravel-1.webp",
+      "file": "plan/textures/tex-decorative-gravel-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#cac7bd",
@@ -1364,7 +1364,7 @@
     {
       "id": "tex-gravel-paving",
       "variant": 1,
-      "file": "textures/tex-gravel-paving-1.webp",
+      "file": "plan/textures/tex-gravel-paving-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#a39988",
@@ -1373,7 +1373,7 @@
     {
       "id": "tex-hardwearing-turf",
       "variant": 1,
-      "file": "textures/tex-hardwearing-turf-1.webp",
+      "file": "plan/textures/tex-hardwearing-turf-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#3a5518",
@@ -1382,7 +1382,7 @@
     {
       "id": "tex-hedge-top",
       "variant": 1,
-      "file": "textures/tex-hedge-top-1.webp",
+      "file": "plan/textures/tex-hedge-top-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#20311d",
@@ -1391,7 +1391,7 @@
     {
       "id": "tex-house-floor",
       "variant": 1,
-      "file": "textures/tex-house-floor-1.webp",
+      "file": "plan/textures/tex-house-floor-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#d5be9d",
@@ -1400,7 +1400,7 @@
     {
       "id": "tex-meadow-grass",
       "variant": 1,
-      "file": "textures/tex-meadow-grass-1.webp",
+      "file": "plan/textures/tex-meadow-grass-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#617a22",
@@ -1409,7 +1409,7 @@
     {
       "id": "tex-play-bark",
       "variant": 1,
-      "file": "textures/tex-play-bark-1.webp",
+      "file": "plan/textures/tex-play-bark-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#ab773e",
@@ -1418,7 +1418,7 @@
     {
       "id": "tex-pond-water",
       "variant": 1,
-      "file": "textures/tex-pond-water-1.webp",
+      "file": "plan/textures/tex-pond-water-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#40635c",
@@ -1427,7 +1427,7 @@
     {
       "id": "tex-pool-water",
       "variant": 1,
-      "file": "textures/tex-pool-water-1.webp",
+      "file": "plan/textures/tex-pool-water-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#446d7d",
@@ -1436,7 +1436,7 @@
     {
       "id": "tex-slate-chippings",
       "variant": 1,
-      "file": "textures/tex-slate-chippings-1.webp",
+      "file": "plan/textures/tex-slate-chippings-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5a6b7c",
@@ -1445,7 +1445,7 @@
     {
       "id": "tex-soil",
       "variant": 1,
-      "file": "textures/tex-soil-1.webp",
+      "file": "plan/textures/tex-soil-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#2c251f",
@@ -1454,7 +1454,7 @@
     {
       "id": "tex-standard-turf",
       "variant": 1,
-      "file": "textures/tex-standard-turf-1.webp",
+      "file": "plan/textures/tex-standard-turf-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#436d1e",
@@ -1463,7 +1463,7 @@
     {
       "id": "tree-canopy",
       "variant": 1,
-      "file": "sprites/tree-canopy-1.webp",
+      "file": "plan/sprites/tree-canopy-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#7d9d3e",
@@ -1472,7 +1472,7 @@
     {
       "id": "tree-canopy",
       "variant": 2,
-      "file": "sprites/tree-canopy-2.webp",
+      "file": "plan/sprites/tree-canopy-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#528116",
@@ -1481,7 +1481,7 @@
     {
       "id": "tree-canopy",
       "variant": 3,
-      "file": "sprites/tree-canopy-3.webp",
+      "file": "plan/sprites/tree-canopy-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#74882e",
@@ -1490,7 +1490,7 @@
     {
       "id": "tree-canopy",
       "variant": 4,
-      "file": "sprites/tree-canopy-4.webp",
+      "file": "plan/sprites/tree-canopy-4.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#688e25",
@@ -1499,7 +1499,7 @@
     {
       "id": "tree-canopy",
       "variant": 5,
-      "file": "sprites/tree-canopy-5.webp",
+      "file": "plan/sprites/tree-canopy-5.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#658e33",
@@ -1508,7 +1508,7 @@
     {
       "id": "tree-canopy",
       "variant": 6,
-      "file": "sprites/tree-canopy-6.webp",
+      "file": "plan/sprites/tree-canopy-6.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#5c762a",
@@ -1517,7 +1517,7 @@
     {
       "id": "tree-conifer",
       "variant": 1,
-      "file": "sprites/tree-conifer-1.webp",
+      "file": "plan/sprites/tree-conifer-1.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#28391e",
@@ -1526,7 +1526,7 @@
     {
       "id": "tree-conifer",
       "variant": 2,
-      "file": "sprites/tree-conifer-2.webp",
+      "file": "plan/sprites/tree-conifer-2.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#21321a",
@@ -1535,7 +1535,7 @@
     {
       "id": "tree-conifer",
       "variant": 3,
-      "file": "sprites/tree-conifer-3.webp",
+      "file": "plan/sprites/tree-conifer-3.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#374c31",
@@ -1549,7 +1549,7 @@
     {
       "id": "tree-conifer",
       "variant": 4,
-      "file": "sprites/tree-conifer-4.webp",
+      "file": "plan/sprites/tree-conifer-4.webp",
       "widthPx": 512,
       "heightPx": 512,
       "meanColour": "#394933",
@@ -1563,7 +1563,7 @@
     {
       "id": "tree-fruit",
       "variant": 1,
-      "file": "sprites/tree-fruit-1.webp",
+      "file": "plan/sprites/tree-fruit-1.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#5a6240",
@@ -1577,7 +1577,7 @@
     {
       "id": "tree-fruit",
       "variant": 2,
-      "file": "sprites/tree-fruit-2.webp",
+      "file": "plan/sprites/tree-fruit-2.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#545f36",
@@ -1591,7 +1591,7 @@
     {
       "id": "tree-japanese-maple",
       "variant": 1,
-      "file": "sprites/tree-japanese-maple-1.webp",
+      "file": "plan/sprites/tree-japanese-maple-1.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#6d2c33",
@@ -1600,7 +1600,7 @@
     {
       "id": "tree-japanese-maple",
       "variant": 2,
-      "file": "sprites/tree-japanese-maple-2.webp",
+      "file": "plan/sprites/tree-japanese-maple-2.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#8d2a32",
@@ -1614,7 +1614,7 @@
     {
       "id": "tree-japanese-maple",
       "variant": 3,
-      "file": "sprites/tree-japanese-maple-3.webp",
+      "file": "plan/sprites/tree-japanese-maple-3.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#893333",
@@ -1628,7 +1628,7 @@
     {
       "id": "tree-multistem",
       "variant": 1,
-      "file": "sprites/tree-multistem-1.webp",
+      "file": "plan/sprites/tree-multistem-1.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#626d44",
@@ -1642,7 +1642,7 @@
     {
       "id": "tree-multistem",
       "variant": 2,
-      "file": "sprites/tree-multistem-2.webp",
+      "file": "plan/sprites/tree-multistem-2.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#617248",
@@ -1656,7 +1656,7 @@
     {
       "id": "tree-ornamental",
       "variant": 1,
-      "file": "sprites/tree-ornamental-1.webp",
+      "file": "plan/sprites/tree-ornamental-1.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#8c795f",
@@ -1670,7 +1670,7 @@
     {
       "id": "tree-ornamental",
       "variant": 2,
-      "file": "sprites/tree-ornamental-2.webp",
+      "file": "plan/sprites/tree-ornamental-2.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#726d40",
@@ -1684,7 +1684,7 @@
     {
       "id": "tree-ornamental",
       "variant": 3,
-      "file": "sprites/tree-ornamental-3.webp",
+      "file": "plan/sprites/tree-ornamental-3.webp",
       "widthPx": 768,
       "heightPx": 768,
       "meanColour": "#767c53",
@@ -1698,7 +1698,7 @@
     {
       "id": "vis-bbq",
       "variant": 1,
-      "file": "sprites/vis-bbq-1.webp",
+      "file": "elevated/sprites/vis-bbq-1.webp",
       "widthPx": 768,
       "heightPx": 489,
       "meanColour": "#8d8c8c",
@@ -1718,7 +1718,7 @@
     {
       "id": "vis-bench",
       "variant": 1,
-      "file": "sprites/vis-bench-1.webp",
+      "file": "elevated/sprites/vis-bench-1.webp",
       "widthPx": 768,
       "heightPx": 380,
       "meanColour": "#9b8167",
@@ -1738,7 +1738,7 @@
     {
       "id": "vis-dining-6",
       "variant": 1,
-      "file": "sprites/vis-dining-6-1.webp",
+      "file": "elevated/sprites/vis-dining-6-1.webp",
       "widthPx": 768,
       "heightPx": 614,
       "meanColour": "#ab8b6d",
@@ -1758,7 +1758,7 @@
     {
       "id": "vis-fire-pit",
       "variant": 1,
-      "file": "sprites/vis-fire-pit-1.webp",
+      "file": "elevated/sprites/vis-fire-pit-1.webp",
       "widthPx": 717,
       "heightPx": 768,
       "meanColour": "#715c54",
@@ -1776,9 +1776,69 @@
       }
     },
     {
+      "id": "vis-flower",
+      "variant": 1,
+      "file": "elevated/sprites/vis-flower-1.webp",
+      "widthPx": 393,
+      "heightPx": 512,
+      "meanColour": "#7f885f",
+      "opaqueBounds": {
+        "minX": 0.092,
+        "minY": 0,
+        "maxX": 0.908,
+        "maxY": 1
+      },
+      "footAlpha": 0.017,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:28:26.223Z",
+        "promptHash": "afb75e3268fc"
+      }
+    },
+    {
+      "id": "vis-flower",
+      "variant": 2,
+      "file": "elevated/sprites/vis-flower-2.webp",
+      "widthPx": 393,
+      "heightPx": 512,
+      "meanColour": "#84813b",
+      "opaqueBounds": {
+        "minX": 0.046,
+        "minY": 0,
+        "maxX": 0.954,
+        "maxY": 1
+      },
+      "footAlpha": 0.04,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:28:26.308Z",
+        "promptHash": "996303d38a3f"
+      }
+    },
+    {
+      "id": "vis-flower",
+      "variant": 3,
+      "file": "elevated/sprites/vis-flower-3.webp",
+      "widthPx": 393,
+      "heightPx": 512,
+      "meanColour": "#734e44",
+      "opaqueBounds": {
+        "minX": 0.036,
+        "minY": 0,
+        "maxX": 0.962,
+        "maxY": 1
+      },
+      "footAlpha": 0.048,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:29:05.550Z",
+        "promptHash": "26f19b0dfa88"
+      }
+    },
+    {
       "id": "vis-grass",
       "variant": 1,
-      "file": "sprites/vis-grass-1.webp",
+      "file": "elevated/sprites/vis-grass-1.webp",
       "widthPx": 349,
       "heightPx": 512,
       "meanColour": "#a1976e",
@@ -1798,7 +1858,7 @@
     {
       "id": "vis-grass",
       "variant": 2,
-      "file": "sprites/vis-grass-2.webp",
+      "file": "elevated/sprites/vis-grass-2.webp",
       "widthPx": 349,
       "heightPx": 512,
       "meanColour": "#797551",
@@ -1818,7 +1878,7 @@
     {
       "id": "vis-grass",
       "variant": 3,
-      "file": "sprites/vis-grass-3.webp",
+      "file": "elevated/sprites/vis-grass-3.webp",
       "widthPx": 349,
       "heightPx": 512,
       "meanColour": "#8d8353",
@@ -1836,9 +1896,89 @@
       }
     },
     {
+      "id": "vis-ground-cover",
+      "variant": 1,
+      "file": "elevated/sprites/vis-ground-cover-1.webp",
+      "widthPx": 463,
+      "heightPx": 512,
+      "meanColour": "#576644",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.295,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.033,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:29:13.989Z",
+        "promptHash": "ce26b926cf0a"
+      }
+    },
+    {
+      "id": "vis-ground-cover",
+      "variant": 2,
+      "file": "elevated/sprites/vis-ground-cover-2.webp",
+      "widthPx": 463,
+      "heightPx": 512,
+      "meanColour": "#535449",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.164,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.056,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:29:56.456Z",
+        "promptHash": "c7eecd63935a"
+      }
+    },
+    {
+      "id": "vis-ground-cover",
+      "variant": 3,
+      "file": "elevated/sprites/vis-ground-cover-3.webp",
+      "widthPx": 463,
+      "heightPx": 512,
+      "meanColour": "#5a5940",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.176,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.019,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:30:02.215Z",
+        "promptHash": "db5468df4b38"
+      }
+    },
+    {
+      "id": "vis-hot-tub",
+      "variant": 1,
+      "file": "elevated/sprites/vis-hot-tub-1.webp",
+      "widthPx": 711,
+      "heightPx": 768,
+      "meanColour": "#4f616c",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.134,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.814,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:32:04.238Z",
+        "promptHash": "b0490b82e915"
+      }
+    },
+    {
       "id": "vis-lounger",
       "variant": 1,
-      "file": "sprites/vis-lounger-1.webp",
+      "file": "elevated/sprites/vis-lounger-1.webp",
       "widthPx": 271,
       "heightPx": 768,
       "meanColour": "#c7beb4",
@@ -1858,7 +1998,7 @@
     {
       "id": "vis-lounger",
       "variant": 2,
-      "file": "sprites/vis-lounger-2.webp",
+      "file": "elevated/sprites/vis-lounger-2.webp",
       "widthPx": 271,
       "heightPx": 768,
       "meanColour": "#beb0a3",
@@ -1878,7 +2018,7 @@
     {
       "id": "vis-parasol",
       "variant": 1,
-      "file": "sprites/vis-parasol-1.webp",
+      "file": "elevated/sprites/vis-parasol-1.webp",
       "widthPx": 646,
       "heightPx": 768,
       "meanColour": "#d1c7bb",
@@ -1896,9 +2036,129 @@
       }
     },
     {
+      "id": "vis-perennial-mound",
+      "variant": 1,
+      "file": "elevated/sprites/vis-perennial-mound-1.webp",
+      "widthPx": 422,
+      "heightPx": 512,
+      "meanColour": "#646e5b",
+      "opaqueBounds": {
+        "minX": 0.002,
+        "minY": 0.016,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.026,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:26:26.899Z",
+        "promptHash": "30a51589f6f8"
+      }
+    },
+    {
+      "id": "vis-perennial-mound",
+      "variant": 2,
+      "file": "elevated/sprites/vis-perennial-mound-2.webp",
+      "widthPx": 422,
+      "heightPx": 512,
+      "meanColour": "#6b8049",
+      "opaqueBounds": {
+        "minX": 0.019,
+        "minY": 0,
+        "maxX": 0.976,
+        "maxY": 1
+      },
+      "footAlpha": 0.065,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:26:27.881Z",
+        "promptHash": "499cf00e0db2"
+      }
+    },
+    {
+      "id": "vis-perennial-mound",
+      "variant": 3,
+      "file": "elevated/sprites/vis-perennial-mound-3.webp",
+      "widthPx": 422,
+      "heightPx": 512,
+      "meanColour": "#6d4f52",
+      "opaqueBounds": {
+        "minX": 0.085,
+        "minY": 0,
+        "maxX": 0.915,
+        "maxY": 1
+      },
+      "footAlpha": 0.029,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:27:06.592Z",
+        "promptHash": "c323804b86a7"
+      }
+    },
+    {
+      "id": "vis-perennial-spire",
+      "variant": 1,
+      "file": "elevated/sprites/vis-perennial-spire-1.webp",
+      "widthPx": 359,
+      "heightPx": 512,
+      "meanColour": "#57564e",
+      "opaqueBounds": {
+        "minX": 0.045,
+        "minY": 0,
+        "maxX": 0.955,
+        "maxY": 1
+      },
+      "footAlpha": 0.026,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:27:07.184Z",
+        "promptHash": "e42384fda2c7"
+      }
+    },
+    {
+      "id": "vis-perennial-spire",
+      "variant": 2,
+      "file": "elevated/sprites/vis-perennial-spire-2.webp",
+      "widthPx": 359,
+      "heightPx": 512,
+      "meanColour": "#637154",
+      "opaqueBounds": {
+        "minX": 0.084,
+        "minY": 0,
+        "maxX": 0.916,
+        "maxY": 1
+      },
+      "footAlpha": 0.014,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:27:45.719Z",
+        "promptHash": "4a0428cb96f6"
+      }
+    },
+    {
+      "id": "vis-perennial-spire",
+      "variant": 3,
+      "file": "elevated/sprites/vis-perennial-spire-3.webp",
+      "widthPx": 359,
+      "heightPx": 512,
+      "meanColour": "#55604e",
+      "opaqueBounds": {
+        "minX": 0.036,
+        "minY": 0,
+        "maxX": 0.961,
+        "maxY": 1
+      },
+      "footAlpha": 0.022,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:27:47.361Z",
+        "promptHash": "8c2d804abd73"
+      }
+    },
+    {
       "id": "vis-planter",
       "variant": 1,
-      "file": "sprites/vis-planter-1.webp",
+      "file": "elevated/sprites/vis-planter-1.webp",
       "widthPx": 582,
       "heightPx": 768,
       "meanColour": "#3e4d2a",
@@ -1918,7 +2178,7 @@
     {
       "id": "vis-planter",
       "variant": 2,
-      "file": "sprites/vis-planter-2.webp",
+      "file": "elevated/sprites/vis-planter-2.webp",
       "widthPx": 582,
       "heightPx": 768,
       "meanColour": "#626241",
@@ -1938,7 +2198,7 @@
     {
       "id": "vis-raised-bed",
       "variant": 1,
-      "file": "sprites/vis-raised-bed-1.webp",
+      "file": "elevated/sprites/vis-raised-bed-1.webp",
       "widthPx": 768,
       "heightPx": 421,
       "meanColour": "#62643c",
@@ -1958,7 +2218,7 @@
     {
       "id": "vis-shrub-evergreen",
       "variant": 1,
-      "file": "sprites/vis-shrub-evergreen-1.webp",
+      "file": "elevated/sprites/vis-shrub-evergreen-1.webp",
       "widthPx": 401,
       "heightPx": 512,
       "meanColour": "#576535",
@@ -1978,7 +2238,7 @@
     {
       "id": "vis-shrub-evergreen",
       "variant": 2,
-      "file": "sprites/vis-shrub-evergreen-2.webp",
+      "file": "elevated/sprites/vis-shrub-evergreen-2.webp",
       "widthPx": 401,
       "heightPx": 512,
       "meanColour": "#495035",
@@ -1998,7 +2258,7 @@
     {
       "id": "vis-shrub-evergreen",
       "variant": 3,
-      "file": "sprites/vis-shrub-evergreen-3.webp",
+      "file": "elevated/sprites/vis-shrub-evergreen-3.webp",
       "widthPx": 401,
       "heightPx": 512,
       "meanColour": "#536139",
@@ -2018,7 +2278,7 @@
     {
       "id": "vis-shrub-flowering",
       "variant": 1,
-      "file": "sprites/vis-shrub-flowering-1.webp",
+      "file": "elevated/sprites/vis-shrub-flowering-1.webp",
       "widthPx": 411,
       "heightPx": 512,
       "meanColour": "#586644",
@@ -2038,7 +2298,7 @@
     {
       "id": "vis-shrub-flowering",
       "variant": 2,
-      "file": "sprites/vis-shrub-flowering-2.webp",
+      "file": "elevated/sprites/vis-shrub-flowering-2.webp",
       "widthPx": 411,
       "heightPx": 512,
       "meanColour": "#5f6b3d",
@@ -2058,7 +2318,7 @@
     {
       "id": "vis-shrub-flowering",
       "variant": 3,
-      "file": "sprites/vis-shrub-flowering-3.webp",
+      "file": "elevated/sprites/vis-shrub-flowering-3.webp",
       "widthPx": 411,
       "heightPx": 512,
       "meanColour": "#5f583a",
@@ -2078,7 +2338,7 @@
     {
       "id": "vis-slide",
       "variant": 1,
-      "file": "sprites/vis-slide-1.webp",
+      "file": "elevated/sprites/vis-slide-1.webp",
       "widthPx": 313,
       "heightPx": 768,
       "meanColour": "#4f7360",
@@ -2098,7 +2358,7 @@
     {
       "id": "vis-sofa-set",
       "variant": 1,
-      "file": "sprites/vis-sofa-set-1.webp",
+      "file": "elevated/sprites/vis-sofa-set-1.webp",
       "widthPx": 768,
       "heightPx": 658,
       "meanColour": "#85827f",
@@ -2118,7 +2378,7 @@
     {
       "id": "vis-swing",
       "variant": 1,
-      "file": "sprites/vis-swing-1.webp",
+      "file": "elevated/sprites/vis-swing-1.webp",
       "widthPx": 768,
       "heightPx": 632,
       "meanColour": "#9b8967",
@@ -2138,7 +2398,7 @@
     {
       "id": "vis-trampoline",
       "variant": 1,
-      "file": "sprites/vis-trampoline-1.webp",
+      "file": "elevated/sprites/vis-trampoline-1.webp",
       "widthPx": 722,
       "heightPx": 768,
       "meanColour": "#385276",
@@ -2156,9 +2416,49 @@
       }
     },
     {
+      "id": "vis-tree-conifer",
+      "variant": 1,
+      "file": "elevated/sprites/vis-tree-conifer-1.webp",
+      "widthPx": 719,
+      "heightPx": 1024,
+      "meanColour": "#3d482c",
+      "opaqueBounds": {
+        "minX": 0.001,
+        "minY": 0.121,
+        "maxX": 0.999,
+        "maxY": 1
+      },
+      "footAlpha": 0.031,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-16T09:52:41.969Z",
+        "promptHash": "1d4bb4902dc5"
+      }
+    },
+    {
+      "id": "vis-tree-conifer",
+      "variant": 2,
+      "file": "elevated/sprites/vis-tree-conifer-2.webp",
+      "widthPx": 719,
+      "heightPx": 1024,
+      "meanColour": "#494f2f",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.016,
+        "maxX": 1,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.018,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-16T09:52:44.986Z",
+        "promptHash": "f801f971600d"
+      }
+    },
+    {
       "id": "vis-tree-deciduous",
       "variant": 1,
-      "file": "sprites/vis-tree-deciduous-1.webp",
+      "file": "elevated/sprites/vis-tree-deciduous-1.webp",
       "widthPx": 746,
       "heightPx": 1024,
       "meanColour": "#636b3c",
@@ -2178,7 +2478,7 @@
     {
       "id": "vis-tree-deciduous",
       "variant": 2,
-      "file": "sprites/vis-tree-deciduous-2.webp",
+      "file": "elevated/sprites/vis-tree-deciduous-2.webp",
       "widthPx": 746,
       "heightPx": 1024,
       "meanColour": "#515e2f",
@@ -2198,7 +2498,7 @@
     {
       "id": "vis-tree-deciduous",
       "variant": 3,
-      "file": "sprites/vis-tree-deciduous-3.webp",
+      "file": "elevated/sprites/vis-tree-deciduous-3.webp",
       "widthPx": 746,
       "heightPx": 1024,
       "meanColour": "#575c31",
@@ -2218,7 +2518,7 @@
     {
       "id": "vis-tree-multistem",
       "variant": 1,
-      "file": "sprites/vis-tree-multistem-1.webp",
+      "file": "elevated/sprites/vis-tree-multistem-1.webp",
       "widthPx": 824,
       "heightPx": 1024,
       "meanColour": "#71733c",
@@ -2238,7 +2538,7 @@
     {
       "id": "vis-tree-multistem",
       "variant": 2,
-      "file": "sprites/vis-tree-multistem-2.webp",
+      "file": "elevated/sprites/vis-tree-multistem-2.webp",
       "widthPx": 824,
       "heightPx": 1024,
       "meanColour": "#666d35",
@@ -2253,6 +2553,46 @@
         "model": "gpt-image-2 (medium)",
         "generatedAt": "2026-09-13T14:18:28.130Z",
         "promptHash": "eefadd0796bb"
+      }
+    },
+    {
+      "id": "vis-tree-ornamental",
+      "variant": 1,
+      "file": "elevated/sprites/vis-tree-ornamental-1.webp",
+      "widthPx": 809,
+      "heightPx": 1024,
+      "meanColour": "#606f2c",
+      "opaqueBounds": {
+        "minX": 0.001,
+        "minY": 0.045,
+        "maxX": 1,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.03,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:30:34.248Z",
+        "promptHash": "4830065e8f04"
+      }
+    },
+    {
+      "id": "vis-tree-ornamental",
+      "variant": 2,
+      "file": "elevated/sprites/vis-tree-ornamental-2.webp",
+      "widthPx": 809,
+      "heightPx": 1024,
+      "meanColour": "#7f7a4f",
+      "opaqueBounds": {
+        "minX": 0.001,
+        "minY": 0.05,
+        "maxX": 1,
+        "maxY": 0.999
+      },
+      "footAlpha": 0.019,
+      "provenance": {
+        "model": "gpt-image-2 (medium)",
+        "generatedAt": "2026-09-15T16:30:40.293Z",
+        "promptHash": "f16b07c72ff9"
       }
     }
   ]

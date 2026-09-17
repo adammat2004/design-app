@@ -1,5 +1,7 @@
 import {
+  BriefEmphasisSchema,
   DESIRED_FEATURE_LABELS,
+  GardenIntentSchema,
   pointInPolygon,
   type DesiredFeature,
   type GardenBrief,
@@ -13,6 +15,7 @@ import { FEATURE_LIBRARY, placementLadder, tierFor } from '../knowledge/feature-
 import { CONDITIONAL, PRINCIPLES } from '../knowledge/principles.js';
 import { RELATIONSHIP_RULES, rulesFor } from '../knowledge/relationship-rules.js';
 import { STYLE_RULES, styleFit } from '../knowledge/style-rules.js';
+import { weightProfile } from '../knowledge/weight-profiles.js';
 import { slotPreferences } from '../layout/assign.js';
 import { buildBriefs } from './brief-builder.js';
 import { capacityFor, inferIntent, interpretRequirements, withinCapacity } from './requirements.js';
@@ -158,13 +161,53 @@ describe('the principle weights', () => {
   it('puts circulation and grouping first, and style and buildability last', () => {
     const ordered = [...PRINCIPLES].sort((a, b) => b.weight - a.weight).map((p) => p.id);
     expect(ordered.slice(0, 2).sort()).toEqual(['circulation', 'grouping']);
-    expect(ordered.slice(-3).sort()).toEqual(['buildability', 'style', 'sun']);
+    expect(ordered.slice(-4).sort()).toEqual(['buildability', 'maintenanceFit', 'style', 'sun']);
   });
 
-  it('sums to one over the principles that always apply, with sun on top', () => {
+  it('sums to one over the principles that always apply, with the conditional two on top', () => {
     const always = PRINCIPLES.filter((principle) => !CONDITIONAL.includes(principle.id));
     expect(always.reduce((sum, principle) => sum + principle.weight, 0)).toBeCloseTo(1, 9);
-    expect(CONDITIONAL).toEqual(['sun']);
+    expect(CONDITIONAL).toEqual(['sun', 'maintenanceFit']);
+  });
+
+  it('still sums to one over the principles that always apply, for every brief', () => {
+    /*
+     * The weights follow the brief now, so "renormalised" has to be true of every profile rather
+     * than of the base table alone. Two gardens judged by different profiles are only comparable
+     * because both are measured on the same scale.
+     */
+    const always = PRINCIPLES.filter((principle) => !CONDITIONAL.includes(principle.id));
+
+    for (const intent of GardenIntentSchema.options) {
+      for (const emphasis of BriefEmphasisSchema.options) {
+        const { weights } = weightProfile({ intent, emphasis });
+        const total = always.reduce((sum, principle) => sum + weights[principle.id], 0);
+        expect(total).toBeCloseTo(1, 9);
+        for (const id of CONDITIONAL) expect(weights[id]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('changes what counts when the brief changes, without changing it beyond recognition', () => {
+    const social = weightProfile({ intent: 'entertaining', emphasis: 'social' });
+    const planted = weightProfile({ intent: 'relaxation', emphasis: 'planted' });
+
+    // An entertaining garden cares more about how its spaces relate; a planted one about enclosure.
+    expect(social.weights.relationships).toBeGreaterThan(planted.weights.relationships);
+    expect(planted.weights.privacy).toBeGreaterThan(social.weights.privacy);
+
+    // And every principle still counts for something in both: a shift is an emphasis, not a scorer.
+    for (const principle of PRINCIPLES) {
+      expect(social.weights[principle.id]).toBeGreaterThan(0);
+      expect(planted.weights[principle.id]).toBeGreaterThan(0);
+    }
+  });
+
+  it('weighs upkeep hardest for the brief that is about upkeep', () => {
+    const minimal = weightProfile({ intent: 'lowMaintenance', emphasis: 'planted' });
+    const ordinary = weightProfile({ intent: 'mixed', emphasis: 'planted' });
+
+    expect(minimal.weights.maintenanceFit).toBeGreaterThan(ordinary.weights.maintenanceFit);
   });
 
   it('does not weight featureFit, which is a gate rather than a category', () => {

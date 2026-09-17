@@ -8,9 +8,20 @@ import type { DesignIssue } from '@garden-studio/schema';
  * different answer from zero, and keeping it separate is what lets the weights be redistributed
  * rather than having an unlocated garden marked down for a fact nobody stated.
  */
+/**
+ * A fault as a principle writes it, before it is stamped with which critic found it.
+ *
+ * `DesignIssue.source` is defaulted in the schema, so the parsed type requires it — and every
+ * principle in this directory is the geometry critic, so repeating `source: 'geometry'` at thirty
+ * emitters would be thirty chances to write something else. `scoreSubject` stamps them once on the
+ * way out, which is also the shape a vision critic will take: it stamps its own findings, and the
+ * repair pipeline downstream cannot tell which produced what.
+ */
+export type MeasuredIssue = Omit<DesignIssue, 'source'>;
+
 export interface PrincipleResult {
   score: number | null;
-  issues: DesignIssue[];
+  issues: MeasuredIssue[];
 }
 
 /** A principle that found nothing to say. */

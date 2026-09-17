@@ -35,7 +35,12 @@ function bed(over: Partial<DesignElement> = {}): DesignElement {
     shape: {
       kind: 'polygon',
       cornerRadius: 0,
-      points: [{ x: 2, y: 2 }, { x: 10, y: 2 }, { x: 10, y: 5 }, { x: 2, y: 5 }],
+      points: [
+        { x: 2, y: 2 },
+        { x: 10, y: 2 },
+        { x: 10, y: 5 },
+        { x: 2, y: 5 },
+      ],
     },
     ...over,
   } as DesignElement;
@@ -49,6 +54,8 @@ function issue(message: string): DesignIssue {
     message,
     subjects: ['e-3'],
     repair: 'widen-path',
+    /* Which critic found it. One measures geometry today; a vision critic would stamp its own. */
+    source: 'geometry',
   } satisfies DesignIssue;
 }
 
@@ -58,6 +65,9 @@ function review(passes: { message: string; kept: boolean }[]): ReviewOutcome {
       issue: issue(pass.message),
       before: 0.8,
       after: pass.kept ? 0.9 : 0.8,
+      played: true,
+      considered: 3,
+      reason: null,
       kept: pass.kept,
     })),
     verdict: passes.some((pass) => pass.kept) ? 'improved' : 'nothing-worked',
@@ -78,7 +88,10 @@ describe('composeOutcome', () => {
     const before = [terrace, border];
     /* Four lines were proposed; two were refused, so two things are actually different. */
     const after = [
-      { ...terrace, shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 6, depth: 4, rotation: 0 } } as DesignElement,
+      {
+        ...terrace,
+        shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 6, depth: 4, rotation: 0 },
+      } as DesignElement,
       { ...border, material: 'mixed-border' } as DesignElement,
     ];
 
@@ -86,7 +99,10 @@ describe('composeOutcome', () => {
       initial: before,
       result: after,
       refused: [
-        { label: 'Garden store', reason: 'There is no clear 2.5 × 2 m space left in the back garden.' },
+        {
+          label: 'Garden store',
+          reason: 'There is no clear 2.5 × 2 m space left in the back garden.',
+        },
         { label: 'Fire pit', reason: 'It would overlap the dining terrace.' },
       ],
     });
@@ -141,9 +157,9 @@ describe('composeOutcome', () => {
     });
 
     expect(outcome.review?.verdict).toBe('improved');
-    expect(outcome.review?.passes.filter((pass) => pass.kept).map((pass) => pass.issue.message)).toEqual([
-      'The path to the store is pinched.',
-    ]);
+    expect(
+      outcome.review?.passes.filter((pass) => pass.kept).map((pass) => pass.issue.message),
+    ).toEqual(['The path to the store is pinched.']);
     expect(
       outcome.review?.passes.filter((pass) => !pass.kept).map((pass) => pass.issue.message),
     ).toEqual(['The store stands in the sightline.']);

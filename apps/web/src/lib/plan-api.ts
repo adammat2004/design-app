@@ -1,13 +1,16 @@
 import {
   AssistantAvailabilitySchema,
   AssistantProposalSchema,
+  RepairDesignResultSchema,
   ReviewDesignResultSchema,
   RedesignResultSchema,
   type AssistantAvailability,
   type AssistantTurn,
   type DesignElement,
   type DesignIntent,
+  type DesignIssue,
   type RedesignResult,
+  type RepairDesignResult,
   type ReviewDesignResult,
   GardenProposalSchema,
   GenerateConceptsResultSchema,
@@ -256,6 +259,27 @@ export function reviewDesign(
   return request(`/plan-projects/${id}/design/review`, ReviewDesignResultSchema, {
     method: 'POST',
     body: JSON.stringify({ elements }),
+    signal,
+  });
+}
+
+/**
+ * Asks for the best correction to one fault, measured rather than guessed.
+ *
+ * The difference from `requestRedesign` is what is being asked. That takes intents and answers with
+ * what they come to; this takes a *fault* and answers with the best legal change to it, having
+ * scored several. What it buys the loop is the thing the loop could not do: when nothing helps, the
+ * user is not shown a change being made and then taken back.
+ */
+export function repairDesign(
+  id: string,
+  issue: DesignIssue,
+  elements: DesignElement[],
+  signal?: AbortSignal,
+): Promise<RepairDesignResult> {
+  return request(`/plan-projects/${id}/design/repair`, RepairDesignResultSchema, {
+    method: 'POST',
+    body: JSON.stringify({ issue, elements }),
     signal,
   });
 }

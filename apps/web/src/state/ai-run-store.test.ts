@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesignRunSchema, type DesignRun } from '@garden-studio/schema';
 import { manualClock, type ManualClock } from '@/lib/ai-run/clock';
 import { layoutFingerprint, type DesignElement, type GeneratedConcept } from '@/lib/concepts';
-import { resetAiRunStoreForTests, selectRunActive, setRunClockFactory, useAiRunStore } from './ai-run-store';
+import {
+  resetAiRunStoreForTests,
+  selectRunActive,
+  setRunClockFactory,
+  useAiRunStore,
+} from './ai-run-store';
 import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
 import { setProjectRevision } from './revision';
 import {
@@ -18,7 +23,7 @@ import {
  */
 vi.mock('@/lib/plan-api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/plan-api')>('@/lib/plan-api');
-  return { ...actual, reviewDesign: vi.fn(), requestRedesign: vi.fn() };
+  return { ...actual, reviewDesign: vi.fn(), repairDesign: vi.fn() };
 });
 
 /* The emitter, for the same reason. */
@@ -30,7 +35,7 @@ vi.mock('./design-events', async () => {
 const events = vi.mocked((await import('./design-events')).emitDesignEvent);
 const api = await import('@/lib/plan-api');
 const reviewDesign = vi.mocked(api.reviewDesign);
-const requestRedesign = vi.mocked(api.requestRedesign);
+const repairDesign = vi.mocked(api.repairDesign);
 
 const editor = () => usePlanEditorStore.getState();
 const ai = () => useAiRunStore.getState();
@@ -102,7 +107,7 @@ beforeEach(() => {
   setRunClockFactory(() => clock);
 
   reviewDesign.mockReset();
-  requestRedesign.mockReset();
+  repairDesign.mockReset();
   setProjectRevision({ projectId: '11111111-2222-3333-4444-555555555555', revision: 1 });
 
   mapProperty();
@@ -130,7 +135,7 @@ describe('starting a run', () => {
     expect(ai().blocked).toBe('A redesign is already running.');
   });
 
-  it('refuses to start in the middle of somebody else\'s gesture', () => {
+  it("refuses to start in the middle of somebody else's gesture", () => {
     editor().beginGesture();
 
     expect(ai().start(TWO_MOVES())).toMatchObject({ ok: false });
@@ -141,7 +146,10 @@ describe('starting a run', () => {
   it('says why rather than playing a run that would change nothing', () => {
     const outside = run([op({ id: 'a', kind: 'move', elementId: 'e-1', to: { x: 40, y: 6 } })]);
 
-    expect(ai().start(outside)).toEqual({ ok: false, reason: 'That goes over the property boundary.' });
+    expect(ai().start(outside)).toEqual({
+      ok: false,
+      reason: 'That goes over the property boundary.',
+    });
     expect(ai().status).toBe('idle');
     expect(editor().past).toHaveLength(0);
   });
@@ -369,9 +377,19 @@ describe('what is left afterwards', () => {
 
   it('gives the same new element the same id when it is replayed', () => {
     const adding = run([
-      op({ id: 'a', phase: 'planting', kind: 'add', ref: '$shrub', element: {
-        category: 'planting-bed', role: 'feature', name: 'Evergreen shrub', zone: 'back',
-        shape: { kind: 'point', at: { x: 12, y: 10 }, radius: 0.6 } } }),
+      op({
+        id: 'a',
+        phase: 'planting',
+        kind: 'add',
+        ref: '$shrub',
+        element: {
+          category: 'planting-bed',
+          role: 'feature',
+          name: 'Evergreen shrub',
+          zone: 'back',
+          shape: { kind: 'point', at: { x: 12, y: 10 }, radius: 0.6 },
+        },
+      }),
     ]);
 
     ai().start(adding);
@@ -401,27 +419,47 @@ describe('what is left afterwards', () => {
 
 describe('the design reviewer', () => {
   /** A score the fake server hands back, with one fault the loop knows how to act on. */
-  function score(total: number, issues = [{
-    code: 'terrace-oversized', principle: 'proportion', severity: 'major',
-    message: 'The terrace takes most of the garden.',
-    subjects: ['e-1'], repair: 'shrink-terrace',
-  }]) {
+  function score(
+    total: number,
+    issues = [
+      {
+        code: 'terrace-oversized',
+        principle: 'proportion',
+        severity: 'major',
+        message: 'The terrace takes most of the garden.',
+        subjects: ['e-1'],
+        repair: 'shrink-terrace',
+      },
+    ],
+  ) {
     return { score: { total, categories: {}, issues, tier: 'realised' } };
   }
 
+  /** What the repair endpoint answers when it found a correction worth making. */
   const moved = {
-    changes: [{
-      id: 'ch1', kind: 'move', elementId: 'e-1', label: 'Seating patio',
-      before: 'here', after: 'there',
-      previous: element({ id: 'e-1' }),
-      next: element({ id: 'e-1', shape: { kind: 'rect', centre: { x: 9, y: 6 }, width: 4, depth: 3, rotation: 0 } }),
-    }],
-    unplaceable: [],
+    changes: [
+      {
+        id: 'ch1',
+        kind: 'move',
+        elementId: 'e-1',
+        label: 'Seating patio',
+        before: 'here',
+        after: 'there',
+        previous: element({ id: 'e-1' }),
+        next: element({
+          id: 'e-1',
+          shape: { kind: 'rect', centre: { x: 9, y: 6 }, width: 4, depth: 3, rotation: 0 },
+        }),
+      },
+    ],
+    predicted: { before: 0.7, after: 0.85, resolved: true },
+    considered: 4,
+    reason: null,
   };
 
-  it('plays the reviewer\'s correction and keeps it when the plan measurably improved', async () => {
-    reviewDesign.mockResolvedValueOnce(score(0.70) as never).mockResolvedValue(score(0.85) as never);
-    requestRedesign.mockResolvedValue(moved as never);
+  it("plays the reviewer's correction and keeps it when the plan measurably improved", async () => {
+    reviewDesign.mockResolvedValueOnce(score(0.7) as never).mockResolvedValue(score(0.85) as never);
+    repairDesign.mockResolvedValue(moved as never);
 
     const running = ai().review();
     // The run is live and animating; the loop is waiting on it, not polling.
@@ -435,8 +473,8 @@ describe('the design reviewer', () => {
   });
 
   it('puts its own change back when the measurement does not support it', async () => {
-    reviewDesign.mockResolvedValueOnce(score(0.80) as never).mockResolvedValue(score(0.79) as never);
-    requestRedesign.mockResolvedValue(moved as never);
+    reviewDesign.mockResolvedValueOnce(score(0.8) as never).mockResolvedValue(score(0.79) as never);
+    repairDesign.mockResolvedValue(moved as never);
 
     const running = ai().review();
     await vi.waitFor(() => expect(selectRunActive(ai())).toBe(true));
@@ -453,7 +491,7 @@ describe('the design reviewer', () => {
 
     await ai().review();
 
-    expect(requestRedesign).not.toHaveBeenCalled();
+    expect(repairDesign).not.toHaveBeenCalled();
     expect(ai().reviewOutcome).toMatchObject({ verdict: 'nothing-to-fix' });
     expect(editor().past).toHaveLength(0);
   });
@@ -552,7 +590,7 @@ describe('one bracket per sentence', () => {
     expect(editor().present.elements).toBe(before);
   });
 
-  it('refuses to open a sentence over somebody else\'s gesture', () => {
+  it("refuses to open a sentence over somebody else's gesture", () => {
     editor().beginGesture();
 
     expect(ai().beginSentence()).toBe(false);

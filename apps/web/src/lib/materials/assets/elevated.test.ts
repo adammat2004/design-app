@@ -325,8 +325,15 @@ describe('the twin table', () => {
     }
   });
 
+  /*
+   * `light-bollard` rather than a plant, and the choice is the point: every plant now has a twin,
+   * so this used to name `plant-flower` and started failing the day the herbaceous layer was drawn.
+   * The lighting families are the ones held back *deliberately* — a bollard is 120 mm and four
+   * pixels at plan zoom, and what a reader sees is the pool it throws, not the fitting — so they
+   * are the stable example of a family the twin table is expected to have no opinion about.
+   */
   it('has no opinion about a family with no twin', () => {
-    expect(elevatedTwin('plant-flower')).toBeNull();
+    expect(elevatedTwin('light-bollard')).toBeNull();
     expect(elevatedTwin(null)).toBeNull();
     expect(elevatedTwin(undefined)).toBeNull();
   });

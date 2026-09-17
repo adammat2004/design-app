@@ -1,5 +1,5 @@
-import { pointInPolygon, type DesignIssue } from '@garden-studio/schema';
-import { meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import { pointInPolygon } from '@garden-studio/schema';
+import { meanOf, NOT_APPLICABLE, type PrincipleResult, type MeasuredIssue } from './result.js';
 import type { DesignSubject } from './subject.js';
 
 /**
@@ -30,7 +30,7 @@ export function scoreSun(subject: DesignSubject): PrincipleResult {
   const wanting = subject.items.filter((item) => item.feature && WANTS_SUN.includes(item.feature));
   if (wanting.length === 0) return NOT_APPLICABLE;
 
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   for (const item of wanting) {
@@ -54,6 +54,8 @@ export function scoreSun(subject: DesignSubject): PrincipleResult {
         message: `${item.name || item.feature} is in shade for most of its area at three on a midsummer afternoon.`,
         subjects: [item.id],
         repair: 'move-to-zone',
+        /* Only ever set on a located plan, which is the only plan this principle runs on at all. */
+        guidance: { sunlit: true },
       });
     }
   }

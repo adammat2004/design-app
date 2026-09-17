@@ -112,6 +112,12 @@ export function reconcileBriefs(
        * offered-not-applied convention exists to prevent.
        */
       style: base.style,
+      /*
+       * And the upkeep is the resolver's, for the stronger reason: it is not a preference at all
+       * but the level `resolveConstraints` settled, which the palette, the badge and the scorer all
+       * read. A model that moved it would make the card say one thing and the plan do another.
+       */
+      upkeep: base.upkeep,
       rationale: match.rationale.trim() === '' ? base.rationale : match.rationale,
     };
 

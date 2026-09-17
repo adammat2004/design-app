@@ -1,10 +1,18 @@
 import {
   PlanDocumentSchema,
+  distanceToSegment,
   elementAnchor,
+  geometryIsLegal,
+  geometryOutline,
+  pointInPolygon,
+  polygonsIntersect,
+  polylineLength,
   type DesignElement,
   type DesignIntent,
   type PlanDocument,
+  type PlanGeometry,
 } from '@garden-studio/schema';
+import { offBearing } from '../generation/design/bearing.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlannerService } from './planner.service.js';
 import { FillService } from '../generation/fill.service.js';
@@ -622,7 +630,6 @@ describe.skipIf(connection === null)('PlannerService', () => {
       expect(changes).toEqual([]);
       expect(unplaceable[0]!.reason).toContain('nothing of it');
     });
-
   });
 
   describe('attach', () => {
@@ -801,10 +808,310 @@ describe.skipIf(connection === null)('PlannerService', () => {
       expect(unplaceable[0]!.reason).toContain('nothing to move it towards');
     });
   });
+
+  /* ---------------------------------------------------------------- reroute */
+
+  /*
+   * The store at the far end with a path that wanders out to it round the left, which is the shape
+   * the circulation principle reports as a detour.
+   */
+  const store = element({
+    id: 'e-shed',
+    name: 'Garden store',
+    category: 'structure',
+    material: 'softwood',
+    shape: { kind: 'rect', centre: { x: 16, y: 14 }, width: 2.4, depth: 2, rotation: 0 },
+  });
+
+  const wandering = element({
+    id: 'e-path',
+    name: 'Path to the store',
+    category: 'paved-area',
+    material: 'stone-setts',
+    shape: {
+      kind: 'polyline',
+      width: 1.2,
+      points: [
+        { x: 10, y: 10 },
+        { x: 2, y: 10 },
+        { x: 2, y: 14.5 },
+        { x: 14.6, y: 14.5 },
+      ],
+    },
+  });
+
+  const rerouteDirect: DesignIntent = {
+    kind: 'reroute',
+    target: { elementIds: ['e-path'] },
+    objective: 'direct',
+  };
+
+  it('redraws a wandering path as a more direct one', async () => {
+    const { changes } = await planner.plan(plan([patio, store, wandering]), [rerouteDirect]);
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.kind).toBe('reroute');
+
+    const before = wandering.shape as Extract<PlanGeometry, { kind: 'polyline' }>;
+    const after = changes[0]!.next.shape as Extract<PlanGeometry, { kind: 'polyline' }>;
+
+    /* The measurement the circulation principle makes: shorter against the straight line. */
+    expect(polylineLength(after.points)).toBeLessThan(polylineLength(before.points));
+    expect(after.width).toBe(before.width);
+  });
+
+  it('leaves the route ends on the things they were on', async () => {
+    const { changes } = await planner.plan(plan([patio, store, wandering]), [rerouteDirect]);
+    const after = changes[0]!.next.shape as Extract<PlanGeometry, { kind: 'polyline' }>;
+
+    const ends = [after.points[0]!, after.points[after.points.length - 1]!];
+
+    /*
+     * Still a path from the terrace to the store. A reroute that quietly moved an end somewhere
+     * else would be answering "make it more direct" by making it a different path.
+     */
+    expect(nearestOn(geometryOutline(patio.shape), ends[0]!)).toBeLessThan(0.6);
+    expect(nearestOn(geometryOutline(store.shape), ends[1]!)).toBeLessThan(0.7);
+  });
+
+  it('never proposes a route that leaves the plot', async () => {
+    const document = plan([patio, store, wandering]);
+    const { changes } = await planner.plan(document, [rerouteDirect]);
+    const boundary = document.site.vertices.map((vertex) => ({ x: vertex.x, y: vertex.y }));
+
+    expect(geometryIsLegal(changes[0]!.next.shape, boundary)).toBe(true);
+  });
+
+  it('keeps clear of what it was told to avoid', async () => {
+    /* A bed across the direct line, so the straight answer is the one that has to be given up. */
+    const bed = element({
+      id: 'e-bed',
+      name: 'Border',
+      category: 'planting-bed',
+      material: 'mixed-border',
+      shape: { kind: 'rect', centre: { x: 13, y: 12.4 }, width: 6, depth: 1.6, rotation: 0 },
+    });
+
+    const intent: DesignIntent = {
+      kind: 'reroute',
+      target: { elementIds: ['e-path'] },
+      objective: 'avoid',
+      avoidElementIds: ['e-bed'],
+    };
+
+    const { changes, unplaceable } = await planner.plan(plan([patio, store, bed, wandering]), [
+      intent,
+    ]);
+
+    if (changes.length === 0) {
+      // A refusal is the honest answer where no legal line clears it; it still has to say so.
+      expect(unplaceable).toHaveLength(1);
+      return;
+    }
+
+    expect(
+      polygonsIntersect(geometryOutline(changes[0]!.next.shape), geometryOutline(bed.shape)),
+    ).toBe(false);
+  });
+
+  it('never makes a path longer than the one it replaced', async () => {
+    /*
+     * The guarantee, rather than "it refuses when the path is already straight" — which is not one
+     * the router can make. A reroute searches from thirteen points along whatever the path leaves,
+     * so a line that is straight from where it happens to start is very often *not* the shortest
+     * line between the two things it joins, and finding the shorter one is the router doing its
+     * job rather than a fault.
+     */
+    const straight = element({
+      id: 'e-path',
+      name: 'Path to the store',
+      category: 'paved-area',
+      material: 'stone-setts',
+      shape: {
+        kind: 'polyline',
+        width: 1.2,
+        points: [
+          { x: 12.5, y: 12 },
+          { x: 14.75, y: 14 },
+        ],
+      },
+    });
+
+    const before = straight.shape as Extract<PlanGeometry, { kind: 'polyline' }>;
+    const { changes } = await planner.plan(plan([patio, store, straight]), [rerouteDirect]);
+
+    for (const proposed of changes) {
+      const after = proposed.next.shape as Extract<PlanGeometry, { kind: 'polyline' }>;
+      expect(polylineLength(after.points)).toBeLessThanOrEqual(
+        polylineLength(before.points) + 1e-9,
+      );
+    }
+  });
+
+  it('says so when a path reaches nothing', async () => {
+    /*
+     * Stepping stones across a lawn end where they end. There is nothing to route *to*, so a
+     * reroute has no question to answer and says so rather than nudging the line by a hair.
+     */
+    const alone = element({
+      id: 'e-path',
+      name: 'Stepping stones',
+      category: 'paved-area',
+      material: 'stone-setts',
+      shape: {
+        kind: 'polyline',
+        width: 1.2,
+        points: [
+          { x: 4, y: 10.5 },
+          { x: 4, y: 14 },
+        ],
+      },
+    });
+
+    const { changes, unplaceable } = await planner.plan(plan([alone]), [rerouteDirect]);
+
+    expect(changes).toHaveLength(0);
+    expect(unplaceable[0]!.reason).toContain('nothing at the far end');
+  });
+
+  it('refuses to reroute something that is not a path', async () => {
+    const intent: DesignIntent = {
+      kind: 'reroute',
+      target: { elementIds: ['e-1'] },
+      objective: 'direct',
+    };
+
+    const { changes, unplaceable } = await planner.plan(plan([patio]), [intent]);
+
+    expect(changes).toHaveLength(0);
+    expect(unplaceable[0]!.reason).toContain('not a path');
+  });
+
+  it('gives the same route twice', async () => {
+    const once = await planner.plan(plan([patio, store, wandering]), [rerouteDirect]);
+    const twice = await planner.plan(plan([patio, store, wandering]), [rerouteDirect]);
+
+    expect(twice.changes).toEqual(once.changes);
+  });
+
+  /* ---------------------------------------------------------------- rotate */
+
+  it('squares a skewed terrace to the house', async () => {
+    const skewed = element({
+      id: 'e-1',
+      name: 'Dining terrace',
+      category: 'paved-area',
+      material: 'stone-pavers',
+      shape: { kind: 'rect', centre: { x: 10, y: 11 }, width: 4, depth: 3, rotation: 23 },
+    });
+
+    const intent: DesignIntent = { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' };
+
+    const { changes } = await planner.plan(plan([skewed]), [intent]);
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.kind).toBe('rotate');
+
+    const after = changes[0]!.next.shape as Extract<PlanGeometry, { kind: 'rect' }>;
+    // The house walls run along the axes, so square to it is a quarter turn from zero.
+    expect(after.rotation % 90).toBeCloseTo(0, 6);
+    // And nothing but the angle moved.
+    expect(after.centre).toEqual({ x: 10, y: 11 });
+    expect(after.width).toBe(4);
+  });
+
+  it('takes the shortest way round', async () => {
+    const skewed = element({
+      id: 'e-1',
+      shape: { kind: 'rect', centre: { x: 10, y: 11 }, width: 4, depth: 3, rotation: 80 },
+    });
+
+    const intent: DesignIntent = { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' };
+
+    const { changes } = await planner.plan(plan([skewed]), [intent]);
+    const after = changes[0]!.next.shape as Extract<PlanGeometry, { kind: 'rect' }>;
+
+    /* 90 is ten degrees away; 0 is eighty. A turn that reads as an adjustment takes the near one. */
+    expect(after.rotation).toBe(90);
+  });
+
+  it('lines one thing up with another', async () => {
+    const pergola = element({
+      id: 'e-2',
+      name: 'Pergola',
+      category: 'structure',
+      material: 'softwood',
+      shape: { kind: 'rect', centre: { x: 5, y: 12 }, width: 3, depth: 3, rotation: 30 },
+    });
+    const skewed = element({
+      id: 'e-1',
+      shape: { kind: 'rect', centre: { x: 12, y: 12 }, width: 3, depth: 2, rotation: 0 },
+    });
+
+    const intent: DesignIntent = {
+      kind: 'rotate',
+      target: { elementIds: ['e-1'] },
+      to: 'element',
+      elementId: 'e-2',
+    };
+
+    const { changes } = await planner.plan(plan([skewed, pergola]), [intent]);
+    const after = changes[0]!.next.shape as Extract<PlanGeometry, { kind: 'rect' }>;
+
+    expect(offBearing(after.rotation, 30)).toBeLessThan(0.001);
+  });
+
+  it('says so when a thing is already square to what it was asked to match', async () => {
+    const intent: DesignIntent = { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' };
+
+    const { changes, unplaceable } = await planner.plan(plan([patio]), [intent]);
+
+    expect(changes).toHaveLength(0);
+    expect(unplaceable[0]!.reason).toContain('already square');
+  });
+
+  it('refuses to turn an outline', async () => {
+    const intent: DesignIntent = {
+      kind: 'rotate',
+      target: { elementIds: ['e-base'] },
+      to: 'house',
+    };
+
+    const { changes, unplaceable } = await planner.plan(plan([baseFill]), [intent]);
+
+    expect(changes).toHaveLength(0);
+    expect(unplaceable).toHaveLength(1);
+  });
+
+  it('never proposes a turn the editor would refuse', async () => {
+    /* A terrace filling most of the plot width: turning it would put a corner through the fence. */
+    const wide = element({
+      id: 'e-1',
+      shape: { kind: 'rect', centre: { x: 10, y: 12 }, width: 19, depth: 3, rotation: 12 },
+    });
+
+    const intent: DesignIntent = { kind: 'rotate', target: { elementIds: ['e-1'] }, to: 'house' };
+
+    const document = plan([wide]);
+    const boundary = document.site.vertices.map((vertex) => ({ x: vertex.x, y: vertex.y }));
+    const { changes } = await planner.plan(document, [intent]);
+
+    for (const proposed of changes) {
+      expect(geometryIsLegal(proposed.next.shape, boundary)).toBe(true);
+    }
+  });
 });
 
 if (connection === null) {
   describe('PlannerService', () => {
     it.skip(DB_UNAVAILABLE_MESSAGE, () => {});
   });
+}
+
+/** The distance from a point to a ring outline; nought when it is inside. */
+function nearestOn(ring: { x: number; y: number }[], point: { x: number; y: number }): number {
+  if (pointInPolygon(point, ring)) return 0;
+  return Math.min(
+    ...ring.map((corner, i) => distanceToSegment(point, corner, ring[(i + 1) % ring.length]!)),
+  );
 }

@@ -27,17 +27,19 @@ export class DesignReviewService {
   /**
    * @param elements the layout to judge, which may be unsaved and may be nothing like the stored one
    *
-   * **There is no "which concept was this" parameter, and that was measured rather than assumed.**
-   * The obvious signature takes the slot the concept was designed to, so a retreat is not marked
-   * down for entertaining badly. The three briefs really do differ — slot A is `social`, B `open`,
-   * C `planted`, and the primary zone moves with them — but scored across four fixtures all three
-   * give **the same total to four decimal places and the same issues**: no principle reads the
-   * fields that vary by slot. Offering the parameter anyway would be a setting the design ignores,
-   * which is the one thing this codebase keeps catching itself doing. Recorded in TODOS as a gap in
-   * the scorer; when it closes, the parameter goes back.
+   * **Judged against the strategy the user actually chose**, and the document already knows which
+   * that is: the chosen concept carries the brief slot it was designed to. There is deliberately no
+   * request parameter for it — a client passing a slot could disagree with the plan it is editing.
+   *
+   * This used to be slot A unconditionally, because it made no difference: the three briefs really
+   * do differ — slot A is `social`, B `open`, C `planted` — and scored across four fixtures all
+   * three gave the same total to four decimal places, since no principle read the fields that vary.
+   * That is what the brief-driven weighting closed, and the slot now decides what the plan is
+   * measured against: a retreat is no longer marked down for entertaining badly.
    */
   review(document: PlanDocument, elements: DesignElement[]): DesignScore {
     const analysis = analyseSite(document);
+    const slot = slotOf(document);
 
     /*
      * The constraints come from the same single resolver generation uses. Reading `brief.budget`
@@ -47,11 +49,11 @@ export class DesignReviewService {
      */
     const constraints = resolveConstraints(
       document.brief,
-      archetypeFor(0, 0),
+      archetypeFor(slot, 0),
       analysis.scale.designedArea,
     );
 
-    const { brief } = readDesignFor(document, constraints, 0);
+    const { brief } = readDesignFor(document, constraints, slot);
 
     /*
      * `realised`, always. The structural tier exists for sketched candidates inside the generator's
@@ -59,5 +61,28 @@ export class DesignReviewService {
      * is finished by definition, and marking it against a gentler standard would flatter it.
      */
     return scoreConcept(elements, analysis, brief, 'realised');
+  }
+}
+
+/**
+ * Which of the three strategies this plan is an edit of.
+ *
+ * Read off the concept the user chose rather than asked for, because a plan in the editor came from
+ * one of the three cards and the document records which. A plan with nothing chosen — generated
+ * before the slot was recorded, or edited from scratch — falls back to slot A, which is the
+ * intent-led recommendation and the honest default for a garden nobody picked a reading of.
+ */
+function slotOf(document: PlanDocument): 0 | 1 | 2 {
+  const chosen = document.concepts.chosenConceptId;
+  if (!chosen) return 0;
+
+  const concept = document.concepts.concepts.find((entry) => entry.id === chosen);
+  switch (concept?.strategy?.briefId) {
+    case 'B':
+      return 1;
+    case 'C':
+      return 2;
+    default:
+      return 0;
   }
 }

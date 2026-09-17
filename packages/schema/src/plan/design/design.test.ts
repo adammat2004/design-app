@@ -7,7 +7,13 @@ import {
   featuresAtLeast,
   tierOf,
 } from './design-brief.js';
-import { DesignScoreSchema, hasCritical, issuesBySeverity } from './design-score.js';
+import {
+  DesignIssueSchema,
+  DesignScoreSchema,
+  hasCritical,
+  IssueGuidanceSchema,
+  issuesBySeverity,
+} from './design-score.js';
 import { ConceptExplanationSchema } from './concept-explanation.js';
 import { isAtLeast, PRIORITY_ORDER, PriorityTierSchema } from './vocabulary.js';
 
@@ -79,6 +85,18 @@ describe('a design brief cannot express a position', () => {
     expect(found).toEqual([]);
   });
 
+  it('gives an issue nowhere to put a position either', () => {
+    /*
+     * The same property, on the other half of the contract. `IssueGuidance` exists so the reviewer
+     * can say what a valid correction would achieve — near this, clear of that, out of the view —
+     * and the moment it could carry a point the scorer would be placing things. Every field on it
+     * is an id, an enum, a boolean or a distance, and a distance is a relation rather than a
+     * position: "three metres from the table" is true wherever the table is.
+     */
+    const found = names(IssueGuidanceSchema).filter((name) => FORBIDDEN.includes(name));
+    expect(found).toEqual([]);
+  });
+
   it('accepts no numbers at all except through the enums it names', () => {
     // Every leaf is a string, an enum or an array of them: a brief is entirely categorical.
     const parsed = brief({
@@ -86,6 +104,56 @@ describe('a design brief cannot express a position', () => {
     });
     const numeric = JSON.stringify(parsed).match(/:\s*-?\d/g) ?? [];
     expect(numeric).toEqual([]);
+  });
+});
+
+describe('a design issue', () => {
+  const issue = (over: Partial<z.input<typeof DesignIssueSchema>> = {}) =>
+    DesignIssueSchema.parse({
+      code: 'shed-in-view',
+      principle: 'relationships',
+      severity: 'major',
+      message: 'The store sits in the view from the doors.',
+      subjects: ['e1'],
+      ...over,
+    });
+
+  it('is a geometry finding unless it says otherwise', () => {
+    /*
+     * Defaulted rather than required, so every emitter written before a second critic existed goes
+     * on parsing — and so the field means "which critic found this" rather than "did somebody
+     * remember to set it".
+     */
+    expect(issue().source).toBe('geometry');
+    expect(issue({ source: 'visual' }).source).toBe('visual');
+  });
+
+  it('carries no guidance unless the detector had some', () => {
+    expect(issue().guidance).toBeUndefined();
+  });
+
+  it('takes the relations a planner can act on', () => {
+    const guided = issue({
+      guidance: {
+        near: ['e2'],
+        nearM: 3,
+        outOfView: true,
+        preferZone: 'utility',
+        nearAnchor: 'gate',
+      },
+    });
+
+    expect(guided.guidance).toEqual({
+      near: ['e2'],
+      nearM: 3,
+      outOfView: true,
+      preferZone: 'utility',
+      nearAnchor: 'gate',
+    });
+  });
+
+  it('refuses a zone it has never heard of', () => {
+    expect(() => issue({ guidance: { preferZone: 'orangery' } })).toThrow();
   });
 });
 

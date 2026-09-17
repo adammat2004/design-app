@@ -66,6 +66,20 @@ test('Visualise renders at DPR 2, responds to maturity and camera controls, and 
   expect(edited.elements.find((element) => element.id === terrace.id)?.name).toBe('Family terrace');
   originalLayout = edited;
   await page.screenshot({ path: resolve(output, 'browser-editor.png') });
+
+  /*
+   * The 2D Plan draws the plan camera, and this is the only place that can say so.
+   *
+   * It once built a *visualise* scene — drawing `vis-*` sprites, `skin-*` faces and the oblique
+   * lifted stack on the tab whose whole job is the flat diagram — and every unit test passed,
+   * because each guard inside `buildRenderScene` was intact and the fault was this caller asking
+   * for the wrong camera. `data-plants` is the corroborating half: planting is lifted out of the
+   * beds only in Visualise, so a plan scene has none.
+   */
+  const planScene = page.getByTestId('editor-scene');
+  await expect(planScene).toHaveAttribute('data-view', 'plan');
+  await expect(planScene).toHaveAttribute('data-plants', '0');
+
   await page.getByTestId('view-visualise').click();
   const canvas = page.getByTestId('visualise-canvas');
   await expect(canvas).toHaveAttribute('data-scale', /\d/);

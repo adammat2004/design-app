@@ -47,6 +47,15 @@ export function AgentActivity({ phase }: { phase: AgentPhase }) {
   const status = useAiRunStore((state) => state.status);
   const active = useAiRunStore(selectRunActive);
   const frame = useAiRunStore((state) => state.frame);
+  /*
+   * What the reviewer is doing between runs, where there is no frame to read a status off.
+   *
+   * Every value it takes is read off something measured — the fault's own sentence, the count of
+   * corrections the server actually scored — so the panel reports work rather than narrating a
+   * process. It is the last fallback before the generic waiting line, because a live operation's
+   * own label is always the more specific thing to say.
+   */
+  const reviewStatus = useAiRunStore((state) => state.reviewStatus);
 
   const live = phase !== 'idle' || active;
 
@@ -154,7 +163,10 @@ export function AgentActivity({ phase }: { phase: AgentPhase }) {
                     {agent.name}
                   </span>
                   <span className="block truncate text-[10px] text-garden-muted">
-                    {frame?.status ?? frame?.chip ?? WAITING_ON[phase === 'idle' ? 'performing' : phase]}
+                    {frame?.status ??
+                      frame?.chip ??
+                      reviewStatus ??
+                      WAITING_ON[phase === 'idle' ? 'performing' : phase]}
                   </span>
                 </span>
               </li>

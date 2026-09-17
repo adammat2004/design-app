@@ -26,12 +26,16 @@ import {
   type SectionPatchResult,
   type ValidateDocument,
   type ValidationResult,
+  RepairDesignSchema,
   ReviewDesignSchema,
+  type RepairDesign,
+  type RepairDesignResult,
   type ReviewDesign,
   type ReviewDesignResult,
 } from '@garden-studio/schema';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { DesignEventsService } from './design-events.service.js';
+import { DesignRepairService } from './design-repair.service.js';
 import { DesignReviewService } from './design-review.service.js';
 import { PlanProjectsService } from './plan-projects.service.js';
 
@@ -46,6 +50,7 @@ const validateBody = new ZodValidationPipe(ValidateDocumentSchema);
 const generateBody = new ZodValidationPipe(GenerateConceptsSchema);
 const eventsBody = new ZodValidationPipe(RecordDesignEventsSchema);
 const reviewBody = new ZodValidationPipe(ReviewDesignSchema);
+const repairBody = new ZodValidationPipe(RepairDesignSchema);
 
 @Controller('plan-projects')
 export class PlanProjectsController {
@@ -53,6 +58,7 @@ export class PlanProjectsController {
     private readonly projects: PlanProjectsService,
     private readonly events: DesignEventsService,
     private readonly reviewer: DesignReviewService,
+    private readonly repairer: DesignRepairService,
   ) {}
 
   @Post()
@@ -173,5 +179,25 @@ export class PlanProjectsController {
   ): Promise<ReviewDesignResult> {
     const project = await this.projects.findOne(id);
     return { score: this.reviewer.review(project.document, body.elements) };
+  }
+
+  /**
+   * The best legal correction to one fault, measured rather than guessed.
+   *
+   * Separate from `/assistant/redesign`, which takes intents and answers with what they come to.
+   * This takes a *fault* and answers with the best change to it — the search happens where the
+   * scorer is, because scoring a candidate is pure and a client doing it would be a round trip each,
+   * against a plan that is in the middle of being animated.
+   *
+   * Side-effect free, model-free and unrate-limited for the same reasons `/assistant/redesign` is:
+   * nobody is waiting on a model and there is no bill to cap.
+   */
+  @Post(':id/design/repair')
+  async repairDesign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(repairBody) body: RepairDesign,
+  ): Promise<RepairDesignResult> {
+    const project = await this.projects.findOne(id);
+    return this.repairer.repair(project.document, body.issue, body.elements);
   }
 }

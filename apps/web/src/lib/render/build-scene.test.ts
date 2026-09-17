@@ -6,6 +6,7 @@ import {
   type SiteSection,
   type Point,
 } from '@garden-studio/schema';
+import { ASSET_FAMILIES, type AssetFamily } from '../materials/assets/asset-spec';
 import { LIGHT_DIRECTION } from '../materials/light';
 import { buildRenderScene, type PlanScene } from './build-scene';
 import { LAYER_ORDER } from './visual-layer';
@@ -49,6 +50,20 @@ function lawn(): DesignElement {
     material: 'standard-turf',
     zone: 'back',
     shape: { kind: 'rect', centre: { x: 10, y: 12 }, width: 12, depth: 6, rotation: 0 },
+  } as DesignElement;
+}
+
+/** A furnished host, so the stack has a standing object with an elevated twin to draw. */
+function diningSet(): DesignElement {
+  return {
+    id: 'dining-1',
+    category: 'furniture',
+    role: 'feature',
+    name: 'Dining set',
+    symbol: 'dining-set-6',
+    material: 'hardwood',
+    zone: 'back',
+    shape: { kind: 'rect', centre: { x: 10, y: 12 }, width: 2.4, depth: 1.6, rotation: 0 },
   } as DesignElement;
 }
 
@@ -359,6 +374,53 @@ describe('buildRenderScene', () => {
       // The ground the plants stand on stays; everything painted over it is lifted out.
       expect(layers).toHaveLength(1);
       expect(layers.some((layer) => layer.planting)).toBe(false);
+    });
+  });
+
+  /**
+   * The one assertion that says what the 2D Plan *is*, rather than pinning the two mechanisms that
+   * happen to deliver it.
+   *
+   * Both of those mechanisms were intact and tested — `plants` is empty without `instanced`, and
+   * `stack` is empty outside Visualise — and the plan was still drawn with elevated art for a whole
+   * commit, because `EditorCanvas` asked `buildRenderScene` for a *visualise* scene and every test
+   * here went on passing. A guarantee that only holds while one call site passes the right string is
+   * not a guarantee; this states the property itself, so the next caller to get it wrong fails here.
+   */
+  describe('the plan camera', () => {
+    const furnished = () => scene([bed('bed-a', 2), lawn(), diningSet()]);
+
+    it('draws no elevated asset anywhere', () => {
+      const built = buildRenderScene(furnished());
+
+      for (const plant of built.plants) {
+        // Read through `AssetFamily`: the manifest is `as const`, so a literal that omits an
+        // optional field narrows to a type without it at all. Same reason `isRecolourable` does.
+        const family: AssetFamily | null = plant.assetId ? ASSET_FAMILIES[plant.assetId] : null;
+        expect(family?.camera ?? 'plan', plant.id).toBe('plan');
+      }
+
+      /*
+       * The other half of the property. `stack` is the only route to `drawElevatedObject` and to
+       * the `skin-*` face textures, neither of which records an asset id on the scene — so for
+       * those the emptiness *is* the assertion.
+       */
+      expect(built.stack).toEqual([]);
+    });
+
+    /*
+     * The control. Without it the test above passes just as happily on a scene that resolves no
+     * assets at all — which is exactly what a broken twin table or an empty catalogue would give.
+     */
+    it('is a real distinction: the same garden in Visualise does draw elevated art', () => {
+      const built = buildRenderScene(furnished(), { view: 'visualise' });
+      const cameras = built.plants.map((plant) => {
+        const family: AssetFamily | null = plant.assetId ? ASSET_FAMILIES[plant.assetId] : null;
+        return family?.camera ?? 'plan';
+      });
+
+      expect(cameras).toContain('elevated');
+      expect(built.stack.length).toBeGreaterThan(0);
     });
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { CircleAlert, Columns2, RotateCcw, Sparkles, Undo2 } from 'lucide-react';
+import type { ReviewPass } from '@/lib/ai-run/review-loop';
 import { useAiRunStore } from '@/state/ai-run-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import {
@@ -140,9 +141,7 @@ export function AssistantBubble({
                   >
                     <span className="block text-garden-ink">{pass.issue.message}</span>
                     <span className={pass.kept ? 'text-garden-green' : 'text-garden-muted'}>
-                      {pass.kept
-                        ? `Kept — the design scores ${pass.after.toFixed(2)}, up from ${pass.before.toFixed(2)}.`
-                        : 'Tried, and put back: it did not measurably improve the design.'}
+                      {reviewLine(pass)}
                     </span>
                   </li>
                 ))}
@@ -271,4 +270,27 @@ function RunButton({
       {label}
     </button>
   );
+}
+
+/**
+ * What the reviewer says about one pass.
+ *
+ * Three outcomes rather than two, and the third is the one the loop could not report before the
+ * search moved to the server: it now measures several corrections against the plan and can say that
+ * none of them helped **without performing one**. "Tried, and put back" was the only thing it could
+ * say when the only way to find out was to do it.
+ */
+function reviewLine(pass: ReviewPass): string {
+  if (pass.kept) {
+    return `Kept — the design scores ${pass.after.toFixed(2)}, up from ${pass.before.toFixed(2)}.`;
+  }
+  if (pass.played) return 'Tried, and put back: it did not measurably improve the design.';
+
+  const tested =
+    pass.considered > 1 ? `Tested ${pass.considered} corrections` : 'Looked for a correction';
+  return `${tested}: ${lowerFirst(pass.reason ?? 'none of them makes the design better.')}`;
+}
+
+function lowerFirst(text: string): string {
+  return `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 }

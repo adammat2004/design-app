@@ -2,16 +2,14 @@
 
 import type {
   AssistantTurn,
-  DesignElement,
-  DesignIntent,
   DesignRun,
   ProposedChange,
 } from '@garden-studio/schema';
 import { create } from 'zustand';
-import { ApiError, assistantAvailability, proposeChanges, requestRedesign } from '@/lib/plan-api';
+import { ApiError, assistantAvailability, proposeChanges, repairDesign } from '@/lib/plan-api';
 import { runFromProposal } from '@/lib/ai-run/from-proposal';
 import { composeOutcome, type AgentOutcome } from '@/lib/ai-run/outcome';
-import type { ReviewOffer, ReviewOutcome } from '@/lib/ai-run/review-loop';
+import { issueKey, type ReviewOffer, type ReviewOutcome } from '@/lib/ai-run/review-loop';
 import { selectRunActive, useAiRunStore } from './ai-run-store';
 import { usePlanEditorStore } from './plan-editor-store';
 import { flushAll } from './project-sync';
@@ -255,9 +253,11 @@ export const useAssistantStore = create<AgentState>((set, get) => {
        * twenty seconds of movement they cannot opt out of. `withinGesture` because the sentence
        * already holds the bracket — see `applyProposal`.
        */
-      const applied = usePlanEditorStore
-        .getState()
-        .applyProposal(changes, changes.map((change) => change.id), { withinGesture: true });
+      const applied = usePlanEditorStore.getState().applyProposal(
+        changes,
+        changes.map((change) => change.id),
+        { withinGesture: true },
+      );
 
       for (const entry of applied.refused) {
         const change = changes.find((candidate) => candidate.id === entry.changeId);
@@ -551,11 +551,19 @@ export const useAssistantStore = create<AgentState>((set, get) => {
         const target = projectRevision();
         if (!target) throw new Error('No plan is loaded.');
 
+        /*
+         * The correction is worked out when the chip is pressed, not when it is offered.
+         *
+         * An offer used to carry the intents it was built from, which meant the search happened at
+         * offer time against a plan the user then went on editing — so accepting it a minute later
+         * applied an answer to a garden that no longer existed. It carries only the fault now, and
+         * the server measures what to do about it against the plan as it stands.
+         */
         const elements = usePlanEditorStore.getState().present.elements;
-        const changes = await proposeFromIntents(target.projectId, offer.intents, elements, signal);
+        const repair = await repairDesign(target.projectId, offer.issue, elements, signal);
         if (abandoned(signal)) return;
 
-        await perform(id, changes, request, [], signal);
+        await perform(id, repair.changes, request, [], signal);
       });
     },
 
@@ -578,25 +586,14 @@ export const useAssistantStore = create<AgentState>((set, get) => {
 });
 
 /**
- * Asks the planner directly, with no model in the loop.
+ * What identifies an offer in the DOM and in `acceptOffer`.
  *
- * An accepted offer already carries its intents — the reviewer worked them out when it decided not
- * to act on the fault — so there is nothing left to interpret, and routing it through the model
- * would make a free deterministic correction into a paid call that can fail. It is also why an
- * offer works on a server that has never had a key.
+ * The same formula `issueKey` uses, and deliberately the same words: a chip's `data-testid` and the
+ * key the loop keeps its tried set under have to agree, and they are computed in two files because
+ * one of them must not import the other.
  */
-async function proposeFromIntents(
-  projectId: string,
-  intents: DesignIntent[],
-  elements: DesignElement[],
-  signal: AbortSignal,
-): Promise<ProposedChange[]> {
-  return (await requestRedesign(projectId, intents, elements, signal)).changes;
-}
-
-/** What identifies an offer in the DOM and in `acceptOffer`. The fault and what it is about. */
 export function keyOf(offer: ReviewOffer): string {
-  return `${offer.issue.code}:${offer.issue.subjects.join(',')}`;
+  return issueKey(offer.issue);
 }
 
 /* ---------------------------------------------------------------- derived reads */
@@ -619,9 +616,7 @@ export function latestSuggestions(state: { messages: ChatMessage[] }): string[] 
  * new one then lands on top of a garden nobody expected.
  */
 export function selectAgentBusy(): boolean {
-  return (
-    useAssistantStore.getState().phase !== 'idle' || selectRunActive(useAiRunStore.getState())
-  );
+  return useAssistantStore.getState().phase !== 'idle' || selectRunActive(useAiRunStore.getState());
 }
 
 export function resetAssistantStoreForTests(): void {

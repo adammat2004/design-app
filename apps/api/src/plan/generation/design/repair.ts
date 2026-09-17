@@ -1,5 +1,8 @@
 import {
   issuesBySeverity,
+  performableInGenerator,
+  REPAIR_CAPABILITIES,
+  REPAIR_KINDS,
   tierOf,
   type DesignBrief,
   type DesiredFeature,
@@ -68,20 +71,18 @@ const BUDGET = 4;
 const WORTHWHILE = 0.002;
 
 /**
- * The two repair kinds nothing here can perform, and why — stated rather than silently missing.
+ * The repair kinds nothing here can perform, and why — stated rather than silently missing.
  *
- * `align` is a rotation fault. Every placement a composition makes inherits the frame's own bearing
- * through `fitInSlot`, so `misaligned` can only ever be raised against something the PostGIS sampler
- * placed at realisation, and no adjustment to a candidate reaches it. The fix belongs in the sampler.
- *
- * `merge-beds` asks for different beds. Beds come from the composition's own sketch, so a repair
- * that redrew them would be rewriting the archetype rather than adjusting this candidate of it —
- * and the archetype is the thing the user is being offered a choice between.
+ * Derived from `REPAIR_CAPABILITIES` rather than written out, because this was one of three tables
+ * saying what a repair could do and the three agreed only by hand. The reasons live there; what is
+ * here is the generator's own view of them.
  */
-export const UNAVAILABLE: Partial<Record<RepairKind, string>> = {
-  align: 'rotation is set by the frame, so only a sampled placement can be out of true',
-  'merge-beds': "the beds are the composition's, not this candidate's",
-};
+export const UNAVAILABLE: Partial<Record<RepairKind, string>> = Object.fromEntries(
+  REPAIR_KINDS.filter((kind) => !performableInGenerator(kind)).map((kind) => [
+    kind,
+    REPAIR_CAPABILITIES[kind].generator,
+  ]),
+) as Partial<Record<RepairKind, string>>;
 
 export interface RepairRequest {
   candidate: Candidate;

@@ -193,7 +193,9 @@ export class SceneRenderer {
     const misses = shadowCacheStats().misses;
     const raster = getShadowLayer({ occluders: scene.passes['cast-shadows'].flatMap((p) => p.kind === 'shadow-caster' ? [p.occluder] : []),
       cast: scene.shadows.cast, boundary: scene.boundary, pxPerMetre: scale, pixelRatio: ratio,
-      softnessMetres: PRESENTATION_SHADOW_SOFTNESS }, makeCanvas);
+      // Soft is Visualise's presentation choice; a diagram draws the hard edge. Same rule as the
+      // composer's `drawShadowLayer`, or the screen and the PNG disagree about a plan's shadows.
+      softnessMetres: scene.view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0 }, makeCanvas);
     if (shadowCacheStats().misses > misses) this.rasterTime.shadowRasterMs += clockNow() - started;
     if (!raster) return;
     const sprite = this.addRaster({ canvas: raster.canvas, origin: raster.originMetres, pxPerMetre: raster.pxPerMetre }, 'cast-shadows', scene.bounds);

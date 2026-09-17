@@ -1,7 +1,13 @@
-import { distanceToSegment, resolveSymbol, type DesignIssue } from '@garden-studio/schema';
+import { distanceToSegment, resolveSymbol } from '@garden-studio/schema';
 import { MIN_FILL_SIDE } from '../../fill-limits.js';
 import { minExtent } from './proportion.js';
-import { clamp01, meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import {
+  clamp01,
+  meanOf,
+  NOT_APPLICABLE,
+  type PrincipleResult,
+  type MeasuredIssue,
+} from './result.js';
 import { FEATURE_LIBRARY } from '../../knowledge/feature-library.js';
 import type { DesignSubject } from './subject.js';
 
@@ -24,8 +30,20 @@ const MAINTENANCE_GAP = 0.3;
 /** A rise this far above grade needs a way down off it. */
 const NEEDS_STEPS = 0.15;
 
+/*
+ * There is deliberately no deeper floor for a concept built round its planting.
+ *
+ * Asking a planted reading for 1.5 m borders rather than `MIN_FILL_SIDE`'s 1.2 was tried, and the
+ * harness answered within one run: the generator draws borders at `BORDER_WIDTH` routinely, so a
+ * legal and deliberate 1.4 m bed became a fault, and a plan whose beds were all of that width scored
+ * **zero** for buildability. It was also the third instance of one mistake in this pass — the same
+ * one that discounted circulation under `planted` and proportion under `social`. What a planted
+ * concept wants more of is planting, and `emphasis-bands.ts` asks for it by area, which is the
+ * measure that does not turn a width the generator is entitled to into a defect.
+ */
+
 export function scoreBuildability(subject: DesignSubject): PrincipleResult {
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   /* ---- beds you can actually plant ---- */
@@ -76,6 +94,7 @@ export function scoreBuildability(subject: DesignSubject): PrincipleResult {
         message: `${item.name || 'A structure'} sits under ${MAINTENANCE_GAP} m from the boundary, too tight to build against or maintain.`,
         subjects: [item.id],
         repair: 'move-to-zone',
+        guidance: { clearOfBoundaryM: MAINTENANCE_GAP },
       });
     }
   }

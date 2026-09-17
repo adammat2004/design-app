@@ -1,15 +1,16 @@
 import {
   pointInPolygon,
   polygonsIntersect,
-  type DesignIssue,
+  type IssueGuidance,
   type Point,
 } from '@garden-studio/schema';
 import {
+  ruleWeight,
   rulesFor,
   type RelationshipRule,
   type RelationSubject,
 } from '../../knowledge/relationship-rules.js';
-import { clamp01, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import { clamp01, NOT_APPLICABLE, type PrincipleResult, type MeasuredIssue } from './result.js';
 import { nearestDistance, type DesignSubject } from './subject.js';
 
 /**
@@ -50,7 +51,7 @@ export function scoreRelationships(subject: DesignSubject): PrincipleResult {
   const rules = rulesFor(present);
   if (rules.length === 0) return NOT_APPLICABLE;
 
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   let earned = 0;
   let available = 0;
 
@@ -58,8 +59,16 @@ export function scoreRelationships(subject: DesignSubject): PrincipleResult {
     const outcome = scoreRule(rule, subject);
     if (outcome === null) continue;
 
-    available += rule.weight;
-    earned += rule.weight * outcome.score;
+    /*
+     * Weighed by what this concept is for. A social reading of a brief cares more that the barbecue
+     * is by the table than a planted reading does, which is the difference between three cards
+     * judged as three gardens and three cards judged as one. Note the *severity* below still reads
+     * the rule's own weight, so a fault does not change how bad it is depending on which slot it
+     * turned up in — only how much of the score it costs.
+     */
+    const weight = ruleWeight(rule, subject.brief.emphasis);
+    available += weight;
+    earned += weight * outcome.score;
     if (outcome.issue) issues.push(outcome.issue);
   }
 
@@ -69,7 +78,7 @@ export function scoreRelationships(subject: DesignSubject): PrincipleResult {
 function scoreRule(
   rule: RelationshipRule,
   subject: DesignSubject,
-): { score: number; issue?: DesignIssue } | null {
+): { score: number; issue?: MeasuredIssue } | null {
   if (rule.kind === 'requireVisibleFrom' || rule.kind === 'avoidVisibleFrom') {
     return scoreVisibility(rule, subject);
   }
@@ -91,6 +100,7 @@ function scoreRule(
         message: `${name(rule.subject)} is ${distance.toFixed(1)} m from ${name(rule.object)}, inside the ${rule.distance} m it wants. ${rule.reason}`,
         subjects,
         repair: 'move-to-zone',
+        guidance: keepApart(rule, subject),
       },
     };
   }
@@ -115,6 +125,7 @@ function scoreRule(
       message: `${name(rule.subject)} is ${distance.toFixed(1)} m from ${name(rule.object)}, past the ${rule.distance} m it wants. ${rule.reason}`,
       subjects,
       repair: 'move-to-zone',
+      guidance: bringTogether(rule, subject),
     },
   };
 }
@@ -129,7 +140,7 @@ function scoreRule(
 function scoreVisibility(
   rule: RelationshipRule,
   subject: DesignSubject,
-): { score: number; issue?: DesignIssue } | null {
+): { score: number; issue?: MeasuredIssue } | null {
   const cone = subject.analysis.viewCone;
   if (!cone) return null;
 
@@ -159,8 +170,45 @@ function scoreVisibility(
         : `${name(rule.subject)} sits in the view from the garden doors. ${rule.reason}`,
       subjects: offenders.map((entry) => entry.item.id),
       repair: 'move-to-zone',
+      /*
+       * A store out of the view wants somewhere to go, not just somewhere to leave: the utility
+       * room by the gate is where a designer puts it, and saying so is the difference between a
+       * fault the planner can act on and one it can only refuse.
+       */
+      guidance: wantsVisible
+        ? { inView: true }
+        : {
+            outOfView: true,
+            ...(rule.subject === 'storage'
+              ? { preferZone: 'utility' as const, nearAnchor: 'gate' as const }
+              : {}),
+          },
     },
   };
+}
+
+/**
+ * What a correction has to get this near to, as a relation.
+ *
+ * An element id where the object is something on the plan, and an anchor where it is the house or
+ * the gate — which is why `IssueGuidance` carries both. Never a point: the planner resolves where
+ * "near the dining area" actually is, against geometry the scorer only read.
+ */
+function bringTogether(rule: RelationshipRule, subject: DesignSubject): IssueGuidance {
+  const ids = idsOf(subject, rule.object);
+  if (ids.length > 0) return { near: ids.slice(0, 8), nearM: rule.distance };
+  if (rule.object === 'house') return { nearAnchor: 'house', nearM: rule.distance };
+  if (rule.object === 'gate') return { nearAnchor: 'gate', nearM: rule.distance };
+  return {};
+}
+
+/** The same, read the other way: what it has to get clear of, and by how much. */
+function keepApart(rule: RelationshipRule, subject: DesignSubject): IssueGuidance {
+  const ids = idsOf(subject, rule.object);
+  if (ids.length > 0) return { awayFrom: ids.slice(0, 8), awayM: rule.distance };
+  if (rule.object === 'house') return { awayFromAnchor: 'house', awayM: rule.distance };
+  if (rule.object === 'street') return { awayFromAnchor: 'street', awayM: rule.distance };
+  return {};
 }
 
 function idsOf(subject: DesignSubject, key: RelationSubject): string[] {

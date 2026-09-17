@@ -4,7 +4,6 @@ import {
   type DesignElement,
   type DesignIssueCode,
   type DesiredFeature,
-  type PlanGeometry,
 } from '@garden-studio/schema';
 import { describe, expect, it } from 'vitest';
 import { ARCHETYPES } from '../../archetypes.js';
@@ -14,6 +13,7 @@ import { interpretRequirements } from '../requirements.js';
 import { scenario } from '../scenarios.js';
 import { analyseSite } from '../site-analysis.js';
 import { evaluateDesign } from './index.js';
+import { gardenBuilder, rect } from './test-garden.js';
 
 /**
  * The scorer, tested by building the fault and checking it is reported.
@@ -38,67 +38,11 @@ function briefFor(over: Partial<DesignBrief> = {}): DesignBrief {
   return { ...buildBriefs(SITE.brief, requirements, ANALYSIS)[0]!, ...over };
 }
 
-let counter = 0;
-function id(): string {
-  counter += 1;
-  return `e${counter}`;
-}
-
-/** A rectangle in world metres, axis-aligned unless told otherwise. */
-function rect(
-  x: number,
-  y: number,
-  width: number,
-  depth: number,
-  rotation = 0,
-): Extract<PlanGeometry, { kind: 'rect' }> {
-  return { kind: 'rect', centre: { x, y }, width, depth, rotation };
-}
-
-function feature(
-  name: string,
-  shape: PlanGeometry,
-  over: Partial<DesignElement> = {},
-): DesignElement {
-  return {
-    id: id(),
-    category: 'paved-area',
-    role: 'feature',
-    name,
-    shape,
-    zone: 'back',
-    material: 'stone-pavers',
-    ...over,
-  };
-}
-
-function fill(
-  category: DesignElement['category'],
-  shape: PlanGeometry,
-  over: Partial<DesignElement> = {},
-): DesignElement {
-  return {
-    id: id(),
-    category,
-    role: 'fill',
-    fillKind: 'accent',
-    shape,
-    zone: 'back',
-    material: category === 'lawn' ? 'standard-turf' : 'mixed-border',
-    ...over,
-  };
-}
-
-function path(points: { x: number; y: number }[], width = 1.2): DesignElement {
-  return feature(
-    'Service path',
-    { kind: 'polyline', points, width },
-    {
-      category: 'paved-area',
-      material: 'stone-setts',
-    },
-  );
-}
+/*
+ * The builders live in `test-garden.ts` so the gallery can use the identical ones. A fixture the
+ * benchmark measures and a fixture a test pins have to be the same kind of object.
+ */
+const { feature, fill, path } = gardenBuilder();
 
 function score(
   elements: DesignElement[],

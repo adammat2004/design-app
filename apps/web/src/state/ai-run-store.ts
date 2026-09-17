@@ -7,7 +7,7 @@ import { createRunController, type RunController } from '@/lib/ai-run/controller
 import type { RunFrame } from '@/lib/ai-run/evaluate';
 import { prepareRun, type PreparedRun } from '@/lib/ai-run/prepare';
 import { runReviewLoop, type ReviewOutcome } from '@/lib/ai-run/review-loop';
-import { requestRedesign, reviewDesign } from '@/lib/plan-api';
+import { repairDesign, reviewDesign } from '@/lib/plan-api';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { useBoundaryStore } from './boundary-store';
 import { emitDesignEvent } from './design-events';
@@ -71,6 +71,15 @@ interface AiRunState {
   reviewing: boolean;
   /** What the reviewer found and what it did about it, for the panel. */
   reviewOutcome: ReviewOutcome | null;
+  /**
+   * What the reviewer is doing right now, in its own words.
+   *
+   * Set by the loop as it works and read by the activity panel between runs, where there is no
+   * frame to read a status off. Every value it takes is read off something measured — the fault's
+   * own sentence, the count of corrections the server scored — so the panel cannot claim a step the
+   * code does not take.
+   */
+  reviewStatus: string | null;
 
   start: (run: DesignRun) => { ok: true } | { ok: false; reason: string };
   pause: () => void;
@@ -164,7 +173,8 @@ function boundaryNow(): Point[] {
 function changedCount(before: DesignElement[], after: DesignElement[]): number {
   const was = new Map(before.map((element) => [element.id, element]));
   let changed = after.filter((element) => was.get(element.id) !== element).length;
-  for (const element of before) if (!after.some((candidate) => candidate.id === element.id)) changed += 1;
+  for (const element of before)
+    if (!after.some((candidate) => candidate.id === element.id)) changed += 1;
   return changed;
 }
 
@@ -178,6 +188,7 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
   blocked: null,
   reviewing: false,
   reviewOutcome: null,
+  reviewStatus: null,
 
   start: (run) => {
     const state = get();
@@ -408,7 +419,7 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
     const target = projectRevision();
     if (!target || get().reviewing || selectRunActive(get())) return null;
 
-    set({ reviewing: true, reviewOutcome: null, blocked: null });
+    set({ reviewing: true, reviewOutcome: null, reviewStatus: null, blocked: null });
     try {
       /*
        * The reviewer reads the elements it is handed rather than the stored plan, so there is no
@@ -418,10 +429,10 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
       const outcome = await runReviewLoop({
         elements: () => usePlanEditorStore.getState().present.elements,
         score: async (elements) => (await reviewDesign(target.projectId, elements)).score,
-        propose: async (intents, elements) =>
-          (await requestRedesign(target.projectId, intents, elements)).changes,
+        repair: (issue, elements) => repairDesign(target.projectId, issue, elements),
         play: (run) => get().playAndWait(run),
         undo: () => undoLastRun(),
+        narrate: (status) => set({ reviewStatus: status }),
         ...(options.subjects ? { subjects: options.subjects } : {}),
       });
       set({ reviewOutcome: outcome });
@@ -435,7 +446,7 @@ export const useAiRunStore = create<AiRunState>((set, get) => ({
       set({ blocked: 'The design reviewer could not be reached.' });
       return null;
     } finally {
-      set({ reviewing: false });
+      set({ reviewing: false, reviewStatus: null });
     }
   },
 
@@ -580,5 +591,6 @@ export function resetAiRunStoreForTests(): void {
     blocked: null,
     reviewing: false,
     reviewOutcome: null,
+    reviewStatus: null,
   });
 }

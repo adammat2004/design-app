@@ -1,6 +1,12 @@
-import { polygonArea, type DesignIssue, type DesiredFeature } from '@garden-studio/schema';
+import { polygonArea, type DesiredFeature } from '@garden-studio/schema';
 import { FEATURE_LIBRARY } from '../../knowledge/feature-library.js';
-import { clamp01, meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import {
+  clamp01,
+  meanOf,
+  NOT_APPLICABLE,
+  type PrincipleResult,
+  type MeasuredIssue,
+} from './result.js';
 import type { DesignSubject } from './subject.js';
 
 /**
@@ -30,7 +36,7 @@ export interface FeatureFit {
 }
 
 export function scoreFeatureFit(subject: DesignSubject): FeatureFit {
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   const placed = new Set<DesiredFeature>();
@@ -74,7 +80,15 @@ export function scoreFeatureFit(subject: DesignSubject): FeatureFit {
           principle: 'featureFit',
           severity: 'critical',
           message: `${label(entry.feature)} is essential to this concept and could not be placed.`,
-          subjects: [],
+          /*
+           * The optional things standing in its way, not the missing thing itself.
+           *
+           * `drop-optional` is what this fault asks for, and a repair resolves an issue to elements
+           * through its subjects — so naming nothing, which is what this did, made the one repair
+           * the scorer names for it unreachable in both the generator and the editor. A feature
+           * that is not in the drawing has no id; what a correction acts on is what is.
+           */
+          subjects: droppable(subject),
           repair: 'drop-optional',
         });
       }
@@ -101,7 +115,7 @@ export function scoreFeatureFit(subject: DesignSubject): FeatureFit {
         principle: 'featureFit',
         severity: 'major',
         message: `Built features cover ${Math.round(share * 100)}% of the garden, leaving nothing between them.`,
-        subjects: [],
+        subjects: droppable(subject),
         repair: 'drop-optional',
       });
     }
@@ -131,4 +145,26 @@ function label(feature: DesiredFeature): string {
     default:
       return `The ${zone} area`;
   }
+}
+
+/**
+ * The things on the plan this concept could do without, largest first.
+ *
+ * Optional-tier features only, because `withinCapacity` already promises never to cut an essential
+ * and a repair that took one out would be answering "the garden is missing what it is for" by
+ * removing something else it is for. Largest first because taking out the biggest optional thing is
+ * what makes room; the planner still decides whether removing it actually helps.
+ */
+function droppable(subject: DesignSubject): string[] {
+  const optional = new Set(
+    subject.brief.featurePriorities
+      .filter((entry) => entry.tier === 'optional')
+      .map((entry) => entry.feature),
+  );
+
+  return subject.items
+    .filter((item) => item.feature !== null && optional.has(item.feature))
+    .sort((a, b) => b.area - a.area)
+    .slice(0, 8)
+    .map((item) => item.id);
 }

@@ -22,8 +22,14 @@ The two panels became one: you talk to the designer and it performs the work on 
 until Phase A built it — one bracket per sentence, Stop writing a revision, and a revision that
 survives a reload.
 
-What is left is not plumbing: the scorer cannot tell the three concepts apart, and the reviewer
-still cannot say *where* a thing should go.
+Phase 2 landed the design intelligence: the scorer reads the brief and there is a benchmark over the
+scorer itself; a fault says what a valid correction would achieve; the reviewer measures several
+corrections and plays the best or none; `reroute` and `rotate` complete the vocabulary. Eight of the
+ten repair kinds are performable in the editor, against three before.
+
+What is left is mostly what the new measurements *found*: a third of generated plans do not honour
+the room they claim to be organised around, and the one repair verb with no planner behind it is
+laying a route — which is the third commonest fault in the harness.
 
 - [x] **Phase 0 — measurement.** One editor scene build is ~34 ms on a 50-element garden, almost
       entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.
@@ -51,25 +57,73 @@ still cannot say *where* a thing should go.
       (furniture travels with the host it stands on), and **`move` towards another element**.
       `clearOfOthers` also stopped counting a surface's own furniture as an obstacle, which had made
       every furnished terrace immovable.
-- [ ] **`reroute` and `rotate`.** The last two of the five. `reroute` reuses the generator's route
-      builder; `rotate` is the one `align` needs. Neither is something a user is likely to ask for
-      before the three above, which is why they were deferred. **Effort: S each.**
-- [ ] **Give `DesignIssue` a destination, so the reviewer can perform the three move repairs.**
-      `move` towards an element now exists, and it is **not** enough on its own — the earlier claim
-      that it would unblock `move-to-zone`, `move-destination` and `move-tree` was wrong. The scorer
-      says what is wrong and never where the thing should go instead, and there is no field on
-      `DesignIssue` to put a destination in. That is a change to the scorer, not to the vocabulary.
-      **Effort: M.**
-- [ ] **The scorer cannot tell the three concepts apart.** `readDesignFor` gives slot A `social`,
-      B `open` and C `planted` with different primary zones, and scored across four fixtures all
-      three produce **the same total to four decimal places and the same issues** — no principle
-      reads `emphasis` or `primaryZone`. So the three cards are judged against one standard, and
-      "slot C is scored as a planted garden" is not true. `design-review.service.ts` takes no brief
-      slot because of it, and `design-review.service.test.ts` pins the limitation so it fails when
-      this is fixed. **Effort: M**, and it is a question about the scorer rather than about the
-      review endpoint.
-- [ ] **A vision critic behind the same interface.** The loop consumes `DesignIssue[]`; a critic
-      that returns them from a rendered picture rather than from geometry would drop straight in.
+- [x] **`reroute` and `rotate`.** Both intents, both through the generator's own primitives:
+      `reroute` names an objective (`direct`, `avoid`, `connect`) and picks among the routes
+      `routeCandidates` enumerates; `rotate` names what to be square to and the planner tries the
+      quarter turns nearest where the thing already sits. No angle and no points anywhere in either.
+      `align` is performable now because of the second.
+- [x] **`DesignIssue` says what a valid correction would achieve.** `IssueGuidance` — near these,
+      clear of those, out of the view, screened from that edge, this much bigger — every field a
+      relation and none of them a position, tested by walking the schema's property names. The three
+      move repairs are performable, `drop-optional` is reachable now that its emitters name the
+      optional things standing in the way, and `REPAIR_CAPABILITIES` replaced the three tables that
+      agreed only by hand.
+- [x] **The reviewer measures several corrections instead of taking the first.**
+      `POST /:id/design/repair` scores candidates with the real scorer and answers with the best or
+      with nothing and a reason, so a change that helps nothing is never animated. `ReviewPass`
+      carries `played`, `considered` and `reason`; the panel narrates from them.
+- [x] **One test joins the two halves.** `pipeline.test.ts`: a fake model's intents → the real
+      planner against PostGIS → `runFromProposal` → `prepareRun`, asserting the executor refuses
+      nothing. `prepare.ts` and `from-proposal.ts` moved into the schema package to allow it, with
+      re-exports so no web import changed.
+
+- [ ] **Laying a route, which is the one repair verb with no planner behind it.** `route-missing` is
+      the third commonest fault in the harness (59 of 117 concepts) and its subject is the thing
+      nobody can reach rather than a path, so the correction is to *lay* a route. `DesignIntent.add`
+      builds a footprint at a sampled point; a route is a line between two things. The router is
+      already pure and already enumerates (`routeCandidates`), so what is missing is the intent and
+      the planner branch — and `terraceStarts` is now shared, which is what that branch needs.
+      The reviewer names the limitation rather than reporting "no legal change". **Effort: M.**
+- [ ] **A move search that can clear the view cone.** Measured on the gallery: `shed-in-view` and
+      `play-not-visible` generate three or four legal candidates and none of them improves the plan,
+      because a `move` steps by `MOVE_LADDER` fractions towards one target and a shed moved a third
+      of the way is still in the sightline. `bbq-far-from-dining` and `view-blocked` do land, so the
+      mechanism works; what is coarse is the set of destinations. **Effort: M.**
+- [x] **The scorer can tell the three concepts apart.** The weights follow the brief
+      (`knowledge/weight-profiles.ts`), four principles read the fields that vary by slot, and
+      `maintenanceFit` is the tenth principle. `DesignScore.weights` carries what was applied so the
+      total can still be explained, and the reviewer judges a plan against the strategy the user
+      chose. **Measured** by `pnpm --filter @garden-studio/api eval:scorer` over nine hand-built
+      gardens: cross-brief spread 0.016 → 0.090, the upkeep pair 0.012 → 0.083, the three slots
+      identical to three decimal places → different on every garden, and the composition pairs
+      unchanged at 0.31–0.39. Before and after are in `scripts/eval-scorer.baseline.md`.
+
+Three things the new principles found in the generator, which are faults in the *plans* rather than
+in the scorer, and are the obvious next pieces of work:
+
+- [ ] **`no-primary-space` fires on 36 of 117 generated concepts.** A third of plans do not make the
+      room the brief says they are organised around the most generous one. `zone-planner.ts`
+      positions the rooms and nothing sizes them by importance, so the primary zone gets whatever
+      the composition's sketch gives it. **Effort: M**, in the zone planner.
+- [ ] **`composition-off-brief` fires 42 times**, which is the same finding measured by area: an
+      `open` concept that comes back under a fifth lawn, or a `planted` one under a quarter planting.
+      The templates draw one composition per archetype whatever the emphasis. **Effort: M.**
+- [ ] **`maintenanceFit` has a minimum of 0.000 across the fixture set**, so at least one low-upkeep
+      brief is answered with a high-upkeep garden even though `resolveConstraints` forbids it a lawn.
+      Worth finding: the demand is mostly planting share and bed count, neither of which the
+      low-maintenance path caps. **Effort: S to diagnose.**
+- [ ] **Two of three cards can share a composition *and* a lawn panel.** On the deep 20 × 30 m
+      fixture the modern set comes back with two `destination_garden` concepts whose realised lawn
+      outline is identical, though the plans differ everywhere else (56 elements against 49,
+      different furniture, a second water feature in one). `choose.test.ts` passes, because the two
+      **previews** genuinely differ — it is realisation that collapses them, since the lawn panel is
+      `remainderPieces` of the same zone. The diversity signature is taken from the preview and
+      cannot see that. Pre-existing; the brief-driven weights exposed it by pushing two slots onto
+      one archetype, and `BRIEF_WEIGHTS=0` still gives three. **Effort: M.**
+- [ ] **A vision critic behind the same interface.** The loop consumes `DesignIssue[]`, which now
+      carries `source: 'geometry' | 'visual'` and is stamped once in `scoreSubject` rather than at
+      thirty emitters — so a critic that returns issues from a rendered picture drops straight in and
+      the repair pipeline cannot tell which produced what.
       The client renders the PNG (`DownloadPlanButton` already does) because the composer lives in
       the web app, and posts it with the element inventory; one vision call in `intent.service.ts`'s
       style returns issues validated so every subject is a real element id and every code is in

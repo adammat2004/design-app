@@ -282,8 +282,15 @@ async function main(): Promise<void> {
   const provider: ImageProvider | null = key ? openAiProvider(key, options.quality) : null;
 
   mkdirSync(RAW_DIR, { recursive: true });
-  mkdirSync(join(PUBLIC_ASSETS, 'textures'), { recursive: true });
-  mkdirSync(join(PUBLIC_ASSETS, 'sprites'), { recursive: true });
+  /*
+   * The output directories are *derived from `assetFile`*, never restated here. They used to be
+   * two hardcoded names, which was fine while layout was one axis; now that it is camera and kind
+   * a restated list is a second place to keep in step, and a camera added to the manifest would
+   * arrive as a directory nobody had created.
+   */
+  for (const dir of new Set(ASSET_IDS.map((id) => dirname(join(PUBLIC_ASSETS, assetFile(id, 1)))))) {
+    mkdirSync(dir, { recursive: true });
+  }
 
   const existing = readCatalogue();
   const entries = new Map<string, CatalogueEntry>(

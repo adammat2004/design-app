@@ -1,5 +1,11 @@
-import { distanceToSegment, type DesignIssue } from '@garden-studio/schema';
-import { clamp01, meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import { distanceToSegment } from '@garden-studio/schema';
+import {
+  clamp01,
+  meanOf,
+  NOT_APPLICABLE,
+  type PrincipleResult,
+  type MeasuredIssue,
+} from './result.js';
 import type { DesignSubject, SubjectItem } from './subject.js';
 
 /**
@@ -34,7 +40,7 @@ export function scorePrivacy(subject: DesignSubject): PrincipleResult {
   const seats = subject.items.filter((item) => PRIVATE.includes(item.feature));
   if (exposedEdges.length === 0 || seats.length === 0) return NOT_APPLICABLE;
 
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   for (const seat of seats) {
@@ -78,6 +84,12 @@ export function scorePrivacy(subject: DesignSubject): PrincipleResult {
           } with nothing screening it.`,
           subjects: [seat.id],
           repair: 'move-to-zone',
+          /*
+           * Screened from *this* edge, named by the vertex every other module names it by. Not
+           * "move it away from the boundary": a seat can be right against a 1.8 m fence quite
+           * happily, and what is wrong here is that nothing stands between it and a low one.
+           */
+          guidance: { screenFrom: [edge.vertexId] },
         });
       }
     }

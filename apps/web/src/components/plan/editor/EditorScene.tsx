@@ -65,7 +65,15 @@ export function EditorScene({ scene, site, transform, onReady }: {
     return () => { live = false; };
   }, [mounted, scene, site, transform, assets, onReady]);
 
+  /*
+   * `data-view` is the camera this scene was built to, exposed so a browser test can assert it.
+   * The 2D Plan tab once built a *visualise* scene and drew the elevated library for a whole
+   * commit while every unit test passed — because each guard one layer down was intact and the
+   * fault was a caller asking for the wrong camera. Nothing below the call site can catch that,
+   * so the call site's answer has to be visible from outside.
+   */
   return <div ref={host} data-testid="editor-scene" data-plants={scene.plants.length}
+    data-view={scene.view}
     data-scale={transform.scale} data-offset-x={transform.offsetX} data-offset-y={transform.offsetY}
     aria-hidden className="pointer-events-none absolute inset-0">
     <canvas ref={overlay} className="absolute inset-0 h-full w-full" />

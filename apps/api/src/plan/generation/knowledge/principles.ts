@@ -14,9 +14,13 @@ import type { PrincipleId } from '@garden-studio/schema';
  * - **They are renormalised, never assumed to sum to one.** A principle that does not apply to a
  *   plan — no location, so nothing can be said about shade — is dropped and the rest are scaled
  *   back up. Scoring an unlocated garden zero for sun would mark down every plan drawn before step
- *   1 grew a location field. The eight principles that always apply do sum to one, and `sun` sits
- *   *on top* of them at 0.05: a located plan is judged on nine things, an unlocated one on eight,
- *   and neither is penalised for what the other knows.
+ *   1 grew a location field. The eight principles that always apply do sum to one, and the two
+ *   conditional ones sit *on top* of them at 0.05 each: a located plan whose owner stated an upkeep
+ *   level is judged on ten things and one that stated neither on eight, and neither is penalised for
+ *   what the other knows.
+ * - **They are a base, not the final answer.** `weightProfile` shifts them by what the concept is
+ *   *for* — an entertaining garden weighs how its spaces relate more heavily than a planted one
+ *   does — and renormalises. This table is what that starts from, and what it falls back to.
  * - **`featureFit` is not in the table.** It is a gate: a concept missing an essential feature has
  *   its total capped rather than reduced, because it is the wrong concept rather than a worse one.
  * - **Nothing here has authority over geometry.** Change every weight and the same set of legal
@@ -84,14 +88,26 @@ export const PRINCIPLES: Principle[] = [
     reason:
       'Whether the seating gets the afternoon. Only when the site has a location: there is no shade that is true of anywhere.',
   },
+  {
+    id: 'maintenanceFit',
+    weight: 0.05,
+    reason:
+      'How much work the garden asks for against how much was offered. Only when the user said: an upkeep level nobody stated is not a standard to mark against.',
+  },
 ];
 
 export const PRINCIPLE_WEIGHTS: Record<string, number> = Object.fromEntries(
   PRINCIPLES.map((principle) => [principle.id, principle.weight]),
 );
 
-/** The principle that only applies when the site says where on Earth it is. */
-export const CONDITIONAL: PrincipleId[] = ['sun'];
+/**
+ * The principles that only apply when the document says enough to ask them.
+ *
+ * `sun` needs a location; `maintenanceFit` needs an upkeep level. Both sit on top of the eight that
+ * always apply rather than among them, so a plan that can answer neither is judged on eight things
+ * out of eight rather than on eight out of ten.
+ */
+export const CONDITIONAL: PrincipleId[] = ['sun', 'maintenanceFit'];
 
 /**
  * The score a candidate must reach to be offered without qualification.

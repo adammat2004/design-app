@@ -30,8 +30,15 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
   const brief = DESIGN_BRIEF_JSON_SCHEMA.properties.briefs.items;
 
   it('asks for every field the Zod brief requires', () => {
-    /* `style` is deliberately absent: it is the user's own answer and the model may not set it. */
-    const zodFields = Object.keys(DesignBriefSchema.shape).filter((key) => key !== 'style');
+    /*
+     * Two fields are deliberately absent, for the same reason in two strengths. `style` is the
+     * user's own answer on a picture card. `upkeep` is the level `resolveConstraints` settled,
+     * which the palette, the badge and the scorer all read — so it is not a preference the model
+     * could hold an opinion about at all. Offering either would be asking for something the
+     * reconciler discards, which costs tokens on every call to produce a field nobody reads.
+     */
+    const withheld = ['style', 'upkeep'];
+    const zodFields = Object.keys(DesignBriefSchema.shape).filter((key) => !withheld.includes(key));
 
     expect([...brief.required].sort()).toEqual([...zodFields].sort());
   });

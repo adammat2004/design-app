@@ -1,6 +1,12 @@
-import { normaliseDegrees, type DesignIssue } from '@garden-studio/schema';
+import { normaliseDegrees } from '@garden-studio/schema';
 import { styleRules } from '../../knowledge/style-rules.js';
-import { clamp01, meanOf, NOT_APPLICABLE, type PrincipleResult } from './result.js';
+import {
+  clamp01,
+  meanOf,
+  NOT_APPLICABLE,
+  type PrincipleResult,
+  type MeasuredIssue,
+} from './result.js';
 import type { DesignSubject } from './subject.js';
 
 /**
@@ -30,7 +36,7 @@ const SYMMETRY_TOLERANCE = 0.6;
 
 export function scoreStyle(subject: DesignSubject): PrincipleResult {
   const rules = styleRules(subject.brief.style);
-  const issues: DesignIssue[] = [];
+  const issues: MeasuredIssue[] = [];
   const parts: number[] = [];
 
   /* ---- alignment ---- */
@@ -49,6 +55,7 @@ export function scoreStyle(subject: DesignSubject): PrincipleResult {
         message: `${off.length} of ${rotated.length} features sit off the line of the house, which a ${label(subject)} plan should not.`,
         subjects: off.map((item) => item.id),
         repair: 'align',
+        guidance: { alignTo: 'house' },
       });
     }
   }
@@ -63,7 +70,14 @@ export function scoreStyle(subject: DesignSubject): PrincipleResult {
         principle: 'style',
         severity: 'minor',
         message: `${used} different materials, where a ${label(subject)} plan wants at most ${rules.maxMaterials}.`,
-        subjects: [],
+        /*
+         * The surfaces the count is of, so the fault points at something even though no repair can
+         * act on it — choosing fewer materials is `materialFor`'s decision, not a layout change.
+         */
+        subjects: subject.items
+          .filter((item) => item.material !== null)
+          .slice(0, 8)
+          .map((item) => item.id),
       });
     }
   }
