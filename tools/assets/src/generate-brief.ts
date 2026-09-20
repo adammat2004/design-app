@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { BRIEF_ART } from '../../../apps/web/src/lib/brief-art';
 import { readOpenAiKey } from './env.js';
-import { openAiProvider } from './providers/openai.js';
-import type { ImageProvider } from './providers/provider.js';
+import { runPool } from './pool.js';
+import { openAiProvider, resolveModel } from './providers/openai.js';
+import type { ImageProvider, ImageQuality } from './providers/provider.js';
 
 /**
  * Generates the brief screen's artwork: one isometric vignette per garden space, one photograph
@@ -32,11 +33,14 @@ const REPO = join(HERE, '..', '..', '..');
 const RAW_DIR = join(HERE, '..', 'raw', 'brief');
 const OUT_DIR = join(REPO, 'apps', 'web', 'public', 'brief');
 
+const QUALITIES: readonly ImageQuality[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
 interface Options {
   only: string | null;
   force: boolean;
   dryRun: boolean;
-  quality: 'low' | 'medium' | 'high';
+  quality: ImageQuality;
+  model: string;
   concurrency: number;
 }
 
@@ -46,25 +50,27 @@ function parseArgs(argv: string[]): Options {
     force: false,
     dryRun: false,
     quality: 'high',
+    model: resolveModel(null),
     /*
-     * Two, not the other tool's four. This is a short run of large pictures against an
-     * images-per-minute allowance of five, so anything higher spends its time being rate-limited
-     * rather than generating.
+     * A short run of large pictures against a small images-per-minute allowance, so anything higher
+     * spends its time being rate-limited rather than generating.
      */
     concurrency: 2,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
+    const arg = argv[i]!;
     if (arg === '--only') options.only = argv[++i] ?? null;
     else if (arg === '--force') options.force = true;
     else if (arg === '--dry-run') options.dryRun = true;
+    else if (arg === '--model') options.model = resolveModel(argv[++i] ?? null);
     else if (arg === '--quality') {
-      const value = argv[++i];
-      if (value === 'low' || value === 'medium' || value === 'high') options.quality = value;
+      const value = argv[++i] as ImageQuality | undefined;
+      if (value && QUALITIES.includes(value)) options.quality = value;
+      else throw new Error(`--quality must be one of ${QUALITIES.join(', ')}, not ${value}`);
     } else if (arg === '--concurrency') {
       options.concurrency = Math.max(1, Number(argv[++i] ?? 1));
-    }
+    } else throw new Error(`Unknown argument ${arg}`);
   }
 
   return options;
@@ -73,7 +79,9 @@ function parseArgs(argv: string[]): Options {
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const key = readOpenAiKey(REPO);
-  const provider: ImageProvider | null = key ? openAiProvider(key, options.quality) : null;
+  const provider: ImageProvider | null = key
+    ? openAiProvider(key, { model: options.model, quality: options.quality })
+    : null;
 
   const wanted = BRIEF_ART.filter((art) => !options.only || art.id.startsWith(options.only));
 
@@ -115,12 +123,13 @@ async function main(): Promise<void> {
         return;
       }
 
-      raw = await provider.generate({
+      const image = await provider.generate({
         prompt: art.prompt,
         sizePx: art.sizePx,
         // Never transparent: both kinds of card art are a full-bleed picture behind a caption.
         transparent: false,
       });
+      raw = image.png;
       writeFileSync(rawFile, raw);
       generated += 1;
     }
@@ -154,19 +163,6 @@ async function main(): Promise<void> {
         'The brief screen draws its placeholder for anything missing.',
     );
   }
-}
-
-/** Runs the jobs with at most `limit` in flight. The twin of `generate.ts`'s. */
-async function runPool(jobs: (() => Promise<void>)[], limit: number): Promise<void> {
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, jobs.length) }, async () => {
-    while (next < jobs.length) {
-      const job = jobs[next]!;
-      next += 1;
-      await job();
-    }
-  });
-  await Promise.all(workers);
 }
 
 await main();

@@ -17,6 +17,8 @@
 /.material-preview/
 # `pnpm render:plan` output, likewise
 /.plan-preview/
+# the sheets as they were before a library regeneration, kept aside to compare against
+/.plan-preview-baseline/
 
 # next.js
 /.next/

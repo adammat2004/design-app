@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 import {
   ASSET_FAMILIES,
   ASSET_IDS,
@@ -10,8 +11,14 @@ import {
   type AssetFamily,
   type AssetId,
 } from '../../../apps/web/src/lib/materials/assets/asset-spec';
-import { readOpenAiKey } from './env.js';
 import {
+  ASSET_SPEC_VERSION,
+  composePrompt,
+} from '../../../apps/web/src/lib/materials/assets/asset-style';
+import { readOpenAiKey } from './env.js';
+import { runPool } from './pool.js';
+import {
+  POSTPROCESS_VERSION,
   processElevatedSprite,
   processFace,
   processSprite,
@@ -20,32 +27,40 @@ import {
   softShadowDisc,
   type Processed,
 } from './postprocess.js';
-import { openAiProvider } from './providers/openai.js';
-import type { ImageProvider } from './providers/provider.js';
+import { openAiProvider, resolveModel, MODEL_ENV, DEFAULT_MODEL } from './providers/openai.js';
+import type { ImageProvider, ImageQuality } from './providers/provider.js';
 
 /**
  * Generates the renderer's assets.
  *
- *     pnpm --filter @garden-studio/asset-tool generate [--only <prefix>] [--force] [--reprocess]
- *                                                        [--dry-run] [--strict]
- *                                                        [--quality low|medium|high]
+ *     pnpm --filter @garden-studio/asset-tool generate [--only <prefix | id-n>] [--force]
+ *                                                        [--reprocess] [--dry-run] [--strict]
+ *                                                        [--model <id>] [--quality <tier>]
+ *                                                        [--concurrency N] [--audit]
  *
- * For every family × variant in `asset-spec.ts`: ask the model, keep the raw PNG under `raw/`
- * (gitignored, so post-processing can be re-run without paying for the picture again), process it
- * into the WebP the app ships, and write `catalogue.json` beside the app's code with the numbers the
- * renderer reads. Existing raws are reused unless `--force`; `--only` restricts to ids starting
- * with a prefix, which is also how the two libraries are generated apart — `--only vis-` and
- * `--only skin-` are the elevated one.
+ * For every family × variant in `asset-spec.ts`: compose the prompt from `asset-style.ts`, ask the
+ * model, keep the raw PNG under `raw/` (gitignored, so post-processing can be re-run without paying
+ * for the picture again), process it into the WebP the app ships, and write `catalogue.json` beside
+ * the app's code with the numbers the renderer reads and a record of how each file was made.
+ * Existing raws are reused unless `--force`; `--only` restricts to ids starting with a prefix, or
+ * to one file by its stem (`plant-shrub-3`), which is how a single bad variant is re-rolled.
  *
- * **`--reprocess` spends nothing.** It re-runs the post-processing over the raws already on disk
- * and skips any family that has none. Use it after changing `postprocess.ts`; use `--force` when
- * you actually want to pay for new pictures.
+ * **The model is a setting.** `--model`, else `ASSET_IMAGE_MODEL`, else `DEFAULT_MODEL`; whichever
+ * it was is written into the catalogue with the quality tier, the size actually requested, the
+ * specification version and a hash of the raw bytes. `--quality` is the cost lever.
  *
- * `--strict` refuses to ship an asset the QA pass complains about. See `elevatedWarnings` in
- * `postprocess.ts` for what it can check and `docs/visualise-asset-style.md` for what only the
- * contact sheet can.
+ * **`--reprocess` spends nothing and forges nothing.** It re-runs the post-processing over the raws
+ * already on disk, skips any family that has none, and carries the file's original generation
+ * record forward untouched — it used to restamp every entry with today's model and today's prompt
+ * hash, which erased the one question the record exists to answer.
  *
- * No key is a supported state: the tool lists what it would generate and exits 0.
+ * `--strict` refuses to ship an asset with a *defect* — an opaque background, a cropped object, one
+ * that would float — and ships one that merely earned a warning, recording the warning. See
+ * `postprocess.ts` for the line between the two.
+ *
+ * `--audit` reads the library and exits non-zero if any file is missing, was drawn from a prompt
+ * that has since changed, or shipped with a defect. No key is a supported state: the tool lists
+ * what it would generate and exits 0.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -54,22 +69,18 @@ const RAW_DIR = join(HERE, '..', 'raw');
 const PUBLIC_ASSETS = join(REPO, 'apps', 'web', 'public', 'assets');
 const CATALOGUE = join(REPO, 'apps', 'web', 'src', 'lib', 'materials', 'assets', 'catalogue.json');
 
+const QUALITIES: readonly ImageQuality[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
 interface Options {
   only: string | null;
   force: boolean;
   reprocess: boolean;
   dryRun: boolean;
-  quality: 'low' | 'medium' | 'high';
-  /** Model calls in flight at once. The model takes ~20 s a picture; four keeps a full run short. */
+  quality: ImageQuality;
+  model: string;
+  /** Model calls in flight at once. The images-per-minute allowance is small; two rarely waits. */
   concurrency: number;
-  /**
-   * Refuse to write an asset the QA pass complains about.
-   *
-   * Off by default, because most of the checks are judgements a number gets *mostly* right and a
-   * tool that refused them outright would have the author tuning thresholds instead of looking at
-   * pictures. On for a long unattended batch, where the alternative is discovering on the contact
-   * sheet that thirty assets have a ground plane baked into them.
-   */
+  /** Refuse to write an asset the QA pass found a defect in. Warnings are recorded, never refused. */
   strict: boolean;
   /** Report what the library says about itself and write nothing. See `audit`. */
   audit: boolean;
@@ -82,7 +93,8 @@ function parseArgs(argv: string[]): Options {
     reprocess: false,
     dryRun: false,
     quality: 'medium',
-    concurrency: 4,
+    model: resolveModel(null),
+    concurrency: 2,
     strict: false,
     audit: false,
   };
@@ -95,45 +107,53 @@ function parseArgs(argv: string[]): Options {
     else if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--strict') options.strict = true;
     else if (arg === '--audit') options.audit = true;
+    else if (arg === '--model') options.model = resolveModel(argv[++i] ?? null);
     else if (arg === '--concurrency') options.concurrency = Math.max(1, Number(argv[++i] ?? 1));
     else if (arg === '--quality') {
-      const value = argv[++i];
-      if (value === 'low' || value === 'medium' || value === 'high') options.quality = value;
-      else throw new Error(`--quality must be low, medium or high, not ${value}`);
+      const value = argv[++i] as ImageQuality | undefined;
+      if (value && QUALITIES.includes(value)) options.quality = value;
+      else throw new Error(`--quality must be one of ${QUALITIES.join(', ')}, not ${value}`);
     } else throw new Error(`Unknown argument ${arg}`);
   }
 
   return options;
 }
 
-/* ---------------------------------------------------------------- prompts */
+/* ---------------------------------------------------------------- selection */
 
-/**
- * The prompt for one variant.
- *
- * A family prompt may list its variants — "Each variant a different species: a, b, c." — in which
- * case the nth item replaces the sentence. Otherwise the variant is asked to differ in arrangement,
- * which is enough for gravel and not enough for shrubs, so the plant families all list theirs.
- */
-export function variantPrompt(family: AssetFamily, variant: number): string {
-  const match = /Each variant[^:]*:\s*([^.]+)\./.exec(family.prompt);
+/** `--only` names a prefix (`vis-`), a family (`plant-shrub`) or one file by stem (`plant-shrub-3`). */
+function selects(only: string | null, id: AssetId, variant: number): boolean {
+  if (!only) return true;
+  return id.startsWith(only) || `${id}-${variant}` === only;
+}
 
-  if (match) {
-    const items = match[1]!.split(/,\s*/).map((item) => item.trim());
-    const item = items[variant - 1];
-    if (item) {
-      return family.prompt.replace(match[0], `Specifically: ${item}.`);
-    }
-  }
-
-  if (family.variants > 1) {
-    return `${family.prompt} Variant ${variant} of ${family.variants}, differing in arrangement and detail from the others.`;
-  }
-
-  return family.prompt;
+function familiesFor(only: string | null): AssetId[] {
+  return ASSET_IDS.filter((id) => !only || id.startsWith(only) || only.startsWith(`${id}-`));
 }
 
 /* ---------------------------------------------------------------- catalogue */
+
+/** How a file was made. Written when the model is called, carried forward by `--reprocess`. */
+export interface GenerationRecord {
+  model: string;
+  quality: string;
+  requestedSize: { w: number; h: number };
+  rawSize: { w: number; h: number };
+  specVersion: string;
+  promptHash: string;
+  generatedAt: string;
+  /** Digest of the raw PNG, so a raw on disk can be matched to the file it made. */
+  rawHash: string;
+}
+
+/** What the last post-processing pass did and found. Rewritten on every pass. */
+export interface ProcessedRecord {
+  postprocessVersion: string;
+  at: string;
+  warnings: string[];
+  defects: string[];
+  correction?: { saturation: number };
+}
 
 export interface CatalogueEntry {
   id: AssetId;
@@ -147,18 +167,10 @@ export interface CatalogueEntry {
   /** Elevated sprites: where the opaque pixels are, and how much of the bottom edge they cover. */
   opaqueBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   footAlpha?: number;
-  /**
-   * Where this file came from — see the app's `CatalogueEntrySchema`.
-   *
-   * Written from here on so the library stays answerable as it becomes mixed-vintage. The first
-   * time a better image model appears, "which of these came from the old one" and "which would
-   * change if I edited this prompt" both become questions a selective regeneration has to answer,
-   * and neither can be reconstructed later.
-   *
-   * The prompt is hashed rather than copied: it already lives in `asset-spec.ts`, which is the
-   * specification, and a second copy here would be a second thing to keep in step.
-   */
+  /** The record written before `generation` existed. Kept as it was; never written afresh. */
   provenance?: { model: string; generatedAt: string; promptHash: string };
+  generation?: GenerationRecord;
+  processed?: ProcessedRecord;
 }
 
 interface Catalogue {
@@ -211,7 +223,7 @@ async function postprocess(family: AssetFamily, png: Buffer): Promise<Processed>
         ? processElevatedSprite(png, family.sizePx, family.metres.h, elevatedFrame(family).h)
         : processSprite(png, family.sizePx);
     case 'texture':
-      return processTexture(png, family.sizePx);
+      return processTexture(png, family.sizePx, family.correction);
     case 'face':
       return processFace(png, family.sizePx);
   }
@@ -220,14 +232,15 @@ async function postprocess(family: AssetFamily, png: Buffer): Promise<Processed>
 /**
  * What the library says about itself, without asking a model or writing a byte.
  *
- * The question this answers is the one `provenance.promptHash` was recorded for and which nothing
- * could ask until now: **which of these files no longer match the sentence that specifies them?**
- * A prompt is edited far more often than a library is regenerated, so the drift is silent and
- * accumulating — an asset keeps drawing perfectly while its specification has moved on, and there
- * is no way to tell by looking at either one.
+ * The question this answers is the one the generation record exists for and which nothing could
+ * ask until it was recorded: **which of these files no longer match the sentence that specifies
+ * them?** A prompt is edited far more often than a library is regenerated, so the drift is silent
+ * and accumulating — an asset keeps drawing perfectly while its specification has moved on, and
+ * there is no way to tell by looking at either one.
  *
  * Read-only on purpose. Regenerating is `--force --only <id>`, which is a decision with a bill
- * attached; this is the report you make it from.
+ * attached; this is the report you make it from. **Exits non-zero** on anything missing, stale or
+ * defective, so it can stand in a check.
  */
 function audit(only: string | null): void {
   const catalogue = readCatalogue();
@@ -236,11 +249,16 @@ function audit(only: string | null): void {
   const stale: string[] = [];
   const unprovenanced: string[] = [];
   const missing: string[] = [];
+  const defective: string[] = [];
+  const unversioned: string[] = [];
+  let considered = 0;
 
-  for (const id of ASSET_IDS.filter((candidate) => !only || candidate.startsWith(only))) {
+  for (const id of familiesFor(only)) {
     const family: AssetFamily = ASSET_FAMILIES[id];
 
     for (let variant = 1; variant <= family.variants; variant += 1) {
+      if (!selects(only, id, variant)) continue;
+      considered += 1;
       const key = `${id}-${variant}`;
       const entry = byKey.get(key);
 
@@ -248,26 +266,32 @@ function audit(only: string | null): void {
         missing.push(key);
         continue;
       }
-      if (!entry.provenance) {
+      if (entry.processed && entry.processed.defects.length > 0) defective.push(key);
+
+      const hash = entry.generation?.promptHash ?? entry.provenance?.promptHash;
+      if (!hash) {
         unprovenanced.push(key);
         continue;
       }
-      if (entry.provenance.promptHash !== promptHash(variantPrompt(family, variant))) {
-        stale.push(key);
-      }
+      if (hash !== promptHash(composePrompt(family, variant))) stale.push(key);
+      else if (!entry.generation) unversioned.push(key);
     }
   }
 
   for (const key of missing) console.log(`  missing      ${key}`);
   for (const key of stale) console.log(`  prompt moved ${key}`);
+  for (const key of defective) console.log(`  defective    ${key}`);
 
   console.log(
-    `\n${byKey.size} catalogued. ${missing.length} never generated, ${stale.length} drawn from a ` +
-      `prompt that has since changed, ${unprovenanced.length} predate provenance.`,
+    `\n${considered} considered, ${byKey.size} catalogued. ${missing.length} never generated, ` +
+      `${stale.length} drawn from a prompt that has since changed, ${defective.length} shipped ` +
+      `with a defect, ${unprovenanced.length} predate any record, ${unversioned.length} current ` +
+      `but predate specification ${ASSET_SPEC_VERSION}.`,
   );
   if (stale.length > 0) {
     console.log(`Regenerate with:  --force --only <id>`);
   }
+  if (missing.length + stale.length + defective.length > 0) process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
@@ -279,7 +303,9 @@ async function main(): Promise<void> {
   }
 
   const key = readOpenAiKey(REPO);
-  const provider: ImageProvider | null = key ? openAiProvider(key, options.quality) : null;
+  const provider: ImageProvider | null = key
+    ? openAiProvider(key, { model: options.model, quality: options.quality })
+    : null;
 
   mkdirSync(RAW_DIR, { recursive: true });
   /*
@@ -288,7 +314,9 @@ async function main(): Promise<void> {
    * a restated list is a second place to keep in step, and a camera added to the manifest would
    * arrive as a directory nobody had created.
    */
-  for (const dir of new Set(ASSET_IDS.map((id) => dirname(join(PUBLIC_ASSETS, assetFile(id, 1)))))) {
+  for (const dir of new Set(
+    ASSET_IDS.map((id) => dirname(join(PUBLIC_ASSETS, assetFile(id, 1)))),
+  )) {
     mkdirSync(dir, { recursive: true });
   }
 
@@ -296,8 +324,6 @@ async function main(): Promise<void> {
   const entries = new Map<string, CatalogueEntry>(
     existing.assets.map((entry) => [`${entry.id}-${entry.variant}`, entry]),
   );
-
-  const ids = ASSET_IDS.filter((id) => !options.only || id.startsWith(options.only));
 
   let generated = 0;
   let processed = 0;
@@ -308,10 +334,11 @@ async function main(): Promise<void> {
 
   const jobs: (() => Promise<void>)[] = [];
 
-  for (const id of ids) {
+  for (const id of familiesFor(options.only)) {
     const family: AssetFamily = ASSET_FAMILIES[id];
 
     for (let variant = 1; variant <= family.variants; variant += 1) {
+      if (!selects(options.only, id, variant)) continue;
       const key = `${id}-${variant}`;
       const file = assetFile(id, variant);
       const out = join(PUBLIC_ASSETS, file);
@@ -326,7 +353,19 @@ async function main(): Promise<void> {
           family.procedural === 'light-pool'
             ? await lightPoolDisc(family.sizePx)
             : await softShadowDisc(family.sizePx);
-        record(entries, id, variant, file, result, 'procedural');
+        record(entries, id, variant, file, result, {
+          kind: 'generated',
+          generation: {
+            model: 'procedural',
+            quality: 'none',
+            requestedSize: family.sizePx,
+            rawSize: family.sizePx,
+            specVersion: ASSET_SPEC_VERSION,
+            promptHash: promptHash(composePrompt(family, variant)),
+            generatedAt: new Date().toISOString(),
+            rawHash: digest(result.webp),
+          },
+        });
         writeFileSync(out, result.webp);
         processed += 1;
         console.log(`  drew   ${key}`);
@@ -370,15 +409,32 @@ async function main(): Promise<void> {
 
       jobs.push(async () => {
         let png: Buffer;
+        let origin: Origin = { kind: 'kept' };
 
         if (needsModel) {
           const started = Date.now();
+          const prompt = composePrompt(family, variant);
           try {
-            png = await provider!.generate({
-              prompt: variantPrompt(family, variant),
+            const image = await provider!.generate({
+              prompt,
               sizePx: family.sizePx,
               transparent: family.transparent,
             });
+            png = image.png;
+            const meta = await sharp(png).metadata();
+            origin = {
+              kind: 'generated',
+              generation: {
+                model: provider!.model,
+                quality: provider!.quality,
+                requestedSize: image.requestedSize,
+                rawSize: { w: meta.width ?? 0, h: meta.height ?? 0 },
+                specVersion: ASSET_SPEC_VERSION,
+                promptHash: promptHash(prompt),
+                generatedAt: new Date().toISOString(),
+                rawHash: digest(png),
+              },
+            };
           } catch (error) {
             failed += 1;
             console.log(`  FAILED ${key}: ${error instanceof Error ? error.message : error}`);
@@ -394,17 +450,17 @@ async function main(): Promise<void> {
         const result = await postprocess(family, png);
 
         /*
-         * Refused rather than written, under `--strict`. The raw PNG stays on disk, so re-running
-         * with the flag off writes it anyway and `--reprocess` re-measures it — the picture that was
-         * paid for is never thrown away, only the decision to ship it.
+         * Refused rather than written, under `--strict`, and only for a defect. The raw PNG stays
+         * on disk, so re-running with the flag off writes it anyway and `--reprocess` re-measures
+         * it — the picture that was paid for is never thrown away, only the decision to ship it.
          */
-        if (options.strict && (result.warnings?.length ?? 0) > 0) {
+        if (options.strict && (result.defects?.length ?? 0) > 0) {
           rejected += 1;
-          console.log(`  REJECT ${key}: ${result.warnings!.join('; ')}`);
+          console.log(`  REJECT ${key}: ${result.defects!.join('; ')}`);
           return;
         }
 
-        record(entries, id, variant, file, result, provider?.name ?? 'reprocessed');
+        record(entries, id, variant, file, result, origin);
         writeFileSync(out, result.webp);
         processed += 1;
         console.log(
@@ -413,6 +469,7 @@ async function main(): Promise<void> {
             (result.opaqueRadiusRatio !== undefined ? `  reach ${result.opaqueRadiusRatio}` : '') +
             (result.footAlpha !== undefined ? `  foot ${result.footAlpha}` : ''),
         );
+        for (const defect of result.defects ?? []) console.log(`         ✗ ${defect}`);
         for (const warning of result.warnings ?? []) console.log(`         ⚠ ${warning}`);
       });
     }
@@ -431,7 +488,7 @@ async function main(): Promise<void> {
   if (failed > 0) console.log(`${failed} failed — re-run to retry just those.`);
   if (rejected > 0) {
     console.log(
-      `${rejected} rejected by the QA pass — the raw PNGs are kept, so --force re-asks the model ` +
+      `${rejected} rejected for a defect — the raw PNGs are kept, so --force re-asks the model ` +
         'and dropping --strict ships them as they are.',
     );
   }
@@ -440,6 +497,14 @@ async function main(): Promise<void> {
     `\n${generated} generated, ${processed} processed, ${skipped} skipped, ${rejected} rejected, ${wouldGenerate} not generated.`,
   );
   console.log(`Catalogue ${catalogue.version} lists ${catalogue.assets.length} files.`);
+  if (generated > 0 || wouldGenerate > 0) {
+    console.log(
+      `Model ${options.model} at ${options.quality}` +
+        (options.model === DEFAULT_MODEL
+          ? ` (the default; override with --model or ${MODEL_ENV})`
+          : ''),
+    );
+  }
 
   if (!provider && wouldGenerate > 0) {
     console.log(
@@ -449,23 +514,23 @@ async function main(): Promise<void> {
   }
 }
 
-/** Runs the jobs with at most `limit` in flight. Order of completion is whatever it is. */
-async function runPool(jobs: (() => Promise<void>)[], limit: number): Promise<void> {
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, jobs.length) }, async () => {
-    while (next < jobs.length) {
-      const job = jobs[next]!;
-      next += 1;
-      await job();
-    }
-  });
-  await Promise.all(workers);
-}
-
 /** A short, stable digest of the sentence that specifies this asset. */
 export function promptHash(prompt: string): string {
-  return createHash('sha256').update(prompt).digest('hex').slice(0, 12);
+  return digest(Buffer.from(prompt));
 }
+
+function digest(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex').slice(0, 12);
+}
+
+/**
+ * Where the pixels came from on this pass.
+ *
+ * `generated` writes a fresh record. `kept` means the raw on disk was reused — `--reprocess` — and
+ * the entry's existing `generation` (or its older `provenance`) is carried forward as it was,
+ * because the pixels are the ones that record describes, whatever prompt or model is current now.
+ */
+type Origin = { kind: 'generated'; generation: GenerationRecord } | { kind: 'kept' };
 
 function record(
   entries: Map<string, CatalogueEntry>,
@@ -473,10 +538,20 @@ function record(
   variant: number,
   file: string,
   result: Processed,
-  /** What made it. The procedural families say so rather than naming a model they never called. */
-  model: string,
+  origin: Origin,
 ): void {
-  entries.set(`${id}-${variant}`, {
+  const key = `${id}-${variant}`;
+  const previous = entries.get(key);
+
+  const lineage: Pick<CatalogueEntry, 'generation' | 'provenance'> =
+    origin.kind === 'generated'
+      ? { generation: origin.generation }
+      : {
+          ...(previous?.generation ? { generation: previous.generation } : {}),
+          ...(previous?.provenance ? { provenance: previous.provenance } : {}),
+        };
+
+  entries.set(key, {
     id,
     variant,
     file,
@@ -489,10 +564,13 @@ function record(
     ...(result.seamScore !== undefined ? { seamScore: result.seamScore } : {}),
     ...(result.opaqueBounds !== undefined ? { opaqueBounds: result.opaqueBounds } : {}),
     ...(result.footAlpha !== undefined ? { footAlpha: result.footAlpha } : {}),
-    provenance: {
-      model,
-      generatedAt: new Date().toISOString(),
-      promptHash: promptHash(variantPrompt(ASSET_FAMILIES[id], variant)),
+    ...lineage,
+    processed: {
+      postprocessVersion: POSTPROCESS_VERSION,
+      at: new Date().toISOString(),
+      warnings: result.warnings ?? [],
+      defects: result.defects ?? [],
+      ...(result.correction ? { correction: result.correction } : {}),
     },
   });
 }

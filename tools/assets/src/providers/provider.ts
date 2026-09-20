@@ -1,19 +1,31 @@
 /**
- * One function between the tool and whichever image model is in use.
+ * One function behind which an image model sits.
  *
- * Everything the tool does — prompting, post-processing, the catalogue — is the same whatever
- * model draws the picture, so the model is the one thing behind an interface. Anthropic's API does
- * not generate images, which is why the default is not the SDK the rest of the repository uses.
+ * The tool asks for a picture of a given size with or without a transparent background, and gets
+ * the bytes back with what was actually requested — so the catalogue can record the true request
+ * rather than the family's nominal size, which a model may not accept verbatim.
  */
+
+/** The cost lever. Which tiers a model accepts is the provider's business. */
+export type ImageQuality = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface ImageRequest {
   prompt: string;
-  /** The size wanted. A provider may round to what its model accepts; the tool resizes after. */
+  /** The output size the family wants. The provider asks for something at least this big. */
   sizePx: { w: number; h: number };
   transparent: boolean;
 }
 
+export interface GeneratedImage {
+  png: Buffer;
+  /** The size the model was actually asked for, which the catalogue records. */
+  requestedSize: { w: number; h: number };
+}
+
 export interface ImageProvider {
+  /** For the log line: model and quality in one string. */
   name: string;
-  /** PNG bytes. With alpha when `transparent` was asked for and the model can oblige. */
-  generate(request: ImageRequest): Promise<Buffer>;
+  model: string;
+  quality: ImageQuality;
+  generate(request: ImageRequest): Promise<GeneratedImage>;
 }

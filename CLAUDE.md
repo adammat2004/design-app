@@ -96,10 +96,13 @@ house by `computeZones`, so storing them could only create something stale.
 - **the plan draws with photographs and sprites**: slab and board faces, seamless tiles of gravel,
   turf, bark and water, top-down plant and tree-canopy sprites, furniture, light fittings and the
   faces of edging and walling products, all generated once by `tools/assets` with an image model and
-  checked in under `apps/web/public/assets/` (147 files across 68 families, ~30 MB;
+  checked in under `apps/web/public/assets/` (203 files across 99 families;
   `pnpm --filter @garden-studio/web audit:assets` is the check that the manifest and the disk
-  agree). The app never calls an image model; a missing file means the procedural pattern
-  draws instead, so everything works with no key. See "Rendering with assets" below.
+  agree, and it exits non-zero when they do not). The app never calls an image model; a missing
+  file means the procedural pattern draws instead, so everything works with no key. Every sprite
+  is drawn to one versioned specification (`asset-style.ts`, `ASSET_SPEC_VERSION`) on
+  `gpt-image-2.5-sunburst`; the opaque surfaces were kept from the first library. See "Rendering
+  with assets" and "Asset Library v2" below.
 - **furniture is a category**, `symbol` is a field, and the generator furnishes what it places: a
   lounge set on the seating patio, a dining set under the pergola, a barbecue in the outdoor
   kitchen, a bowl in the fire pit, a swing on the play area; a store is a `shed`, a veg patch a
@@ -3502,6 +3505,98 @@ catches both — which is how a test for edging heights came to be reading plant
 its faces from it and the eaves shade draws its bands from it. Two copies of that winding probe is
 exactly how the walls and the shadow on them would come to disagree about which side of a building
 is the front.
+
+## Asset Library v2: one specification, composed prompts, a recorded lineage
+
+**Every prompt is composed; no family carries one.** `asset-style.ts` holds the versioned visual
+specification — `ASSET_SPEC_VERSION`, the two camera preambles, one template per kind of subject,
+the global exclusions and the tint clause — and `composePrompt(family, variant)` is the only place
+they meet. A family in `asset-spec.ts` names its `template`, writes its `subject` and, where the
+variants are different things, lists `variantSubjects`. The tool, `elevated.test.ts` and
+`asset-style.test.ts` all call the same function, so what is sent is what is tested. The old shape
+baked the preamble into each family's `prompt` string, which is how the plan camera and the elevated
+camera came to be written at different times to different standards, and how a regex reading the
+variant list out of prose fell through for fifteen families and sent every variant the same
+sentence.
+
+**The subject must not restate the template.** A test refuses "transparent background", "degrees",
+"cast shadow" and "watermark" in any subject: a subject that names the background or the light can
+only ever disagree with the camera it is composed onto.
+
+**Bump `ASSET_SPEC_VERSION` when a template's *meaning* changes**, never for a reworded subject —
+`promptHash` catches that on its own. The catalogue records the version beside every generated
+file, so an audit can say "drawn to 1.x" rather than only "something moved". A test holds
+`docs/visualise-asset-style.md` to the same number.
+
+**The catalogue has two records per file and they mean different things.** `generation` is written
+only when a model is called — model, quality, the size actually requested and returned, spec
+version, prompt hash, a digest of the raw — and `--reprocess` carries it forward untouched, because
+the pixels are still the ones it describes whatever prompt is current. `processed` is rewritten on
+every pass: post-process version, the QA pass's `warnings` and `defects`, any baked `correction`.
+`--reprocess` used to restamp every entry with today's model and today's prompt hash, which erased
+the one question the record exists to answer. The 48 files kept from the first library (faces,
+tiles, skins, effects) still carry only the older `provenance`; they are byte-identical to what
+their prompts say and predate the version.
+
+**A defect is refused; a warning is recorded.** `--strict` refuses an opaque background, a cropped
+object or one that would float above its footprint, and ships one with a halo or a broad foot while
+writing the warning into the catalogue. One flat list left `--strict` choosing between refusing
+every judgement and refusing nothing, which is why it was off.
+
+**The model is a setting, dated.** `--model`, else `ASSET_IMAGE_MODEL`, else
+`DEFAULT_MODEL = 'gpt-image-2.5-sunburst-2026-09-08'` — a snapshot so a regeneration a year on asks
+the same model. `gpt-image-2` and later accept any size with both sides a multiple of 16 inside 3:1,
+so the frame is requested at its own aspect with the long edge in 1024–2048 px and downsampled;
+older models get the three presets. `--only` takes a prefix, a family, or one file by stem
+(`plant-shrub-3`) for re-rolling a single bad variant.
+
+**The model has a minimum pixel budget as well as a maximum, and a dropped connection is as
+ordinary as a 429.** The first full run lost forty of a hundred and fifty pictures to two things
+the provider did not handle: every narrow family (a lounger at 512×1024, a bench at 1024×384) came
+back `400 Requested resolution is below the current minimum pixel budget`, and `fetch failed` was
+thrown straight through after hanging for minutes, because the retry loop looked only at status
+codes. `customSizeFor` now scales any request up to a megapixel at its own aspect, and a network
+error is retried with the same backoff under a three-minute timeout. Re-roll what a run lost by
+stem — `--force --strict --only vis-lounger-2` — rather than by prefix, or the pictures that
+succeeded are bought again.
+
+**Corrections at source live on `correction`, draw-time policy on `render`, and they must not both
+say the same thing.** `render.saturation` is multiplied in by the renderer at every draw;
+`correction.saturation` is baked into the file by `processTexture` from the raw and applied exactly
+once however many surfaces overlap. Play bark moved from the first to the second. `render` also
+replaced the renderer's hard-coded set of eight turnable texture ids: a policy about a family
+belongs on the family.
+
+**Regenerate in place; append, never insert or remove.** Every plan-camera family keeps its id and
+its position, so `assetsMatching` keeps its length and order and no saved bed changes species. The
+two shrub twins added are elevated, reached only through `ELEVATED_TWINS`, so they sit beside their
+kin. `public/assets-v1/` (gitignored) is a copy taken before the first regeneration: the same
+catalogue path under two roots is what `/asset-lab` compares.
+
+**`/asset-lab` is where thirty assets are judged together.** Development only, like `/render-lab`.
+A lineup of every family at one scale on one real ground, drawn with `elevatedFrame`,
+`assetAnchor` and the contact-shadow constants rather than a fit of its own; per-family scale
+ladder, rotation and variants; every file with its record and the v1 picture beside it; and a
+fixture scene through the Canvas2D compositor. **The lineup effect has to depend on the image
+version, not the image map** — the map is one object for the life of the page, and keyed on it
+alone the canvas draws once before anything has decoded. Found on the first screenshot.
+
+**Measured, after the 17–19 Sep 2026 regeneration** (155 files on `gpt-image-2.5-sunburst`, trees
+at high and the rest at medium, in three waves plus a forty-file re-roll): the tool audit reports
+nothing missing, stale or defective; `audit:assets` reports zero failures and five halo warnings on
+pale objects; `measure:render`'s per-group saturation went tree 0.514 → 0.364, play 0.509 → 0.308,
+plant 0.383 → 0.288, hedge 0.495 → 0.443, elevated 0.334 → 0.287, library mean 0.338 → 0.277 —
+the outliers are gone and the whole library now sits a little *under* the traced target's 0.334,
+which is the restrained side of the specification and the right side to err on. **The golden
+images did not change**, because `render-plan.golden.test.ts` deliberately draws with no assets;
+the sheets in `.plan-preview/` are where a regeneration is judged, against the copy in
+`.plan-preview-baseline/`.
+
+**`audit:assets` exits non-zero.** Missing files, orphan and duplicate entries, incomplete families,
+a file whose pixels disagree with the catalogue, a shipped defect or elevated art in the 2D Plan
+are failures; framing warnings are printed. It used to print everything and exit zero, so nothing
+it found could stop a commit. `tools/assets --audit` adds the one question only the composer can
+answer — which files were drawn from a prompt that has since changed — and exits non-zero too.
 
 ## Materials: idempotence, and why it matters
 

@@ -238,9 +238,9 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
  */
 export const ELEVATED_TWINS: Partial<Record<AssetId, AssetId>> = {
   'plant-shrub': 'vis-shrub-evergreen',
-  'plant-shrub-architectural': 'vis-shrub-evergreen',
+  'plant-shrub-architectural': 'vis-shrub-architectural',
   'plant-shrub-deciduous': 'vis-shrub-flowering',
-  'plant-shrub-topiary': 'vis-shrub-evergreen',
+  'plant-shrub-topiary': 'vis-shrub-topiary',
   'plant-grass': 'vis-grass',
   'plant-grass-tall': 'vis-grass',
   /*

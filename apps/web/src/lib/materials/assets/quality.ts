@@ -15,23 +15,38 @@ export interface AssetRenderQuality {
   saturation: number;
 }
 
-/** Only isotropic ground textures are allowed to turn. Boards, stripes and baked light are not. */
-const TURNABLE = new Set<AssetId>(['tex-standard-turf', 'tex-hardwearing-turf', 'tex-soil',
-  'tex-gravel-paving', 'tex-decorative-gravel', 'tex-bark-mulch', 'tex-play-bark', 'tex-slate-chippings']);
-
+/**
+ * The renderer's transform policy for a family, from what the family says about itself.
+ *
+ * The defaults are conservative and derived: elevated art carries its own light so it may only turn
+ * a little, vegetation in plan is free to turn, everything else stays as photographed. Anything a
+ * family knows better — that a gravel is isotropic and may be quarter-turned and mirrored, that a
+ * bark is over-saturated at source — it states on its own `render` field, which is spread last.
+ * There used to be a set of eight texture ids and one saturation literal in here; a policy about a
+ * family belongs on the family.
+ */
 export function assetQuality(id: AssetId): AssetRenderQuality {
   const family: AssetFamily = ASSET_FAMILIES[id];
   return {
     lighting: family.camera === 'elevated' && family.kind === 'sprite' ? 'upper-left' : 'neutral',
     cameraCompliance: 'declared',
     groundShadow: family.taxon.group === 'effect' ? 'effect' : 'unverified',
-    rotation: TURNABLE.has(id) ? 'quarter-turn' : family.camera === 'elevated' ? 'limited' :
-      family.taxon.group === 'vegetation' ? 'free' : 'none',
-    mirror: TURNABLE.has(id), minPx: family.kind === 'sprite' ? 2 : 4,
+    rotation:
+      family.camera === 'elevated'
+        ? 'limited'
+        : family.taxon.group === 'vegetation'
+          ? 'free'
+          : 'none',
+    mirror: false,
+    minPx: family.kind === 'sprite' ? 2 : 4,
     preferredMaxPxPerMetre: Math.min(200, family.sizePx.w / family.metres.w),
-    replacement: family.taxon.group === 'effect' ? 'ready' : family.camera === 'elevated' || family.kind !== 'sprite' ||
-      elevatedTwin(id) ? 'review' : 'needed',
-    saturation: id === 'tex-play-bark' ? 0.68 : 1,
+    replacement:
+      family.taxon.group === 'effect'
+        ? 'ready'
+        : family.camera === 'elevated' || family.kind !== 'sprite' || elevatedTwin(id)
+          ? 'review'
+          : 'needed',
+    saturation: 1,
     ...family.render,
   };
 }
@@ -41,8 +56,18 @@ export function assetQualityAudit(id: AssetId) {
   const variants = catalogueVariants(id);
   const twin = elevatedTwin(id);
   const frame = family.camera === 'elevated' ? elevatedFrame(family) : family.metres;
-  return { id, camera: family.camera ?? 'plan', footprint: family.metres, anchor: assetAnchor(id),
-    elevatedTwin: twin, elevatedAvailable: twin ? catalogueVariants(twin).length : 0,
-    quality: assetQuality(id), pixelsPerMetre: variants.map((entry) => ({ variant: entry.variant,
-      x: entry.widthPx / frame.w, y: entry.heightPx / frame.h })) };
+  return {
+    id,
+    camera: family.camera ?? 'plan',
+    footprint: family.metres,
+    anchor: assetAnchor(id),
+    elevatedTwin: twin,
+    elevatedAvailable: twin ? catalogueVariants(twin).length : 0,
+    quality: assetQuality(id),
+    pixelsPerMetre: variants.map((entry) => ({
+      variant: entry.variant,
+      x: entry.widthPx / frame.w,
+      y: entry.heightPx / frame.h,
+    })),
+  };
 }

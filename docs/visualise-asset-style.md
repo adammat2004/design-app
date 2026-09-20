@@ -48,7 +48,7 @@ One sun, stated once, obeyed by everything:
 |---|---|
 | Direction | from the **upper left** — screen azimuth 315° |
 | Elevation | about **55°** above the horizon |
-| Softness | soft, hazy daylight; a visible but gentle self-shadow with no hard terminator |
+| Softness | soft, hazy daylight; from specification 2.0, **low-contrast self-shading only** — a gentle gradient across the object rather than a distinct lit side and dark side, no hard terminator |
 | Ambient | high; nothing in shadow goes black, shadow-side detail stays readable |
 | Contrast | restrained — a landscape visualisation, not a sunlit photograph |
 
@@ -161,14 +161,15 @@ direction, which is exactly what a real tree does and exactly what the reference
 
 ## 8 · Metadata every family carries
 
-| field | meaning |
-|---|---|
-| `camera: 'elevated'` | which specification this was drawn to; absent means `'plan'` |
-| `metres: { w, h }` | the **footprint** in metres, not the image's coverage |
-| `heightMetres` | how tall the thing is; with `RISE` this gives the frame's height |
-| `anchor: { x, y }` | where the object stands inside its own frame, as a fraction |
-| `recolourable: false` | always, for elevated art — see below |
-| `variants` | how many to generate |
+The fields and their meanings are documented once, on `AssetFamily` in `asset-spec.ts`, and are
+not restated here. The ones an elevated family has to get right are `camera`, `metres` (the
+**footprint**, not the image's coverage), `heightMetres` (with `RISE` it gives the frame), `anchor`
+(only when the object does not stand at the middle of its footprint band), `variants` and
+`variantSubjects` (one phrase per variant), and `recolourable`, which is never true for elevated art.
+
+The specification a file was drawn to is versioned: `asset-style.ts` exports
+`ASSET_SPEC_VERSION = '2.0'`, the catalogue records it beside every generated file, and a test holds
+this document to the same number, so neither can move without the other.
 
 **Elevated art is never recolourable.** The tint path (`SPRITE_TINT`, `MASS_TEXTURE_TINT`) is a
 proportional multiply, and a multiply darkens what is already dark — so shaded art goes muddy
@@ -209,7 +210,7 @@ plain `startsWith` on the id and is unaffected by anything below.
 **The directory is camera-first, and _this reverses_ the flat `sprites/` ⁄ `textures/` layout this
 section used to specify.** The old reasoning was that the prefix already said everything a directory
 could, so a second place to keep in step would be pure cost. That held while the elevated library was
-a handful of files. At 181 files across two cameras — 149 plan, 32 elevated — the cost changed sides:
+a handful of files. At 203 files across two cameras — 149 plan, 54 elevated — the cost changed sides:
 "which of these am I looking at" became a question a listing should answer, and `plan/` is now a unit
 that can be deployed, measured or preloaded on its own while `elevated/` is not.
 
@@ -223,24 +224,22 @@ one-function change plus a catalogue rewrite.
 
 ## Prompt templates
 
-Every prompt is `ELEVATED` + a subject sentence + (where there is more than one) a variant sentence
-the tool appends. `ELEVATED` is a single constant in `asset-spec.ts` and encodes §§1–5 and §7. What
-is **fixed globally**: the camera, the light, the background, the framing, the colour treatment, the
-shadow refusal. What **varies per asset**: the subject, its species or material, its size in words,
-and what distinguishes the variants.
+Every prompt is composed by `composePrompt` in `asset-style.ts`:
 
-| template | adds to `ELEVATED` | families |
-|---|---|---|
-| `ELEVATED_TREE` | a single tree with a visible trunk, canopy overhanging it, foliage depth and layered branches | `vis-tree-*` |
-| `ELEVATED_SHRUB` | a single shrub, a rounded mass with visible depth and a dark shaded underside | `vis-shrub-*` |
-| `ELEVATED_PLANT` | a single herbaceous plant or grass, a clump with visible height | `vis-perennial-*`, `vis-grass*`, `vis-fern` |
-| `ELEVATED_FURNITURE` | a piece of garden furniture, its own materials, seen from the front-above | `vis-dining-*`, `vis-sofa-set`, … |
-| `ELEVATED_PLANTER` | a container with a visible rim and side, planting standing out of it | `vis-planter`, `vis-pot-*` |
-| `SKIN` | an opaque, seamless material for a vertical face | `skin-*` |
+    template  +  subject  +  variant clause  +  (tint clause)  +  (global exclusions)
 
-`SKIN` is the odd one out and deliberately so: it is a **texture**, lit flat like the existing
-`face-*` families, because it is drawn onto a face whose shading the renderer computes from the
-face's own normal. A skin with baked light would be lit twice.
+The **template** is one of the keys of `STYLE.template` and carries everything fixed globally — the
+camera (§1), the light (§2), the shadow refusal (§3), the colour treatment (§4), the background and
+framing (§5), the orientation (§7) — plus the framing sentence for its kind of subject: a tree with
+its trunk showing, a piece of furniture with its legs on the ground, a container with its rim. The
+**subject** is the one sentence a family author writes. The **variant clause** names what each
+variant *is* from `variantSubjects`, or asks for a different draw when the family has none. The
+templates themselves are not restated here: read them in `asset-style.ts`, which is the single
+place they live, and which `elevated.test.ts` and `asset-style.test.ts` hold to this document.
+
+`skin` is the odd one out and deliberately so: it is a **texture**, lit flat like the `face-*`
+families, because it is drawn onto a face whose shading the renderer computes from the face's own
+normal. A skin with baked light would be lit twice.
 
 ### What the first trial taught, and why `ELEVATED` reads the way it does
 
@@ -270,29 +269,51 @@ can check the prompt against `RISE`. It is simply not what does the work.
 
 ## Quality assurance
 
-### Automated, in `tools/assets` (`--strict` refuses; otherwise warns)
+### Automated, in `tools/assets` at processing time
 
-| check | what fails |
-|---|---|
-| background transparent | any of the four corner pixels is opaque |
-| no ground plane | opaque pixels in the bottom 2% of the frame outside the footprint width |
-| clean alpha | mean saturation of the edge band (alpha 10–60) far from the interior's — a coloured fringe |
-| not clipped | opaque pixels touching any frame edge after trimming |
-| fills the frame | trimmed width under 90% of the frame width |
-| bounds recorded | `opaqueBounds` written to the catalogue for every elevated sprite |
-| prompt current | `provenance.promptHash` matches the family's prompt today |
+Two lists, recorded beside every file in the catalogue as `processed.defects` and
+`processed.warnings`. A **defect** is a picture the renderer cannot use as it is and `--strict`
+refuses it; a **warning** is a judgement worth a person's eye and is never refused.
 
-### By eye, on the contact sheet (`pnpm --filter @garden-studio/web audit:assets`)
+| check | defect or warning | what it means |
+|---|---|---|
+| background transparent | defect | any of the four corner pixels is opaque (both cameras) |
+| not clipped | defect | the model ran the object off its own canvas |
+| stands on its footprint | defect | the object does not reach down into its footprint band — it would float |
+| no ground plane | warning | the bottom band spreads wider than the body — a baked ground or shadow |
+| clean alpha | warning | the soft edge band is far from the interior colour — a halo (both cameras) |
+| fills the frame | warning | trimmed to nothing sensible, or proportions disagree with the declared metres |
 
-Each asset drawn at 64 px/m over its own footprint outline with a cross on its anchor. Check:
+### Automated, on the library at rest (`pnpm --filter @garden-studio/web audit:assets`, exits non-zero)
+
+Missing files, orphan and duplicate entries, families with fewer variants than declared, a file
+whose pixels are not the size the catalogue says, a shipped defect, and elevated art drawn in the
+2D Plan are **failures**. Framing that disagrees with the manifest — the frame's aspect, the foot
+standing off the anchor — is a warning. `tools/assets --audit` adds the question only the composer
+can answer: which files were drawn from a prompt that has since changed.
+
+### By eye, on the contact sheets (`audit:assets` writes them to `.plan-preview/`)
+
+Elevated: each asset drawn at 64 px/m over its own footprint outline with a cross on its anchor.
 
 1. the camera angle matches its neighbours — no asset noticeably flatter or more isometric
-2. the light comes from the upper left
+2. the light comes from the upper left and is soft — no asset with a hard lit side and dark side
 3. proportions are believable against the footprint drawn under it
 4. the front faces screen-bottom
 5. the foot sits on the footprint, not above or below it
 6. no text, watermark, logo or model artefact
 7. realism consistent with the rest of the sheet
+
+Plan: each family's variants side by side.
+
+1. flat and even — no lit side, no baked shadow, no ground under the object
+2. neutral, mid-toned foliage that the palette can tint; furniture in its own real colour
+3. the object fills its frame and is centred, so it fills the circle or rectangle of record
+4. the variants are genuinely different plants or finishes, not the same picture six times
+5. no white fringe against a dark ground
+
+And for both, on the `/asset-lab` lineup: **do thirty of them look like they belong in the same
+garden?** That is the test the whole specification exists to pass, and no single asset can pass it.
 
 **Reject and regenerate rather than accept and adjust.** An asset that is nearly right is the one
 that makes the whole sheet look wrong, because the eye finds the odd one out before it finds

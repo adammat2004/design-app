@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ASSET_FAMILIES, ASSET_IDS, assetFile, type AssetFamily, type AssetId } from './asset-spec';
-import { CATALOGUE_VERSION, catalogueEntries, catalogueVariants } from './catalogue';
+import {
+  CATALOGUE_VERSION,
+  CatalogueEntrySchema,
+  catalogueEntries,
+  catalogueVariants,
+} from './catalogue';
+import raw from './catalogue.json';
 import {
   CANOPY_SPRITES,
   CONTACT_SHADOW_SPRITE,
@@ -31,6 +37,82 @@ describe('the catalogue', () => {
     for (const entry of catalogueEntries()) {
       expect(existsSync(join(PUBLIC_ASSETS, entry.file)), entry.file).toBe(true);
     }
+  });
+
+  /**
+   * On the raw file, not on `catalogueEntries()`: the loader drops an entry whose id the spec no
+   * longer knows so an orphan cannot stop the app drawing, which is the right thing at runtime and
+   * exactly what a test has to see. Two entries for one file would have the second silently win.
+   */
+  it('has one entry per file and none for a family that does not exist', () => {
+    const seen = new Set<string>();
+    for (const entry of raw.assets) {
+      const key = `${entry.id}-${entry.variant}`;
+      expect(seen.has(key), key).toBe(false);
+      seen.add(key);
+      expect(entry.id in ASSET_FAMILIES, entry.id).toBe(true);
+    }
+  });
+
+  /**
+   * Every treatment ends in a resize to the family's `sizePx` — contain for a sprite, cover for a
+   * texture or face — so an entry whose recorded size disagrees with the spec was processed before
+   * the spec changed and needs `--reprocess`. The renderer scales by these numbers.
+   */
+  it('records the size the spec declares', () => {
+    for (const entry of catalogueEntries()) {
+      const family: AssetFamily = ASSET_FAMILIES[entry.id];
+      expect(entry.widthPx, entry.file).toBe(family.sizePx.w);
+      expect(entry.heightPx, entry.file).toBe(family.sizePx.h);
+    }
+  });
+
+  it('never ships a file the QA pass found a defect in', () => {
+    for (const entry of catalogueEntries()) {
+      expect(entry.processed?.defects ?? [], entry.file).toHaveLength(0);
+    }
+  });
+
+  it('round-trips the generation and processing records', () => {
+    const entry = CatalogueEntrySchema.parse({
+      id: 'plant-shrub',
+      variant: 1,
+      file: 'plan/sprites/plant-shrub-1.webp',
+      widthPx: 256,
+      heightPx: 256,
+      meanColour: '#4a6b3a',
+      opaqueRadiusRatio: 0.98,
+      generation: {
+        model: 'gpt-image-2.5-sunburst-2026-09-08',
+        quality: 'medium',
+        requestedSize: { w: 1024, h: 1024 },
+        rawSize: { w: 1024, h: 1024 },
+        specVersion: '2.0',
+        promptHash: 'abcdef012345',
+        generatedAt: '2026-09-17T10:00:00.000Z',
+        rawHash: '0123456789ab',
+      },
+      processed: {
+        postprocessVersion: '2',
+        at: '2026-09-17T10:00:05.000Z',
+        warnings: ['soft edge is 30% off the interior colour — a halo'],
+        defects: [],
+      },
+    });
+    expect(entry.generation?.specVersion).toBe('2.0');
+    expect(entry.processed?.warnings).toHaveLength(1);
+    // And the record written before either existed still parses.
+    expect(() =>
+      CatalogueEntrySchema.parse({
+        id: 'tex-soil',
+        variant: 1,
+        file: 'plan/textures/tex-soil-1.webp',
+        widthPx: 512,
+        heightPx: 512,
+        meanColour: '#5a4a3a',
+        seamScore: 1.1,
+      }),
+    ).not.toThrow();
   });
 
   /**
@@ -127,7 +209,7 @@ describe('the spec', () => {
       expect(family.metres.w).toBeGreaterThan(0);
       expect(family.metres.h).toBeGreaterThan(0);
       expect(family.variants).toBeGreaterThanOrEqual(1);
-      expect(family.prompt.length).toBeGreaterThan(20);
+      expect(family.subject.length).toBeGreaterThan(20);
       // Only sprites can be transparent; a transparent gravel tile is a hole in the ground.
       if (family.kind !== 'sprite') expect(family.transparent).toBe(false);
     }

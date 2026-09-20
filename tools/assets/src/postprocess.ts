@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 
 /**
  * From a model's PNG to the file the app ships, plus the numbers the catalogue records.
@@ -18,6 +18,12 @@ import sharp from 'sharp';
  * - A **face** is one module's surface: cropped to cover the target aspect and downsampled.
  */
 
+/**
+ * Which post-processing produced a file. Bump when a measurement or a treatment changes, so the
+ * catalogue can say which files were measured the old way and `--reprocess` knows what to redo.
+ */
+export const POSTPROCESS_VERSION = '2';
+
 export interface Processed {
   webp: Buffer;
   widthPx: number;
@@ -32,8 +38,50 @@ export interface Processed {
   opaqueBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   /** Elevated sprites: how much of the bottom edge band is opaque, 0-1. The ground-plane detector. */
   footAlpha?: number;
-  /** Anything the QA pass found wrong with the picture. Empty is a pass. */
+  /**
+   * What the QA pass found, in two lists that mean different things.
+   *
+   * A **defect** is a picture the renderer cannot use as it is: an opaque background, an object the
+   * model ran off its own canvas, one that would float above its footprint. `--strict` refuses
+   * these. A **warning** is a judgement a number gets *mostly* right — a wide low planter really
+   * does have a broad foot — and is recorded beside the file for a person to look at, never refused.
+   * One flat list was the first design, and it left `--strict` with the choice between refusing
+   * every judgement and refusing nothing.
+   */
   warnings?: string[];
+  defects?: string[];
+  /** A correction baked into the file at source, so the renderer need not apply it at draw time. */
+  correction?: { saturation: number };
+}
+
+/**
+ * The two checks every sprite gets, whichever camera it was drawn to.
+ *
+ * Transparency is the one thing the model is most likely to get wrong and the one the renderer can
+ * least tolerate — an opaque plan sprite is a white square on the lawn — so a corner that is opaque
+ * is a defect. A coloured fringe is a warning: it shows against dark ground and hides against pale,
+ * and how much of it is acceptable depends on where the sprite lands.
+ */
+function spriteChecks(image: Raw): { warnings: string[]; defects: string[] } {
+  const warnings: string[] = [];
+  const defects: string[] = [];
+
+  const corners = [
+    0,
+    (image.width - 1) * 4,
+    (image.height - 1) * image.width * 4,
+    ((image.height - 1) * image.width + image.width - 1) * 4,
+  ];
+  if (corners.some((index) => image.data[index + 3]! >= 64)) {
+    defects.push('a corner is opaque — the background is not transparent');
+  }
+
+  const fringe = edgeFringe(image);
+  if (fringe > 0.22) {
+    warnings.push(`soft edge is ${(fringe * 100).toFixed(0)}% off the interior colour — a halo`);
+  }
+
+  return { warnings, defects };
 }
 
 /**
@@ -52,12 +100,12 @@ interface Raw {
   height: number;
 }
 
-async function raw(image: sharp.Sharp): Promise<Raw> {
+async function raw(image: Sharp): Promise<Raw> {
   const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   return { data, width: info.width, height: info.height };
 }
 
-function fromRaw(image: Raw): sharp.Sharp {
+function fromRaw(image: Raw): Sharp {
   return sharp(image.data, {
     raw: { width: image.width, height: image.height, channels: 4 },
   });
@@ -88,6 +136,7 @@ export async function processSprite(
     heightPx: image.height,
     meanColour: meanColour(image),
     opaqueRadiusRatio: opaqueRadiusRatio(image),
+    ...spriteChecks(image),
   };
 }
 
@@ -180,7 +229,7 @@ export async function processElevatedSprite(
     meanColour: meanColour(image),
     opaqueBounds: bounds,
     footAlpha: foot,
-    warnings: elevatedWarnings(image, bounds, foot, footprintDepth, frameDepth, clipped),
+    ...elevatedWarnings(image, bounds, foot, footprintDepth, frameDepth, clipped),
   };
 }
 
@@ -274,10 +323,11 @@ function spreadsAtTheFoot(image: Raw): boolean {
 /**
  * What the QA pass can check without looking at the picture.
  *
- * Deliberately a list of warnings rather than a throw. Some of these are judgements a number gets
- * *mostly* right — a very wide low planter legitimately has a broad foot — and a tool that refused
- * them outright would have the author editing thresholds instead of looking at assets. `--strict`
- * is what turns them into a refusal, for a batch run where nobody is watching.
+ * Deliberately lists rather than a throw, and two of them: a *defect* the renderer cannot live
+ * with, which `--strict` refuses, and a *warning* that is a judgement a number gets mostly right —
+ * a very wide low planter legitimately has a broad foot — which is recorded for a person to look at.
+ * A tool that refused the judgements outright would have the author editing thresholds instead of
+ * looking at assets.
  *
  * Everything a number cannot answer — is the camera angle right, is the light on the correct side,
  * are the proportions believable — is on the contact sheet instead. See `docs/visualise-asset-style.md`.
@@ -289,18 +339,8 @@ function elevatedWarnings(
   footprintDepth: number,
   frameDepth: number,
   clipped: boolean,
-): string[] {
-  const warnings: string[] = [];
-
-  const corners = [
-    0,
-    (image.width - 1) * 4,
-    (image.height - 1) * image.width * 4,
-    ((image.height - 1) * image.width + image.width - 1) * 4,
-  ];
-  if (corners.some((index) => image.data[index + 3]! >= 64)) {
-    warnings.push('a corner is opaque — the background is not transparent');
-  }
+): { warnings: string[]; defects: string[] } {
+  const { warnings, defects } = spriteChecks(image);
 
   const footprintShare = frameDepth > 0 ? footprintDepth / frameDepth : 1;
 
@@ -328,19 +368,14 @@ function elevatedWarnings(
     );
   }
   if (clipped) {
-    warnings.push('the model ran the object off its own canvas — it is cropped');
+    defects.push('the model ran the object off its own canvas — it is cropped');
   }
   // The object has to reach down into its own footprint band, or it is drawn hovering.
   if (bounds.maxY < 1 - footprintShare) {
-    warnings.push('does not reach its footprint band — the object will float above the ground');
+    defects.push('does not reach its footprint band — the object will float above the ground');
   }
 
-  const fringe = edgeFringe(image);
-  if (fringe > 0.22) {
-    warnings.push(`soft edge is ${(fringe * 100).toFixed(0)}% off the interior colour — a halo`);
-  }
-
-  return warnings;
+  return { warnings, defects };
 }
 
 /**
@@ -389,12 +424,28 @@ export function edgeFringe(image: Raw): number {
 
 /* ---------------------------------------------------------------- textures */
 
+/**
+ * A texture, with any correction the family asks for **baked into the file**.
+ *
+ * A saturation correction lives here rather than at draw time for the reason `tintTexture` bakes
+ * the palette into the tile: two surfaces of one material overlap by design, and anything applied
+ * per draw over an overlap is applied twice. Baking it once also corrects the 2D Plan, the concept
+ * cards and the export equally, which a Visualise-only grade cannot. What was applied is recorded on
+ * the result so the catalogue can say so and `--reprocess` reproduces it from the raw.
+ */
 export async function processTexture(
   png: Buffer,
   sizePx: { w: number; h: number },
+  correction?: { saturation?: number },
 ): Promise<Processed> {
+  const saturation = correction?.saturation;
+  const corrected = saturation !== undefined && saturation !== 1 ? { saturation } : undefined;
+
+  let source = sharp(png);
+  if (corrected) source = source.modulate({ saturation: corrected.saturation });
+
   const resized = await raw(
-    sharp(png).resize(sizePx.w, sizePx.h, { fit: 'cover', kernel: 'lanczos3' }),
+    source.resize(sizePx.w, sizePx.h, { fit: 'cover', kernel: 'lanczos3' }),
   );
 
   let image = resized;
@@ -413,6 +464,7 @@ export async function processTexture(
     heightPx: image.height,
     meanColour: meanColour(image),
     seamScore: seam,
+    ...(corrected ? { correction: corrected } : {}),
   };
 }
 

@@ -96,6 +96,8 @@ Per package:
 | `pnpm render:plan`                                  | Whole-plan judging sheets from the captured fixtures, to `apps/web/.plan-preview/` |
 | `pnpm --filter @garden-studio/web capture:fixtures` | Regenerates those fixtures from the real generator (API up)                        |
 | `pnpm --filter @garden-studio/asset-tool generate`  | Regenerates the textures and sprites with an image model (needs a key — see below) |
+| `pnpm --filter @garden-studio/asset-tool generate --audit` | Which files no longer match their prompt or shipped with a defect; exits non-zero |
+| `pnpm --filter @garden-studio/web audit:assets`     | Checks the library against the manifest and the disk, writes the QA sheets; exits non-zero |
 
 ## How the plan is drawn
 
@@ -108,10 +110,17 @@ top-down sprite for every plant, tree canopy and piece of furniture. The images 
 missing image just means the procedural pattern draws instead.
 
 To regenerate them, put an OpenAI key in `apps/api/.env` as `OPEN_AI_API_KEY` and run the asset
-tool. It reads `apps/web/src/lib/materials/assets/asset-spec.ts` (the prompts are the specification
-of each asset), asks `gpt-image-1` for each variant, post-processes with `sharp` and writes the files
-plus `catalogue.json`. Roughly eighty pictures at medium quality cost a few pounds; the
-images-per-minute limit is low, so a full run takes ten to fifteen minutes.
+tool. Every prompt is composed from one versioned visual specification
+(`apps/web/src/lib/materials/assets/asset-style.ts`: the camera, the light, the background and the
+framing, per kind of subject) plus the family's own subject sentence in `asset-spec.ts`. The tool
+asks the model — `gpt-image-2.5-sunburst` by default, `--model` or `ASSET_IMAGE_MODEL` to change it
+— for each variant, post-processes with `sharp`, and writes the files plus `catalogue.json`, which
+records how every file was made. `--only <prefix>` limits a run; `--only plant-shrub-3` re-rolls one
+file; `--reprocess` redoes the post-processing from the kept raw PNGs with no spend. About two
+hundred pictures at medium quality cost a few pounds; the images-per-minute limit is low, so a full
+run takes a couple of hours. Judge the result on `/asset-lab` in development, which shows every
+family at one scale on one ground beside the previous library (copy `apps/web/public/assets` to
+`apps/web/public/assets-v1` before regenerating to get the comparison).
 
 ## Testing
 

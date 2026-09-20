@@ -50,6 +50,8 @@ package-lock.json
 yarn.lock
 # Image-model originals kept by tools/assets so post-processing can be re-run without regenerating
 tools/assets/raw/
+# A copy of public/assets taken before a regeneration, for /asset-lab's old-against-new comparison
+apps/web/public/assets-v1/
 
 
 design_handoff_ai_redesign/

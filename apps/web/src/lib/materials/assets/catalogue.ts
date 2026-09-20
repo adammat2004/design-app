@@ -69,6 +69,40 @@ export const CatalogueEntrySchema = z.object({
       promptHash: z.string(),
     })
     .optional(),
+  /**
+   * How the file was made, from the second library on: the model and quality tier, the size the
+   * model was actually asked for and what it returned, the specification version and prompt hash
+   * the picture answers to, and a digest of the raw so the gitignored original can be matched to
+   * it. Written only when a model is called; `--reprocess` carries it forward untouched, because the
+   * pixels are still the ones this record describes whatever prompt is current now.
+   */
+  generation: z
+    .object({
+      model: z.string(),
+      quality: z.string(),
+      requestedSize: z.object({ w: z.number(), h: z.number() }),
+      rawSize: z.object({ w: z.number(), h: z.number() }),
+      specVersion: z.string(),
+      promptHash: z.string(),
+      generatedAt: z.string(),
+      rawHash: z.string(),
+    })
+    .optional(),
+  /**
+   * What the last post-processing pass did and found: its own version, and the QA pass's warnings
+   * and defects, kept beside the file rather than printed once and lost. A non-empty `defects`
+   * means the file shipped with something the renderer cannot use as it is, which `--strict`
+   * would have refused and `audit:assets` reports.
+   */
+  processed: z
+    .object({
+      postprocessVersion: z.string(),
+      at: z.string(),
+      warnings: z.array(z.string()),
+      defects: z.array(z.string()),
+      correction: z.object({ saturation: z.number() }).optional(),
+    })
+    .optional(),
 });
 export type CatalogueEntry = z.infer<typeof CatalogueEntrySchema> & { id: AssetId };
 

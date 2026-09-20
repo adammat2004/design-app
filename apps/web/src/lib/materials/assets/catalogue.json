@@ -1,6 +1,6 @@
 {
-  "version": "76ea8c4d81b7",
-  "generatedAt": "2026-09-16T09:52:45.026Z",
+  "version": "28af524473df",
+  "generatedAt": "2026-09-19T12:17:25.705Z",
   "assets": [
     {
       "id": "face-concrete-slab",
@@ -100,7 +100,29 @@
       "file": "plan/textures/face-hardwood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#754120"
+      "meanColour": "#825231",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "specVersion": "2.0",
+        "promptHash": "66d0b0994117",
+        "generatedAt": "2026-09-18T03:05:29.149Z",
+        "rawHash": "caa1a1de06d9"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T03:05:29.227Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "face-hardwood",
@@ -108,11 +130,28 @@
       "file": "plan/textures/face-hardwood-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#693a1d",
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:03:26.785Z",
-        "promptHash": "b1035da514bd"
+      "meanColour": "#72462b",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "specVersion": "2.0",
+        "promptHash": "66d1fa462fb9",
+        "generatedAt": "2026-09-18T03:05:29.405Z",
+        "rawHash": "66d1cc4eed39"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T03:05:29.478Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -147,7 +186,29 @@
       "file": "plan/textures/face-painted-timber-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#b0bba8"
+      "meanColour": "#a7af9e",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "specVersion": "2.0",
+        "promptHash": "aaa19049f3a7",
+        "generatedAt": "2026-09-18T03:05:45.269Z",
+        "rawHash": "37e03bcd3767"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T03:05:45.337Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "face-painted-timber",
@@ -155,11 +216,28 @@
       "file": "plan/textures/face-painted-timber-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#9ea59e",
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:03:41.165Z",
-        "promptHash": "28d99697ef0b"
+      "meanColour": "#a5a798",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 688
+        },
+        "specVersion": "2.0",
+        "promptHash": "b2e78957b1a8",
+        "generatedAt": "2026-09-18T03:05:44.305Z",
+        "rawHash": "868292a0bbde"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T03:05:44.375Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -210,7 +288,29 @@
       "file": "plan/textures/face-softwood-1.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#c7bcaa"
+      "meanColour": "#bab590",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "rawSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "specVersion": "2.0",
+        "promptHash": "55f8d67e3b18",
+        "generatedAt": "2026-09-19T12:07:06.787Z",
+        "rawHash": "9fe2a14fba4f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:07:06.867Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "face-softwood",
@@ -218,11 +318,28 @@
       "file": "plan/textures/face-softwood-2.webp",
       "widthPx": 1024,
       "heightPx": 683,
-      "meanColour": "#c0b696",
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:02:53.840Z",
-        "promptHash": "cb502ef8131d"
+      "meanColour": "#bfb086",
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "rawSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "specVersion": "2.0",
+        "promptHash": "293d79eaa6b5",
+        "generatedAt": "2026-09-19T12:07:21.296Z",
+        "rawHash": "757bde5e55da"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:07:21.376Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -365,12 +482,31 @@
       "file": "plan/sprites/feature-hot-tub-1.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#8b99a1",
-      "opaqueRadiusRatio": 1.341,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T12:52:05.500Z",
-        "promptHash": "dfb0573de391"
+      "meanColour": "#899194",
+      "opaqueRadiusRatio": 1.326,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "77fa6d57bf0b",
+        "generatedAt": "2026-09-18T00:11:50.636Z",
+        "rawHash": "23d41858cd2d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:11:50.879Z",
+        "warnings": [
+          "soft edge is 24% off the interior colour — a halo"
+        ],
+        "defects": []
       }
     },
     {
@@ -379,12 +515,31 @@
       "file": "plan/sprites/feature-hot-tub-2.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#8899a0",
+      "meanColour": "#9ca6a6",
       "opaqueRadiusRatio": 1.352,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T12:52:53.495Z",
-        "promptHash": "047c570f9394"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8f35e97fcdb9",
+        "generatedAt": "2026-09-18T00:11:50.867Z",
+        "rawHash": "f6c06592d7e2"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:11:51.087Z",
+        "warnings": [
+          "soft edge is 40% off the interior colour — a halo"
+        ],
+        "defects": []
       }
     },
     {
@@ -393,8 +548,30 @@
       "file": "plan/sprites/furniture-bbq-1.webp",
       "widthPx": 512,
       "heightPx": 256,
-      "meanColour": "#a8a6a2",
-      "opaqueRadiusRatio": 2.102
+      "meanColour": "#8d8c8b",
+      "opaqueRadiusRatio": 2.075,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "rawSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "specVersion": "2.0",
+        "promptHash": "4dfdbe1b2b96",
+        "generatedAt": "2026-09-19T12:07:36.298Z",
+        "rawHash": "36fade9ec794"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:07:36.513Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-bench",
@@ -402,8 +579,30 @@
       "file": "plan/sprites/furniture-bench-1.webp",
       "widthPx": 512,
       "heightPx": 192,
-      "meanColour": "#ab713b",
-      "opaqueRadiusRatio": 2.324
+      "meanColour": "#a78161",
+      "opaqueRadiusRatio": 2.751,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1680,
+          "h": 640
+        },
+        "rawSize": {
+          "w": 1680,
+          "h": 640
+        },
+        "specVersion": "2.0",
+        "promptHash": "4d1b57401bdc",
+        "generatedAt": "2026-09-19T12:07:47.969Z",
+        "rawHash": "4b0b48469108"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:07:48.155Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-dining-4",
@@ -411,8 +610,30 @@
       "file": "plan/sprites/furniture-dining-4-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#aa7c4c",
-      "opaqueRadiusRatio": 1.044
+      "meanColour": "#9d7b5a",
+      "opaqueRadiusRatio": 1.034,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5fefcf8f53dc",
+        "generatedAt": "2026-09-19T12:08:05.145Z",
+        "rawHash": "c1b55ee3fdbc"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:08:05.331Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-dining-4",
@@ -420,8 +641,30 @@
       "file": "plan/sprites/furniture-dining-4-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#707170",
-      "opaqueRadiusRatio": 1.051
+      "meanColour": "#777777",
+      "opaqueRadiusRatio": 1.04,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "4fc8dd2fa9c2",
+        "generatedAt": "2026-09-19T12:08:23.805Z",
+        "rawHash": "a86a6782710d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:08:23.992Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-dining-6",
@@ -429,8 +672,30 @@
       "file": "plan/sprites/furniture-dining-6-1.webp",
       "widthPx": 512,
       "heightPx": 384,
-      "meanColour": "#c2894b",
-      "opaqueRadiusRatio": 1.341
+      "meanColour": "#a98869",
+      "opaqueRadiusRatio": 1.465,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 768
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 768
+        },
+        "specVersion": "2.0",
+        "promptHash": "3dbf7b9cf078",
+        "generatedAt": "2026-09-17T23:39:54.840Z",
+        "rawHash": "9e49a73dedea"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:39:54.994Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-fire-pit",
@@ -438,8 +703,30 @@
       "file": "plan/sprites/furniture-fire-pit-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#2e1b17",
-      "opaqueRadiusRatio": 1
+      "meanColour": "#614a42",
+      "opaqueRadiusRatio": 1.003,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8fb26fe3b58e",
+        "generatedAt": "2026-09-17T23:40:18.874Z",
+        "rawHash": "2705cf67b6e4"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:40:19.045Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-lounger",
@@ -447,8 +734,32 @@
       "file": "plan/sprites/furniture-lounger-1.webp",
       "widthPx": 256,
       "heightPx": 512,
-      "meanColour": "#e8ddcd",
-      "opaqueRadiusRatio": 2.11
+      "meanColour": "#d4cbc2",
+      "opaqueRadiusRatio": 2.1,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 736,
+          "h": 1456
+        },
+        "rawSize": {
+          "w": 736,
+          "h": 1456
+        },
+        "specVersion": "2.0",
+        "promptHash": "1fa0124a9cb3",
+        "generatedAt": "2026-09-19T12:08:39.960Z",
+        "rawHash": "5fbf6b8ee42f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:08:40.171Z",
+        "warnings": [
+          "soft edge is 31% off the interior colour — a halo"
+        ],
+        "defects": []
+      }
     },
     {
       "id": "furniture-lounger",
@@ -456,8 +767,30 @@
       "file": "plan/sprites/furniture-lounger-2.webp",
       "widthPx": 256,
       "heightPx": 512,
-      "meanColour": "#8a7d6f",
-      "opaqueRadiusRatio": 2.103
+      "meanColour": "#897f76",
+      "opaqueRadiusRatio": 2.09,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 736,
+          "h": 1456
+        },
+        "rawSize": {
+          "w": 736,
+          "h": 1456
+        },
+        "specVersion": "2.0",
+        "promptHash": "63ccbfab8cc2",
+        "generatedAt": "2026-09-19T12:08:54.213Z",
+        "rawHash": "d40ebbb72e7e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:08:54.422Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-parasol",
@@ -465,8 +798,30 @@
       "file": "plan/sprites/furniture-parasol-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#e1d8cb",
-      "opaqueRadiusRatio": 1.014
+      "meanColour": "#cbc3b6",
+      "opaqueRadiusRatio": 0.998,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "09800aa1b691",
+        "generatedAt": "2026-09-19T12:09:12.790Z",
+        "rawHash": "e1f4508ddd73"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:09:12.997Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-planter",
@@ -474,8 +829,30 @@
       "file": "plan/sprites/furniture-planter-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#54501e",
-      "opaqueRadiusRatio": 1.398
+      "meanColour": "#625e31",
+      "opaqueRadiusRatio": 1.392,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a84a5c40e1f0",
+        "generatedAt": "2026-09-19T12:09:29.654Z",
+        "rawHash": "07c7055be520"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:09:29.816Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-planter",
@@ -483,8 +860,30 @@
       "file": "plan/sprites/furniture-planter-2.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#7f836f",
-      "opaqueRadiusRatio": 1.282
+      "meanColour": "#6d7461",
+      "opaqueRadiusRatio": 1.199,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "13e8a065a99c",
+        "generatedAt": "2026-09-18T00:11:33.286Z",
+        "rawHash": "d31ec9783c9c"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:11:33.460Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-sofa-set",
@@ -492,8 +891,30 @@
       "file": "plan/sprites/furniture-sofa-set-1.webp",
       "widthPx": 512,
       "heightPx": 410,
-      "meanColour": "#8b8580",
-      "opaqueRadiusRatio": 1.545
+      "meanColour": "#999694",
+      "opaqueRadiusRatio": 1.564,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "specVersion": "2.0",
+        "promptHash": "603fb72678ee",
+        "generatedAt": "2026-09-17T23:39:57.882Z",
+        "rawHash": "0f8719e25c1b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:39:58.051Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "furniture-sofa-set",
@@ -501,8 +922,30 @@
       "file": "plan/sprites/furniture-sofa-set-2.webp",
       "widthPx": 512,
       "heightPx": 410,
-      "meanColour": "#af957c",
-      "opaqueRadiusRatio": 1.467
+      "meanColour": "#a79b8f",
+      "opaqueRadiusRatio": 1.58,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "specVersion": "2.0",
+        "promptHash": "bbe917a13127",
+        "generatedAt": "2026-09-17T23:40:10.556Z",
+        "rawHash": "72d54d06dba4"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:40:10.723Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "fx-light-pool",
@@ -533,12 +976,29 @@
       "file": "plan/sprites/hedge-crown-beech-1.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#536a2a",
-      "opaqueRadiusRatio": 1.216,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:09:41.426Z",
-        "promptHash": "46f31254310b"
+      "meanColour": "#4c5e31",
+      "opaqueRadiusRatio": 1.271,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "3db0539f9816",
+        "generatedAt": "2026-09-17T20:26:31.251Z",
+        "rawHash": "7c4c7179a0a3"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:31.486Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -547,12 +1007,29 @@
       "file": "plan/sprites/hedge-crown-beech-2.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#4d652a",
-      "opaqueRadiusRatio": 1.238,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:09:53.430Z",
-        "promptHash": "ee103aa0c319"
+      "meanColour": "#536133",
+      "opaqueRadiusRatio": 1.231,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "93d6cae12b78",
+        "generatedAt": "2026-09-17T20:26:31.631Z",
+        "rawHash": "eff2f6557bf0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:31.876Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -561,12 +1038,29 @@
       "file": "plan/sprites/hedge-crown-yew-1.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#36472d",
-      "opaqueRadiusRatio": 1.245,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:10:27.927Z",
-        "promptHash": "1192e357024b"
+      "meanColour": "#384628",
+      "opaqueRadiusRatio": 1.19,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "330112e8d80d",
+        "generatedAt": "2026-09-17T20:26:50.095Z",
+        "rawHash": "ed0b972039d9"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:50.348Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -575,12 +1069,29 @@
       "file": "plan/sprites/hedge-crown-yew-2.webp",
       "widthPx": 384,
       "heightPx": 384,
-      "meanColour": "#304226",
-      "opaqueRadiusRatio": 1.267,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:10:42.253Z",
-        "promptHash": "edfac0a2d331"
+      "meanColour": "#38482c",
+      "opaqueRadiusRatio": 1.29,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5660ef875226",
+        "generatedAt": "2026-09-17T20:26:50.650Z",
+        "rawHash": "83e3dcbdeb0f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:50.900Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -589,12 +1100,29 @@
       "file": "plan/sprites/light-bollard-1.webp",
       "widthPx": 192,
       "heightPx": 192,
-      "meanColour": "#313232",
-      "opaqueRadiusRatio": 1.001,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:55:10.762Z",
-        "promptHash": "20cc99ca371c"
+      "meanColour": "#313233",
+      "opaqueRadiusRatio": 1.002,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "565d558c129b",
+        "generatedAt": "2026-09-18T00:43:28.800Z",
+        "rawHash": "cd8e54d64708"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:43:28.925Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -603,12 +1131,29 @@
       "file": "plan/sprites/light-bollard-2.webp",
       "widthPx": 192,
       "heightPx": 192,
-      "meanColour": "#786148",
-      "opaqueRadiusRatio": 1.005,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:55:12.873Z",
-        "promptHash": "6a7ab2128589"
+      "meanColour": "#836e55",
+      "opaqueRadiusRatio": 1.001,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "da8fc2d6ead5",
+        "generatedAt": "2026-09-18T00:43:32.077Z",
+        "rawHash": "a13fab413932"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:43:32.211Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -617,12 +1162,29 @@
       "file": "plan/sprites/light-recessed-1.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#868583",
+      "meanColour": "#7a7874",
       "opaqueRadiusRatio": 1.003,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:56:04.964Z",
-        "promptHash": "b91ba67c1312"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "c460790a58ad",
+        "generatedAt": "2026-09-19T12:09:46.964Z",
+        "rawHash": "3e54c8f307f0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:09:47.070Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -631,12 +1193,29 @@
       "file": "plan/sprites/light-recessed-2.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#897351",
-      "opaqueRadiusRatio": 1.005,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:56:03.924Z",
-        "promptHash": "e16192697935"
+      "meanColour": "#867555",
+      "opaqueRadiusRatio": 1.006,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "02990df500e5",
+        "generatedAt": "2026-09-19T12:10:03.244Z",
+        "rawHash": "9322b3ae4724"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:10:03.347Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -645,12 +1224,29 @@
       "file": "plan/sprites/light-spike-1.webp",
       "widthPx": 192,
       "heightPx": 192,
-      "meanColour": "#5b5b5b",
+      "meanColour": "#4b4b49",
       "opaqueRadiusRatio": 0.998,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:54:22.601Z",
-        "promptHash": "827d8edf4242"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "73b7ce6609da",
+        "generatedAt": "2026-09-18T00:43:11.018Z",
+        "rawHash": "827a7801a785"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:43:11.115Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -659,12 +1255,29 @@
       "file": "plan/sprites/light-spike-2.webp",
       "widthPx": 192,
       "heightPx": 192,
-      "meanColour": "#7f7e7c",
-      "opaqueRadiusRatio": 1,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:54:22.737Z",
-        "promptHash": "c58c77a0bebd"
+      "meanColour": "#918e89",
+      "opaqueRadiusRatio": 0.999,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "9fed25eb6be0",
+        "generatedAt": "2026-09-18T00:43:13.457Z",
+        "rawHash": "fec7677d3ed8"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T00:43:13.552Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -673,12 +1286,29 @@
       "file": "plan/sprites/light-wall-1.webp",
       "widthPx": 256,
       "heightPx": 140,
-      "meanColour": "#383839",
-      "opaqueRadiusRatio": 1.903,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:56:44.644Z",
-        "promptHash": "5eee5780c901"
+      "meanColour": "#333335",
+      "opaqueRadiusRatio": 1.929,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "rawSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "specVersion": "2.0",
+        "promptHash": "49be492dcb94",
+        "generatedAt": "2026-09-19T12:10:15.699Z",
+        "rawHash": "2ac3d2beb82d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:10:15.805Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -687,12 +1317,29 @@
       "file": "plan/sprites/light-wall-2.webp",
       "widthPx": 256,
       "heightPx": 140,
-      "meanColour": "#9f9c9a",
-      "opaqueRadiusRatio": 1.903,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T18:56:43.444Z",
-        "promptHash": "01c52bce15b6"
+      "meanColour": "#94928f",
+      "opaqueRadiusRatio": 1.911,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "rawSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "specVersion": "2.0",
+        "promptHash": "453bf98bb179",
+        "generatedAt": "2026-09-19T12:10:28.472Z",
+        "rawHash": "986aff9475f8"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:10:28.574Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -701,8 +1348,30 @@
       "file": "plan/sprites/plant-flower-1.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#9faa79",
-      "opaqueRadiusRatio": 1.038
+      "meanColour": "#8a8f69",
+      "opaqueRadiusRatio": 1.066,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f5d52e676022",
+        "generatedAt": "2026-09-17T20:21:00.089Z",
+        "rawHash": "9241debd717f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:21:00.194Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-flower",
@@ -710,8 +1379,30 @@
       "file": "plan/sprites/plant-flower-2.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#919a29",
-      "opaqueRadiusRatio": 1.066
+      "meanColour": "#7a7c26",
+      "opaqueRadiusRatio": 1.074,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "456a35e62dbc",
+        "generatedAt": "2026-09-17T20:21:10.532Z",
+        "rawHash": "341e6347b817"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:21:10.645Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-flower",
@@ -719,8 +1410,30 @@
       "file": "plan/sprites/plant-flower-3.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#6b605b",
-      "opaqueRadiusRatio": 1.025
+      "meanColour": "#706a5f",
+      "opaqueRadiusRatio": 1.094,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "856dd28a0caa",
+        "generatedAt": "2026-09-17T20:21:42.531Z",
+        "rawHash": "b9f704511e4f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:21:42.656Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-flower",
@@ -728,8 +1441,30 @@
       "file": "plan/sprites/plant-flower-4.webp",
       "widthPx": 128,
       "heightPx": 128,
-      "meanColour": "#92481d",
-      "opaqueRadiusRatio": 1.02
+      "meanColour": "#924b32",
+      "opaqueRadiusRatio": 1.13,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a6e85f70349d",
+        "generatedAt": "2026-09-17T20:21:29.608Z",
+        "rawHash": "19195a0fdf2a"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:21:29.720Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass",
@@ -737,8 +1472,30 @@
       "file": "plan/sprites/plant-grass-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#c9c79b",
-      "opaqueRadiusRatio": 1
+      "meanColour": "#a5a383",
+      "opaqueRadiusRatio": 1.085,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5454c781a3ee",
+        "generatedAt": "2026-09-17T20:20:06.715Z",
+        "rawHash": "68b0e5b3d420"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:20:06.891Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass",
@@ -746,8 +1503,30 @@
       "file": "plan/sprites/plant-grass-2.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#afb18e",
-      "opaqueRadiusRatio": 1.062
+      "meanColour": "#899076",
+      "opaqueRadiusRatio": 1.008,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "9d76e3c4d034",
+        "generatedAt": "2026-09-17T20:20:12.315Z",
+        "rawHash": "f8dfc7037fe0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:20:12.475Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass",
@@ -755,8 +1534,30 @@
       "file": "plan/sprites/plant-grass-3.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#cbcaa0",
-      "opaqueRadiusRatio": 1.057
+      "meanColour": "#848664",
+      "opaqueRadiusRatio": 1.118,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "e5bff1d4147b",
+        "generatedAt": "2026-09-17T20:20:23.930Z",
+        "rawHash": "55a341f1eddc"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:20:24.094Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass",
@@ -764,8 +1565,30 @@
       "file": "plan/sprites/plant-grass-4.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#a9b181",
-      "opaqueRadiusRatio": 1.033
+      "meanColour": "#8d9266",
+      "opaqueRadiusRatio": 1.072,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "e2fb32f76ef8",
+        "generatedAt": "2026-09-17T20:20:53.338Z",
+        "rawHash": "bc428b8992e3"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:20:53.450Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass",
@@ -773,8 +1596,30 @@
       "file": "plan/sprites/plant-grass-5.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#adaf7f",
-      "opaqueRadiusRatio": 1.017
+      "meanColour": "#8d8b6a",
+      "opaqueRadiusRatio": 1.079,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ec6a901d8556",
+        "generatedAt": "2026-09-17T20:20:42.469Z",
+        "rawHash": "28aa63927aa2"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:20:42.637Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-grass-tall",
@@ -782,12 +1627,29 @@
       "file": "plan/sprites/plant-grass-tall-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#7a7952",
-      "opaqueRadiusRatio": 1.073,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.675Z",
-        "promptHash": "ed995d0d4e62"
+      "meanColour": "#777b5c",
+      "opaqueRadiusRatio": 1.071,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "3afe28e8bc74",
+        "generatedAt": "2026-09-17T20:25:16.615Z",
+        "rawHash": "3794d19f0630"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:25:16.828Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -796,12 +1658,29 @@
       "file": "plan/sprites/plant-grass-tall-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#757653",
-      "opaqueRadiusRatio": 1.115,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.874Z",
-        "promptHash": "95bcfd4ea075"
+      "meanColour": "#77795c",
+      "opaqueRadiusRatio": 1.07,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "31d3afb32280",
+        "generatedAt": "2026-09-17T20:25:32.040Z",
+        "rawHash": "c305d205600e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:25:32.234Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -810,12 +1689,29 @@
       "file": "plan/sprites/plant-grass-tall-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#6c7453",
+      "meanColour": "#717858",
       "opaqueRadiusRatio": 1.042,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.887Z",
-        "promptHash": "f1d944e5c512"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ec7bd94bcfd6",
+        "generatedAt": "2026-09-17T20:25:34.436Z",
+        "rawHash": "0a4c332cb163"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:25:34.642Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -824,8 +1720,30 @@
       "file": "plan/sprites/plant-ground-cover-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#517f32",
-      "opaqueRadiusRatio": 1.05
+      "meanColour": "#596948",
+      "opaqueRadiusRatio": 1.087,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "214e66c06b93",
+        "generatedAt": "2026-09-17T20:19:31.784Z",
+        "rawHash": "ee58b15aeab7"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:31.947Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-ground-cover",
@@ -833,8 +1751,30 @@
       "file": "plan/sprites/plant-ground-cover-2.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#51603b",
-      "opaqueRadiusRatio": 1.05
+      "meanColour": "#52594b",
+      "opaqueRadiusRatio": 1.009,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5da6f4550942",
+        "generatedAt": "2026-09-17T20:19:35.966Z",
+        "rawHash": "ca77414c012b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:36.117Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-ground-cover",
@@ -842,8 +1782,30 @@
       "file": "plan/sprites/plant-ground-cover-3.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#53812f",
-      "opaqueRadiusRatio": 1.068
+      "meanColour": "#616256",
+      "opaqueRadiusRatio": 1.026,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8dbd9e0ddd3a",
+        "generatedAt": "2026-09-17T20:19:49.386Z",
+        "rawHash": "4d8d6268af5f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:49.545Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-ground-cover",
@@ -851,8 +1813,30 @@
       "file": "plan/sprites/plant-ground-cover-4.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#46672f",
-      "opaqueRadiusRatio": 1.021
+      "meanColour": "#536445",
+      "opaqueRadiusRatio": 1.017,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "47c911836a81",
+        "generatedAt": "2026-09-17T20:19:55.603Z",
+        "rawHash": "f5ee7f3bc1e8"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:55.759Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-ground-cover-spreading",
@@ -860,12 +1844,29 @@
       "file": "plan/sprites/plant-ground-cover-spreading-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5d6e40",
-      "opaqueRadiusRatio": 1.124,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.916Z",
-        "promptHash": "77cc3cbdb906"
+      "meanColour": "#64724b",
+      "opaqueRadiusRatio": 1.146,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "d2570432ade4",
+        "generatedAt": "2026-09-17T20:25:52.604Z",
+        "rawHash": "a840f02b6cf4"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:25:52.793Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -874,12 +1875,29 @@
       "file": "plan/sprites/plant-ground-cover-spreading-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#676f4b",
-      "opaqueRadiusRatio": 1.111,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.918Z",
-        "promptHash": "3e804670b307"
+      "meanColour": "#697546",
+      "opaqueRadiusRatio": 1.051,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "d733ce73774c",
+        "generatedAt": "2026-09-17T20:26:05.278Z",
+        "rawHash": "265769f98384"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:05.468Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -888,12 +1906,29 @@
       "file": "plan/sprites/plant-ground-cover-spreading-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#6a7655",
-      "opaqueRadiusRatio": 1.15,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:03.073Z",
-        "promptHash": "391418a80731"
+      "meanColour": "#687157",
+      "opaqueRadiusRatio": 1.112,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "e092dc7f05ae",
+        "generatedAt": "2026-09-17T20:26:11.862Z",
+        "rawHash": "31b4f91c3340"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:26:12.063Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -902,8 +1937,30 @@
       "file": "plan/sprites/plant-perennial-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#70696a",
-      "opaqueRadiusRatio": 1.034
+      "meanColour": "#626563",
+      "opaqueRadiusRatio": 1.037,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "92669fead263",
+        "generatedAt": "2026-09-17T20:17:32.790Z",
+        "rawHash": "b9bbfc4c7adb"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:17:32.956Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial",
@@ -911,8 +1968,30 @@
       "file": "plan/sprites/plant-perennial-2.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#54604c",
-      "opaqueRadiusRatio": 1.011
+      "meanColour": "#5d605a",
+      "opaqueRadiusRatio": 1.085,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8e2b8d35bbc7",
+        "generatedAt": "2026-09-17T20:17:33.294Z",
+        "rawHash": "198f017da5cf"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:17:33.460Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial",
@@ -920,8 +1999,30 @@
       "file": "plan/sprites/plant-perennial-3.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#718050",
-      "opaqueRadiusRatio": 1.011
+      "meanColour": "#667159",
+      "opaqueRadiusRatio": 1.081,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "04592f41f9a1",
+        "generatedAt": "2026-09-17T20:17:51.662Z",
+        "rawHash": "30b8bb473a8a"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:17:51.823Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial",
@@ -929,8 +2030,30 @@
       "file": "plan/sprites/plant-perennial-4.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#7d7756",
-      "opaqueRadiusRatio": 1.026
+      "meanColour": "#706653",
+      "opaqueRadiusRatio": 1.073,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "6a3c1437b2d0",
+        "generatedAt": "2026-09-17T20:17:52.338Z",
+        "rawHash": "a0ee43905e65"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:17:52.494Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial",
@@ -938,8 +2061,30 @@
       "file": "plan/sprites/plant-perennial-5.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#647562",
-      "opaqueRadiusRatio": 0.868
+      "meanColour": "#5d645a",
+      "opaqueRadiusRatio": 1.043,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "4a1544f8f92d",
+        "generatedAt": "2026-09-17T20:18:12.764Z",
+        "rawHash": "c4cb02414318"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:12.922Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial",
@@ -947,8 +2092,30 @@
       "file": "plan/sprites/plant-perennial-6.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#698531",
-      "opaqueRadiusRatio": 1.015
+      "meanColour": "#6d7d4a",
+      "opaqueRadiusRatio": 1.044,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "9cbc87fe44f6",
+        "generatedAt": "2026-09-17T20:18:12.370Z",
+        "rawHash": "9650728ddd45"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:12.533Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-perennial-ferny",
@@ -956,12 +2123,29 @@
       "file": "plan/sprites/plant-perennial-ferny-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5b7141",
-      "opaqueRadiusRatio": 1.142,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.215Z",
-        "promptHash": "6ee874831365"
+      "meanColour": "#627147",
+      "opaqueRadiusRatio": 1.077,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2dafec6b2974",
+        "generatedAt": "2026-09-17T20:23:18.141Z",
+        "rawHash": "522c96f46d57"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:23:18.332Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -970,12 +2154,29 @@
       "file": "plan/sprites/plant-perennial-ferny-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#757b53",
-      "opaqueRadiusRatio": 1.067,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.219Z",
-        "promptHash": "233c81ebd457"
+      "meanColour": "#6a7154",
+      "opaqueRadiusRatio": 1.158,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "dc87cd4cd068",
+        "generatedAt": "2026-09-17T20:23:06.309Z",
+        "rawHash": "4766edbc1507"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:23:06.500Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -984,12 +2185,29 @@
       "file": "plan/sprites/plant-perennial-ferny-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#657951",
-      "opaqueRadiusRatio": 1.066,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.404Z",
-        "promptHash": "04a16b4f4797"
+      "meanColour": "#717c5c",
+      "opaqueRadiusRatio": 1.127,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "24aaa5860d7c",
+        "generatedAt": "2026-09-17T20:23:25.925Z",
+        "rawHash": "8813004d83eb"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:23:26.124Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -998,12 +2216,29 @@
       "file": "plan/sprites/plant-perennial-spire-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5c6f49",
-      "opaqueRadiusRatio": 1.108,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.007Z",
-        "promptHash": "93fa5b0899c8"
+      "meanColour": "#5c6e4d",
+      "opaqueRadiusRatio": 1.102,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "d7e44828156d",
+        "generatedAt": "2026-09-17T20:22:31.650Z",
+        "rawHash": "71a26e1fd478"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:22:31.840Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1012,12 +2247,29 @@
       "file": "plan/sprites/plant-perennial-spire-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5c7651",
-      "opaqueRadiusRatio": 1.029,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.201Z",
-        "promptHash": "4698772fb246"
+      "meanColour": "#586f4c",
+      "opaqueRadiusRatio": 1.113,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "126ea3ae7187",
+        "generatedAt": "2026-09-17T20:22:37.282Z",
+        "rawHash": "f02e64f6debc"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:22:37.473Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1026,12 +2278,29 @@
       "file": "plan/sprites/plant-perennial-spire-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5b7157",
-      "opaqueRadiusRatio": 1.117,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.203Z",
-        "promptHash": "b9f1fa3332a8"
+      "meanColour": "#5e6e58",
+      "opaqueRadiusRatio": 1.04,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f225ec90bcd3",
+        "generatedAt": "2026-09-17T20:22:48.234Z",
+        "rawHash": "42d1c784ac6e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:22:48.423Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1040,12 +2309,29 @@
       "file": "plan/sprites/plant-perennial-upright-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#536a48",
-      "opaqueRadiusRatio": 1.068,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.004Z",
-        "promptHash": "dd9bb2be9656"
+      "meanColour": "#5e7452",
+      "opaqueRadiusRatio": 1.076,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "19eb8baa9443",
+        "generatedAt": "2026-09-17T20:21:47.051Z",
+        "rawHash": "d320cba64fdb"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:21:47.240Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1054,12 +2340,29 @@
       "file": "plan/sprites/plant-perennial-upright-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5d6b4f",
-      "opaqueRadiusRatio": 1.093,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.010Z",
-        "promptHash": "b9bf21cd0b90"
+      "meanColour": "#6a6d5c",
+      "opaqueRadiusRatio": 1.041,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "90d9ed1eaf49",
+        "generatedAt": "2026-09-17T20:22:00.627Z",
+        "rawHash": "bbac7cf89f29"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:22:00.817Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1068,12 +2371,29 @@
       "file": "plan/sprites/plant-perennial-upright-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#646941",
-      "opaqueRadiusRatio": 1.081,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.012Z",
-        "promptHash": "962712fc326f"
+      "meanColour": "#5f6647",
+      "opaqueRadiusRatio": 1.077,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2ca3d5c768ca",
+        "generatedAt": "2026-09-17T20:22:17.080Z",
+        "rawHash": "a948c2131715"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:22:17.280Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1082,8 +2402,30 @@
       "file": "plan/sprites/plant-shrub-1.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#63923a",
-      "opaqueRadiusRatio": 1.001
+      "meanColour": "#535f3b",
+      "opaqueRadiusRatio": 1.043,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "9a812d406360",
+        "generatedAt": "2026-09-17T20:18:32.735Z",
+        "rawHash": "439ba83fd0b1"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:32.905Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub",
@@ -1091,8 +2433,30 @@
       "file": "plan/sprites/plant-shrub-2.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#5c7d39",
-      "opaqueRadiusRatio": 1.017
+      "meanColour": "#58643b",
+      "opaqueRadiusRatio": 1.09,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "e4c158375c2d",
+        "generatedAt": "2026-09-17T20:18:32.748Z",
+        "rawHash": "dd34ecfd554a"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:32.910Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub",
@@ -1100,8 +2464,30 @@
       "file": "plan/sprites/plant-shrub-3.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#557a35",
-      "opaqueRadiusRatio": 1.028
+      "meanColour": "#5c663e",
+      "opaqueRadiusRatio": 1.04,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "3055dedaa1ab",
+        "generatedAt": "2026-09-17T20:18:51.827Z",
+        "rawHash": "212eb38418b6"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:51.989Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub",
@@ -1109,8 +2495,30 @@
       "file": "plan/sprites/plant-shrub-4.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#5b792f",
-      "opaqueRadiusRatio": 1.031
+      "meanColour": "#5e6b4c",
+      "opaqueRadiusRatio": 1.054,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "380cc37c1891",
+        "generatedAt": "2026-09-17T20:18:53.820Z",
+        "rawHash": "b601175bf5b0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:18:53.979Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub",
@@ -1118,8 +2526,30 @@
       "file": "plan/sprites/plant-shrub-5.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#64882c",
-      "opaqueRadiusRatio": 1.005
+      "meanColour": "#646f44",
+      "opaqueRadiusRatio": 1.05,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "97481e2627dc",
+        "generatedAt": "2026-09-17T20:19:12.564Z",
+        "rawHash": "67ba546b0202"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:12.728Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub",
@@ -1127,8 +2557,30 @@
       "file": "plan/sprites/plant-shrub-6.webp",
       "widthPx": 256,
       "heightPx": 256,
-      "meanColour": "#578131",
-      "opaqueRadiusRatio": 1.02
+      "meanColour": "#677445",
+      "opaqueRadiusRatio": 1.029,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "fdc0c090f557",
+        "generatedAt": "2026-09-17T20:19:17.036Z",
+        "rawHash": "e2a273d96d3f"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:19:17.205Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "plant-shrub-architectural",
@@ -1136,12 +2588,29 @@
       "file": "plan/sprites/plant-shrub-architectural-1.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#5a6f54",
-      "opaqueRadiusRatio": 1.062,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.455Z",
-        "promptHash": "e2bf616e0084"
+      "meanColour": "#566745",
+      "opaqueRadiusRatio": 1.12,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "69c100b892cb",
+        "generatedAt": "2026-09-17T20:23:37.359Z",
+        "rawHash": "4232e6d0c902"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:23:37.605Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1150,12 +2619,29 @@
       "file": "plan/sprites/plant-shrub-architectural-2.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#6c6c58",
-      "opaqueRadiusRatio": 1.052,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.463Z",
-        "promptHash": "6c19acb8b6dc"
+      "meanColour": "#767960",
+      "opaqueRadiusRatio": 1.057,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "826640478075",
+        "generatedAt": "2026-09-17T20:24:07.553Z",
+        "rawHash": "1c08ddaa4a1c"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:24:07.794Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1164,12 +2650,29 @@
       "file": "plan/sprites/plant-shrub-architectural-3.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#6f8264",
-      "opaqueRadiusRatio": 1.081,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.465Z",
-        "promptHash": "2bceb2a79bf3"
+      "meanColour": "#687a62",
+      "opaqueRadiusRatio": 1.076,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "6da5d6e59902",
+        "generatedAt": "2026-09-17T20:23:55.026Z",
+        "rawHash": "a536aa9f74a0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:23:55.264Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1178,12 +2681,29 @@
       "file": "plan/sprites/plant-shrub-deciduous-1.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#667446",
-      "opaqueRadiusRatio": 1.125,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.667Z",
-        "promptHash": "46595275d310"
+      "meanColour": "#6c7a55",
+      "opaqueRadiusRatio": 1.053,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "bb9f250d20e0",
+        "generatedAt": "2026-09-17T20:24:15.871Z",
+        "rawHash": "3389d8ec22f7"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:24:16.132Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1192,12 +2712,29 @@
       "file": "plan/sprites/plant-shrub-deciduous-2.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#65683e",
-      "opaqueRadiusRatio": 1.144,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.718Z",
-        "promptHash": "690843d40270"
+      "meanColour": "#6c6a4e",
+      "opaqueRadiusRatio": 1.134,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2d2399050e8c",
+        "generatedAt": "2026-09-17T20:24:27.169Z",
+        "rawHash": "e57fd3cd72cc"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:24:27.431Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1206,12 +2743,29 @@
       "file": "plan/sprites/plant-shrub-deciduous-3.webp",
       "widthPx": 640,
       "heightPx": 640,
-      "meanColour": "#5f7250",
-      "opaqueRadiusRatio": 1.032,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:02.727Z",
-        "promptHash": "9f4fb0cf1bad"
+      "meanColour": "#6a7861",
+      "opaqueRadiusRatio": 1.074,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a24332bc5404",
+        "generatedAt": "2026-09-17T20:24:32.181Z",
+        "rawHash": "8d7f5d96d85b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:24:32.440Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1220,12 +2774,29 @@
       "file": "plan/sprites/plant-shrub-topiary-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#415e25",
-      "opaqueRadiusRatio": 1.014,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:05:07.354Z",
-        "promptHash": "8a4c65eeeb97"
+      "meanColour": "#536030",
+      "opaqueRadiusRatio": 1.012,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "da02ff5fdd50",
+        "generatedAt": "2026-09-17T20:24:46.212Z",
+        "rawHash": "dc7f95f9e131"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:24:46.409Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1234,12 +2805,29 @@
       "file": "plan/sprites/plant-shrub-topiary-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#3d532e",
+      "meanColour": "#42552f",
       "opaqueRadiusRatio": 1.008,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:05:24.121Z",
-        "promptHash": "508b619c5d0f"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "3413231aa191",
+        "generatedAt": "2026-09-17T20:25:02.174Z",
+        "rawHash": "7da6a546d4ad"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:25:02.374Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1248,8 +2836,30 @@
       "file": "plan/sprites/play-raised-bed-1.webp",
       "widthPx": 512,
       "heightPx": 256,
-      "meanColour": "#4f4f18",
-      "opaqueRadiusRatio": 2.04
+      "meanColour": "#5f633b",
+      "opaqueRadiusRatio": 2.157,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "rawSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "specVersion": "2.0",
+        "promptHash": "aa9115f20d16",
+        "generatedAt": "2026-09-19T12:10:42.783Z",
+        "rawHash": "b454c2ef701e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:10:43.014Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "play-slide",
@@ -1257,8 +2867,30 @@
       "file": "plan/sprites/play-slide-1.webp",
       "widthPx": 256,
       "heightPx": 555,
-      "meanColour": "#767d3d",
-      "opaqueRadiusRatio": 2.292
+      "meanColour": "#697162",
+      "opaqueRadiusRatio": 2.196,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 704,
+          "h": 1520
+        },
+        "rawSize": {
+          "w": 704,
+          "h": 1520
+        },
+        "specVersion": "2.0",
+        "promptHash": "a73c86c4c319",
+        "generatedAt": "2026-09-19T12:10:55.901Z",
+        "rawHash": "cb4201c1b706"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:10:56.106Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "play-swing",
@@ -1266,8 +2898,30 @@
       "file": "plan/sprites/play-swing-1.webp",
       "widthPx": 512,
       "heightPx": 342,
-      "meanColour": "#8a6b4e",
-      "opaqueRadiusRatio": 1.654
+      "meanColour": "#8c7a5c",
+      "opaqueRadiusRatio": 1.702,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "rawSize": {
+          "w": 1264,
+          "h": 848
+        },
+        "specVersion": "2.0",
+        "promptHash": "2526483c68e5",
+        "generatedAt": "2026-09-19T12:11:11.558Z",
+        "rawHash": "972806db3240"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:11:11.702Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "play-trampoline",
@@ -1275,8 +2929,30 @@
       "file": "plan/sprites/play-trampoline-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#394b5e",
-      "opaqueRadiusRatio": 0.812
+      "meanColour": "#3e4c60",
+      "opaqueRadiusRatio": 1.012,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8f8cfaa0e8d8",
+        "generatedAt": "2026-09-19T12:11:26.776Z",
+        "rawHash": "95435feb67c3"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:11:26.979Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "skin-fence-boards",
@@ -1412,8 +3088,17 @@
       "file": "plan/textures/tex-play-bark-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#ab773e",
-      "seamScore": 1.406
+      "meanColour": "#a07a55",
+      "seamScore": 1.417,
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:03:35.624Z",
+        "warnings": [],
+        "defects": [],
+        "correction": {
+          "saturation": 0.68
+        }
+      }
     },
     {
       "id": "tex-pond-water",
@@ -1466,8 +3151,30 @@
       "file": "plan/sprites/tree-canopy-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#7d9d3e",
-      "opaqueRadiusRatio": 1.021
+      "meanColour": "#6b7548",
+      "opaqueRadiusRatio": 1.038,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2a09c78ced9d",
+        "generatedAt": "2026-09-17T20:27:33.685Z",
+        "rawHash": "3c52f9678b17"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:27:33.889Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-canopy",
@@ -1475,8 +3182,30 @@
       "file": "plan/sprites/tree-canopy-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#528116",
-      "opaqueRadiusRatio": 0.861
+      "meanColour": "#63633a",
+      "opaqueRadiusRatio": 1.039,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "1e29f8e1b674",
+        "generatedAt": "2026-09-17T20:27:38.219Z",
+        "rawHash": "2028090401a0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:27:38.434Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-canopy",
@@ -1484,8 +3213,30 @@
       "file": "plan/sprites/tree-canopy-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#74882e",
-      "opaqueRadiusRatio": 1.012
+      "meanColour": "#6e6d4f",
+      "opaqueRadiusRatio": 1.061,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ca48dea0a725",
+        "generatedAt": "2026-09-17T20:28:20.476Z",
+        "rawHash": "80a861947636"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:28:20.688Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-canopy",
@@ -1493,8 +3244,30 @@
       "file": "plan/sprites/tree-canopy-4.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#688e25",
-      "opaqueRadiusRatio": 1.014
+      "meanColour": "#647242",
+      "opaqueRadiusRatio": 1.018,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "b5a77ebefc26",
+        "generatedAt": "2026-09-17T20:28:23.532Z",
+        "rawHash": "5c21d4fb9456"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:28:23.736Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-canopy",
@@ -1502,8 +3275,30 @@
       "file": "plan/sprites/tree-canopy-5.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#658e33",
-      "opaqueRadiusRatio": 1.034
+      "meanColour": "#6f7554",
+      "opaqueRadiusRatio": 1.118,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f00b6e0568a1",
+        "generatedAt": "2026-09-17T20:29:08.005Z",
+        "rawHash": "8e68dee35e43"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:29:08.215Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-canopy",
@@ -1511,8 +3306,30 @@
       "file": "plan/sprites/tree-canopy-6.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#5c762a",
-      "opaqueRadiusRatio": 0.999
+      "meanColour": "#5e6a40",
+      "opaqueRadiusRatio": 1.05,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "65f119062d9b",
+        "generatedAt": "2026-09-17T20:29:10.754Z",
+        "rawHash": "57565ddf6e22"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:29:10.958Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-conifer",
@@ -1520,8 +3337,30 @@
       "file": "plan/sprites/tree-conifer-1.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#28391e",
-      "opaqueRadiusRatio": 1.007
+      "meanColour": "#434a37",
+      "opaqueRadiusRatio": 1.087,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "b5ffa62d0ccc",
+        "generatedAt": "2026-09-17T20:29:49.036Z",
+        "rawHash": "86ebe70d7f0d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:29:49.243Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-conifer",
@@ -1529,8 +3368,30 @@
       "file": "plan/sprites/tree-conifer-2.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#21321a",
-      "opaqueRadiusRatio": 0.998
+      "meanColour": "#3e4933",
+      "opaqueRadiusRatio": 1.03,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f201cf7670ab",
+        "generatedAt": "2026-09-17T20:29:52.650Z",
+        "rawHash": "fc6372655e5e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:29:52.834Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-conifer",
@@ -1538,12 +3399,29 @@
       "file": "plan/sprites/tree-conifer-3.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#374c31",
-      "opaqueRadiusRatio": 1.118,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:04:17.221Z",
-        "promptHash": "35d5a684beef"
+      "meanColour": "#44573f",
+      "opaqueRadiusRatio": 1.007,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2c2259d6f906",
+        "generatedAt": "2026-09-17T20:30:29.106Z",
+        "rawHash": "950e66fab376"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:30:29.306Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1552,12 +3430,29 @@
       "file": "plan/sprites/tree-conifer-4.webp",
       "widthPx": 512,
       "heightPx": 512,
-      "meanColour": "#394933",
-      "opaqueRadiusRatio": 1.069,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:04:30.975Z",
-        "promptHash": "1d4f7825a0f6"
+      "meanColour": "#445136",
+      "opaqueRadiusRatio": 1.014,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ff6eed171070",
+        "generatedAt": "2026-09-17T20:30:35.493Z",
+        "rawHash": "940a9fa1761b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:30:35.694Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1566,12 +3461,29 @@
       "file": "plan/sprites/tree-fruit-1.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#5a6240",
-      "opaqueRadiusRatio": 1.04,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:08:56.911Z",
-        "promptHash": "6a6a2bc56231"
+      "meanColour": "#646c43",
+      "opaqueRadiusRatio": 1.067,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ad0aca93069c",
+        "generatedAt": "2026-09-17T20:32:55.249Z",
+        "rawHash": "f39bf4813de0"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:32:55.595Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1580,12 +3492,29 @@
       "file": "plan/sprites/tree-fruit-2.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#545f36",
-      "opaqueRadiusRatio": 1.074,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:09:07.634Z",
-        "promptHash": "4444e57b0ad6"
+      "meanColour": "#5d683f",
+      "opaqueRadiusRatio": 1.025,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a84892a498a0",
+        "generatedAt": "2026-09-17T20:33:36.269Z",
+        "rawHash": "caa50b26162e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:33:36.629Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1594,8 +3523,30 @@
       "file": "plan/sprites/tree-japanese-maple-1.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#6d2c33",
-      "opaqueRadiusRatio": 1.04
+      "meanColour": "#6b2f36",
+      "opaqueRadiusRatio": 1.029,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "0480ab6dc2fc",
+        "generatedAt": "2026-09-17T20:33:41.353Z",
+        "rawHash": "30120921689e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:33:41.677Z",
+        "warnings": [],
+        "defects": []
+      }
     },
     {
       "id": "tree-japanese-maple",
@@ -1603,12 +3554,29 @@
       "file": "plan/sprites/tree-japanese-maple-2.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#8d2a32",
-      "opaqueRadiusRatio": 1.09,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:05:58.087Z",
-        "promptHash": "5110ca028e1c"
+      "meanColour": "#843035",
+      "opaqueRadiusRatio": 1.087,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a316b774ad20",
+        "generatedAt": "2026-09-17T20:34:24.556Z",
+        "rawHash": "4eaa16b7bc64"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:34:24.875Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1617,12 +3585,29 @@
       "file": "plan/sprites/tree-japanese-maple-3.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#893333",
-      "opaqueRadiusRatio": 1.07,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-10T15:09:18.106Z",
-        "promptHash": "422f8c67aea4"
+      "meanColour": "#9a4447",
+      "opaqueRadiusRatio": 1.035,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "6626ef3d3a95",
+        "generatedAt": "2026-09-17T20:34:27.503Z",
+        "rawHash": "292d657f7a06"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:34:27.839Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1631,12 +3616,29 @@
       "file": "plan/sprites/tree-multistem-1.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#626d44",
-      "opaqueRadiusRatio": 1.115,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:08:18.036Z",
-        "promptHash": "34c7f65c7c41"
+      "meanColour": "#69714c",
+      "opaqueRadiusRatio": 1.131,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "2000b885ba5c",
+        "generatedAt": "2026-09-17T20:32:09.824Z",
+        "rawHash": "8afc3cd4c07b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:32:10.148Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1645,12 +3647,29 @@
       "file": "plan/sprites/tree-multistem-2.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#617248",
-      "opaqueRadiusRatio": 1.113,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:08:10.351Z",
-        "promptHash": "19a6a7fdcebe"
+      "meanColour": "#6e7556",
+      "opaqueRadiusRatio": 1.181,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f5120988368f",
+        "generatedAt": "2026-09-17T20:32:47.234Z",
+        "rawHash": "b6bc171a6199"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:32:47.564Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1659,12 +3678,29 @@
       "file": "plan/sprites/tree-ornamental-1.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#8c795f",
-      "opaqueRadiusRatio": 1.045,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:03.221Z",
-        "promptHash": "582399d97253"
+      "meanColour": "#a99186",
+      "opaqueRadiusRatio": 1.011,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "9799d0b2aaa0",
+        "generatedAt": "2026-09-17T20:31:11.629Z",
+        "rawHash": "baa3a67deb88"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:31:11.971Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1673,12 +3709,29 @@
       "file": "plan/sprites/tree-ornamental-2.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#726d40",
-      "opaqueRadiusRatio": 1.053,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:03.268Z",
-        "promptHash": "1ae6da60c27e"
+      "meanColour": "#7b7956",
+      "opaqueRadiusRatio": 1.1,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "e57e984cee23",
+        "generatedAt": "2026-09-17T20:31:22.792Z",
+        "rawHash": "557e2980f646"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:31:23.136Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1687,12 +3740,29 @@
       "file": "plan/sprites/tree-ornamental-3.webp",
       "widthPx": 768,
       "heightPx": 768,
-      "meanColour": "#767c53",
-      "opaqueRadiusRatio": 1.042,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-05T18:07:03.265Z",
-        "promptHash": "27526a4ea326"
+      "meanColour": "#7d825a",
+      "opaqueRadiusRatio": 1.025,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "624a4e41db86",
+        "generatedAt": "2026-09-17T20:32:01.287Z",
+        "rawHash": "3bdab477cd4e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:32:01.643Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1701,18 +3771,35 @@
       "file": "elevated/sprites/vis-bbq-1.webp",
       "widthPx": 768,
       "heightPx": 489,
-      "meanColour": "#8d8c8c",
+      "meanColour": "#939291",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.008,
-        "maxX": 1,
+        "minX": 0.01,
+        "minY": 0,
+        "maxX": 0.988,
         "maxY": 1
       },
-      "footAlpha": 0.069,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:32.128Z",
-        "promptHash": "55f66f7bb8f4"
+      "footAlpha": 0.07,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1296,
+          "h": 832
+        },
+        "rawSize": {
+          "w": 1296,
+          "h": 832
+        },
+        "specVersion": "2.0",
+        "promptHash": "baa8e3b937b6",
+        "generatedAt": "2026-09-19T12:11:42.999Z",
+        "rawHash": "a32c8971c8af"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:11:43.158Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1721,18 +3808,35 @@
       "file": "elevated/sprites/vis-bench-1.webp",
       "widthPx": 768,
       "heightPx": 380,
-      "meanColour": "#9b8167",
+      "meanColour": "#968575",
       "opaqueBounds": {
-        "minX": 0.113,
+        "minX": 0.042,
         "minY": 0,
-        "maxX": 0.887,
+        "maxX": 0.958,
         "maxY": 1
       },
-      "footAlpha": 0.055,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.960Z",
-        "promptHash": "8b9a047ec4ba"
+      "footAlpha": 0.07,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "rawSize": {
+          "w": 1456,
+          "h": 736
+        },
+        "specVersion": "2.0",
+        "promptHash": "dcd5872c3060",
+        "generatedAt": "2026-09-19T12:11:57.711Z",
+        "rawHash": "adad9bac1671"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:11:57.887Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1741,18 +3845,35 @@
       "file": "elevated/sprites/vis-dining-6-1.webp",
       "widthPx": 768,
       "heightPx": 614,
-      "meanColour": "#ab8b6d",
+      "meanColour": "#ab9076",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.042,
+        "minY": 0.003,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.079,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.342Z",
-        "promptHash": "0c6631fae1c8"
+      "footAlpha": 0.101,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 832
+        },
+        "specVersion": "2.0",
+        "promptHash": "27f0ef225e10",
+        "generatedAt": "2026-09-18T01:14:53.265Z",
+        "rawHash": "0b3d99870d52"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T01:14:53.451Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1761,18 +3882,35 @@
       "file": "elevated/sprites/vis-fire-pit-1.webp",
       "widthPx": 717,
       "heightPx": 768,
-      "meanColour": "#715c54",
+      "meanColour": "#665449",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.043,
+        "minY": 0.025,
         "maxX": 0.999,
-        "maxY": 0.999
+        "maxY": 1
       },
-      "footAlpha": 0.061,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:32.348Z",
-        "promptHash": "f1f8e9eea0de"
+      "footAlpha": 0.183,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 960,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 960,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "7a8ca33b902f",
+        "generatedAt": "2026-09-18T01:46:37.266Z",
+        "rawHash": "dd8985d79a86"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T01:46:37.495Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1781,18 +3919,35 @@
       "file": "elevated/sprites/vis-flower-1.webp",
       "widthPx": 393,
       "heightPx": 512,
-      "meanColour": "#7f885f",
+      "meanColour": "#838a6d",
       "opaqueBounds": {
-        "minX": 0.092,
+        "minX": 0,
         "minY": 0,
-        "maxX": 0.908,
+        "maxX": 0.997,
         "maxY": 1
       },
-      "footAlpha": 0.017,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:28:26.223Z",
-        "promptHash": "afb75e3268fc"
+      "footAlpha": 0.026,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 800,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 800,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "ebb41f4e378b",
+        "generatedAt": "2026-09-17T22:39:14.488Z",
+        "rawHash": "894e09bcdc57"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:39:14.625Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1801,18 +3956,35 @@
       "file": "elevated/sprites/vis-flower-2.webp",
       "widthPx": 393,
       "heightPx": 512,
-      "meanColour": "#84813b",
+      "meanColour": "#928e3d",
       "opaqueBounds": {
-        "minX": 0.046,
-        "minY": 0,
-        "maxX": 0.954,
+        "minX": 0,
+        "minY": 0.072,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.04,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:28:26.308Z",
-        "promptHash": "996303d38a3f"
+      "footAlpha": 0.018,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 800,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 800,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "a0912c809cf9",
+        "generatedAt": "2026-09-17T22:39:10.569Z",
+        "rawHash": "88529c6802b8"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:39:10.706Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1821,18 +3993,35 @@
       "file": "elevated/sprites/vis-flower-3.webp",
       "widthPx": 393,
       "heightPx": 512,
-      "meanColour": "#734e44",
+      "meanColour": "#905456",
       "opaqueBounds": {
-        "minX": 0.036,
-        "minY": 0,
-        "maxX": 0.962,
+        "minX": 0,
+        "minY": 0.08,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.048,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:29:05.550Z",
-        "promptHash": "26f19b0dfa88"
+      "footAlpha": 0.013,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 912,
+          "h": 1184
+        },
+        "rawSize": {
+          "w": 912,
+          "h": 1184
+        },
+        "specVersion": "2.0",
+        "promptHash": "5431eb028990",
+        "generatedAt": "2026-09-19T12:12:15.597Z",
+        "rawHash": "b6daef34d91d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:12:15.747Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1841,18 +4030,35 @@
       "file": "elevated/sprites/vis-grass-1.webp",
       "widthPx": 349,
       "heightPx": 512,
-      "meanColour": "#a1976e",
+      "meanColour": "#928a69",
       "opaqueBounds": {
-        "minX": 0.02,
-        "minY": 0.004,
-        "maxX": 0.971,
-        "maxY": 0.996
+        "minX": 0.017,
+        "minY": 0.008,
+        "maxX": 0.986,
+        "maxY": 0.992
       },
-      "footAlpha": 0.005,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:04.123Z",
-        "promptHash": "88ec4d4f941d"
+      "footAlpha": 0.003,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 848,
+          "h": 1248
+        },
+        "rawSize": {
+          "w": 848,
+          "h": 1248
+        },
+        "specVersion": "2.0",
+        "promptHash": "701a82d2160c",
+        "generatedAt": "2026-09-19T12:12:33.292Z",
+        "rawHash": "80c706ac1a6e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:12:33.473Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1861,18 +4067,35 @@
       "file": "elevated/sprites/vis-grass-2.webp",
       "widthPx": 349,
       "heightPx": 512,
-      "meanColour": "#797551",
+      "meanColour": "#838563",
       "opaqueBounds": {
-        "minX": 0.032,
+        "minX": 0.026,
         "minY": 0.004,
-        "maxX": 0.968,
-        "maxY": 0.994
+        "maxX": 0.971,
+        "maxY": 0.996
       },
-      "footAlpha": 0.006,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:07.385Z",
-        "promptHash": "e67e6c97d916"
+      "footAlpha": 0.004,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 848,
+          "h": 1248
+        },
+        "rawSize": {
+          "w": 848,
+          "h": 1248
+        },
+        "specVersion": "2.0",
+        "promptHash": "84e1adf48530",
+        "generatedAt": "2026-09-19T12:12:49.938Z",
+        "rawHash": "e33703fe308d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:12:50.103Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1881,18 +4104,35 @@
       "file": "elevated/sprites/vis-grass-3.webp",
       "widthPx": 349,
       "heightPx": 512,
-      "meanColour": "#8d8353",
+      "meanColour": "#8a8967",
       "opaqueBounds": {
-        "minX": 0.052,
-        "minY": 0.006,
-        "maxX": 0.948,
-        "maxY": 0.982
+        "minX": 0.006,
+        "minY": 0.002,
+        "maxX": 0.989,
+        "maxY": 0.996
       },
-      "footAlpha": 0,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:06.812Z",
-        "promptHash": "eab3d899a6da"
+      "footAlpha": 0.003,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 704,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 704,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "c49396ccc651",
+        "generatedAt": "2026-09-17T22:02:54.745Z",
+        "rawHash": "d69584cf5ce4"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:02:54.882Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1901,18 +4141,35 @@
       "file": "elevated/sprites/vis-ground-cover-1.webp",
       "widthPx": 463,
       "heightPx": 512,
-      "meanColour": "#576644",
+      "meanColour": "#5b674d",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.295,
+        "minY": 0.061,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.033,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:29:13.989Z",
-        "promptHash": "ce26b926cf0a"
+      "footAlpha": 0.028,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "d3f5b015fa3a",
+        "generatedAt": "2026-09-17T23:10:34.411Z",
+        "rawHash": "4ebb120cbf84"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:10:34.571Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1921,18 +4178,35 @@
       "file": "elevated/sprites/vis-ground-cover-2.webp",
       "widthPx": 463,
       "heightPx": 512,
-      "meanColour": "#535449",
+      "meanColour": "#56544b",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.164,
+        "minY": 0.059,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.056,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:29:56.456Z",
-        "promptHash": "c7eecd63935a"
+      "footAlpha": 0.034,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "06b1fb52215f",
+        "generatedAt": "2026-09-17T23:10:33.861Z",
+        "rawHash": "4c8e35dd269a"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:10:34.017Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1941,18 +4215,35 @@
       "file": "elevated/sprites/vis-ground-cover-3.webp",
       "widthPx": 463,
       "heightPx": 512,
-      "meanColour": "#5a5940",
+      "meanColour": "#686950",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.176,
+        "minY": 0.154,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.019,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:30:02.215Z",
-        "promptHash": "db5468df4b38"
+      "footAlpha": 0.044,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 928,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "642ca6c345ee",
+        "generatedAt": "2026-09-17T23:10:52.784Z",
+        "rawHash": "586382fd9c71"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T23:10:52.943Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1961,18 +4252,35 @@
       "file": "elevated/sprites/vis-hot-tub-1.webp",
       "widthPx": 711,
       "heightPx": 768,
-      "meanColour": "#4f616c",
+      "meanColour": "#57656c",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.134,
+        "minX": 0.001,
+        "minY": 0.085,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.814,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:32:04.238Z",
-        "promptHash": "b0490b82e915"
+      "footAlpha": 0.793,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 960,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 960,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8d413b086891",
+        "generatedAt": "2026-09-18T02:34:07.920Z",
+        "rawHash": "82db77d9540e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T02:34:08.129Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -1981,18 +4289,37 @@
       "file": "elevated/sprites/vis-lounger-1.webp",
       "widthPx": 271,
       "heightPx": 768,
-      "meanColour": "#c7beb4",
+      "meanColour": "#c9beb2",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.201,
-        "maxX": 1,
+        "minX": 0.022,
+        "minY": 0,
+        "maxX": 0.978,
         "maxY": 1
       },
-      "footAlpha": 0.161,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.643Z",
-        "promptHash": "f0f58b033828"
+      "footAlpha": 0.147,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 624,
+          "h": 1728
+        },
+        "rawSize": {
+          "w": 624,
+          "h": 1728
+        },
+        "specVersion": "2.0",
+        "promptHash": "0f1b71f80c5a",
+        "generatedAt": "2026-09-19T12:13:04.207Z",
+        "rawHash": "d887d36eee35"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:13:04.360Z",
+        "warnings": [
+          "soft edge is 24% off the interior colour — a halo"
+        ],
+        "defects": []
       }
     },
     {
@@ -2001,18 +4328,37 @@
       "file": "elevated/sprites/vis-lounger-2.webp",
       "widthPx": 271,
       "heightPx": 768,
-      "meanColour": "#beb0a3",
+      "meanColour": "#cbc0b5",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.169,
-        "maxX": 1,
+        "minX": 0.007,
+        "minY": 0,
+        "maxX": 0.993,
         "maxY": 1
       },
-      "footAlpha": 0.118,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.775Z",
-        "promptHash": "fcd5a2c0137a"
+      "footAlpha": 0.129,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 624,
+          "h": 1728
+        },
+        "rawSize": {
+          "w": 624,
+          "h": 1728
+        },
+        "specVersion": "2.0",
+        "promptHash": "a03731931b27",
+        "generatedAt": "2026-09-19T12:13:16.689Z",
+        "rawHash": "e1faa3d5ca3d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:13:16.837Z",
+        "warnings": [
+          "soft edge is 24% off the interior colour — a halo"
+        ],
+        "defects": []
       }
     },
     {
@@ -2021,18 +4367,35 @@
       "file": "elevated/sprites/vis-parasol-1.webp",
       "widthPx": 646,
       "heightPx": 768,
-      "meanColour": "#d1c7bb",
+      "meanColour": "#c7bfb5",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.168,
+        "minY": 0.03,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.082,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:16.322Z",
-        "promptHash": "ddda66e3211e"
+      "footAlpha": 0.088,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 944,
+          "h": 1120
+        },
+        "rawSize": {
+          "w": 944,
+          "h": 1120
+        },
+        "specVersion": "2.0",
+        "promptHash": "0e2d382600dc",
+        "generatedAt": "2026-09-19T12:13:31.564Z",
+        "rawHash": "64e85340483d"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:13:31.716Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2041,18 +4404,35 @@
       "file": "elevated/sprites/vis-perennial-mound-1.webp",
       "widthPx": 422,
       "heightPx": 512,
-      "meanColour": "#646e5b",
+      "meanColour": "#616755",
       "opaqueBounds": {
-        "minX": 0.002,
-        "minY": 0.016,
+        "minX": 0,
+        "minY": 0.029,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.026,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:26:26.899Z",
-        "promptHash": "30a51589f6f8"
+      "footAlpha": 0.022,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "rawSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "specVersion": "2.0",
+        "promptHash": "46d9eaf30bcd",
+        "generatedAt": "2026-09-19T12:13:50.455Z",
+        "rawHash": "683c8f552655"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:13:50.618Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2061,18 +4441,35 @@
       "file": "elevated/sprites/vis-perennial-mound-2.webp",
       "widthPx": 422,
       "heightPx": 512,
-      "meanColour": "#6b8049",
+      "meanColour": "#707d46",
       "opaqueBounds": {
-        "minX": 0.019,
-        "minY": 0,
-        "maxX": 0.976,
+        "minX": 0,
+        "minY": 0.121,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.065,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:26:27.881Z",
-        "promptHash": "499cf00e0db2"
+      "footAlpha": 0.102,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "rawSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "specVersion": "2.0",
+        "promptHash": "9a27c824c809",
+        "generatedAt": "2026-09-19T12:14:08.645Z",
+        "rawHash": "bd76e79e3528"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:14:08.808Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2081,18 +4478,35 @@
       "file": "elevated/sprites/vis-perennial-mound-3.webp",
       "widthPx": 422,
       "heightPx": 512,
-      "meanColour": "#6d4f52",
+      "meanColour": "#684c4f",
       "opaqueBounds": {
-        "minX": 0.085,
-        "minY": 0,
-        "maxX": 0.915,
+        "minX": 0,
+        "minY": 0.01,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.029,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:27:06.592Z",
-        "promptHash": "c323804b86a7"
+      "footAlpha": 0.031,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 848,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 848,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "51c30453dfd9",
+        "generatedAt": "2026-09-17T22:34:19.296Z",
+        "rawHash": "ded52fd94150"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:34:19.444Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2101,18 +4515,35 @@
       "file": "elevated/sprites/vis-perennial-spire-1.webp",
       "widthPx": 359,
       "heightPx": 512,
-      "meanColour": "#57564e",
+      "meanColour": "#616563",
       "opaqueBounds": {
-        "minX": 0.045,
+        "minX": 0.017,
         "minY": 0,
-        "maxX": 0.955,
+        "maxX": 0.983,
         "maxY": 1
       },
       "footAlpha": 0.026,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:27:07.184Z",
-        "promptHash": "e42384fda2c7"
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "787f3e332d9b",
+        "generatedAt": "2026-09-17T22:34:20.610Z",
+        "rawHash": "9e2444f5e61c"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:34:20.734Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2121,18 +4552,35 @@
       "file": "elevated/sprites/vis-perennial-spire-2.webp",
       "widthPx": 359,
       "heightPx": 512,
-      "meanColour": "#637154",
+      "meanColour": "#636b55",
       "opaqueBounds": {
-        "minX": 0.084,
-        "minY": 0,
-        "maxX": 0.916,
+        "minX": 0.036,
+        "minY": 0.002,
+        "maxX": 0.958,
         "maxY": 1
       },
-      "footAlpha": 0.014,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:27:45.719Z",
-        "promptHash": "4a0428cb96f6"
+      "footAlpha": 0.012,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "f0a6e2090685",
+        "generatedAt": "2026-09-17T22:34:37.420Z",
+        "rawHash": "a9a0b0c4cf47"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T22:34:37.550Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2141,18 +4589,35 @@
       "file": "elevated/sprites/vis-perennial-spire-3.webp",
       "widthPx": 359,
       "heightPx": 512,
-      "meanColour": "#55604e",
+      "meanColour": "#616855",
       "opaqueBounds": {
-        "minX": 0.036,
+        "minX": 0.019,
         "minY": 0,
-        "maxX": 0.961,
+        "maxX": 0.981,
         "maxY": 1
       },
-      "footAlpha": 0.022,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:27:47.361Z",
-        "promptHash": "8c2d804abd73"
+      "footAlpha": 0.06,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 864,
+          "h": 1232
+        },
+        "rawSize": {
+          "w": 864,
+          "h": 1232
+        },
+        "specVersion": "2.0",
+        "promptHash": "4f9fac433cd3",
+        "generatedAt": "2026-09-19T12:14:26.556Z",
+        "rawHash": "5a45e6772463"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:14:26.706Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2161,18 +4626,35 @@
       "file": "elevated/sprites/vis-planter-1.webp",
       "widthPx": 582,
       "heightPx": 768,
-      "meanColour": "#3e4d2a",
+      "meanColour": "#495537",
       "opaqueBounds": {
-        "minX": 0.002,
-        "minY": 0.036,
+        "minX": 0,
+        "minY": 0.091,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.86,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:43.502Z",
-        "promptHash": "16b1d640a7bc"
+      "footAlpha": 0.828,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 896,
+          "h": 1184
+        },
+        "rawSize": {
+          "w": 896,
+          "h": 1184
+        },
+        "specVersion": "2.0",
+        "promptHash": "99f19ce17e76",
+        "generatedAt": "2026-09-19T12:14:42.550Z",
+        "rawHash": "7d80c50eefb5"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:14:42.764Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2181,18 +4663,35 @@
       "file": "elevated/sprites/vis-planter-2.webp",
       "widthPx": 582,
       "heightPx": 768,
-      "meanColour": "#626241",
+      "meanColour": "#6f6847",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.155,
+        "minY": 0.163,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.886,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:43.725Z",
-        "promptHash": "29e80cac4198"
+      "footAlpha": 0.856,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 896,
+          "h": 1184
+        },
+        "rawSize": {
+          "w": 896,
+          "h": 1184
+        },
+        "specVersion": "2.0",
+        "promptHash": "261199698aa3",
+        "generatedAt": "2026-09-19T12:14:59.128Z",
+        "rawHash": "facff89f0438"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:14:59.348Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2201,18 +4700,146 @@
       "file": "elevated/sprites/vis-raised-bed-1.webp",
       "widthPx": 768,
       "heightPx": 421,
-      "meanColour": "#62643c",
+      "meanColour": "#686847",
       "opaqueBounds": {
-        "minX": 0.009,
-        "minY": 0.002,
-        "maxX": 0.991,
+        "minX": 0,
+        "minY": 0.105,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.605,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:47.898Z",
-        "promptHash": "a2f598680fbb"
+      "footAlpha": 0.845,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "rawSize": {
+          "w": 1392,
+          "h": 768
+        },
+        "specVersion": "2.0",
+        "promptHash": "5b12ef6806d2",
+        "generatedAt": "2026-09-19T12:15:13.387Z",
+        "rawHash": "2d474a87168e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:15:13.584Z",
+        "warnings": [],
+        "defects": []
+      }
+    },
+    {
+      "id": "vis-shrub-architectural",
+      "variant": 1,
+      "file": "elevated/sprites/vis-shrub-architectural-1.webp",
+      "widthPx": 403,
+      "heightPx": 512,
+      "meanColour": "#5c6a46",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.096,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.025,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "dd9cf8f4144e",
+        "generatedAt": "2026-09-17T21:24:32.666Z",
+        "rawHash": "6259989efc0a"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T21:24:32.805Z",
+        "warnings": [],
+        "defects": []
+      }
+    },
+    {
+      "id": "vis-shrub-architectural",
+      "variant": 2,
+      "file": "elevated/sprites/vis-shrub-architectural-2.webp",
+      "widthPx": 403,
+      "heightPx": 512,
+      "meanColour": "#686a4d",
+      "opaqueBounds": {
+        "minX": 0.002,
+        "minY": 0.027,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.009,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "25541c014a6b",
+        "generatedAt": "2026-09-17T21:24:30.392Z",
+        "rawHash": "09cdc6d79f7b"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T21:24:30.522Z",
+        "warnings": [],
+        "defects": []
+      }
+    },
+    {
+      "id": "vis-shrub-architectural",
+      "variant": 3,
+      "file": "elevated/sprites/vis-shrub-architectural-3.webp",
+      "widthPx": 403,
+      "heightPx": 512,
+      "meanColour": "#637353",
+      "opaqueBounds": {
+        "minX": 0.002,
+        "minY": 0.064,
+        "maxX": 0.998,
+        "maxY": 0.996
+      },
+      "footAlpha": 0.006,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "835213b68836",
+        "generatedAt": "2026-09-17T21:24:46.155Z",
+        "rawHash": "e7ff49e966f6"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T21:24:46.276Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2221,18 +4848,35 @@
       "file": "elevated/sprites/vis-shrub-evergreen-1.webp",
       "widthPx": 401,
       "heightPx": 512,
-      "meanColour": "#576535",
+      "meanColour": "#55603a",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.053,
+        "minY": 0.17,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.031,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:54.175Z",
-        "promptHash": "da93ede1b6d3"
+      "footAlpha": 0.043,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "rawSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "specVersion": "2.0",
+        "promptHash": "3c930d42a7e3",
+        "generatedAt": "2026-09-19T12:15:31.214Z",
+        "rawHash": "a6ee88a3bf3c"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:15:31.370Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2241,18 +4885,35 @@
       "file": "elevated/sprites/vis-shrub-evergreen-2.webp",
       "widthPx": 401,
       "heightPx": 512,
-      "meanColour": "#495035",
+      "meanColour": "#515338",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.111,
+        "minY": 0.197,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.09,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:54.179Z",
-        "promptHash": "54e4ee62d0a7"
+      "footAlpha": 0.066,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "rawSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "specVersion": "2.0",
+        "promptHash": "ce274095ab4b",
+        "generatedAt": "2026-09-19T12:15:46.414Z",
+        "rawHash": "0441161ae6b7"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:15:46.569Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2261,18 +4922,35 @@
       "file": "elevated/sprites/vis-shrub-evergreen-3.webp",
       "widthPx": 401,
       "heightPx": 512,
-      "meanColour": "#536139",
+      "meanColour": "#5a6440",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.098,
+        "minY": 0.123,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.044,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:54.355Z",
-        "promptHash": "7efbf5b70194"
+      "footAlpha": 0.047,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "rawSize": {
+          "w": 912,
+          "h": 1168
+        },
+        "specVersion": "2.0",
+        "promptHash": "648f5cb00788",
+        "generatedAt": "2026-09-19T12:16:03.275Z",
+        "rawHash": "b1a5acad26f2"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:16:03.435Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2281,18 +4959,35 @@
       "file": "elevated/sprites/vis-shrub-flowering-1.webp",
       "widthPx": 411,
       "heightPx": 512,
-      "meanColour": "#586644",
+      "meanColour": "#647154",
       "opaqueBounds": {
-        "minX": 0.002,
-        "minY": 0.016,
-        "maxX": 1,
+        "minX": 0,
+        "minY": 0.037,
+        "maxX": 0.998,
         "maxY": 1
       },
-      "footAlpha": 0.024,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.090Z",
-        "promptHash": "170120049418"
+      "footAlpha": 0.015,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "7c51ac61290b",
+        "generatedAt": "2026-09-17T20:53:11.129Z",
+        "rawHash": "0d21b06b13a2"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:53:11.278Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2301,18 +4996,35 @@
       "file": "elevated/sprites/vis-shrub-flowering-2.webp",
       "widthPx": 411,
       "heightPx": 512,
-      "meanColour": "#5f6b3d",
+      "meanColour": "#5d6743",
       "opaqueBounds": {
-        "minX": 0.022,
-        "minY": 0,
-        "maxX": 0.978,
+        "minX": 0,
+        "minY": 0.041,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.048,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:31.143Z",
-        "promptHash": "fa6e9533d844"
+      "footAlpha": 0.032,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 928,
+          "h": 1152
+        },
+        "rawSize": {
+          "w": 928,
+          "h": 1152
+        },
+        "specVersion": "2.0",
+        "promptHash": "88963643fb16",
+        "generatedAt": "2026-09-19T12:16:19.468Z",
+        "rawHash": "4ae480af2ad7"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:16:19.634Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2321,18 +5033,109 @@
       "file": "elevated/sprites/vis-shrub-flowering-3.webp",
       "widthPx": 411,
       "heightPx": 512,
-      "meanColour": "#5f583a",
+      "meanColour": "#646646",
       "opaqueBounds": {
-        "minX": 0.015,
-        "minY": 0,
-        "maxX": 0.985,
+        "minX": 0.002,
+        "minY": 0.002,
+        "maxX": 0.995,
         "maxY": 1
       },
-      "footAlpha": 0.013,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:30.204Z",
-        "promptHash": "cfed50a6e229"
+      "footAlpha": 0.018,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 928,
+          "h": 1152
+        },
+        "rawSize": {
+          "w": 928,
+          "h": 1152
+        },
+        "specVersion": "2.0",
+        "promptHash": "3e08b5134223",
+        "generatedAt": "2026-09-19T12:16:38.932Z",
+        "rawHash": "00a5eda138b1"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:16:39.100Z",
+        "warnings": [],
+        "defects": []
+      }
+    },
+    {
+      "id": "vis-shrub-topiary",
+      "variant": 1,
+      "file": "elevated/sprites/vis-shrub-topiary-1.webp",
+      "widthPx": 422,
+      "heightPx": 512,
+      "meanColour": "#50652f",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.148,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.139,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 848,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 848,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "7a214a332f26",
+        "generatedAt": "2026-09-17T21:24:48.664Z",
+        "rawHash": "1d5349abccfa"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T21:24:48.800Z",
+        "warnings": [],
+        "defects": []
+      }
+    },
+    {
+      "id": "vis-shrub-topiary",
+      "variant": 2,
+      "file": "elevated/sprites/vis-shrub-topiary-2.webp",
+      "widthPx": 422,
+      "heightPx": 512,
+      "meanColour": "#425028",
+      "opaqueBounds": {
+        "minX": 0,
+        "minY": 0.15,
+        "maxX": 1,
+        "maxY": 1
+      },
+      "footAlpha": 0.093,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "rawSize": {
+          "w": 944,
+          "h": 1136
+        },
+        "specVersion": "2.0",
+        "promptHash": "9d28e370325a",
+        "generatedAt": "2026-09-19T12:16:55.634Z",
+        "rawHash": "3b1c046a26ca"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:16:55.780Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2341,18 +5144,35 @@
       "file": "elevated/sprites/vis-slide-1.webp",
       "widthPx": 313,
       "heightPx": 768,
-      "meanColour": "#4f7360",
+      "meanColour": "#68826f",
       "opaqueBounds": {
-        "minX": 0.195,
+        "minX": 0.204,
         "minY": 0,
-        "maxX": 0.805,
+        "maxX": 0.796,
         "maxY": 1
       },
-      "footAlpha": 0.304,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:43.272Z",
-        "promptHash": "584021a3d446"
+      "footAlpha": 0.339,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 656,
+          "h": 1616
+        },
+        "rawSize": {
+          "w": 656,
+          "h": 1616
+        },
+        "specVersion": "2.0",
+        "promptHash": "a4855c2406c3",
+        "generatedAt": "2026-09-19T12:17:07.858Z",
+        "rawHash": "1d1ef1c5f240"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:17:07.982Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2361,18 +5181,35 @@
       "file": "elevated/sprites/vis-sofa-set-1.webp",
       "widthPx": 768,
       "heightPx": 658,
-      "meanColour": "#85827f",
+      "meanColour": "#848282",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.033,
+        "minY": 0.091,
         "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.117,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:22:05.734Z",
-        "promptHash": "fd6cf713309e"
+      "footAlpha": 0.142,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1120,
+          "h": 960
+        },
+        "rawSize": {
+          "w": 1120,
+          "h": 960
+        },
+        "specVersion": "2.0",
+        "promptHash": "a016beda7137",
+        "generatedAt": "2026-09-19T12:17:25.493Z",
+        "rawHash": "e71620efdb47"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-19T12:17:25.683Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2381,18 +5218,35 @@
       "file": "elevated/sprites/vis-swing-1.webp",
       "widthPx": 768,
       "heightPx": 632,
-      "meanColour": "#9b8967",
+      "meanColour": "#9d8666",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.198,
-        "maxX": 1,
+        "minX": 0.003,
+        "minY": 0,
+        "maxX": 0.996,
         "maxY": 1
       },
-      "footAlpha": 0.07,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:19:46.046Z",
-        "promptHash": "23b462ea9058"
+      "footAlpha": 0.056,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 1024,
+          "h": 848
+        },
+        "rawSize": {
+          "w": 1024,
+          "h": 848
+        },
+        "specVersion": "2.0",
+        "promptHash": "f1c86752cf58",
+        "generatedAt": "2026-09-18T02:18:02.575Z",
+        "rawHash": "593470d97469"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T02:18:02.728Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2401,18 +5255,35 @@
       "file": "elevated/sprites/vis-trampoline-1.webp",
       "widthPx": 722,
       "heightPx": 768,
-      "meanColour": "#385276",
+      "meanColour": "#3f5778",
       "opaqueBounds": {
-        "minX": 0.001,
-        "minY": 0.055,
-        "maxX": 0.999,
+        "minX": 0,
+        "minY": 0.042,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.154,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:20:12.254Z",
-        "promptHash": "d1a18e7065b0"
+      "footAlpha": 0.041,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "medium",
+        "requestedSize": {
+          "w": 976,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 976,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "8e182ebbb80c",
+        "generatedAt": "2026-09-18T02:18:23.248Z",
+        "rawHash": "e7a936179cde"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-18T02:18:23.412Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2421,18 +5292,35 @@
       "file": "elevated/sprites/vis-tree-conifer-1.webp",
       "widthPx": 719,
       "heightPx": 1024,
-      "meanColour": "#3d482c",
+      "meanColour": "#4c553e",
       "opaqueBounds": {
-        "minX": 0.001,
-        "minY": 0.121,
-        "maxX": 0.999,
+        "minX": 0.003,
+        "minY": 0.233,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.031,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-16T09:52:41.969Z",
-        "promptHash": "1d4bb4902dc5"
+      "footAlpha": 0.053,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "cae7904b5d37",
+        "generatedAt": "2026-09-17T20:36:57.563Z",
+        "rawHash": "17eedc824938"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:36:57.778Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2441,18 +5329,35 @@
       "file": "elevated/sprites/vis-tree-conifer-2.webp",
       "widthPx": 719,
       "heightPx": 1024,
-      "meanColour": "#494f2f",
+      "meanColour": "#4f5744",
       "opaqueBounds": {
         "minX": 0,
-        "minY": 0.016,
-        "maxX": 1,
+        "minY": 0.2,
+        "maxX": 0.999,
         "maxY": 0.999
       },
-      "footAlpha": 0.018,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-16T09:52:44.986Z",
-        "promptHash": "f801f971600d"
+      "footAlpha": 0.032,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 720,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "31f106409805",
+        "generatedAt": "2026-09-17T20:37:28.324Z",
+        "rawHash": "a3b1cc82d6bb"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:37:28.590Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2461,18 +5366,35 @@
       "file": "elevated/sprites/vis-tree-deciduous-1.webp",
       "widthPx": 746,
       "heightPx": 1024,
-      "meanColour": "#636b3c",
+      "meanColour": "#606a44",
       "opaqueBounds": {
-        "minX": 0.034,
-        "minY": 0.001,
-        "maxX": 0.966,
+        "minX": 0,
+        "minY": 0.024,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.012,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:54.008Z",
-        "promptHash": "5b3f736f1c01"
+      "footAlpha": 0.043,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5f471d9d8f69",
+        "generatedAt": "2026-09-17T20:35:07.632Z",
+        "rawHash": "a5a27aba1076"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:35:07.937Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2481,18 +5403,35 @@
       "file": "elevated/sprites/vis-tree-deciduous-2.webp",
       "widthPx": 746,
       "heightPx": 1024,
-      "meanColour": "#515e2f",
+      "meanColour": "#626e3f",
       "opaqueBounds": {
-        "minX": 0,
-        "minY": 0.033,
-        "maxX": 0.999,
-        "maxY": 0.999
+        "minX": 0.001,
+        "minY": 0.18,
+        "maxX": 1,
+        "maxY": 1
       },
-      "footAlpha": 0.018,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:54.912Z",
-        "promptHash": "e3c60011d9a9"
+      "footAlpha": 0.049,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "913bc84badd9",
+        "generatedAt": "2026-09-17T20:35:06.309Z",
+        "rawHash": "edc6fffc9464"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:35:06.558Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2501,18 +5440,35 @@
       "file": "elevated/sprites/vis-tree-deciduous-3.webp",
       "widthPx": 746,
       "heightPx": 1024,
-      "meanColour": "#575c31",
+      "meanColour": "#60633f",
       "opaqueBounds": {
-        "minX": 0.004,
-        "minY": 0,
-        "maxX": 0.995,
-        "maxY": 0.999
+        "minX": 0,
+        "minY": 0.168,
+        "maxX": 1,
+        "maxY": 1
       },
-      "footAlpha": 0.04,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:52.747Z",
-        "promptHash": "76a7ec6235ba"
+      "footAlpha": 0.03,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 752,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "53d4ed51174f",
+        "generatedAt": "2026-09-17T20:35:42.126Z",
+        "rawHash": "cb61e4c4f73e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:35:42.381Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2521,18 +5477,35 @@
       "file": "elevated/sprites/vis-tree-multistem-1.webp",
       "widthPx": 824,
       "heightPx": 1024,
-      "meanColour": "#71733c",
+      "meanColour": "#7a7b53",
       "opaqueBounds": {
-        "minX": 0.03,
-        "minY": 0,
-        "maxX": 0.97,
+        "minX": 0,
+        "minY": 0.046,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.036,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:17:53.990Z",
-        "promptHash": "03fac7c144fb"
+      "footAlpha": 0.05,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "fc83b5294098",
+        "generatedAt": "2026-09-17T20:35:48.981Z",
+        "rawHash": "f80449374925"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:35:49.298Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2541,18 +5514,35 @@
       "file": "elevated/sprites/vis-tree-multistem-2.webp",
       "widthPx": 824,
       "heightPx": 1024,
-      "meanColour": "#666d35",
+      "meanColour": "#727848",
       "opaqueBounds": {
-        "minX": 0.056,
-        "minY": 0.001,
-        "maxX": 0.943,
+        "minX": 0.001,
+        "minY": 0.083,
+        "maxX": 1,
         "maxY": 1
       },
-      "footAlpha": 0.04,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-13T14:18:28.130Z",
-        "promptHash": "eefadd0796bb"
+      "footAlpha": 0.037,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 832,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "52bbd7ecf158",
+        "generatedAt": "2026-09-17T20:36:21.975Z",
+        "rawHash": "15fda91962bf"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:36:22.269Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2561,18 +5551,35 @@
       "file": "elevated/sprites/vis-tree-ornamental-1.webp",
       "widthPx": 809,
       "heightPx": 1024,
-      "meanColour": "#606f2c",
+      "meanColour": "#5e6c38",
       "opaqueBounds": {
         "minX": 0.001,
-        "minY": 0.045,
+        "minY": 0.084,
         "maxX": 1,
-        "maxY": 0.999
+        "maxY": 1
       },
-      "footAlpha": 0.03,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:30:34.248Z",
-        "promptHash": "4830065e8f04"
+      "footAlpha": 0.055,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "5d947ff0186f",
+        "generatedAt": "2026-09-17T20:36:25.962Z",
+        "rawHash": "ef2ea3f27294"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:36:26.259Z",
+        "warnings": [],
+        "defects": []
       }
     },
     {
@@ -2581,18 +5588,35 @@
       "file": "elevated/sprites/vis-tree-ornamental-2.webp",
       "widthPx": 809,
       "heightPx": 1024,
-      "meanColour": "#7f7a4f",
+      "meanColour": "#a28e7e",
       "opaqueBounds": {
         "minX": 0.001,
-        "minY": 0.05,
+        "minY": 0.159,
         "maxX": 1,
-        "maxY": 0.999
+        "maxY": 1
       },
-      "footAlpha": 0.019,
-      "provenance": {
-        "model": "gpt-image-2 (medium)",
-        "generatedAt": "2026-09-15T16:30:40.293Z",
-        "promptHash": "f16b07c72ff9"
+      "footAlpha": 0.024,
+      "generation": {
+        "model": "gpt-image-2.5-sunburst-2026-09-08",
+        "quality": "high",
+        "requestedSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "rawSize": {
+          "w": 816,
+          "h": 1024
+        },
+        "specVersion": "2.0",
+        "promptHash": "6a8f3cea5a13",
+        "generatedAt": "2026-09-17T20:36:58.908Z",
+        "rawHash": "65a92c3a365e"
+      },
+      "processed": {
+        "postprocessVersion": "2",
+        "at": "2026-09-17T20:36:59.215Z",
+        "warnings": [],
+        "defects": []
       }
     }
   ]

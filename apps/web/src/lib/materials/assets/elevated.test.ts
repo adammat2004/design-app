@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ASSET_FAMILIES,
   ASSET_IDS,
-  ELEVATED,
   elevatedAnchor,
   elevatedFrame,
   type AssetFamily,
   type AssetId,
 } from './asset-spec';
+import { composePrompt, ELEVATED } from './asset-style';
 import { RISE } from '../../render/camera';
 import { extrude } from '../../render/projection';
 import {
@@ -82,8 +82,11 @@ describe('the elevated library', () => {
      * elevated family carries the same contract, not that the contract contains any given sentence.
      */
     for (const id of elevatedSprites) {
-      const { prompt } = ASSET_FAMILIES[id] as AssetFamily;
-      expect(prompt.startsWith(ELEVATED), id).toBe(true);
+      const family: AssetFamily = ASSET_FAMILIES[id];
+      // Every variant, through the composer the tool itself uses: what is sent is what is checked.
+      for (let variant = 1; variant <= family.variants; variant += 1) {
+        expect(composePrompt(family, variant).startsWith(ELEVATED), `${id}-${variant}`).toBe(true);
+      }
     }
 
     // And the contract still says the five things it exists to say.
@@ -135,8 +138,9 @@ describe('the elevated library', () => {
     for (const id of SKIN_ASSETS) {
       const family: AssetFamily = ASSET_FAMILIES[id];
       expect(family.kind, id).toBe('texture');
-      expect(family.prompt, id).toContain('no shadows');
-      expect(family.prompt, id).not.toContain('twelve degrees from vertical');
+      const prompt = composePrompt(family, 1);
+      expect(prompt, id).toContain('no shadows');
+      expect(prompt, id).not.toContain('twelve degrees off vertical');
     }
   });
 });
