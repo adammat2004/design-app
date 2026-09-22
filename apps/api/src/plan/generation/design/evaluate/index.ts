@@ -10,6 +10,7 @@ import type {
 import { BASE_PROFILE, weightProfile } from '../../knowledge/weight-profiles.js';
 import type { SiteAnalysis } from '../types.js';
 import { scoreBuildability } from './buildability.js';
+import { scoreCanopy } from './canopy.js';
 import { scoreCirculation } from './circulation.js';
 import { scoreFeatureFit } from './feature-fit.js';
 import { scoreGrouping } from './grouping.js';
@@ -118,6 +119,7 @@ export function scoreSubject(subject: DesignSubject, tier: ScoreTier): DesignSco
   run('buildability', scoreBuildability(subject));
   run('sun', scoreSun(subject));
   run('maintenanceFit', scoreMaintenance(subject, composition));
+  run('canopy', scoreCanopy(subject));
 
   const fit = scoreFeatureFit(subject);
   run('featureFit', fit.result);

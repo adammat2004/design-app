@@ -1,4 +1,5 @@
 import {
+  DEFAULT_ROOF_MATERIAL,
   DEFAULT_STOREYS,
   MIN_HOUSE_SIDE,
   defaultWalls,
@@ -52,6 +53,7 @@ export function houseFromPoints(points: Point[]): HouseFootprint | null {
     centre,
     rotation: 0,
     storeys: DEFAULT_STOREYS,
+    roofMaterial: DEFAULT_ROOF_MATERIAL,
   };
 }
 

@@ -103,7 +103,8 @@
         "y": 6
       },
       "rotation": 180,
-      "storeys": 1
+      "storeys": 1,
+      "roofMaterial": "slate"
     },
     "selectedZoneIds": [
       "front",
@@ -211,7 +212,7 @@
         ],
         "elements": [
           {
-            "id": "c2-0-e18",
+            "id": "c2-0-e19",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -241,7 +242,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e19",
+            "id": "c2-0-e20",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -271,7 +272,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-0-e20",
+            "id": "c2-0-e21",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -301,7 +302,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-0-e21",
+            "id": "c2-0-e22",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -339,7 +340,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-0-e22",
+            "id": "c2-0-e23",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -371,7 +372,7 @@
             "edging": "brick-edging"
           },
           {
-            "id": "c2-0-e29",
+            "id": "c2-0-e30",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -379,14 +380,14 @@
               "points": [
                 {
                   "x": 12,
-                  "y": 1.5
+                  "y": 2.2
                 },
                 {
-                  "x": 20.5,
-                  "y": 1.5
+                  "x": 19.8,
+                  "y": 2.2
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 3.9
                 },
                 {
@@ -398,11 +399,11 @@
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 9.8
                 },
                 {
@@ -435,7 +436,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e30",
+            "id": "c2-0-e31",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -495,7 +496,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e24",
+            "id": "c2-0-e25",
             "category": "planting-bed",
             "role": "fill",
             "name": "Terrace flank",
@@ -564,7 +565,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e25",
+            "id": "c2-0-e26",
             "category": "planting-bed",
             "role": "fill",
             "name": "Terrace flank",
@@ -597,7 +598,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e26",
+            "id": "c2-0-e27",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -617,35 +618,23 @@
                   "y": 16.437948
                 },
                 {
-                  "x": 6.228655438,
-                  "y": 16.437948
+                  "x": 6.086063769,
+                  "y": 16.446389
                 },
                 {
-                  "x": 6.234754,
-                  "y": 16.871135
+                  "x": 5.78722,
+                  "y": 16.64607
                 },
                 {
-                  "x": 5.726349786,
-                  "y": 16.871135
+                  "x": 5.349269,
+                  "y": 16.733184
                 },
                 {
-                  "x": 5.397114,
-                  "y": 17.091123
+                  "x": 4.911317,
+                  "y": 16.64607
                 },
                 {
-                  "x": 4.959163,
-                  "y": 17.178237
-                },
-                {
-                  "x": 4.521211,
-                  "y": 17.091123
-                },
-                {
-                  "x": 4.149934,
-                  "y": 16.843044
-                },
-                {
-                  "x": 3.895128172,
+                  "x": 4.599841219,
                   "y": 16.437948
                 },
                 {
@@ -657,12 +646,12 @@
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "mixed-border",
+            "material": "shrubs",
             "edging": "brick-edging",
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e27",
+            "id": "c2-0-e28",
             "category": "planting-bed",
             "role": "fill",
             "name": "Specimen border",
@@ -707,7 +696,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e28",
+            "id": "c2-0-e29",
             "category": "planting-bed",
             "role": "fill",
             "name": "Flowering border",
@@ -768,111 +757,107 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e23",
+            "id": "c2-0-e24",
             "category": "lawn",
             "role": "fill",
             "shape": {
               "kind": "polygon",
               "points": [
                 {
-                  "x": 3.154712,
-                  "y": 14.622062
+                  "x": 3.138336558,
+                  "y": 14.615455126
                 },
                 {
                   "x": 3.4386,
                   "y": 14.881474
                 },
                 {
-                  "x": 3.154712,
-                  "y": 15.140886
-                },
-                {
-                  "x": 2.532250777,
-                  "y": 15.392025656
-                },
-                {
-                  "x": 2.571926,
-                  "y": 15.431969
-                },
-                {
-                  "x": 3.304577,
-                  "y": 15.881523
-                },
-                {
-                  "x": 3.834591,
-                  "y": 16.097644
-                },
-                {
-                  "x": 4.536337,
-                  "y": 16.297767
-                },
-                {
-                  "x": 6.229937736,
-                  "y": 16.529055463
-                },
-                {
-                  "x": 6.228655,
-                  "y": 16.437948
-                },
-                {
-                  "x": 8.857924062,
-                  "y": 16.437948
-                },
-                {
-                  "x": 9.67865,
-                  "y": 16.272812
-                },
-                {
-                  "x": 10.339008,
-                  "y": 16.021214
-                },
-                {
-                  "x": 10.698044,
-                  "y": 15.738197
-                },
-                {
-                  "x": 10.785236,
-                  "y": 15.454157
-                },
-                {
-                  "x": 10.670457,
+                  "x": 3.137827,
                   "y": 15.187948
                 },
                 {
-                  "x": 10.428074,
+                  "x": 3.595076,
+                  "y": 15.66024
+                },
+                {
+                  "x": 4.351179,
+                  "y": 16.097644
+                },
+                {
+                  "x": 4.916918,
+                  "y": 16.297767
+                },
+                {
+                  "x": 6.007323007,
+                  "y": 16.499002003
+                },
+                {
+                  "x": 6.007323007,
+                  "y": 16.499002003
+                },
+                {
+                  "x": 6.086064,
+                  "y": 16.446389
+                },
+                {
+                  "x": 8.378572542,
+                  "y": 16.443528082
+                },
+                {
+                  "x": 9.06259,
+                  "y": 16.272812
+                },
+                {
+                  "x": 9.594962,
+                  "y": 16.021214
+                },
+                {
+                  "x": 9.884413,
+                  "y": 15.738197
+                },
+                {
+                  "x": 9.954707,
+                  "y": 15.454157
+                },
+                {
+                  "x": 9.862173,
+                  "y": 15.187948
+                },
+                {
+                  "x": 9.666767,
                   "y": 14.943927
                 },
                 {
-                  "x": 9.695423,
+                  "x": 9.076112,
                   "y": 14.494373
                 },
                 {
-                  "x": 9.165409,
+                  "x": 8.648821,
                   "y": 14.278252
                 },
                 {
-                  "x": 7.565835,
+                  "x": 7.359264,
                   "y": 13.916964
                 },
                 {
-                  "x": 5.352645,
+                  "x": 6.5,
+                  "y": 13.823043
+                },
+                {
+                  "x": 5.575016,
                   "y": 13.819753
                 },
                 {
-                  "x": 4.249915,
+                  "x": 4.686008,
                   "y": 13.91625
                 },
                 {
-                  "x": 3.32135,
+                  "x": 3.93741,
                   "y": 14.103084
                 },
                 {
-                  "x": 2.660992,
+                  "x": 3.405038,
                   "y": 14.354682
-                },
-                {
-                  "x": 2.603778962,
-                  "y": 14.399781272
                 }
               ],
               "cornerRadius": 0
@@ -1025,7 +1010,7 @@
             "shape": {
               "kind": "rect",
               "centre": {
-                "x": 9.185259444463945,
+                "x": 8.295153314838867,
                 "y": 14.700896222214421
               },
               "width": 3.3061084814645807,
@@ -1034,7 +1019,7 @@
             },
             "zone": "back",
             "material": "mixed-border",
-            "edging": "brick-edging",
+            "edging": "timber-sleeper",
             "symbol": "raised-bed",
             "plantingStyle": "cottage"
           },
@@ -1046,8 +1031,8 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 4.95916272219687,
-                "y": 16.033814861115985
+                "x": 5.34926885182195,
+                "y": 15.588761796303446
               },
               "radius": 1.1444221666608163
             },
@@ -1105,12 +1090,12 @@
                   "y": 13.175
                 },
                 {
-                  "x": 5.809753915109194,
+                  "x": 6.1760615899922575,
                   "y": 13.175
                 },
                 {
-                  "x": 5.809753915109194,
-                  "y": 16.87113520844879
+                  "x": 6.1760615899922575,
+                  "y": 16.446389027500967
                 }
               ],
               "width": 0.85
@@ -1195,7 +1180,7 @@
                 "x": 11.1,
                 "y": 18.1
               },
-              "radius": 1.6
+              "radius": 1.5
             },
             "zone": "back",
             "material": "mixed-border",
@@ -1213,7 +1198,7 @@
                 "x": 1.9000000000000004,
                 "y": 18.1
               },
-              "radius": 1.6
+              "radius": 2
             },
             "zone": "right",
             "material": "mixed-border",
@@ -1223,63 +1208,61 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-0-e31",
+            "id": "c2-0-e18",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Evergreen shrub",
+            "name": "Tree",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 17.517338783062062,
-                "y": 10.572971927510574
+                "x": 1.9000000000000004,
+                "y": 13.55
               },
-              "radius": 0.6
+              "radius": 2.5
             },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e24",
+            "zone": "right",
+            "material": "mixed-border",
+            "symbol": "tree-deciduous",
             "plantingStyle": "cottage"
           },
           {
             "id": "c2-0-e32",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Evergreen shrub",
+            "name": "Flowering shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 20.195072678446067,
-                "y": 10.886805792127037
+                "x": 15.992432038531405,
+                "y": 0.9939239397081545
               },
-              "radius": 0.6
+              "radius": 0.95
             },
-            "zone": "back",
+            "zone": "left",
             "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e24",
+            "height": 1.7,
+            "symbol": "shrub-flowering",
+            "bedId": "c2-0-e30",
             "plantingStyle": "cottage"
           },
           {
             "id": "c2-0-e33",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Flowering shrub",
+            "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 8.825610701317666,
-                "y": 17.507796942508776
+                "x": 18.384000148938036,
+                "y": 1.169687575268559
               },
-              "radius": 0.7
+              "radius": 0.85
             },
-            "zone": "back",
+            "zone": "left",
             "material": "shrubs",
             "height": 1.5,
-            "symbol": "shrub-flowering",
-            "bedId": "c2-0-e26",
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-0-e30",
             "plantingStyle": "cottage"
           },
           {
@@ -1290,16 +1273,16 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 4.702756271183258,
-                "y": 19.14582708370755
+                "x": 20.81723910933849,
+                "y": 0.9085803053551352
               },
-              "radius": 0.6
+              "radius": 0.85
             },
-            "zone": "back",
+            "zone": "left",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e26",
+            "bedId": "c2-0-e30",
             "plantingStyle": "cottage"
           },
           {
@@ -1310,16 +1293,16 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 8.798339447861071,
-                "y": 18.904123262678038
+                "x": 9.934707165205618,
+                "y": 17.373641272369536
               },
-              "radius": 0.6
+              "radius": 0.85
             },
             "zone": "back",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e26",
+            "bedId": "c2-0-e27",
             "plantingStyle": "cottage"
           },
           {
@@ -1330,16 +1313,16 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 20.94880903998798,
-                "y": 0.8503051887930406
+                "x": 20.029098156163236,
+                "y": 10.90658360084718
               },
-              "radius": 0.6
+              "radius": 0.85
             },
-            "zone": "left",
+            "zone": "back",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e29",
+            "bedId": "c2-0-e25",
             "plantingStyle": "cottage"
           },
           {
@@ -1350,68 +1333,28 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.0152649171466723,
-                "y": 11.147043118079791
+                "x": 1.1731613332844775,
+                "y": 14.892493540593781
               },
-              "radius": 0.6
+              "radius": 0.85
             },
             "zone": "back",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e25",
+            "bedId": "c2-0-e29",
             "plantingStyle": "cottage"
           },
           {
             "id": "c2-0-e38",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 12.206197478825667,
-                "y": 14.035317929206307
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e27",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-0-e39",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 1.1422634375174623,
-                "y": 14.932475826720523
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e28",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-0-e40",
             "category": "lighting",
             "role": "feature",
             "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 9.685786437626904,
-                "y": 16.685786437626906
+                "x": 9.75649711574556,
+                "y": 16.75649711574556
               },
               "radius": 0.06
             },
@@ -1421,15 +1364,15 @@
             "symbol": "light-spike"
           },
           {
-            "id": "c2-0-e41",
+            "id": "c2-0-e39",
             "category": "lighting",
             "role": "feature",
             "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 0.4857864376269052,
-                "y": 16.685786437626906
+                "x": 0.20294372515228631,
+                "y": 16.402943725152287
               },
               "radius": 0.06
             },
@@ -1439,15 +1382,15 @@
             "symbol": "light-spike"
           },
           {
-            "id": "c2-0-e42",
+            "id": "c2-0-e41",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 6.664753915109194,
-                "y": 13.221805804001985
+                "x": 7.031061589992257,
+                "y": 13.588113478885047
               },
               "radius": 0.08
             },
@@ -1457,7 +1400,7 @@
             "symbol": "light-bollard"
           },
           {
-            "id": "c2-0-e43",
+            "id": "c2-0-e42",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
@@ -1481,18 +1424,20 @@
           "candidateId": "c2-0"
         },
         "score": {
-          "total": 0.9064285510613762,
+          "total": 0.8816129231090997,
           "categories": {
             "sun": 0.8,
             "style": 0.8333333333333334,
+            "canopy": 1,
             "privacy": 1,
-            "grouping": 0.8855423986650676,
+            "grouping": 0.8777678886149595,
             "hierarchy": 0.75,
             "featureFit": 1,
-            "proportion": 0.9948322147651005,
+            "proportion": 0.8174077181208054,
             "circulation": 0.875,
             "buildability": 0.875,
-            "relationships": 1
+            "relationships": 1,
+            "maintenanceFit": 1
           },
           "issues": [
             {
@@ -1502,9 +1447,15 @@
               "message": "Garden path cuts through a planting bed.",
               "subjects": [
                 "c2-0-e11",
-                "c2-0-e26"
+                "c2-0-e27"
               ],
-              "repair": "reroute"
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-0-e27"
+                ]
+              },
+              "source": "geometry"
             },
             {
               "code": "route-through-planting",
@@ -1513,9 +1464,15 @@
               "message": "Path to outdoor kitchen cuts through a planting bed.",
               "subjects": [
                 "c2-0-e12",
-                "c2-0-e30"
+                "c2-0-e31"
               ],
-              "repair": "reroute"
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-0-e31"
+                ]
+              },
+              "source": "geometry"
             },
             {
               "code": "route-dead-end",
@@ -1525,22 +1482,22 @@
               "subjects": [
                 "c2-0-e14"
               ],
-              "repair": "reroute"
-            },
-            {
-              "code": "leftover-pocket",
-              "principle": "proportion",
-              "severity": "major",
-              "message": "30% of the ground has nothing designed onto it.",
-              "subjects": [],
-              "repair": "enlarge-lawn"
+              "repair": "reroute",
+              "source": "geometry"
             },
             {
               "code": "too-many-materials",
               "principle": "style",
               "severity": "minor",
               "message": "6 different materials, where a naturalistic plan wants at most 4.",
-              "subjects": []
+              "subjects": [
+                "c2-0-e1",
+                "c2-0-e5",
+                "c2-0-e7",
+                "c2-0-e8",
+                "c2-0-e9"
+              ],
+              "source": "geometry"
             },
             {
               "code": "bed-too-narrow",
@@ -1548,9 +1505,10 @@
               "severity": "minor",
               "message": "A planting bed is 1.00 m across, under the 1.2 m a border needs to be planted in layers.",
               "subjects": [
-                "c2-0-e30"
+                "c2-0-e31"
               ],
-              "repair": "merge-beds"
+              "repair": "merge-beds",
+              "source": "geometry"
             },
             {
               "code": "bed-too-narrow",
@@ -1560,10 +1518,24 @@
               "subjects": [
                 "c2-0-e15"
               ],
-              "repair": "merge-beds"
+              "repair": "merge-beds",
+              "source": "geometry"
             }
           ],
-          "tier": "realised"
+          "tier": "realised",
+          "weights": {
+            "sun": 0.04347826086956522,
+            "style": 0.04221190375685944,
+            "canopy": 0.04347826086956522,
+            "privacy": 0.08442380751371888,
+            "grouping": 0.151962853524694,
+            "hierarchy": 0.10130856901646264,
+            "proportion": 0.17728999577880963,
+            "circulation": 0.16884761502743775,
+            "buildability": 0.04221190375685944,
+            "relationships": 0.10130856901646264,
+            "maintenanceFit": 0.04347826086956522
+          }
         },
         "explanation": {
           "strategy": "sweeping_lawn",
@@ -1614,7 +1586,7 @@
               "kind": "open-ground",
               "text": "Kept the lawn as one continuous panel rather than cutting it into pieces.",
               "subjects": [
-                "c2-0-e23"
+                "c2-0-e24"
               ]
             }
           ],
@@ -1657,7 +1629,7 @@
         ],
         "elements": [
           {
-            "id": "c2-1-e27",
+            "id": "c2-1-e24",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1687,7 +1659,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e28",
+            "id": "c2-1-e25",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -1717,7 +1689,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-1-e29",
+            "id": "c2-1-e26",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -1747,7 +1719,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-1-e30",
+            "id": "c2-1-e27",
             "category": "lawn",
             "role": "fill",
             "shape": {
@@ -1785,7 +1757,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-1-e31",
+            "id": "c2-1-e28",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -1817,7 +1789,7 @@
             "edging": "brick-edging"
           },
           {
-            "id": "c2-1-e37",
+            "id": "c2-1-e35",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -1825,14 +1797,14 @@
               "points": [
                 {
                   "x": 12,
-                  "y": 1.5
+                  "y": 2.2
                 },
                 {
-                  "x": 20.5,
-                  "y": 1.5
+                  "x": 19.8,
+                  "y": 2.2
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 3.9
                 },
                 {
@@ -1844,11 +1816,11 @@
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 9.8
                 },
                 {
@@ -1881,7 +1853,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e38",
+            "id": "c2-1-e36",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -1945,7 +1917,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e33",
+            "id": "c2-1-e30",
             "category": "planting-bed",
             "role": "fill",
             "name": "Terrace flank",
@@ -2014,7 +1986,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e34",
+            "id": "c2-1-e31",
             "category": "planting-bed",
             "role": "fill",
             "name": "Terrace flank",
@@ -2026,16 +1998,16 @@
                   "y": 12.95059
                 },
                 {
-                  "x": 1.223491202,
+                  "x": 1.809007763,
                   "y": 12.95059
                 },
                 {
-                  "x": 1.583166,
-                  "y": 11.142381
+                  "x": 1.520283,
+                  "y": 12.301242
                 },
                 {
                   "x": 1.85,
-                  "y": 11.195457622
+                  "y": 12.154637573
                 },
                 {
                   "x": 1.85,
@@ -2050,12 +2022,12 @@
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "mixed-border",
+            "material": "shrubs",
             "edging": "brick-edging",
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e35",
+            "id": "c2-1-e32",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -2075,6 +2047,18 @@
                   "y": 16.213538
                 },
                 {
+                  "x": 3.877871723,
+                  "y": 16.213538
+                },
+                {
+                  "x": 3.361856,
+                  "y": 16.442978
+                },
+                {
+                  "x": 3.259838269,
+                  "y": 16.213538
+                },
+                {
                   "x": 0.15,
                   "y": 16.213538
                 }
@@ -2088,7 +2072,7 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e36",
+            "id": "c2-1-e33",
             "category": "planting-bed",
             "role": "fill",
             "name": "Specimen border",
@@ -2129,43 +2113,88 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e32",
+            "id": "c2-1-e34",
+            "category": "planting-bed",
+            "role": "fill",
+            "name": "Flowering border",
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 0.15,
+                  "y": 16.213538
+                },
+                {
+                  "x": 1.35,
+                  "y": 16.213538
+                },
+                {
+                  "x": 1.35,
+                  "y": 15.435301
+                },
+                {
+                  "x": 2.799869078,
+                  "y": 15.179057717
+                },
+                {
+                  "x": 2.29608331,
+                  "y": 14.046033043
+                },
+                {
+                  "x": 1.35,
+                  "y": 13.878827
+                },
+                {
+                  "x": 1.35,
+                  "y": 13.10059
+                },
+                {
+                  "x": 0.15,
+                  "y": 13.10059
+                }
+              ],
+              "cornerRadius": 0
+            },
+            "zone": "back",
+            "fillKind": "accent",
+            "material": "shrubs",
+            "edging": "brick-edging",
+            "plantingStyle": "cottage"
+          },
+          {
+            "id": "c2-1-e29",
             "category": "lawn",
             "role": "fill",
             "shape": {
               "kind": "polygon",
               "points": [
                 {
-                  "x": 1.90737,
+                  "x": 2.797476,
                   "y": 15.013538
                 },
                 {
-                  "x": 2.040704,
+                  "x": 2.93081,
                   "y": 15.680204
                 },
                 {
-                  "x": 2.20737,
+                  "x": 3.097476,
                   "y": 15.913538
                 },
                 {
-                  "x": 2.740704,
+                  "x": 3.63081,
                   "y": 16.180204
                 },
                 {
-                  "x": 7.750511,
-                  "y": 16.20632
+                  "x": 7.67112,
+                  "y": 16.213538
                 },
                 {
-                  "x": 7.902074,
-                  "y": 16.098061
+                  "x": 7.865988,
+                  "y": 16.148582
                 },
                 {
-                  "x": 7.92553025,
-                  "y": 16.0132575
-                },
-                {
-                  "x": 7.930943,
-                  "y": 15.953715
+                  "x": 7.936356411,
+                  "y": 15.894172724
                 },
                 {
                   "x": 7.938161,
@@ -2208,19 +2237,19 @@
                   "y": 13.713538
                 },
                 {
-                  "x": 3.10737,
+                  "x": 3.997476,
                   "y": 13.713538
                 },
                 {
-                  "x": 2.440704,
+                  "x": 3.33081,
                   "y": 13.846871
                 },
                 {
-                  "x": 2.20737,
+                  "x": 3.097476,
                   "y": 14.013538
                 },
                 {
-                  "x": 1.940704,
+                  "x": 2.83081,
                   "y": 14.546871
                 }
               ],
@@ -2231,7 +2260,7 @@
             "material": "standard-turf"
           },
           {
-            "id": "c2-1-e24",
+            "id": "c2-1-e19",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -2383,7 +2412,7 @@
             },
             "zone": "back",
             "material": "mixed-border",
-            "edging": "brick-edging",
+            "edging": "timber-sleeper",
             "symbol": "raised-bed",
             "plantingStyle": "cottage"
           },
@@ -2395,12 +2424,12 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.3469457592677099,
-                "y": 14.603643787742936
+                "x": 5.467794796268345,
+                "y": 15.026556569808768
               },
               "radius": 1.1444221666608163
             },
-            "zone": "right",
+            "zone": "back",
             "material": "naturalistic-pond"
           },
           {
@@ -2505,84 +2534,6 @@
             "id": "c2-1-e14",
             "category": "paved-area",
             "role": "feature",
-            "name": "Garden lounge",
-            "shape": {
-              "kind": "rect",
-              "centre": {
-                "x": 4.577688666643265,
-                "y": 14.72160963462131
-              },
-              "width": 3.42,
-              "depth": 3.06,
-              "rotation": 180
-            },
-            "zone": "back",
-            "material": "timber-decking"
-          },
-          {
-            "id": "c2-1-e15",
-            "category": "furniture",
-            "role": "feature",
-            "name": "Sun lounger",
-            "shape": {
-              "kind": "rect",
-              "centre": {
-                "x": 4.577688666643265,
-                "y": 14.72160963462131
-              },
-              "width": 0.7,
-              "depth": 1.9,
-              "rotation": 180
-            },
-            "zone": "back",
-            "material": "teak-furniture",
-            "height": 0.4,
-            "symbol": "lounger"
-          },
-          {
-            "id": "c2-1-e16",
-            "category": "furniture",
-            "role": "feature",
-            "name": "Sun lounger",
-            "shape": {
-              "kind": "rect",
-              "centre": {
-                "x": 3.5276886666432654,
-                "y": 14.72160963462131
-              },
-              "width": 0.7,
-              "depth": 1.9,
-              "rotation": 180
-            },
-            "zone": "back",
-            "material": "teak-furniture",
-            "height": 0.4,
-            "symbol": "lounger"
-          },
-          {
-            "id": "c2-1-e17",
-            "category": "furniture",
-            "role": "feature",
-            "name": "Planter",
-            "shape": {
-              "kind": "rect",
-              "centre": {
-                "x": 5.637688666643266,
-                "y": 13.841609634621308
-              },
-              "width": 0.6,
-              "depth": 0.6,
-              "rotation": 180
-            },
-            "zone": "back",
-            "material": "teak-furniture",
-            "height": 0.9,
-            "symbol": "planter"
-          },
-          {
-            "id": "c2-1-e18",
-            "category": "paved-area",
-            "role": "feature",
             "name": "Path to outdoor kitchen",
             "shape": {
               "kind": "polyline",
@@ -2602,7 +2553,7 @@
             "material": "stepping-stones"
           },
           {
-            "id": "c2-1-e19",
+            "id": "c2-1-e15",
             "category": "gravel-mulch",
             "role": "feature",
             "name": "Path to veg beds",
@@ -2610,12 +2561,12 @@
               "kind": "polyline",
               "points": [
                 {
-                  "x": 7,
-                  "y": 12.950589547010644
+                  "x": 2,
+                  "y": 12.087942160257983
                 },
                 {
-                  "x": 7,
-                  "y": 16.225365574089025
+                  "x": 3.8415725143294686,
+                  "y": 16.229678276137616
                 }
               ],
               "width": 1.05
@@ -2625,7 +2576,7 @@
             "edging": "brick-edging"
           },
           {
-            "id": "c2-1-e20",
+            "id": "c2-1-e16",
             "category": "paved-area",
             "role": "feature",
             "name": "Path to water feature",
@@ -2637,30 +2588,12 @@
                   "y": 11.225294773505322
                 },
                 {
-                  "x": 1.5574557222091834,
-                  "y": 13.450115098257395
-                }
-              ],
-              "width": 0.85
-            },
-            "zone": "right",
-            "material": "stepping-stones"
-          },
-          {
-            "id": "c2-1-e21",
-            "category": "paved-area",
-            "role": "feature",
-            "name": "Path to garden lounge",
-            "shape": {
-              "kind": "polyline",
-              "points": [
-                {
-                  "x": 4.5,
-                  "y": 9.5
+                  "x": 4.625355040408177,
+                  "y": 11.225294773505322
                 },
                 {
-                  "x": 4.5,
-                  "y": 13.141609634621307
+                  "x": 4.625355040408177,
+                  "y": 14.179951109906082
                 }
               ],
               "width": 0.85
@@ -2669,7 +2602,7 @@
             "material": "stepping-stones"
           },
           {
-            "id": "c2-1-e22",
+            "id": "c2-1-e17",
             "category": "paved-area",
             "role": "feature",
             "name": "Path to side lounge",
@@ -2691,7 +2624,7 @@
             "material": "stepping-stones"
           },
           {
-            "id": "c2-1-e23",
+            "id": "c2-1-e18",
             "category": "paved-area",
             "role": "feature",
             "name": "Front path",
@@ -2713,7 +2646,7 @@
             "material": "stone-setts"
           },
           {
-            "id": "c2-1-e25",
+            "id": "c2-1-e20",
             "category": "planting-bed",
             "role": "feature",
             "name": "Tree",
@@ -2723,7 +2656,7 @@
                 "x": 1.9000000000000004,
                 "y": 18.1
               },
-              "radius": 1.6
+              "radius": 1.5
             },
             "zone": "right",
             "material": "mixed-border",
@@ -2731,17 +2664,17 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e26",
+            "id": "c2-1-e21",
             "category": "planting-bed",
             "role": "feature",
             "name": "Japanese maple",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 11.1,
-                "y": 17.689999999999998
+                "x": 6.030943407428209,
+                "y": 19.299999999999997
               },
-              "radius": 1.6
+              "radius": 2
             },
             "zone": "back",
             "material": "mixed-border",
@@ -2751,135 +2684,111 @@
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e39",
+            "id": "c2-1-e22",
+            "category": "planting-bed",
+            "role": "feature",
+            "name": "Tree",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 1.9000000000000004,
+                "y": 14.075
+              },
+              "radius": 2.5
+            },
+            "zone": "right",
+            "material": "mixed-border",
+            "symbol": "tree-deciduous",
+            "plantingStyle": "cottage"
+          },
+          {
+            "id": "c2-1-e23",
+            "category": "planting-bed",
+            "role": "feature",
+            "name": "Tree",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 11.1,
+                "y": 17.689999999999998
+              },
+              "radius": 1.5
+            },
+            "zone": "back",
+            "material": "mixed-border",
+            "symbol": "tree-fruit",
+            "plantingStyle": "cottage"
+          },
+          {
+            "id": "c2-1-e37",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 14.115991066422078,
-                "y": 0.8266253536201547
+                "x": 14.84261302626156,
+                "y": 1.0765318025448358
               },
-              "radius": 0.6
+              "radius": 0.85
             },
             "zone": "left",
             "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-1-e37",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-1-e40",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 21.24452482853061,
-                "y": 2.421401574092684
-              },
-              "radius": 0.6
-            },
-            "zone": "left",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-1-e37",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-1-e41",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 20.309863395038292,
-                "y": 10.478510561771225
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-1-e33",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-1-e42",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 0.9578793866226032,
-                "y": 10.70723989884412
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-1-e34",
-            "plantingStyle": "cottage"
-          },
-          {
-            "id": "c2-1-e43",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 8.792306779720784,
-                "y": 18.103845986421288
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
             "bedId": "c2-1-e35",
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e44",
+            "id": "c2-1-e38",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 12.162366065073707,
-                "y": 15.516954599962048
+                "x": 18.78395137928263,
+                "y": 10.852301067944616
               },
-              "radius": 0.6
+              "radius": 0.85
             },
             "zone": "back",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-1-e36",
+            "bedId": "c2-1-e30",
             "plantingStyle": "cottage"
           },
           {
-            "id": "c2-1-e45",
+            "id": "c2-1-e39",
+            "category": "planting-bed",
+            "role": "feature",
+            "name": "Flowering shrub",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 9.92292713216669,
+                "y": 17.52964441676717
+              },
+              "radius": 0.95
+            },
+            "zone": "back",
+            "material": "shrubs",
+            "height": 1.7,
+            "symbol": "shrub-flowering",
+            "bedId": "c2-1-e32",
+            "plantingStyle": "cottage"
+          },
+          {
+            "id": "c2-1-e40",
             "category": "lighting",
             "role": "feature",
             "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 0.4857864376269052,
-                "y": 16.685786437626906
+                "x": 0.55649711574556,
+                "y": 16.75649711574556
               },
               "radius": 0.06
             },
@@ -2889,15 +2798,15 @@
             "symbol": "light-spike"
           },
           {
-            "id": "c2-1-e46",
+            "id": "c2-1-e41",
             "category": "lighting",
             "role": "feature",
             "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 9.685786437626904,
-                "y": 16.275786437626902
+                "x": 4.333887132580495,
+                "y": 17.602943725152283
               },
               "radius": 0.06
             },
@@ -2907,7 +2816,61 @@
             "symbol": "light-spike"
           },
           {
-            "id": "c2-1-e47",
+            "id": "c2-1-e43",
+            "category": "lighting",
+            "role": "feature",
+            "name": "Spike uplight",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 9.75649711574556,
+                "y": 16.346497115745557
+              },
+              "radius": 0.06
+            },
+            "zone": "back",
+            "material": "antique-brass",
+            "height": 0.3,
+            "symbol": "light-spike"
+          },
+          {
+            "id": "c2-1-e44",
+            "category": "lighting",
+            "role": "feature",
+            "name": "Bollard light",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 3.6851994119498555,
+                "y": 13.527430938249623
+              },
+              "radius": 0.08
+            },
+            "zone": "back",
+            "material": "antique-brass",
+            "height": 0.6,
+            "symbol": "light-bollard"
+          },
+          {
+            "id": "c2-1-e45",
+            "category": "lighting",
+            "role": "feature",
+            "name": "Bollard light",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 4,
+                "y": 10.370294773505321
+              },
+              "radius": 0.08
+            },
+            "zone": "back",
+            "material": "antique-brass",
+            "height": 0.6,
+            "symbol": "light-bollard"
+          },
+          {
+            "id": "c2-1-e46",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
@@ -2931,18 +2894,20 @@
           "candidateId": "c2-1"
         },
         "score": {
-          "total": 0.843966344604206,
+          "total": 0.8982614384003328,
           "categories": {
-            "sun": 0.8666666666666667,
+            "sun": 0.8,
             "style": 0.75,
+            "canopy": 1,
             "privacy": 1,
-            "grouping": 0.923842939330813,
-            "hierarchy": 0.75,
+            "grouping": 0.8935201382644598,
+            "hierarchy": 0.5328013894935111,
             "featureFit": 1,
-            "proportion": 0.9995188000000002,
-            "circulation": 0.8888888888888888,
-            "buildability": 0.8571428571428572,
-            "relationships": 0.5
+            "proportion": 0.9966093400447428,
+            "circulation": 0.8999999999999999,
+            "buildability": 0.875,
+            "relationships": 1,
+            "maintenanceFit": 1
           },
           "issues": [
             {
@@ -2951,10 +2916,16 @@
               "severity": "minor",
               "message": "Path to outdoor kitchen cuts through a planting bed.",
               "subjects": [
-                "c2-1-e18",
-                "c2-1-e38"
+                "c2-1-e14",
+                "c2-1-e36"
               ],
-              "repair": "reroute"
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-1-e36"
+                ]
+              },
+              "source": "geometry"
             },
             {
               "code": "route-through-planting",
@@ -2962,21 +2933,16 @@
               "severity": "minor",
               "message": "Path to veg beds cuts through a planting bed.",
               "subjects": [
-                "c2-1-e19",
-                "c2-1-e35"
+                "c2-1-e15",
+                "c2-1-e32"
               ],
-              "repair": "reroute"
-            },
-            {
-              "code": "route-through-planting",
-              "principle": "circulation",
-              "severity": "minor",
-              "message": "Path to water feature cuts through a planting bed.",
-              "subjects": [
-                "c2-1-e20",
-                "c2-1-e34"
-              ],
-              "repair": "reroute"
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-1-e32"
+                ]
+              },
+              "source": "geometry"
             },
             {
               "code": "route-dead-end",
@@ -2984,26 +2950,49 @@
               "severity": "minor",
               "message": "Front path ends at nothing in particular.",
               "subjects": [
-                "c2-1-e23"
+                "c2-1-e18"
               ],
-              "repair": "reroute"
+              "repair": "reroute",
+              "source": "geometry"
             },
             {
-              "code": "relationship-unmet",
-              "principle": "relationships",
+              "code": "composition-off-brief",
+              "principle": "proportion",
               "severity": "minor",
-              "message": "the water cannot be seen from the garden doors. A water feature is something to look at; out of sight it is a maintenance job.",
+              "message": "30% of the garden is hard landscaping, where a concept of this kind wants at least 30%.",
               "subjects": [
-                "c2-1-e8"
+                "c2-1-e1"
               ],
-              "repair": "move-to-zone"
+              "source": "geometry"
+            },
+            {
+              "code": "no-primary-space",
+              "principle": "hierarchy",
+              "severity": "minor",
+              "message": "The dining area is what this concept is organised around, and Seating patio is larger.",
+              "subjects": [
+                "c2-1-e5",
+                "c2-1-e1"
+              ],
+              "repair": "shrink-terrace",
+              "guidance": {
+                "targetAreaFactor": 7.6216283474654825
+              },
+              "source": "geometry"
             },
             {
               "code": "too-many-materials",
               "principle": "style",
               "severity": "minor",
               "message": "7 different materials, where a naturalistic plan wants at most 4.",
-              "subjects": []
+              "subjects": [
+                "c2-1-e1",
+                "c2-1-e5",
+                "c2-1-e7",
+                "c2-1-e8",
+                "c2-1-e9"
+              ],
+              "source": "geometry"
             },
             {
               "code": "bed-too-narrow",
@@ -3011,9 +3000,10 @@
               "severity": "minor",
               "message": "A planting bed is 1.00 m across, under the 1.2 m a border needs to be planted in layers.",
               "subjects": [
-                "c2-1-e38"
+                "c2-1-e36"
               ],
-              "repair": "merge-beds"
+              "repair": "merge-beds",
+              "source": "geometry"
             },
             {
               "code": "bed-too-narrow",
@@ -3021,12 +3011,26 @@
               "severity": "minor",
               "message": "A planting bed is 0.70 m across, under the 1.2 m a border needs to be planted in layers.",
               "subjects": [
-                "c2-1-e24"
+                "c2-1-e19"
               ],
-              "repair": "merge-beds"
+              "repair": "merge-beds",
+              "source": "geometry"
             }
           ],
-          "tier": "realised"
+          "tier": "realised",
+          "weights": {
+            "sun": 0.051724137931034475,
+            "style": 0.03918495297805642,
+            "canopy": 0.043103448275862065,
+            "privacy": 0.0940438871473354,
+            "grouping": 0.1567398119122257,
+            "hierarchy": 0.0940438871473354,
+            "proportion": 0.11755485893416925,
+            "circulation": 0.1567398119122257,
+            "buildability": 0.03918495297805642,
+            "relationships": 0.16457680250783696,
+            "maintenanceFit": 0.043103448275862065
+          }
         },
         "explanation": {
           "strategy": "terrace_and_lawn",
@@ -3068,7 +3072,7 @@
             },
             {
               "kind": "feature-in-zone",
-              "text": "Water feature in the corner of the terrace, within reach of the door.",
+              "text": "Water feature at the far end, on the diagonal from the doors.",
               "subjects": [
                 "c2-1-e8"
               ]
@@ -3077,12 +3081,14 @@
               "kind": "open-ground",
               "text": "Kept the lawn as one continuous panel rather than cutting it into pieces.",
               "subjects": [
-                "c2-1-e32"
+                "c2-1-e29"
               ]
             }
           ],
           "excludedFeatures": [],
-          "repairs": []
+          "repairs": [
+            "Moved the water feature out of the terrace. the water cannot be seen from the garden doors. A water feature is something to look at; out of sight it is a maintenance job."
+          ]
         }
       },
       {
@@ -3118,7 +3124,7 @@
         ],
         "elements": [
           {
-            "id": "c2-2-e25",
+            "id": "c2-2-e23",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -3148,7 +3154,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e26",
+            "id": "c2-2-e24",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -3178,7 +3184,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e27",
+            "id": "c2-2-e25",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -3208,7 +3214,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e28",
+            "id": "c2-2-e26",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -3246,7 +3252,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e29",
+            "id": "c2-2-e27",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -3278,7 +3284,7 @@
             "edging": "brick-edging"
           },
           {
-            "id": "c2-2-e35",
+            "id": "c2-2-e32",
             "category": "planting-bed",
             "role": "fill",
             "shape": {
@@ -3286,94 +3292,14 @@
               "points": [
                 {
                   "x": 12,
-                  "y": 1.5
+                  "y": 2.2
                 },
                 {
-                  "x": 15.299551291,
-                  "y": 1.5
+                  "x": 19.8,
+                  "y": 2.2
                 },
                 {
-                  "x": 15.348812,
-                  "y": 1.25235
-                },
-                {
-                  "x": 15.695648,
-                  "y": 0.733273
-                },
-                {
-                  "x": 16.214725,
-                  "y": 0.386436
-                },
-                {
-                  "x": 16.827019,
-                  "y": 0.264644
-                },
-                {
-                  "x": 17.439312,
-                  "y": 0.386436
-                },
-                {
-                  "x": 17.95839,
-                  "y": 0.733273
-                },
-                {
-                  "x": 18.305226,
-                  "y": 1.25235
-                },
-                {
-                  "x": 18.354486709,
-                  "y": 1.5
-                },
-                {
-                  "x": 18.603282245,
-                  "y": 1.5
-                },
-                {
-                  "x": 18.96396,
-                  "y": 0.911335
-                },
-                {
-                  "x": 19.483038,
-                  "y": 0.564499
-                },
-                {
-                  "x": 20.095331,
-                  "y": 0.442706
-                },
-                {
-                  "x": 20.707625,
-                  "y": 0.564499
-                },
-                {
-                  "x": 21.226702,
-                  "y": 0.911335
-                },
-                {
-                  "x": 21.573539,
-                  "y": 1.430413
-                },
-                {
-                  "x": 21.695331,
-                  "y": 2.042706
-                },
-                {
-                  "x": 21.573539,
-                  "y": 2.655
-                },
-                {
-                  "x": 21.226702,
-                  "y": 3.174077
-                },
-                {
-                  "x": 20.707625,
-                  "y": 3.520914
-                },
-                {
-                  "x": 20.5,
-                  "y": 3.562212892
-                },
-                {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 3.9
                 },
                 {
@@ -3385,56 +3311,68 @@
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
+                  "x": 19.8,
                   "y": 8.1
                 },
                 {
-                  "x": 20.5,
-                  "y": 9.9
-                },
-                {
-                  "x": 21.95,
-                  "y": 9.9
-                },
-                {
-                  "x": 21.95,
-                  "y": 11.1
-                },
-                {
-                  "x": 12.05,
-                  "y": 11.1
-                },
-                {
-                  "x": 12.05,
-                  "y": 10.865399065
-                },
-                {
-                  "x": 12,
-                  "y": 10.898807997
-                },
-                {
-                  "x": 12,
-                  "y": 13.325
-                },
-                {
-                  "x": 12.85,
-                  "y": 13.325
-                },
-                {
-                  "x": 12.85,
-                  "y": 19.85
-                },
-                {
-                  "x": 12,
-                  "y": 19.85
-                },
-                {
-                  "x": 12,
-                  "y": 20
+                  "x": 19.8,
+                  "y": 9.8
                 },
                 {
                   "x": 13,
-                  "y": 20
+                  "y": 9.8
+                },
+                {
+                  "x": 12.497266051,
+                  "y": 9.9
+                },
+                {
+                  "x": 21.95,
+                  "y": 9.9
+                },
+                {
+                  "x": 21.95,
+                  "y": 11.1
+                },
+                {
+                  "x": 12.05,
+                  "y": 11.1
+                },
+                {
+                  "x": 12.05,
+                  "y": 10.039692766
+                },
+                {
+                  "x": 12,
+                  "y": 11.3375
+                },
+                {
+                  "x": 12.449612,
+                  "y": 11.356179
+                },
+                {
+                  "x": 12.328306,
+                  "y": 14.276098
+                },
+                {
+                  "x": 12,
+                  "y": 14.262458988
+                },
+                {
+                  "x": 12,
+                  "y": 16.437948
+                },
+                {
+                  "x": 12.85,
+                  "y": 16.437948
+                },
+                {
+                  "x": 12.85,
+                  "y": 16.831763696
+                },
+                {
+                  "x": 13,
+                  "y": 16.931990457
                 },
                 {
                   "x": 13,
@@ -3462,7 +3400,7 @@
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e31",
+            "id": "c2-2-e29",
             "category": "planting-bed",
             "role": "fill",
             "name": "Terrace flank",
@@ -3490,12 +3428,12 @@
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "ornamental-grasses",
+            "material": "shrubs",
             "edging": "brick-edging",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e32",
+            "id": "c2-2-e30",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -3523,45 +3461,12 @@
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "ornamental-grasses",
+            "material": "ground-cover",
             "edging": "brick-edging",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e33",
-            "category": "planting-bed",
-            "role": "fill",
-            "name": "Left border",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 11.284,
-                  "y": 16.437948
-                },
-                {
-                  "x": 12.85,
-                  "y": 16.437948
-                },
-                {
-                  "x": 12.85,
-                  "y": 13.325
-                },
-                {
-                  "x": 11.284,
-                  "y": 13.325
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "ornamental-grasses",
-            "edging": "brick-edging",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e34",
+            "id": "c2-2-e31",
             "category": "planting-bed",
             "role": "fill",
             "name": "Right border",
@@ -3589,55 +3494,35 @@
             },
             "zone": "back",
             "fillKind": "accent",
-            "material": "ornamental-grasses",
+            "material": "shrubs",
             "edging": "brick-edging",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e30",
+            "id": "c2-2-e28",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
               "kind": "polygon",
               "points": [
                 {
-                  "x": 1.925426,
-                  "y": 14.389337
+                  "x": 11.202523592606893,
+                  "y": 13.937948111107211
                 },
                 {
-                  "x": 1.979592,
-                  "y": 14.949059
+                  "x": 11.202523592606893,
+                  "y": 15.237948111107212
                 },
                 {
-                  "x": 2.06987,
-                  "y": 15.075448
+                  "x": 2.7974764073931073,
+                  "y": 15.237948111107212
                 },
                 {
-                  "x": 2.358759,
-                  "y": 15.219893
-                },
-                {
-                  "x": 11.284,
-                  "y": 15.237948
-                },
-                {
-                  "x": 11.284,
-                  "y": 13.937948
-                },
-                {
-                  "x": 2.55737,
-                  "y": 13.937948
-                },
-                {
-                  "x": 2.196259,
-                  "y": 14.01017
-                },
-                {
-                  "x": 1.979592,
-                  "y": 14.226837
+                  "x": 2.7974764073931073,
+                  "y": 13.937948111107211
                 }
               ],
-              "cornerRadius": 0
+              "cornerRadius": 1.2
             },
             "zone": "back",
             "fillKind": "accent",
@@ -3770,8 +3655,8 @@
             "shape": {
               "kind": "rect",
               "centre": {
-                "x": 3.941898574053923,
-                "y": 16.366733500017553
+                "x": 4.832004703679003,
+                "y": 15.476627370392471
               },
               "width": 3.560424518500317,
               "depth": 2.2252653240626983,
@@ -3779,7 +3664,7 @@
             },
             "zone": "back",
             "material": "ornamental-grasses",
-            "edging": "brick-edging",
+            "edging": "timber-sleeper",
             "symbol": "raised-bed",
             "plantingStyle": "low-maintenance"
           },
@@ -3791,8 +3676,8 @@
             "shape": {
               "kind": "rect",
               "centre": {
-                "x": 8.009247752908898,
-                "y": 14.474856254900487
+                "x": 9.969248329935741,
+                "y": 15.197482616408566
               },
               "width": 3.814740555536054,
               "depth": 1.7802122592501586,
@@ -3809,8 +3694,8 @@
             "shape": {
               "kind": "rect",
               "centre": {
-                "x": 8.009247752908898,
-                "y": 14.474856254900487
+                "x": 9.969248329935741,
+                "y": 15.197482616408566
               },
               "width": 1.4,
               "depth": 0.7,
@@ -3950,12 +3835,16 @@
               "kind": "polyline",
               "points": [
                 {
-                  "x": 3.9418985740539245,
+                  "x": 9.5,
                   "y": 13.175
                 },
                 {
-                  "x": 3.9418985740539245,
-                  "y": 15.204100837986203
+                  "x": 6.658451388812543,
+                  "y": 13.175
+                },
+                {
+                  "x": 6.658451388812543,
+                  "y": 14.344958483335292
                 }
               ],
               "width": 1.05
@@ -3973,16 +3862,12 @@
               "kind": "polyline",
               "points": [
                 {
-                  "x": 4.5,
-                  "y": 13.175
+                  "x": 12,
+                  "y": 11.3375
                 },
                 {
-                  "x": 6.053437104067449,
-                  "y": 13.175
-                },
-                {
-                  "x": 6.053437104067449,
-                  "y": 13.57235938477013
+                  "x": 11.878694031661636,
+                  "y": 14.257419579199098
                 }
               ],
               "width": 0.9
@@ -4043,12 +3928,12 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 10.899999999999999,
+                "x": 12.1,
                 "y": 18.1
               },
-              "radius": 1.6
+              "radius": 1.5
             },
-            "zone": "back",
+            "zone": "left",
             "material": "ornamental-grasses",
             "symbol": "tree-fruit",
             "plantingStyle": "low-maintenance"
@@ -4061,12 +3946,12 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 7.724050629119405,
-                "y": 18.36925800346912
+                "x": 1.9000000000000004,
+                "y": 18.1
               },
-              "radius": 1.6
+              "radius": 2
             },
-            "zone": "back",
+            "zone": "right",
             "material": "ornamental-grasses",
             "height": 3,
             "symbol": "tree-ornamental",
@@ -4081,52 +3966,74 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 20.09533133215625,
-                "y": 2.042706268708651
+                "x": 1.9000000000000004,
+                "y": 13.55
               },
-              "radius": 1.6
+              "radius": 2.5
             },
-            "zone": "left",
+            "zone": "right",
             "material": "ornamental-grasses",
             "symbol": "tree-deciduous",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e23",
+            "id": "c2-2-e33",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Tree",
+            "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 16.827018818894057,
-                "y": 1.864643684280644
+                "x": 14.309439227931433,
+                "y": 1.2145171736462506
               },
-              "radius": 1.6
+              "radius": 0.85
             },
             "zone": "left",
-            "material": "ornamental-grasses",
-            "symbol": "tree-fruit",
+            "material": "shrubs",
+            "height": 1.5,
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-2-e32",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e24",
+            "id": "c2-2-e34",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Japanese maple",
+            "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 14.007009538768184,
-                "y": 3.455579620719701
+                "x": 21.120694302034096,
+                "y": 1.0669063408412038
               },
-              "radius": 1.6
+              "radius": 0.85
             },
             "zone": "left",
-            "material": "ornamental-grasses",
-            "height": 3,
-            "symbol": "tree-ornamental",
-            "plantId": "acer-palmatum-red",
+            "material": "shrubs",
+            "height": 1.5,
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-2-e32",
+            "plantingStyle": "low-maintenance"
+          },
+          {
+            "id": "c2-2-e35",
+            "category": "planting-bed",
+            "role": "feature",
+            "name": "Evergreen shrub",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 8.69875414710841,
+                "y": 17.816758089015956
+              },
+              "radius": 0.85
+            },
+            "zone": "back",
+            "material": "shrubs",
+            "height": 1.5,
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-2-e30",
             "plantingStyle": "low-maintenance"
           },
           {
@@ -4137,210 +4044,76 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.2425848841986151,
-                "y": 11.2609308025497
+                "x": 3.8806314541641624,
+                "y": 18.51346669072215
               },
-              "radius": 0.6
+              "radius": 0.85
             },
             "zone": "back",
             "material": "shrubs",
-            "height": 1.3,
+            "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e31",
+            "bedId": "c2-2-e30",
             "plantingStyle": "low-maintenance"
           },
           {
             "id": "c2-2-e37",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Flowering shrub",
+            "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 3.612186279020738,
-                "y": 18.277981766621348
+                "x": 10.46926258807769,
+                "y": 18.07418075775029
               },
-              "radius": 0.7
+              "radius": 0.85
             },
             "zone": "back",
             "material": "shrubs",
             "height": 1.5,
-            "symbol": "shrub-flowering",
-            "bedId": "c2-2-e32",
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-2-e30",
             "plantingStyle": "low-maintenance"
           },
           {
             "id": "c2-2-e38",
-            "category": "planting-bed",
+            "category": "lighting",
             "role": "feature",
-            "name": "Flowering shrub",
+            "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.0889336238177492,
-                "y": 19.094616011724806
+                "x": 10.75649711574556,
+                "y": 16.75649711574556
               },
-              "radius": 0.7
+              "radius": 0.06
             },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.5,
-            "symbol": "shrub-flowering",
-            "bedId": "c2-2-e32",
-            "plantingStyle": "low-maintenance"
+            "zone": "left",
+            "material": "antique-brass",
+            "height": 0.3,
+            "symbol": "light-spike"
           },
           {
             "id": "c2-2-e39",
-            "category": "planting-bed",
+            "category": "lighting",
             "role": "feature",
-            "name": "Evergreen shrub",
+            "name": "Spike uplight",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 12.78429081758968,
-                "y": 0.7478821937888146
+                "x": 0.20294372515228631,
+                "y": 16.402943725152287
               },
-              "radius": 0.6
+              "radius": 0.06
             },
-            "zone": "left",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e35",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e40",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 12.073658811822444,
-                "y": 14.536050026935463
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e33",
-            "plantingStyle": "low-maintenance"
+            "zone": "right",
+            "material": "antique-brass",
+            "height": 0.3,
+            "symbol": "light-spike"
           },
           {
             "id": "c2-2-e41",
-            "category": "planting-bed",
-            "role": "feature",
-            "name": "Evergreen shrub",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 0.9189809297411031,
-                "y": 15.050599894023366
-              },
-              "radius": 0.6
-            },
-            "zone": "back",
-            "material": "shrubs",
-            "height": 1.3,
-            "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e34",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-2-e42",
-            "category": "lighting",
-            "role": "feature",
-            "name": "Spike uplight",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 9.485786437626903,
-                "y": 16.685786437626906
-              },
-              "radius": 0.06
-            },
-            "zone": "back",
-            "material": "antique-brass",
-            "height": 0.3,
-            "symbol": "light-spike"
-          },
-          {
-            "id": "c2-2-e43",
-            "category": "lighting",
-            "role": "feature",
-            "name": "Spike uplight",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 6.30983706674631,
-                "y": 16.955044441096025
-              },
-              "radius": 0.06
-            },
-            "zone": "back",
-            "material": "antique-brass",
-            "height": 0.3,
-            "symbol": "light-spike"
-          },
-          {
-            "id": "c2-2-e44",
-            "category": "lighting",
-            "role": "feature",
-            "name": "Spike uplight",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 18.681117769783153,
-                "y": 0.6284927063355557
-              },
-              "radius": 0.06
-            },
-            "zone": "left",
-            "material": "antique-brass",
-            "height": 0.3,
-            "symbol": "light-spike"
-          },
-          {
-            "id": "c2-2-e45",
-            "category": "lighting",
-            "role": "feature",
-            "name": "Spike uplight",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 15.412805256520961,
-                "y": 0.45043012190754883
-              },
-              "radius": 0.06
-            },
-            "zone": "left",
-            "material": "antique-brass",
-            "height": 0.3,
-            "symbol": "light-spike"
-          },
-          {
-            "id": "c2-2-e46",
-            "category": "lighting",
-            "role": "feature",
-            "name": "Spike uplight",
-            "shape": {
-              "kind": "point",
-              "at": {
-                "x": 12.592795976395088,
-                "y": 2.041366058346606
-              },
-              "radius": 0.06
-            },
-            "zone": "left",
-            "material": "antique-brass",
-            "height": 0.3,
-            "symbol": "light-spike"
-          },
-          {
-            "id": "c2-2-e47",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
@@ -4358,7 +4131,7 @@
             "symbol": "light-bollard"
           },
           {
-            "id": "c2-2-e48",
+            "id": "c2-2-e42",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
@@ -4376,7 +4149,25 @@
             "symbol": "light-bollard"
           },
           {
-            "id": "c2-2-e49",
+            "id": "c2-2-e43",
+            "category": "lighting",
+            "role": "feature",
+            "name": "Bollard light",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 7.5,
+                "y": 14.13
+              },
+              "radius": 0.08
+            },
+            "zone": "back",
+            "material": "antique-brass",
+            "height": 0.6,
+            "symbol": "light-bollard"
+          },
+          {
+            "id": "c2-2-e44",
             "category": "lighting",
             "role": "feature",
             "name": "Bollard light",
@@ -4400,20 +4191,56 @@
           "candidateId": "c2-2"
         },
         "score": {
-          "total": 0.9119252177623633,
+          "total": 0.9126561330616435,
           "categories": {
             "sun": 0.8,
             "style": 1,
+            "canopy": 1,
             "privacy": 1,
-            "grouping": 0.8164238082412218,
+            "grouping": 0.8249835923215891,
             "hierarchy": 0.75,
             "featureFit": 0.8888888888888888,
-            "proportion": 0.9338003355704698,
-            "circulation": 0.9666666666666667,
-            "buildability": 0.9166666666666667,
-            "relationships": 1
+            "proportion": 0.97,
+            "circulation": 0.8999999999999999,
+            "buildability": 0.9,
+            "relationships": 1,
+            "maintenanceFit": 0.846809417279216
           },
           "issues": [
+            {
+              "code": "route-through-planting",
+              "principle": "circulation",
+              "severity": "minor",
+              "message": "Path to outdoor kitchen cuts through a planting bed.",
+              "subjects": [
+                "c2-2-e16",
+                "c2-2-e32"
+              ],
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-2-e32"
+                ]
+              },
+              "source": "geometry"
+            },
+            {
+              "code": "route-pinch",
+              "principle": "circulation",
+              "severity": "minor",
+              "message": "Path to outdoor kitchen squeezes between two things with under 0.9 m to spare.",
+              "subjects": [
+                "c2-2-e16"
+              ],
+              "repair": "reroute",
+              "guidance": {
+                "avoid": [
+                  "c2-2-e7",
+                  "c2-2-e32"
+                ]
+              },
+              "source": "geometry"
+            },
             {
               "code": "route-dead-end",
               "principle": "circulation",
@@ -4422,15 +4249,8 @@
               "subjects": [
                 "c2-2-e18"
               ],
-              "repair": "reroute"
-            },
-            {
-              "code": "leftover-pocket",
-              "principle": "proportion",
-              "severity": "major",
-              "message": "34% of the ground has nothing designed onto it.",
-              "subjects": [],
-              "repair": "enlarge-lawn"
+              "repair": "reroute",
+              "source": "geometry"
             },
             {
               "code": "bed-too-narrow",
@@ -4440,10 +4260,39 @@
               "subjects": [
                 "c2-2-e19"
               ],
-              "repair": "merge-beds"
+              "repair": "merge-beds",
+              "source": "geometry"
+            },
+            {
+              "code": "upkeep-heavy",
+              "principle": "maintenanceFit",
+              "severity": "minor",
+              "message": "This garden asks for more looking after than a low-upkeep brief allows: 40% of what a garden can demand, against 35%.",
+              "subjects": [
+                "c2-2-e32",
+                "c2-2-e30",
+                "c2-2-e29",
+                "c2-2-e31",
+                "c2-2-e19"
+              ],
+              "repair": "merge-beds",
+              "source": "geometry"
             }
           ],
-          "tier": "realised"
+          "tier": "realised",
+          "weights": {
+            "sun": 0.042918454935622324,
+            "style": 0.051901387364008386,
+            "canopy": 0.05579399141630902,
+            "privacy": 0.10380277472801677,
+            "grouping": 0.15969657650464117,
+            "hierarchy": 0.07984828825232058,
+            "proportion": 0.14372691885417707,
+            "circulation": 0.15969657650464117,
+            "buildability": 0.03992414412616029,
+            "relationships": 0.11977243237848088,
+            "maintenanceFit": 0.042918454935622324
+          }
         },
         "explanation": {
           "strategy": "formal_axis",
@@ -4480,7 +4329,7 @@
               "kind": "open-ground",
               "text": "Laid one open panel of gravel where a lawn would have been, since none was wanted.",
               "subjects": [
-                "c2-2-e30"
+                "c2-2-e28"
               ]
             }
           ],
@@ -4496,7 +4345,7 @@
   "layout": {
     "elements": [
       {
-        "id": "c2-0-e18",
+        "id": "c2-0-e19",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -4526,7 +4375,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e19",
+        "id": "c2-0-e20",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -4556,7 +4405,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e20",
+        "id": "c2-0-e21",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -4586,7 +4435,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e21",
+        "id": "c2-0-e22",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -4624,7 +4473,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e22",
+        "id": "c2-0-e23",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -4656,7 +4505,7 @@
         "edging": "brick-edging"
       },
       {
-        "id": "c2-0-e29",
+        "id": "c2-0-e30",
         "category": "planting-bed",
         "role": "fill",
         "shape": {
@@ -4664,14 +4513,14 @@
           "points": [
             {
               "x": 12,
-              "y": 1.5
+              "y": 2.2
             },
             {
-              "x": 20.5,
-              "y": 1.5
+              "x": 19.8,
+              "y": 2.2
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 3.9
             },
             {
@@ -4683,11 +4532,11 @@
               "y": 8.1
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 8.1
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 9.8
             },
             {
@@ -4720,7 +4569,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e30",
+        "id": "c2-0-e31",
         "category": "planting-bed",
         "role": "fill",
         "shape": {
@@ -4780,7 +4629,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e24",
+        "id": "c2-0-e25",
         "category": "planting-bed",
         "role": "fill",
         "name": "Terrace flank",
@@ -4849,7 +4698,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e25",
+        "id": "c2-0-e26",
         "category": "planting-bed",
         "role": "fill",
         "name": "Terrace flank",
@@ -4882,7 +4731,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e26",
+        "id": "c2-0-e27",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -4902,35 +4751,23 @@
               "y": 16.437948
             },
             {
-              "x": 6.228655438,
-              "y": 16.437948
+              "x": 6.086063769,
+              "y": 16.446389
             },
             {
-              "x": 6.234754,
-              "y": 16.871135
+              "x": 5.78722,
+              "y": 16.64607
             },
             {
-              "x": 5.726349786,
-              "y": 16.871135
+              "x": 5.349269,
+              "y": 16.733184
             },
             {
-              "x": 5.397114,
-              "y": 17.091123
+              "x": 4.911317,
+              "y": 16.64607
             },
             {
-              "x": 4.959163,
-              "y": 17.178237
-            },
-            {
-              "x": 4.521211,
-              "y": 17.091123
-            },
-            {
-              "x": 4.149934,
-              "y": 16.843044
-            },
-            {
-              "x": 3.895128172,
+              "x": 4.599841219,
               "y": 16.437948
             },
             {
@@ -4942,12 +4779,12 @@
         },
         "zone": "back",
         "fillKind": "accent",
-        "material": "mixed-border",
+        "material": "shrubs",
         "edging": "brick-edging",
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e27",
+        "id": "c2-0-e28",
         "category": "planting-bed",
         "role": "fill",
         "name": "Specimen border",
@@ -4992,7 +4829,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e28",
+        "id": "c2-0-e29",
         "category": "planting-bed",
         "role": "fill",
         "name": "Flowering border",
@@ -5053,111 +4890,107 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e23",
+        "id": "c2-0-e24",
         "category": "lawn",
         "role": "fill",
         "shape": {
           "kind": "polygon",
           "points": [
             {
-              "x": 3.154712,
-              "y": 14.622062
+              "x": 3.138336558,
+              "y": 14.615455126
             },
             {
               "x": 3.4386,
               "y": 14.881474
             },
             {
-              "x": 3.154712,
-              "y": 15.140886
-            },
-            {
-              "x": 2.532250777,
-              "y": 15.392025656
-            },
-            {
-              "x": 2.571926,
-              "y": 15.431969
-            },
-            {
-              "x": 3.304577,
-              "y": 15.881523
-            },
-            {
-              "x": 3.834591,
-              "y": 16.097644
-            },
-            {
-              "x": 4.536337,
-              "y": 16.297767
-            },
-            {
-              "x": 6.229937736,
-              "y": 16.529055463
-            },
-            {
-              "x": 6.228655,
-              "y": 16.437948
-            },
-            {
-              "x": 8.857924062,
-              "y": 16.437948
-            },
-            {
-              "x": 9.67865,
-              "y": 16.272812
-            },
-            {
-              "x": 10.339008,
-              "y": 16.021214
-            },
-            {
-              "x": 10.698044,
-              "y": 15.738197
-            },
-            {
-              "x": 10.785236,
-              "y": 15.454157
-            },
-            {
-              "x": 10.670457,
+              "x": 3.137827,
               "y": 15.187948
             },
             {
-              "x": 10.428074,
+              "x": 3.595076,
+              "y": 15.66024
+            },
+            {
+              "x": 4.351179,
+              "y": 16.097644
+            },
+            {
+              "x": 4.916918,
+              "y": 16.297767
+            },
+            {
+              "x": 6.007323007,
+              "y": 16.499002003
+            },
+            {
+              "x": 6.007323007,
+              "y": 16.499002003
+            },
+            {
+              "x": 6.086064,
+              "y": 16.446389
+            },
+            {
+              "x": 8.378572542,
+              "y": 16.443528082
+            },
+            {
+              "x": 9.06259,
+              "y": 16.272812
+            },
+            {
+              "x": 9.594962,
+              "y": 16.021214
+            },
+            {
+              "x": 9.884413,
+              "y": 15.738197
+            },
+            {
+              "x": 9.954707,
+              "y": 15.454157
+            },
+            {
+              "x": 9.862173,
+              "y": 15.187948
+            },
+            {
+              "x": 9.666767,
               "y": 14.943927
             },
             {
-              "x": 9.695423,
+              "x": 9.076112,
               "y": 14.494373
             },
             {
-              "x": 9.165409,
+              "x": 8.648821,
               "y": 14.278252
             },
             {
-              "x": 7.565835,
+              "x": 7.359264,
               "y": 13.916964
             },
             {
-              "x": 5.352645,
+              "x": 6.5,
+              "y": 13.823043
+            },
+            {
+              "x": 5.575016,
               "y": 13.819753
             },
             {
-              "x": 4.249915,
+              "x": 4.686008,
               "y": 13.91625
             },
             {
-              "x": 3.32135,
+              "x": 3.93741,
               "y": 14.103084
             },
             {
-              "x": 2.660992,
+              "x": 3.405038,
               "y": 14.354682
-            },
-            {
-              "x": 2.603778962,
-              "y": 14.399781272
             }
           ],
           "cornerRadius": 0
@@ -5310,7 +5143,7 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 9.185259444463945,
+            "x": 8.295153314838867,
             "y": 14.700896222214421
           },
           "width": 3.3061084814645807,
@@ -5319,7 +5152,7 @@
         },
         "zone": "back",
         "material": "mixed-border",
-        "edging": "brick-edging",
+        "edging": "timber-sleeper",
         "symbol": "raised-bed",
         "plantingStyle": "cottage"
       },
@@ -5331,8 +5164,8 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.95916272219687,
-            "y": 16.033814861115985
+            "x": 5.34926885182195,
+            "y": 15.588761796303446
           },
           "radius": 1.1444221666608163
         },
@@ -5390,12 +5223,12 @@
               "y": 13.175
             },
             {
-              "x": 5.809753915109194,
+              "x": 6.1760615899922575,
               "y": 13.175
             },
             {
-              "x": 5.809753915109194,
-              "y": 16.87113520844879
+              "x": 6.1760615899922575,
+              "y": 16.446389027500967
             }
           ],
           "width": 0.85
@@ -5480,7 +5313,7 @@
             "x": 11.1,
             "y": 18.1
           },
-          "radius": 1.6
+          "radius": 1.5
         },
         "zone": "back",
         "material": "mixed-border",
@@ -5498,7 +5331,7 @@
             "x": 1.9000000000000004,
             "y": 18.1
           },
-          "radius": 1.6
+          "radius": 2
         },
         "zone": "right",
         "material": "mixed-border",
@@ -5508,63 +5341,61 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e31",
+        "id": "c2-0-e18",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Evergreen shrub",
+        "name": "Tree",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 17.517338783062062,
-            "y": 10.572971927510574
+            "x": 1.9000000000000004,
+            "y": 13.55
           },
-          "radius": 0.6
+          "radius": 2.5
         },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e24",
+        "zone": "right",
+        "material": "mixed-border",
+        "symbol": "tree-deciduous",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e32",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Evergreen shrub",
+        "name": "Flowering shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 20.195072678446067,
-            "y": 10.886805792127037
+            "x": 15.992432038531405,
+            "y": 0.9939239397081545
           },
-          "radius": 0.6
+          "radius": 0.95
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e24",
+        "height": 1.7,
+        "symbol": "shrub-flowering",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e33",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Flowering shrub",
+        "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 8.825610701317666,
-            "y": 17.507796942508776
+            "x": 18.384000148938036,
+            "y": 1.169687575268559
           },
-          "radius": 0.7
+          "radius": 0.85
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
         "height": 1.5,
-        "symbol": "shrub-flowering",
-        "bedId": "c2-0-e26",
+        "symbol": "shrub-evergreen",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
@@ -5575,16 +5406,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.702756271183258,
-            "y": 19.14582708370755
+            "x": 20.81723910933849,
+            "y": 0.9085803053551352
           },
-          "radius": 0.6
+          "radius": 0.85
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e26",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
@@ -5595,16 +5426,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 8.798339447861071,
-            "y": 18.904123262678038
+            "x": 9.934707165205618,
+            "y": 17.373641272369536
           },
-          "radius": 0.6
+          "radius": 0.85
         },
         "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e26",
+        "bedId": "c2-0-e27",
         "plantingStyle": "cottage"
       },
       {
@@ -5615,16 +5446,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 20.94880903998798,
-            "y": 0.8503051887930406
+            "x": 20.029098156163236,
+            "y": 10.90658360084718
           },
-          "radius": 0.6
+          "radius": 0.85
         },
-        "zone": "left",
+        "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e29",
+        "bedId": "c2-0-e25",
         "plantingStyle": "cottage"
       },
       {
@@ -5635,68 +5466,28 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 1.0152649171466723,
-            "y": 11.147043118079791
+            "x": 1.1731613332844775,
+            "y": 14.892493540593781
           },
-          "radius": 0.6
+          "radius": 0.85
         },
         "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e25",
+        "bedId": "c2-0-e29",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e38",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Evergreen shrub",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 12.206197478825667,
-            "y": 14.035317929206307
-          },
-          "radius": 0.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e27",
-        "plantingStyle": "cottage"
-      },
-      {
-        "id": "c2-0-e39",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Evergreen shrub",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 1.1422634375174623,
-            "y": 14.932475826720523
-          },
-          "radius": 0.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e28",
-        "plantingStyle": "cottage"
-      },
-      {
-        "id": "c2-0-e40",
         "category": "lighting",
         "role": "feature",
         "name": "Spike uplight",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 9.685786437626904,
-            "y": 16.685786437626906
+            "x": 9.75649711574556,
+            "y": 16.75649711574556
           },
           "radius": 0.06
         },
@@ -5706,15 +5497,15 @@
         "symbol": "light-spike"
       },
       {
-        "id": "c2-0-e41",
+        "id": "c2-0-e39",
         "category": "lighting",
         "role": "feature",
         "name": "Spike uplight",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 0.4857864376269052,
-            "y": 16.685786437626906
+            "x": 0.20294372515228631,
+            "y": 16.402943725152287
           },
           "radius": 0.06
         },
@@ -5724,15 +5515,15 @@
         "symbol": "light-spike"
       },
       {
-        "id": "c2-0-e42",
+        "id": "c2-0-e41",
         "category": "lighting",
         "role": "feature",
         "name": "Bollard light",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 6.664753915109194,
-            "y": 13.221805804001985
+            "x": 7.031061589992257,
+            "y": 13.588113478885047
           },
           "radius": 0.08
         },
@@ -5742,7 +5533,7 @@
         "symbol": "light-bollard"
       },
       {
-        "id": "c2-0-e43",
+        "id": "c2-0-e42",
         "category": "lighting",
         "role": "feature",
         "name": "Bollard light",
@@ -5763,7 +5554,7 @@
     "seededFrom": "c2-0",
     "pristine": [
       {
-        "id": "c2-0-e18",
+        "id": "c2-0-e19",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -5793,7 +5584,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e19",
+        "id": "c2-0-e20",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -5823,7 +5614,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e20",
+        "id": "c2-0-e21",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -5853,7 +5644,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e21",
+        "id": "c2-0-e22",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -5891,7 +5682,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c2-0-e22",
+        "id": "c2-0-e23",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -5923,7 +5714,7 @@
         "edging": "brick-edging"
       },
       {
-        "id": "c2-0-e29",
+        "id": "c2-0-e30",
         "category": "planting-bed",
         "role": "fill",
         "shape": {
@@ -5931,14 +5722,14 @@
           "points": [
             {
               "x": 12,
-              "y": 1.5
+              "y": 2.2
             },
             {
-              "x": 20.5,
-              "y": 1.5
+              "x": 19.8,
+              "y": 2.2
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 3.9
             },
             {
@@ -5950,11 +5741,11 @@
               "y": 8.1
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 8.1
             },
             {
-              "x": 20.5,
+              "x": 19.8,
               "y": 9.8
             },
             {
@@ -5987,7 +5778,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e30",
+        "id": "c2-0-e31",
         "category": "planting-bed",
         "role": "fill",
         "shape": {
@@ -6047,7 +5838,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e24",
+        "id": "c2-0-e25",
         "category": "planting-bed",
         "role": "fill",
         "name": "Terrace flank",
@@ -6116,7 +5907,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e25",
+        "id": "c2-0-e26",
         "category": "planting-bed",
         "role": "fill",
         "name": "Terrace flank",
@@ -6149,7 +5940,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e26",
+        "id": "c2-0-e27",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -6169,35 +5960,23 @@
               "y": 16.437948
             },
             {
-              "x": 6.228655438,
-              "y": 16.437948
+              "x": 6.086063769,
+              "y": 16.446389
             },
             {
-              "x": 6.234754,
-              "y": 16.871135
+              "x": 5.78722,
+              "y": 16.64607
             },
             {
-              "x": 5.726349786,
-              "y": 16.871135
+              "x": 5.349269,
+              "y": 16.733184
             },
             {
-              "x": 5.397114,
-              "y": 17.091123
+              "x": 4.911317,
+              "y": 16.64607
             },
             {
-              "x": 4.959163,
-              "y": 17.178237
-            },
-            {
-              "x": 4.521211,
-              "y": 17.091123
-            },
-            {
-              "x": 4.149934,
-              "y": 16.843044
-            },
-            {
-              "x": 3.895128172,
+              "x": 4.599841219,
               "y": 16.437948
             },
             {
@@ -6209,12 +5988,12 @@
         },
         "zone": "back",
         "fillKind": "accent",
-        "material": "mixed-border",
+        "material": "shrubs",
         "edging": "brick-edging",
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e27",
+        "id": "c2-0-e28",
         "category": "planting-bed",
         "role": "fill",
         "name": "Specimen border",
@@ -6259,7 +6038,7 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e28",
+        "id": "c2-0-e29",
         "category": "planting-bed",
         "role": "fill",
         "name": "Flowering border",
@@ -6320,111 +6099,107 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e23",
+        "id": "c2-0-e24",
         "category": "lawn",
         "role": "fill",
         "shape": {
           "kind": "polygon",
           "points": [
             {
-              "x": 3.154712,
-              "y": 14.622062
+              "x": 3.138336558,
+              "y": 14.615455126
             },
             {
               "x": 3.4386,
               "y": 14.881474
             },
             {
-              "x": 3.154712,
-              "y": 15.140886
-            },
-            {
-              "x": 2.532250777,
-              "y": 15.392025656
-            },
-            {
-              "x": 2.571926,
-              "y": 15.431969
-            },
-            {
-              "x": 3.304577,
-              "y": 15.881523
-            },
-            {
-              "x": 3.834591,
-              "y": 16.097644
-            },
-            {
-              "x": 4.536337,
-              "y": 16.297767
-            },
-            {
-              "x": 6.229937736,
-              "y": 16.529055463
-            },
-            {
-              "x": 6.228655,
-              "y": 16.437948
-            },
-            {
-              "x": 8.857924062,
-              "y": 16.437948
-            },
-            {
-              "x": 9.67865,
-              "y": 16.272812
-            },
-            {
-              "x": 10.339008,
-              "y": 16.021214
-            },
-            {
-              "x": 10.698044,
-              "y": 15.738197
-            },
-            {
-              "x": 10.785236,
-              "y": 15.454157
-            },
-            {
-              "x": 10.670457,
+              "x": 3.137827,
               "y": 15.187948
             },
             {
-              "x": 10.428074,
+              "x": 3.595076,
+              "y": 15.66024
+            },
+            {
+              "x": 4.351179,
+              "y": 16.097644
+            },
+            {
+              "x": 4.916918,
+              "y": 16.297767
+            },
+            {
+              "x": 6.007323007,
+              "y": 16.499002003
+            },
+            {
+              "x": 6.007323007,
+              "y": 16.499002003
+            },
+            {
+              "x": 6.086064,
+              "y": 16.446389
+            },
+            {
+              "x": 8.378572542,
+              "y": 16.443528082
+            },
+            {
+              "x": 9.06259,
+              "y": 16.272812
+            },
+            {
+              "x": 9.594962,
+              "y": 16.021214
+            },
+            {
+              "x": 9.884413,
+              "y": 15.738197
+            },
+            {
+              "x": 9.954707,
+              "y": 15.454157
+            },
+            {
+              "x": 9.862173,
+              "y": 15.187948
+            },
+            {
+              "x": 9.666767,
               "y": 14.943927
             },
             {
-              "x": 9.695423,
+              "x": 9.076112,
               "y": 14.494373
             },
             {
-              "x": 9.165409,
+              "x": 8.648821,
               "y": 14.278252
             },
             {
-              "x": 7.565835,
+              "x": 7.359264,
               "y": 13.916964
             },
             {
-              "x": 5.352645,
+              "x": 6.5,
+              "y": 13.823043
+            },
+            {
+              "x": 5.575016,
               "y": 13.819753
             },
             {
-              "x": 4.249915,
+              "x": 4.686008,
               "y": 13.91625
             },
             {
-              "x": 3.32135,
+              "x": 3.93741,
               "y": 14.103084
             },
             {
-              "x": 2.660992,
+              "x": 3.405038,
               "y": 14.354682
-            },
-            {
-              "x": 2.603778962,
-              "y": 14.399781272
             }
           ],
           "cornerRadius": 0
@@ -6577,7 +6352,7 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 9.185259444463945,
+            "x": 8.295153314838867,
             "y": 14.700896222214421
           },
           "width": 3.3061084814645807,
@@ -6586,7 +6361,7 @@
         },
         "zone": "back",
         "material": "mixed-border",
-        "edging": "brick-edging",
+        "edging": "timber-sleeper",
         "symbol": "raised-bed",
         "plantingStyle": "cottage"
       },
@@ -6598,8 +6373,8 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.95916272219687,
-            "y": 16.033814861115985
+            "x": 5.34926885182195,
+            "y": 15.588761796303446
           },
           "radius": 1.1444221666608163
         },
@@ -6657,12 +6432,12 @@
               "y": 13.175
             },
             {
-              "x": 5.809753915109194,
+              "x": 6.1760615899922575,
               "y": 13.175
             },
             {
-              "x": 5.809753915109194,
-              "y": 16.87113520844879
+              "x": 6.1760615899922575,
+              "y": 16.446389027500967
             }
           ],
           "width": 0.85
@@ -6747,7 +6522,7 @@
             "x": 11.1,
             "y": 18.1
           },
-          "radius": 1.6
+          "radius": 1.5
         },
         "zone": "back",
         "material": "mixed-border",
@@ -6765,7 +6540,7 @@
             "x": 1.9000000000000004,
             "y": 18.1
           },
-          "radius": 1.6
+          "radius": 2
         },
         "zone": "right",
         "material": "mixed-border",
@@ -6775,63 +6550,61 @@
         "plantingStyle": "cottage"
       },
       {
-        "id": "c2-0-e31",
+        "id": "c2-0-e18",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Evergreen shrub",
+        "name": "Tree",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 17.517338783062062,
-            "y": 10.572971927510574
+            "x": 1.9000000000000004,
+            "y": 13.55
           },
-          "radius": 0.6
+          "radius": 2.5
         },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e24",
+        "zone": "right",
+        "material": "mixed-border",
+        "symbol": "tree-deciduous",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e32",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Evergreen shrub",
+        "name": "Flowering shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 20.195072678446067,
-            "y": 10.886805792127037
+            "x": 15.992432038531405,
+            "y": 0.9939239397081545
           },
-          "radius": 0.6
+          "radius": 0.95
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e24",
+        "height": 1.7,
+        "symbol": "shrub-flowering",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e33",
         "category": "planting-bed",
         "role": "feature",
-        "name": "Flowering shrub",
+        "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 8.825610701317666,
-            "y": 17.507796942508776
+            "x": 18.384000148938036,
+            "y": 1.169687575268559
           },
-          "radius": 0.7
+          "radius": 0.85
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
         "height": 1.5,
-        "symbol": "shrub-flowering",
-        "bedId": "c2-0-e26",
+        "symbol": "shrub-evergreen",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
@@ -6842,16 +6615,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.702756271183258,
-            "y": 19.14582708370755
+            "x": 20.81723910933849,
+            "y": 0.9085803053551352
           },
-          "radius": 0.6
+          "radius": 0.85
         },
-        "zone": "back",
+        "zone": "left",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e26",
+        "bedId": "c2-0-e30",
         "plantingStyle": "cottage"
       },
       {
@@ -6862,16 +6635,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 8.798339447861071,
-            "y": 18.904123262678038
+            "x": 9.934707165205618,
+            "y": 17.373641272369536
           },
-          "radius": 0.6
+          "radius": 0.85
         },
         "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e26",
+        "bedId": "c2-0-e27",
         "plantingStyle": "cottage"
       },
       {
@@ -6882,16 +6655,16 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 20.94880903998798,
-            "y": 0.8503051887930406
+            "x": 20.029098156163236,
+            "y": 10.90658360084718
           },
-          "radius": 0.6
+          "radius": 0.85
         },
-        "zone": "left",
+        "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e29",
+        "bedId": "c2-0-e25",
         "plantingStyle": "cottage"
       },
       {
@@ -6902,68 +6675,28 @@
         "shape": {
           "kind": "point",
           "at": {
-            "x": 1.0152649171466723,
-            "y": 11.147043118079791
+            "x": 1.1731613332844775,
+            "y": 14.892493540593781
           },
-          "radius": 0.6
+          "radius": 0.85
         },
         "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e25",
+        "bedId": "c2-0-e29",
         "plantingStyle": "cottage"
       },
       {
         "id": "c2-0-e38",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Evergreen shrub",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 12.206197478825667,
-            "y": 14.035317929206307
-          },
-          "radius": 0.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e27",
-        "plantingStyle": "cottage"
-      },
-      {
-        "id": "c2-0-e39",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Evergreen shrub",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 1.1422634375174623,
-            "y": 14.932475826720523
-          },
-          "radius": 0.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e28",
-        "plantingStyle": "cottage"
-      },
-      {
-        "id": "c2-0-e40",
         "category": "lighting",
         "role": "feature",
         "name": "Spike uplight",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 9.685786437626904,
-            "y": 16.685786437626906
+            "x": 9.75649711574556,
+            "y": 16.75649711574556
           },
           "radius": 0.06
         },
@@ -6973,15 +6706,15 @@
         "symbol": "light-spike"
       },
       {
-        "id": "c2-0-e41",
+        "id": "c2-0-e39",
         "category": "lighting",
         "role": "feature",
         "name": "Spike uplight",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 0.4857864376269052,
-            "y": 16.685786437626906
+            "x": 0.20294372515228631,
+            "y": 16.402943725152287
           },
           "radius": 0.06
         },
@@ -6991,15 +6724,15 @@
         "symbol": "light-spike"
       },
       {
-        "id": "c2-0-e42",
+        "id": "c2-0-e41",
         "category": "lighting",
         "role": "feature",
         "name": "Bollard light",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 6.664753915109194,
-            "y": 13.221805804001985
+            "x": 7.031061589992257,
+            "y": 13.588113478885047
           },
           "radius": 0.08
         },
@@ -7009,7 +6742,7 @@
         "symbol": "light-bollard"
       },
       {
-        "id": "c2-0-e43",
+        "id": "c2-0-e42",
         "category": "lighting",
         "role": "feature",
         "name": "Bollard light",
@@ -7026,6 +6759,7 @@
         "height": 0.6,
         "symbol": "light-bollard"
       }
-    ]
+    ],
+    "revision": null
   }
 }

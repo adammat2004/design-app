@@ -207,9 +207,9 @@ export function elementsFromPreview(
       category: 'planting-bed',
       role: 'feature',
       name: 'Tree',
-      shape: { kind: 'point', at: tree, radius: 1.6 },
-      zone: zoneAt([tree]),
-      symbol: 'tree-deciduous',
+      shape: { kind: 'point', at: tree.at, radius: tree.radius },
+      zone: zoneAt([tree.at]),
+      symbol: tree.symbol,
     });
   }
 

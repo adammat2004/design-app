@@ -86,8 +86,10 @@ house by `computeZones`, so storing them could only create something stale.
   can be turned off.
 - **one sun over the whole drawing**: `site.location` plus `site.sun` feed `suncalc`, and the same
   unit vector lights slab bevels, plant crowns, water crests and a real cast-shadow layer. Set a
-  location in step 1's Sun and shade panel and the shadows appear; leave it unset and the plan
-  keeps the conventional top-left drawing light and says nothing about shade.
+  location in step 1's Sun and shade panel and the shadows follow the real sun through the day;
+  leave it unset and the plan casts them from the conventional top-left drawing light instead,
+  which says how tall things are and nothing about where the shade falls. Soft in both views, with
+  the penumbra growing with the caster's height, and a **Shadows** toggle in the toolbar.
 - **a schedule of materials on step 6**: areas, slab and board counts, the budget asked for against
   what the materials came to, and which requested features made it in. Every figure is derived from
   the geometry at read time; nothing is stored.
@@ -108,8 +110,11 @@ house by `computeZones`, so storing them could only create something stale.
   kitchen, a bowl in the fire pit, a swing on the play area; a store is a `shed`, a veg patch a
   `raised-bed`, a pergola a `pergola`. The editor's palette offers twelve pieces of furniture and,
   since lighting landed, four fittings.
-- **the house is drawn as a building**: a wall of real thickness round a floor, doors shown on
-  steps 4 and 5 as well as step 1.
+- **the house is drawn as a building**: a wall of real thickness round a floor on step 1, and a
+  **roof** everywhere the design is drawn — slate, dark tile or red tile, with ridge and hip
+  capping, a fascia and a rooflight on a broad plane. The door is not lost under it: the ground
+  outside carries a threshold mark, which is what a landscape drawing shows. Doors and windows are
+  drawn on the walls themselves in Visualise, where you can see them.
 - **concept cards show the real render**, drawn by the same composer as everything else, and the
   editor and the review screen can **download the plan as a PNG** with its feature chips.
 - **`pnpm render:plan`** writes whole-plan judging sheets from three captured generator fixtures
@@ -179,12 +184,12 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
 - **there is a designer's reading of every plan, and a benchmark over the generator**: a pure
   TypeScript design agent (`apps/api/src/plan/generation/design/`, `knowledge/`) that analyses the
   site, infers what the garden is *for*, ranks the requested features by tier, writes a strategy per
-  concept slot, and scores the finished elements against ten landscape-design principles — with the
+  concept slot, and scores the finished elements against eleven landscape-design principles — with the
   faults it found, each a measured sentence. `GeneratedConcept` carries `strategy`, `score` and
   `explanation`; step 4 shows the decisions and why a feature was left out.
   `pnpm --filter @garden-studio/api eval:generator` is the harness: 13 cases × 3 seeds, reporting
   validity, composition bands, score per principle, inclusion, determinism and latency. Today's
-  numbers: **117/117 valid, deterministic, mean score 0.860, no critical faults, 86% of requested
+  numbers: **117/117 valid, deterministic, mean score 0.856, no critical faults, 85% of requested
   features drawn.** Nothing here moves a coordinate.
 - **the scorer judges a garden against its own brief, and there is a benchmark over the scorer
   itself.** The weights follow what the concept is *for* (`knowledge/weight-profiles.ts`), four
@@ -207,7 +212,8 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
   times faster.
 - **many layouts are drawn and the best is offered**: `design/choose.ts` enumerates every suitable
   composition against the variations each offers, previews each one with no query at all
-  (`design/layout-generator.ts`), scores the field on the same nine principles, and takes the best
+  (`design/layout-generator.ts`), scores the field on the same principles the finished plan is
+  judged by, and takes the best
   that is not too like what the other slots have already taken. A candidate is judged on its score
   *and* on how well its composition suited the job; repeating a composition costs extra, because
   three cards are a promise of three answers. **Measured**: the worst plan in the fixture set went
@@ -243,6 +249,11 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
   One gesture bracket per run, so the whole thing is one Undo; Stop, Skip, Compare and Replay round
   it out. `Demo AI redesign` in the editor's AI panel plays a scripted one against whatever concept
   is on screen. Nothing about the reasoning is in it yet — see "Visual AI agents" below.
+- **you can point at something and talk about it**: click an element and the composer says what the
+  request will be about, so "make this bigger" — or "use porcelain instead", with no noun in it at
+  all — resolves to the thing on screen instead of the designer asking which one is meant.
+  `ProposeRequest.selection` is ids, never a position, and the chip is a view of the canvas
+  selection rather than a second copy of it. See "The selection is what 'this' means" below.
 
 **Not built yet:** printing at true scale, a navigable 3D preview, and the optional AI
 photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
@@ -608,10 +619,32 @@ unchanged and the compass keeps pointing exactly where it did.
 **Orientation is not enough for a sun, and `site.location` is the gate.** Which way the plot is
 turned says nothing about where on Earth it is, and solar altitude is a function of latitude —
 shadow length is `height / tan(altitude)`. So `location` is nullable and **null means the app makes
-no solar claim at all**: no cast shadows, and the conventional top-left drawing light everywhere.
-There is no latitude that is true of anywhere, and a plausible guess would have the design built
-confidently around a fact the user never stated. Offered, not applied, exactly as
-`suggestedDoorWall` handles the inferred patio door.
+no solar claim at all**: no time of day, no shade study, no night, no lighting hours. There is no
+latitude that is true of anywhere, and a plausible guess would have the design built confidently
+around a fact the user never stated. Offered, not applied, exactly as `suggestedDoorWall` handles
+the inferred patio door.
+
+**A plan with no location still casts shadows, from the drawing's own light — _this reverses_ "no
+cast shadows, and the conventional top-left drawing light everywhere".** The old rule was right
+about the claim and wrong about the picture, and the cost was measurable against the professional
+reference: nothing in an unlocated garden was attached to the ground, which is most of what makes a
+render read as a diagram. Note what it was already inconsistent about — a contact disc under every
+sprite, a shade band along every fence and a ground shadow under the house have *always* been drawn
+without a location, pushed away from `LIGHT_DIRECTION`. The cast layer was the one drawing
+convention held to the solar standard.
+
+`presentationCast(site, light)` (`materials/light.ts`) is the one answer: the real sun where there
+is a location, `conventionalCast` where there is not — shadows falling away from the same top-left
+light that bevels every slab, at a flat `CONVENTIONAL_SHADOW_RATIO` of 0.55 m per metre of height.
+`ShadowCast.source` says which it is, and that field is what keeps the rule above true: every
+consumer that would be making a claim about *this garden at this hour* checks it rather than
+assuming a cast means a sun.
+
+**The test is `site.location`, not the null cast, and getting that wrong draws a second sun at
+midnight.** `shadowCast` returns null for two different reasons — no location, or a location whose
+sun is below the horizon — and only the first may fall back to a convention. A located garden at
+eleven at night has no shadows because there is no sun, and conventional ones drawn across the
+night wash would be a second light in a picture whose whole subject is that the first one has gone.
 
 **`site.sun` is on the document, like `pattern`.** "Show me half three in June" is a design decision
 of the same kind as which way the decking boards run, and it has to survive a reload for the same
@@ -1053,8 +1086,13 @@ overshooting lobe draws a tree hanging over the fence that the model says is com
 
 **Trees are `role: 'feature'`, never `fillKind: 'accent'`.** `geometryArea` is 0 for a point, so a
 tree tagged as an accent slips past the "every accent has a real area" test and quietly breaks it.
-They also have to go through `placement.candidates` and be pushed onto `obstacles`, because the
-concept tests require every feature footprint to be pairwise disjoint.
+
+**What goes onto `obstacles` is the *trunk*, and _this reverses_ the note that said the tree does.**
+The pairwise-disjointness the concept tests require is measured on `legalFootprint` now — see
+"Trees: the trunk is what occupies the ground" — so a bed or a path laid afterwards may run under
+the branches, which is the whole point of the change. The note above about an inscribed canopy is
+untouched and still load-bearing: the *drawn* lobes must not overshoot `shape.radius`, because the
+radius is what the schedule, the shadow model and the user's own canopy handle read.
 
 **One `ElementDrawing`, used by both canvases.** There were two, and they had already drifted — the
 editor drew textures while step 4 drew flat category colours, so the screen where the user _chooses_
@@ -1146,6 +1184,22 @@ Same `LIGHT_DIRECTION` as the slab bevels, so a bed and the patio beside it are 
 which runs to the edge of the zone in every generated concept — so the garden would lose its edge
 exactly where it needs one. Posts are spaced in metres, not pixels, and dropped when they get closer
 than about nine pixels apart.
+
+**A boundary states its height with a lit edge and a cast band.** The plan draws a boundary as the
+band it occupies on the ground, and a band is flat — so a 1.8 m fence and a 1.1 m railing were the
+same drawing at different widths, and neither read as anything but a line on the paper. Visualise
+has extrusions and faces to say it; the plan has only conventions. `drawBoundaryRelief` puts a lit
+line along the edge the light comes from and a band of shade on the ground on the far side, and
+**the reach of that band is `height × CONVENTIONAL_SHADOW_RATIO`** — the same ratio every other
+standing thing casts by, so a fence's mark and a shed's shadow agree about where the drawing's sun
+is. A convention in the `houseGroundShadow` class: drawn whether or not the plan knows where on
+Earth it is, and withdrawn with the rest of the shading when shadows are turned off.
+
+**A hedge's face is skinned with `tex-hedge-top`, and it needs no family of its own.** A hedge is
+the one boundary whose top and whose side are the same material seen from two angles: a fence has a
+capping rail and a wall a coping, and neither top would do as a face, but clipped box is clipped box.
+Lit by the renderer like every other face rather than carrying its own light, which is the rule every
+skin follows.
 
 **Zone labels are off on step 5, on purpose.** Zones are scaffolding for "which parts do you want
 designed"; once that is answered, writing "Back garden ≈ 18 m²" across a finished design is a note
@@ -1898,6 +1952,136 @@ warns in words when a declared breakpoint neither wrote nor read, which is the f
 otherwise be a zero easy to read past. The measurement itself is in the "prompt cache" note near the
 top of this file: it works, and the estimate that said it might not was wrong.
 
+## One subject, three ways to change it: the inspector is one surface
+
+**The unified inspector was one component and still read as two products**, and the reasons were
+all presentational: the property sheet had its own capped scroller with a `border-b` under it, the
+conversation was left/right bubbles with a Sparkles avatar, the two were drawn in different shapes
+(rectangular form controls against round pills), the AI's indigo was the identity of the bottom
+half, the whole thing sat as a rounded card inside a padded aside, and the busy state swapped the
+heading to "Changing the garden". Blur your eyes and there were two horizontal bands. `EditorInspector`
+is now **header · one scrolling body · pinned footer** on one white surface with hairline dividers,
+and everything under the header is something you can do to the subject it names: the precise verbs
+(`SelectedElementPanel`), the recommended ones (`SmartSuggestions`), the record of the last one
+(`RecentActivity`), and the imprecise one (`InspectorComposer`). `DesignAgentPanel` is gone;
+`Pill.tsx` is the one small-action control where five inline copies of the class used to be.
+
+**A smart suggestion is a typed action on the subject, not a sentence the designer said.**
+`lib/smart-suggestions.ts` is pure: `suggestionsFor(subject, { elements })` reads the plan (is there
+lighting already? is this patio already porcelain?) and returns entries whose `action` is a union of
+a **direct edit** (`material` → `setMaterial`), a **request** (`send(text)`) and a **review**. The
+component renders all three identically — art, title, detail — which is the visual argument that a
+swatch, a suggestion and a typed sentence are three handles on one object. Request-kind entries are
+*dropped* when `available === false` rather than disabled: a card that looks available and does
+nothing is the fault this codebase keeps catching. `quickCommandsFor` is the same idea as chips —
+sentences about "it", which the selection resolves. The garden's chips stay `latestSuggestions`,
+because the server writes those and a second source of designer copy would drift.
+
+**The working header names what the request was _about_, never the run's cursor.** The run drives
+`selectedId` (that is how the canvas follows the work), so the old rule — claim nothing about the
+selection while busy — still holds; what changed is that the subject of a live request is already
+known, captured on `UserMessage.about` at send time. So "Patio · Updating…" over the stage checklist
+is honest, and a demonstration or a garden-wide request reads "Garden · Updating…". The property
+controls hide (a form you cannot use looks broken), the suggestions dim, the composer says
+"Watching…". `AgentActivity` is mounted by the inspector always and hidden when idle, because
+`ai-activity-panel` has to carry the run's final `data-status` after the work is over.
+
+**The record is absent rather than empty, and the newest exchange is the only one shown in full.** A
+"Recent change" heading over "nothing yet" is a section about the tool. Earlier requests fold under a
+`<details>`; every testid the browser spec reads (`chat-user-*`, `chat-assistant-*`, `agent-outcome-*`,
+`ai-review-outcome`, `ai-compare` / `ai-undo` / `ai-replay`, the offers) is still on the same kind of
+element. When a run finishes the body scrolls to the outcome so Compare and Undo are in view; a new
+selection scrolls to the top. The `element-area` figure lives in the header now, under the name.
+
+## The selection is what "this" means
+
+**The canvas knew which element you were pointing at and the designer did not.** `selectedId` has
+always driven the Edit panel, and `ProposeRequest` carried `{ message, history }` — so "make this
+bigger" arrived as the bare word "this" against an inventory of every element, and `rules.ts` quite
+correctly had the designer ask which one was meant *about the element already selected on screen*.
+The user had to name the thing they were pointing at. `ProposeRequest.selection` closes that.
+
+**Measured against a live model on a real plan, before and after.** Same sentence, same garden:
+
+```
+no selection    "I can't tell which element you mean — the seating patio, the dining
+                 pergola, the rear border or the lawn are the likely candidates."   0 changes
+selection e1    "I'll enlarge the seating patio and bring the lounge set with it."  resize + attach
+```
+
+And a sentence with no noun in it at all — "use porcelain instead" — resolved to the selected patio
+and came back as one material change. That is the whole feature: **the subject of the sentence is on
+the screen, not in the words.**
+
+**It is deixis, not a description of the garden, and that is why it may be on the request.** The
+elements, zones, boundary, house and unit were deliberately taken *off* `ProposeRequest` so the
+designer could never reason about a garden other than the stored one. The two things left are what
+was *said* and what is being *pointed at*, neither of which the server can know. Ids only — the
+selection renders as `id=…, "name", category` and nothing else, because the inventory a few lines
+above already carries the size and the material, and a second description of one element is a second
+thing to drift.
+
+**No position, and there is a test standing over it.** `intent.service.test.ts` asserts the prompt
+contains no `vertices`, no `x:` and no `centre`, and that test now runs *with* a selection so the
+newest section is held to the same rule. Telling the model where the selected thing is would be the
+one thing this architecture has refused everywhere else.
+
+**The grammar budget is untouched, and deliberately so.** `INTENT_JSON_SCHEMA` is pinned at
+`optionals <= 2`, `branches <= 11`, `objects <= 14`, `refs === 9` after the 400 that
+*"the compiled grammar is too large"*. The selection is a **request** field — Zod only, never sent
+to the model as a schema — and the model still answers with ordinary `target.elementIds`. So nothing
+here needed `probe:assistant`. Anything that gives the model a new way to *name* the selection back
+does.
+
+**A stale selection is dropped in silence, not reported.** `renderSelection` resolves the ids
+against the stored plan and drops what no longer exists, exactly as `planner.service.ts`'s `resolve`
+does — a selection can go stale between the click and the send, and naming a ghost would have the
+designer talk about something that is not on the plan. The heading disappears with it, because a
+heading with nothing under it invites the model to wonder what was withheld.
+
+**The section goes after the inventory, not before it.** The order is the order the request is
+reasoned in: we said this, the garden is now that, they are pointing at this, they want this. First,
+it would be an id with nothing yet to attach to.
+
+**A hint, not a hard scope.** The rules say "this", "it", "that" and any subjectless instruction mean
+the selection; they also say a sentence that plainly names something else wins, because somebody can
+have the terrace selected and ask about the shed. Client-side filtering of changes to other elements
+was the alternative and it refuses "move the shed next to this", which is exactly the sentence the
+selection makes natural.
+
+**The chip is a view of the selection, never a second copy of it.** There is one selected element;
+the Edit panel below shows the same one; the × on the chip is the same `select(null)` that clicking
+bare canvas performs. Pinned independently — the tempting Cursor-like design — it would be a second
+answer to "what is selected", and the two would disagree the first time somebody clicked the plan.
+It is hidden while a run is on, because **the run drives `selectedId` itself** (that is how the Edit
+panel follows the work), so a chip reading off it would present the designer's own cursor as the
+user's context.
+
+**The review pass is scoped to the selection as well as to what changed.** A request made with the
+terrace selected is a request about the terrace whether or not the terrace itself moved — one that
+ended up only shifting its furniture is still work on that terrace. Union and dedupe. Scope still
+decides only what may be *acted on*: the scorer reads every element, or a subset would quietly
+change which composition is being judged.
+
+**The transcript records what a sentence was about, with the name it had at the time.** "Make it
+bigger" is unreadable a minute later, which is the price of letting the canvas supply the subject —
+so `UserMessage.about` carries the id and the label, captured at send time. Looked up at render time
+instead, a rename would rewrite history. The tag offers to select the element again only where it
+still exists; where it does not it stays plain text, because a control that looks available and does
+nothing is the fault this codebase keeps catching.
+
+**`elementLabel` exists so one element has one name.** The `element.name ?? CATEGORY_COLOURS[…].label`
+fallback was written out in four places; the chip, the transcript and the Edit panel now share one
+function, or they would come to disagree about what an unnamed bed is called.
+
+**"Ask the designer" is told whether there is one, rather than looking.** The button in the Edit
+panel takes `agent` as a prop from `EditorScreen`, which is the same `concept !== null` that decides
+whether the agent panel renders at all. The first version probed the DOM for the composer in an
+effect — `react-hooks/set-state-in-effect` refused it, and the rule was right: whether a sibling
+exists is the caller's knowledge, not something to discover after paint. Reaching the composer by
+`data-testid` to *focus* it is the one liberty kept, because lifting a ref through the screen is real
+plumbing for a cursor.
+
 ## The garden assistant
 
 A sibling of `assistant/`, not a second AI system: same `AnthropicModule`, same
@@ -1993,9 +2177,142 @@ kind at once, and it cannot be fooled by a tessellated circle or a hairline bulg
 leaves the fence (so `borderRegions` is genuinely clipped), leaves a whole zone out, and still
 covers the garden door (so the grammar runs rather than the fallback).
 
-**`reference-fixture.test.ts` now states a 30 s timeout.** Each case generates three whole concepts
-against real PostGIS; Vitest's 5 s default was never a budget it was written to, and it was timing
-out on machine speed rather than on anything about the generator.
+**`reference-fixture.test.ts` now states a 30 s timeout, and so does `concepts.service.test.ts`.**
+Each case generates three whole concepts against real PostGIS; Vitest's 5 s default was never a
+budget either was written to, and they were timing out on machine speed rather than on anything
+about the generator. The concept suite's largest case already sat at about 4.3 s, and giving a
+garden its full complement of trees rather than five put it over — the generator doing more work
+rather than doing it worse, since `placement.candidates` is the dominant cost in the whole
+generator and it gets harder the more obstacles a plan carries.
+
+## Trees: the trunk is what occupies the ground
+
+**A tree's canopy is what it is drawn as; its trunk is what it takes up, and until Phase 5 the
+system only knew the first.** `shape.radius` is the canopy, because that is what the drawing, the
+schedule and the shadow model are about — and treating that circle as the shape that must fit
+inside the boundary and clear of everything else meant a canopy could never cross a fence or reach
+over a patio. Every tree in every generated plan therefore stood marooned in open ground with its
+own radius of clearance round it, and the move that gives a real garden its enclosure and its
+dappled terrace was unavailable. **A canopy is not a wall: it is the part of the tree that is
+allowed to be over things.**
+
+`packages/schema/src/plan/footprint.ts` is the one rule. `legalFootprint(element)` answers the
+trunk for a canopy and the shape itself for everything else; `elementIsLegal` is `geometryIsLegal`
+asked about the right one. **It has to reach all four deciders or it is worse than not existing** —
+the editor's drag (`refusalFor` takes an element now, not a geometry), the AI run executor
+(`resolveOperation`), the assistant's planner, and the server's PostGIS validator, which builds its
+containment CTE from `legalFootprint` rather than `element.shape`. Miss one and the server refuses
+the save of a plan the editor drew, with nothing on screen to say why or any way to put it right.
+
+**What may overlap what is a composition question, and stays where it can see what the other thing
+is.** `plantTree` tests the *trunk* against the obstacle set and the *crown* against buildings and
+other crowns: a canopy over paving, a path or a border is the ordinary case and the whole point;
+one through a shed or through another tree is not. Only the stem goes onto `obstacles`, so a bed or
+a path laid afterwards runs under the branches.
+
+**`TRUNK_FOOTPRINT_RATIO` is 0.12 and is deliberately not the renderer's `TRUNK_RADIUS_RATIO`.**
+This one is the space a tree *takes* — root flare, and the ring you would not pave right up to — so
+it is generous against botany; the renderer's sizes a dot under a sprite and answers to legibility.
+Two numbers because they are two questions.
+
+**The count is per square metre, not a cap.** `treeBudget` (`generation/layout/trees.ts`) is one
+tree per 22 m² of designed area, between 3 and 12 — read off the reference's ten canopies over about
+220 m², not chosen. A flat `MAX_TREES = 5` gave an estate the same three or four specimens a
+courtyard got, which is the largest single reason our plans read as emptier than a designed one
+however good the planting in the borders is. The module is shared and pure **because two places
+plant trees and they have to agree**: `concepts.service` builds the plan somebody sees and
+`design/layout-generator` previews fifty candidates to decide which plan that is. A preview that
+plants five where realisation plants eleven scores a garden nobody will look at.
+
+**A boundary backdrop walk, in both, at 5 m spacing inset 1.1 m.** Five metres is a screen rather
+than an avenue; the inset is the trunk's own standoff, since the crown may cross the fence and the
+stem may not. It is walked over the room's edges rather than written into each of the seven
+compositions, because it is the same move in all of them and a template is about what makes its
+composition *different* — the sketch's own points are still tried first, so a composition with an
+opinion about where a specimen goes keeps it.
+
+**`PreviewTree` carries the radius and the symbol, and a bare `Point` no longer would do.** The
+species is chosen before the geometry (`treeSpeciesFor`, then the symbol's own footprint radius),
+so a preview that forgot it would hand the scorer ten identical circles for a garden of hornbeams,
+rowans and fruit trees — and canopy cover and what the crowns overhang are exactly what the extra
+trees are judged on.
+
+**`canopy` is the eleventh principle and the third conditional one.** Every other rule can be
+satisfied by a garden with no trees in it, so a plan with three specimens in open lawn scored
+exactly as well as one with a boundary of them, and the candidate loop — which only ever prefers
+what it can measure — had no reason to choose the fuller garden. It scores the share of the room
+under crown against a 0.15–0.35 band, **sampled rather than summed**, because crowns overlap by
+design and adding their areas reports four trees as more shaded than eight whose canopies touch.
+Conditional on the room being big enough for a tree to be a question at all, so a courtyard is not
+marked down for a fact about its plot. Measured: 0.912 mean over the 117-concept harness.
+
+**The gallery gained four boundary trees per garden, in every one of the nine.** Every pair holds
+its contents constant, so a fixture that gains trees gains them on both sides of the pair. Down the
+sides and never at the far end: a tree within `FOCAL_REACH` of the axis's end terminates the view,
+which is the fault `planted-poor` and `family-poor` are built to exhibit, and a fixture change that
+quietly repairs the fault a pair exists to show makes the pair agree about a garden nobody looked
+at.
+
+## Deeper borders, and what a border may take
+
+**`BORDER_WIDTH` is 2.2 m and `borderDepth` caps at 3.5, and 1.5 was the bottom of that range
+rather than the middle.** A bed a metre and a half deep holds two ranks of plants — something at
+the back and something in front of it — which is a strip; a layered planting needs three. The
+traced reference's own beds run 2.2 to 6.9 m, and this is the difference between planting that
+reads as the body of the garden and planting that reads as an edging round a lawn.
+
+**The lawn's floor wins over the border's profile.** `borderIn(scale, across, panelDepth)` in
+`layout/sketch.ts` is that rule: a border takes what it wants of the span it shares with an open
+panel only down to the point where what is left is still a lawn, and `LAWN_FLOOR` is an area as
+well as a minimum side, so leaving 2.5 m across a 2.5 m strip is 6 m² and `lawnViable` rightly
+refuses it. Without this the deepening argued against itself — on a wide shallow plot the extra
+seventy centimetres came straight off a 3.2 m lawn, and a change meant to improve the planting
+produced a garden with no open ground at all.
+
+**`isCourtyard` asks its question at the *thinnest* border, and that is the other half.** Whether a
+room can hold a lawn is a fact about the room; how deep the borders round it are is a preference,
+and one `borderIn` already makes yield. Asking at the preferred depth made the two disagree the
+moment the border deepened: a 9 × 10 m garden was reported as unable to hold a lawn, the courtyard
+composition claimed it on that basis, and a plan that had been 38% hard came back **82%** — paved
+corner to corner because the border we wanted was seventy centimetres deeper.
+
+**`largestPanel` looks in the zones being measured, not across the whole plan.** `report.courtyard`
+means "this plan has nowhere open at all" and it decides which set of bands a concept is judged by.
+Scanning every element let a gravel front garden count as the back garden's open ground, so a
+courtyard plan — paved by design, which is what a courtyard is — was judged as a garden, reported
+as having no lawn, and failed a band it can never meet.
+
+**The measured cost of the deeper borders, recorded rather than hidden.** Over the 117-concept
+harness: composition-band compliance 72% → 64%, `route-through-planting` 53 → 77, mean score 0.863
+→ 0.856 with the minimum rising 0.728 → 0.734, and repairs accepted on 15% → 23% of concepts. Both
+regressions are one fact — there is more planting, and the routes were composed without knowing how
+deep the beds would be. The routes are the thing to fix; they are laid from the sketch's own points
+before `designedBeds` cuts anything.
+
+**A structural plant budget scaled by planting, not a flat thirty.** A flat cap is a cap on the
+whole plan, so a garden with four deep borders spent it on the first two and left the last ones as
+bare texture — the beds furthest from the house, which is where the structure matters most. One
+shrub per 5 m² of bed, floor 12, ceiling 60, and the ceiling stays because the placed-elements
+panel still has to be scrollable.
+
+**`naturalistic` and `pollinator` had no backdrop layer at all**, which made them grasses and
+perennials all the way to the fence: a true description of a prairie planting and a bad one of a
+British border, which is held up at the back by shrubs whatever the style at the front. `backdrop`
+is also the role that becomes a *placed* element rather than texture, so a scheme without one gave
+the user nothing structural to move and the drawing nothing with a silhouette.
+
+**Shrub symbols are sized as the shrub is in five years, not as it arrives.** 1.2–1.4 m across is a
+two-litre pot; a back-of-border viburnum or hydrangea is nearer two metres, and drawn at the smaller
+size they read as infill among the infill — the one thing structural planting exists not to do.
+`shrub-topiary` is the exception that stays the size it is bought at, because a topiary is defined
+by being *held*: that is the whole of what it contributes, and it is why it belongs to the
+architectural palette and nowhere else.
+
+**`FeatureSpec.edging` exists for exactly one entry.** A kitchen garden is *built* of timber
+sleepers, and `timber-sleeper` had sat in `EDGING_MATERIALS` since edging landed with nothing able
+to choose it, because `edgingFor` answers by style and no style asks for sleepers. `stampEdging`
+leaves an edging the element already carries alone, which is what makes a per-feature answer and a
+per-style answer able to coexist.
 
 ## The layout grammar
 
@@ -2155,7 +2472,7 @@ concept's gravel panel.
 
 **There is a designer's reading of every plan now, and it runs after the plan rather than instead of
 it.** `apps/api/src/plan/generation/design/` reads the site, reads the brief, writes a strategy and
-then scores the finished elements against ten landscape-design principles; `knowledge/` holds the
+then scores the finished elements against eleven landscape-design principles; `knowledge/` holds the
 tables it reasons from. `build` calls it at the end and attaches `strategy`, `score` and
 `explanation` to the concept. **Not one coordinate moves because of it** — `elements` is already
 final when the agent sees it, every outline it reads came from `geometryOutline`, and deleting both
@@ -2185,8 +2502,10 @@ garden does not contain. Same refusal, same reason, as `suggestedDoorWall` and `
 
 **A score is not one number, and a principle that cannot be measured is absent rather than zero.**
 `DesignScore.categories` is partial; the weights are renormalised over whatever applied. The eight
-principles that always apply sum to 1 and `sun` sits on top at 0.05, so a located plan is judged on
-nine things and an unlocated one on eight, and neither is penalised for what the other knows.
+principles that always apply sum to 1 and each conditional one sits on top at 0.05 — `sun` where
+there is a location, `maintenanceFit` where an upkeep level was stated, `canopy` where the room is
+big enough for a tree to be a question — so a plan is judged on between eight and eleven things and
+none is penalised for what another knows.
 `featureFit` is deliberately **not** in the weight table: a concept missing something the brief calls
 essential has its total *capped* at 0.5 rather than reduced, because it is the wrong concept rather
 than a worse one.
@@ -2235,7 +2554,7 @@ shift is a pair of small tables read off `intent` and `emphasis`, which are them
 what the user ticked — so nothing here is anybody's opinion at generation time, let alone a model's.
 Multipliers run 0.7 to 1.6, because these are emphases rather than different scorers: a shed in the
 sightline is a fault on an entertaining plan too. The eight principles that always apply are scaled
-to sum to one and the two conditional ones keep their base share on top, so two gardens judged by
+to sum to one and the three conditional ones keep their base share on top, so two gardens judged by
 different profiles are still on one scale.
 
 **The weights applied are on the score.** `DesignScore.weights` is optional, so a stored score still
@@ -2813,9 +3132,29 @@ exactly one redraw between the two states. `useAssetPreload` runs once in `Proje
 **A contact shadow is a drawing convention, not a solar claim.** Every sprite and symbol stands on a
 soft disc, proportional to the thing, pushed a little way away from `DrawPass.light`, never scaled
 by height. It says "this stands up off the ground", which a plan symbol needs to say whether or not
-the plan knows where on Earth it is. The cast-shadow layer — the one that says where the shade falls
-at four o'clock — stays gated on `site.location`. The fence's shade strip is the same class.
-`SHADOW_OPACITY` went from 0.26 to 0.36 when the lawn became a photograph.
+the plan knows where on Earth it is. The fence's shade strip is the same class, and since
+`presentationCast` landed so is the cast layer on an unlocated plan — what stays gated on
+`site.location` is the *claim*, which `ShadowCast.source` carries. `SHADOW_OPACITY` went from 0.26
+to 0.36 when the lawn became a photograph.
+
+**Shadows are soft in both views, and the penumbra grows with the caster — _this reverses_ "soft is
+Visualise's presentation choice; a diagram draws the hard edge".** A hard-edged shadow is what a
+shadow looks like on the moon, and the 2D Plan is a drawing of a garden rather than a section
+through one. `softnessMetres` is still a switch rather than a radius: the blur each bucket gets
+comes from its occluder's character (`PRESENTATION_SHADOW_SOFTNESS` for built,
+`FOLIAGE_SHADOW_SOFTNESS` for foliage) *and* its height, through `PENUMBRA_GROWTH_PER_METRE`, so a
+kerb keeps its crisp line and a six-metre house gets an edge with air in it. Heights are quantised
+into three bands (`HEIGHT_BANDS`) because every distinct softness is another opaque union, another
+blur and another composite over a raster that reaches 4096²; measured at **3.1 ms against 0.9 ms**
+for the hard path on the 56-occluder suburban fixture, on a cache miss only. The hard single-union
+path is kept for a context with no `filter` support and for a caller that genuinely wants the union.
+
+**`SceneOptions.shadows` is a view preference beside `maturity`, not a document field.** Off is a
+real thing to want: a drawing somebody is about to measure, print or write on, and two layouts
+being compared rather than one being admired. It withdraws the cast layer only — the contact discs
+and the fence shade bands stay, because those say "this stands up" rather than "the sun is over
+there". `shadowsVisible` in `plan-editor-store` has the same five edit points `gridVisible` does,
+and the PNG export reads it so a download matches the view it was taken from.
 
 **A canopy sprite is inscribed in the tree's radius by `canopySpriteBox`.** The catalogue records
 how far a sprite's opaque pixels reach; the half-width is `radius / ratio`, so the furthest leaf
@@ -2967,10 +3306,12 @@ the rule that keeps a dining set on its patio. What the two _do_ share is said o
 composition bands. Adding the category was a compile error in **ten** places, not the nine the
 furniture note quotes — `layerForElement`'s switch is total too and is not a `Record`.
 
-**Night is a ramp, and it is gated on `site.location` exactly as shadows are.** `nightFraction`
-returns 0 in daylight, 1 once civil twilight has ended, and the real fraction between — and `null`
-without a location, which is the same refusal `shadowCast` makes and for the same reason: there is no
-latitude that is true of anywhere, so there is no hour at which an unlocated garden is dark. A
+**Night is a ramp, and it is gated on `site.location` — which since `presentationCast` is a
+*stricter* gate than the cast layer's, not the same one.** `nightFraction` returns 0 in daylight, 1
+once civil twilight has ended, and the real fraction between — and `null` without a location, for
+the reason `shadowCast` refuses: there is no latitude that is true of anywhere, so there is no hour
+at which an unlocated garden is dark. An unlocated plan therefore draws shadows and never draws
+night, which is exactly the split `ShadowCast.source` exists to express. A
 boolean was the first design and is visibly wrong: the time slider steps in fifteen minutes, so a
 switch takes the whole garden from noon to midnight in one step, and dusk is the hour a lit garden
 actually looks its best. `-6°` is not a tuned number — it is civil twilight, the standard definition
@@ -3017,6 +3358,23 @@ before it — saw no trees at all and quietly specified bollards and nothing els
 therefore resolved to a local rather than applied inline in the return. This is the same class of
 bug as `openingCounter` not being re-seeded: everything works, nothing errors, and the output is
 silently impoverished.
+
+**A pergola throws slat shadows, and that is the one thing that says "pergola" from above.** In
+plan a pergola is a grid of thin bars on whatever it stands on, and drawn alone that reads as a
+painted pattern — the rafters have no thickness on the page and nothing says they are two and a half
+metres over your head. The shadow *is* the rafters translated, the same construction `projectShadow`
+uses, so there is no clipping and no second geometry: the stripes land under the structure and run
+out beyond it exactly as far as the height and the light say. A convention in the contact-disc class,
+so it is drawn whether or not the plan has a location.
+
+**`dark-stained-timber` is the finish a garden building actually has.** Every shed, store and garden
+room came out pale honey, because `softwood` is the cheap default and a photograph of untreated
+softwood is what it is — so the most conspicuous object in the garden after the house was also the
+brightest. A dark stain *recedes*, which is the whole reason a designer specifies one: a store you
+notice is a store you are looking at instead of the garden. It leads the structure palette on modern
+and low-upkeep briefs and shares the rotation elsewhere, so a plan with two buildings still differs
+between them. Not a black: at this scale a true black shed is a hole in the drawing, and what is
+being drawn is timber that has been *stained*, so the grain still reads through it.
 
 **`furnish` is pure and centred.** An item is placed in the middle of its host with a 0.3 m margin,
 inherits the host's rotation, may be turned a quarter to fit, and is verified by `geometryIsLegal`
@@ -3123,8 +3481,73 @@ not a different garden that happens to be sparser.
 **`INSTANCE_DENSITY` is a presentation gain and is deliberately not folded into
 `PlantingScheme.share`.** Those layers are handed to `samplePlanting` by the _generator_ too, to
 place structural shrubs, so moving them would move real `DesignElement`s in generated concepts.
-The scheme stays exactly as authored and only the picture gets denser. Saturating is harmless: the
+The scheme stays exactly as authored and only the picture changes. Saturating is harmless: the
 sampler places at most one unit per cell.
+
+**Both views instance their planting now — _this reverses_ "instanced mode is Visualise's".** A bed
+painted inside `clip(outline)` is a cut-out by construction, and that clip was the largest single
+reason the 2D Plan read as a diagram: no plant crossed its own edge, nothing spilled onto the lawn,
+every border ended in a line no garden has. It was never what made the plan *measurable* — the
+outline is still the geometry of record and still what selection, handles, dimensions and the
+schedule use. Only the picture overhangs, exactly as a tree canopy always has.
+
+**Which camera the planting draws from is passed down, never inferred.** `chooseAsset` resolves a
+family in the plan camera and *then* swaps it for its elevated twin, so instancing the plan view
+without saying which camera it is drawing to is precisely how `vis-*` art shipped into the 2D Plan
+once before. `buildPlants` takes an `AssetCamera`; `audit:assets` fails on any leak.
+
+**The plan view's `stack` holds its plants and nothing else.** The v2 renderer draws standing
+things from the stack rather than from `scene.plants`, so a plan with an empty stack had no
+planting under Pixi while the composer had it. `plantNodes` is what both views' stacks start from;
+`buildStack` — which is where lift, extrusion, skins and the roof come from — is still called for
+Visualise only, so none of that can reach the plan by a later edit to a flag. The test asserts
+every node in a plan stack is a plant, rather than asserting the stack is empty.
+
+**The planting was measured before it was tuned, and the numbers are the argument.**
+`measure:render` counts the scene rather than the pixels — plants per m² of bed, mean drawn
+diameter, the share under half a metre, sampled cover and canopy share — because a bed can match
+the reference's saturation exactly and still read as a carpet of dots. It reported **8 to 15 plants
+per m²** against a designed border's 5 to 7, with **71 to 83% of them under half a metre** and 14
+to 30% bare ground. Too many, too small, and still not covering.
+
+`INSTANCE_DENSITY` went 1.25 → **0.8** and a new `CROWN_FILL` of **1.45** multiplies the drawn
+spread only, after the clamp and never `cellSize` — so the world grid, every plant's identity and
+the `year-1 ⊆ mature` nesting are untouched while the gaps close. The bands in `SCHEMES` are
+nursery sizes read as real plants (a mass perennial at 0.4–0.7 m is a pot; the geranium it stands
+for is 0.6–1.0 m in its third year), and the garden this app draws is the mature one. Measured
+after: **5.4 to 9.7 per m², mean 0.64–0.81 m, 6 to 25% under half a metre.** Cover goes as
+`1 − exp(−λ·area)`, which is why fewer plants cover more.
+
+**Every bed gets a shrub storey, because almost none of them had one.** `understoreyLayer` is the
+render-only backdrop the generator cannot supply: `STRUCTURAL_ROLES` takes `backdrop` and
+`specimen` out of the drawn stack because those are emitted as real elements, but there are at most
+thirty of those in a whole plan and two of the six schemes — including `naturalistic`, the default
+— declare neither role at all. Sized as a shrub actually is (1–1.8 m across, 0.9–1.9 m tall) rather
+than as the largest perennial.
+
+**A mature border closes, and the coverage band says so.** _This reverses_ the 70–95% band, which
+was calibrated when the drawn plants were 0.45 m: reaching 95% then would have taken fifteen plants
+per square metre, so the ceiling was really a cap on density. The old ceiling's argument — that
+without gaps the planting reads as a flat mat — was right about the risk and wrong about the
+remedy. What makes plants legible is that they *differ in size*, which is the metric that moved
+from 80% to 20% under half a metre in the same change. Bare soil is not doing that work. The
+first-year band is what still protects "visibly open".
+
+**The mass LOD band ends where the plan zoom begins.** It ran 40 → 24 px/m, which put the ordinary
+editing zoom of 32 exactly half way: every low plant drawn at half opacity *and* its mass blob at
+half opacity, one over the other. Two representations of the same plants ghosted together is not a
+transition — it is the mush that reads as noise at the zoom people work at. 32 → 24 now.
+
+**A mat gets no contact disc.** `MIN_CONTACT_SHADOW_HEIGHT` is 0.55 m. A contact shadow says "this
+stands up off the ground", and in a border at these densities the discs overlapped two and a half
+times over — and since the layer is flattened and composited once, the bed did not get shadows, it
+got a **flat 28% blue-grey wash**, which is most of why planting read as grey-purple whatever the
+palette said. A spreading ground-cover mat *is* the ground there and has nothing standing off it.
+
+**`#8d7a99` is gone from the `mixed-border` palette.** A desaturated mauve standing for the flower
+colour a border has — one entry of five, so a fifth of every blob, every low-zoom mass and every
+tinted sprite came out purple-grey, and at a distance a bed read as lavender gravel. A border is
+mostly foliage; the flowers in it are accents drawn as flowers.
 
 **`maturity` is a view preference in `ephemeralState()`, beside `gridVisible`** — same five edit
 points, same trap. It changes how the picture is drawn and nothing about the design: no geometry
@@ -3139,6 +3562,50 @@ better and would put drawn geometry outside the outline `houseFitsInside` measur
 presentation flourish that can make a legal house look illegal is not worth a millimetre of
 shading. Note the ridge ring must be filled as a cap — held short of the true half-span so it stays
 a line, it leaves a sliver no slope covers, and unfilled the roof reads as a frame.
+
+**Both views draw a roof now, and _this reverses_ "only Visualise gets one".** The old rule was
+protecting step 1, where a building the user is *positioning* has to read as the footprint they are
+positioning — and it still does, because step 1 draws through its own Konva canvas and never calls
+`buildRenderScene`. What it was also doing, unintentionally, was leaving every concept card, every
+export and every judging sheet with a flat pale rectangle where the house is: the eye parses that as
+another paved surface, so the drawing loses the one object that gives the garden its scale and its
+orientation. **The overhang is the part that may not travel**, and it does not: the plan's roof is
+drawn strictly within `housePolygon`, so nothing measurable changes. `build-scene.test.ts` states
+that as the property — the plan's eaves *are* the wall line, Visualise's are outside it — rather
+than asserting "the plan has no roof", which would pass on a build that had quietly stopped drawing
+one.
+
+**A roof hides the door, so the ground outside is marked instead.** No openings over a roof is
+still right — from directly above you cannot see the doors beneath one — but the door is the single
+most layout-determining object in a garden drawing: it is what the terrace is laid across and what
+every path starts from. `drawThresholds` puts a short bar with its swing on the garden just outside
+the wall, ground-floor doors only. A window is not a way out and an upstairs opening is not one
+either, so neither gets a mark; a bar under every window would draw a dozen thresholds on a house
+with one door and say nothing about where the terrace goes.
+
+**`HouseFootprint.roofMaterial` is asked, not guessed.** Unlike the roof's *shape*, which the
+footprint genuinely constrains, the covering is derivable from nothing — a guess would be inventing
+a fact about somebody's house, which is the trap `site.location` exists to avoid. Three answers,
+because at 1:100 there are three, offered as swatches in the house panel. An addition with a
+default, so no migration and no version bump, and **nothing measures it**: it reaches the roof
+painter and stops.
+
+**`ROOF_SKINS` and `skin-roof-slate` are read at last**, tiled in each plane's *own* frame rather
+than in screen space — a slate is 300 mm on every roof of every house at every rotation, and tiling
+in screen space runs the courses across the drawing instead of along the eaves. The procedural
+courses stay as the answer where nothing has loaded, which is every environment with no asset
+library, including the golden tests. `skin-roof-felt` is the one that is still unread: it was
+consumed the same way, looked at and reverted, because the family is quoted at 1.5 m and a whole
+shed roof is two tiles by two — what reads is not felt but a dark slab quartered by its own seams.
+A photograph earns its place where it is small against the thing it covers; where it is not,
+geometry wins.
+
+**A rooflight is drawn as glass, which means *light*.** The pane is paler than the covering and the
+frame darker, because glass seen from above is the sky. The first version had it the other way
+round on the reasoning that a window is a dark opening — true of a wall, false of a roof, and what
+it actually drew was two holes punched through the building. One per plane over 30 m², so a hip end
+and every plane of a small outrigger get none: the convention shows up where a roof is broad enough
+for the eye to want something on it and nowhere else.
 
 ## PixiJS, and where it earns its place
 
@@ -3335,6 +3802,15 @@ Three things came out of it, and the second is the one worth copying:
   still drawing flat art, a gap that degrades gracefully — and nothing asking whether the plan is
   drawing elevated art, which is not a gap but a wrong drawing. `elevatedInPlan` is on the one line
   the console prints, because a wrong camera is invisible unless something says so out loud.
+
+**The corroborating half of that test went stale, and nothing noticed for a phase.** It asserted
+`data-plants` was 0 on the plan scene, on the reasoning that planting is lifted out of the beds only
+in Visualise — true when it was written and false the moment the planting rework instanced both
+views, which is the change that stops the 2D Plan's beds reading as cut-outs. The browser suite is
+not part of `pnpm test`, so it went a whole phase without being run. What is still true of the plan
+camera and only of it is that its stack is **plants and nothing else**: `buildStack` is not called
+on that path, so `data-stack` equals `data-plants` there and does not in Visualise. **Run
+`pnpm exec playwright test` after anything that touches the scene**, not only after touching Pixi.
 
 **The same divergence was one layer down in the shadows.** The composer softens a cast shadow only
 in Visualise (`view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0`) and both Pixi backends
@@ -3622,10 +4098,56 @@ drawing a slab under three pixels — so detail does not fade at small scales, i
 large puts every floor twice as far away and the downsample averages the units into the pixels they
 should have occupied, which is a genuinely different picture from drawing at the final size. Two,
 not four: at 4x a 2400 px plan is a 368 MB canvas that Safari refuses, for a gain that is below the
-floors again. The finishing pass is a small contrast and saturation lift done as arithmetic on the
-pixels rather than through `context.filter`, which is unsupported in places and fails silently
-where it is — a filter that worked on one browser and not another would make the export quietly
-differ. It is not a look and must not become one.
+floors again.
+
+**The export's own finishing pass is gone, and _that reverses_ "it is not a look and must not become
+one".** It was a contrast and saturation lift, plan view only, written to put back the separation
+that compositing dozens of independently tinted photographs averages away — and it was exactly a
+look, chosen rather than measured, pulling two of the scene grade's terms the other way. That is why
+it had to be switched off for Visualise and left on for the plan, and two finishing passes
+disagreeing about one picture is not a policy. `drawPlan` grades **both views** now, from the one
+measured set of constants. A downloaded plan is therefore no longer byte-identical to one downloaded
+before this work, deliberately.
+
+## The grade, and the fourth term nothing could see
+
+**One measured grade over every drawing.** `grade.ts` holds four terms and two applications: the
+sheets, the thumbnails and the download take `applyGrade` on real pixels, and the live views take
+`gradeCss()` on the one wrapper element that contains both their canvases — Visualise's, and now
+`EditorScene`'s, which is where the Pixi canvas and the 2D overlay meet. As CSS on screen because
+that repaints every frame of every drag and `getImageData` over the viewport per frame is a cost
+the download does not pay. The Konva chrome is a *sibling* of that wrapper, so handles, guides and
+the tape stay ungraded, which is right: they are the interface, not the garden.
+
+**`WARMTH` is the fourth term, and the first measurement that could find it.** Saturation, luminance
+and contrast are each computed over channels that have *already been collapsed* — HSV
+`(max − min) / max`, Rec. 709 luma, the standard deviation of that luma — so a render and its
+reference can match on all three and still be one golden and one blue. `measure:render` gained a
+**colour balance** row (each channel against its own picture's mean, so brightness divides out) and
+it read the reference 4.2% redder, 2.6% greener and 8.0% less blue than our render of the same
+garden. The gains are that gap, normalised by the Rec. 709 weighted mean so luminance is left where
+`BRIGHTNESS` and `CONTRAST` were solved to put it. Measured after: 0.0% on all three channels.
+
+**CSS has no shorthand for a per-channel gain, so the warm term travels as an `feColorMatrix`.** The
+alternative was applying it only where real pixels are processed and leaving the live view without
+it — a grade the screen has and the download does not, which is the *symptom* two separate bugs in
+these notes already shared. A CSS filter list accepts `url(#id)` alongside the shorthand functions,
+so `GradeFilter` renders one and `gradeCss()` appends it last, in the order `gradePixel` applies it.
+**`color-interpolation-filters="sRGB"` is load-bearing**: an SVG filter operates in *linearRGB* by
+default, so the identical matrix gives visibly different pixels from the arithmetic unless it is told
+otherwise — it fails by looking slightly wrong rather than by failing. `grade.test.ts` drives the
+published matrix string rather than the constants, so a typo in `warmthMatrix()` is caught by the
+same sweep.
+
+**The constants were refitted when the grade reached the plan, and the refit was declined.** Fitted
+against the graded *plan* rather than the graded Visualise picture, the solution is 0.918 / 1.234 /
+0.690 and it closes every row: `saturation +1.0%, luminance 0.0%, contrast -0.0%`. Looked at, it is
+visibly worse — the lawn goes flat and saturated and the paving bleaches. The statistic is not wrong;
+it is **the wrong target for that term**: `contrast` is the standard deviation of luminance over the
+plot, so it is a function of what the garden *contains* as much as of how it is graded, and a global
+expansion cannot close a composition difference without damage. 0.932 / 1.152 / 0.773 is kept, which
+measures closer than ungraded on all three and worse on none. Look at the sheet: the balance row may
+be closed to zero and the others may not.
 
 ## Traps already hit
 
@@ -3719,10 +4241,12 @@ rather than stored in columns.
 **drizzle-kit does not generate `CREATE EXTENSION`.** The PostGIS extension line in
 `apps/api/drizzle/0000_*.sql` was added by hand; preserve it if migrations are regenerated.
 
-**The assistant request must flush the autosave first.** It carries only the sentence — the server
-reads the stored plan — so asking inside the 800 ms debounce window would have the assistant
-reasoning about a garden the user can no longer see. `assistant-store.send` awaits `flushAll()`
-before it posts, and there is a test asserting that order.
+**The assistant request must flush the autosave first.** It carries no geometry — only the sentence,
+the last few turns and the ids of what is selected; the server reads the stored plan — so asking
+inside the 800 ms debounce window would have the assistant reasoning about a garden the user can no
+longer see. `assistant-store.send` awaits `flushAll()` before it posts, and there is a test
+asserting that order. Note the selection is read *before* the flush, for the same reason the history
+is: a sentence is about the garden as it stood when it was typed, and `flushAll` awaits.
 
 **Testing Library's auto-cleanup does not register without Vitest globals.** `apps/web`
 keeps globals off, so `vitest.setup.ts` calls `afterEach(cleanup)` explicitly. Without it,

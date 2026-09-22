@@ -13,7 +13,7 @@ import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
 const makeCanvas: MakeCanvas = (width, height) =>
   createCanvas(width, height) as unknown as PatternCanvas;
 
-const NOON: ShadowCast = { direction: { x: 0, y: -1 }, lengthPerMetre: 1 };
+const NOON: ShadowCast = { direction: { x: 0, y: -1 }, lengthPerMetre: 1, source: 'solar' };
 
 const PLOT: Point[] = [
   { x: 0, y: 0 },
@@ -46,7 +46,7 @@ describe('shadowLayerKey', () => {
   });
 
   it('changes when the sun moves', () => {
-    const evening: ShadowCast = { direction: { x: -0.7, y: -0.7 }, lengthPerMetre: 3 };
+    const evening: ShadowCast = { direction: { x: -0.7, y: -0.7 }, lengthPerMetre: 3, source: 'solar' };
 
     expect(shadowLayerKey(request({ cast: evening }))).not.toBe(shadowLayerKey(request()));
   });

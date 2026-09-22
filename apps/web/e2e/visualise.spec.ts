@@ -73,12 +73,22 @@ test('Visualise renders at DPR 2, responds to maturity and camera controls, and 
    * It once built a *visualise* scene — drawing `vis-*` sprites, `skin-*` faces and the oblique
    * lifted stack on the tab whose whole job is the flat diagram — and every unit test passed,
    * because each guard inside `buildRenderScene` was intact and the fault was this caller asking
-   * for the wrong camera. `data-plants` is the corroborating half: planting is lifted out of the
-   * beds only in Visualise, so a plan scene has none.
+   * for the wrong camera.
+   *
+   * `data-stack` is the corroborating half, and it _replaces_ `data-plants`, which used to be
+   * asserted at zero on the reasoning that planting is lifted out of the beds only in Visualise.
+   * The planting rework made the 2D Plan draw instanced sprites too — that is what stops its beds
+   * reading as cut-outs — so a plan scene has plants now and their absence proves nothing.
+   *
+   * What is still true of the plan camera and only of it: its stack is **plants and nothing else**,
+   * because `buildStack` — the lifted extrusions, the skinned faces, the roof — is not called on
+   * that path. So the two counts are equal here, and in Visualise they are not.
    */
   const planScene = page.getByTestId('editor-scene');
   await expect(planScene).toHaveAttribute('data-view', 'plan');
-  await expect(planScene).toHaveAttribute('data-plants', '0');
+  const planPlants = Number(await planScene.getAttribute('data-plants'));
+  expect(planPlants).toBeGreaterThan(0);
+  await expect(planScene).toHaveAttribute('data-stack', String(planPlants));
 
   await page.getByTestId('view-visualise').click();
   const canvas = page.getByTestId('visualise-canvas');

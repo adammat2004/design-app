@@ -92,8 +92,15 @@ describe('render primitive compilation', () => {
     const scene = buildRenderScene(qualityScene('target'), { view: 'visualise' });
     const low = scene.clusters.find((cluster) => cluster.massEligible)!;
     const high = scene.clusters.find((cluster) => !cluster.massEligible)!;
+    /*
+     * The band is 32 down to 24, and the top of it matters more than the shape. At the ordinary
+     * editing zoom of 32 px/m the plants are drawn and the masses are not — no half-and-half, which
+     * is what the old 40-to-24 band produced at exactly the zoom people work at: both
+     * representations painted at half opacity over each other.
+     */
     expect(clusterMassOpacity(low, 24)).toBe(1);
-    expect(clusterMassOpacity(low, 32)).toBe(0.5);
+    expect(clusterMassOpacity(low, 28)).toBe(0.5);
+    expect(clusterMassOpacity(low, 32)).toBe(0);
     expect(clusterMassOpacity(low, 40)).toBe(0);
     expect(clusterMassOpacity(high, 10)).toBe(0);
     expect(clusterMassOpacity(low, plantingLodScale(32, 'individual'))).toBe(0);

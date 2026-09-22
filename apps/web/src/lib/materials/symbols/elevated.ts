@@ -70,12 +70,24 @@ export const HOUSE_WALL_TONE = '#d6cfc3';
  * garden*, and the house is there to give it scale and orientation, so trading a metre of garden
  * for a taller picture of somebody's wall is the wrong way round.
  *
- * ## Why three metres
+ * ## Why four and a half metres, where it was three
  *
- * Measured off the reference rather than chosen: the wall band there is about 7% of the roof's
- * depth, which on a nine-metre house is 0.63 m — and `3 × RISE` is 0.64 m. So the cap is what the
- * picture we are aiming at actually shows, and it happens to be a storey, which is the honest way
- * to say it: **past the first storey, extra height only hides the garden.**
+ * Three was measured off the reference: the wall band there is about 7% of the roof's depth, which
+ * on a nine-metre house is 0.63 m, and `3 × RISE` is 0.64 m. That reading is sound and it was the
+ * *wrong measurement to take*, because the reference is an aerial photograph of a garden in which
+ * the house is almost out of frame — so its wall band says how much wall a camera happened to
+ * catch, not how much wall a drawing needs to show a building.
+ *
+ * What the drawing needs is enough wall to carry the thing that makes a building read as one: its
+ * **openings**. A patio door is 2.1 m tall standing on the ground, and at a three-metre cap the
+ * band is 0.64 m of screen with a door filling two thirds of it and nothing above — no eaves line,
+ * no wall, no first floor. 4.5 m gives 0.96 m of screen: the door, a course of wall over it, and a
+ * strip of the storey above, which is what the eye needs to read the object as a house rather than
+ * as a fence with a roof.
+ *
+ * The cost is real and is the reason it is capped at all: a further 0.32 m of garden disappears
+ * behind the building. Judged on `01-suburban-visualise.png`, where the house is at the top of the
+ * plot and the strip it hides is the strip a real aerial hides too.
  *
  * ## What it does not touch
  *
@@ -84,7 +96,7 @@ export const HOUSE_WALL_TONE = '#d6cfc3';
  * separate systems and this is only about the drawing; conflating them would have a tall house stop
  * shading its own garden, which is a fact about the site rather than a drawing convention.
  */
-export const MAX_DRAWN_LIFT = 3;
+export const MAX_DRAWN_LIFT = 4.5;
 
 /** A height, capped for drawing. See `MAX_DRAWN_LIFT`. */
 export function drawnLift(height: number): number {

@@ -200,8 +200,16 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
    * pixels. Before that tint existed, retuning this file could not have fixed any of it — the
    * sprite path ignored the palette entirely.
    */
+  /*
+   * The widest spread of any planting material, and it stays wide — but in **green**. The fourth
+   * entry was `#8d7a99`, a desaturated mauve, standing for the flower colour a mixed border has.
+   * It is one of five, so a fifth of every blob, every low-zoom mass and every tinted sprite in a
+   * mixed border came out purple-grey; at a distance a bed read as lavender-coloured gravel. A
+   * border *is* mostly foliage, and the flowers in it are accents drawn as flowers rather than a
+   * fifth of the leaves being the wrong colour.
+   */
   'mixed-border': {
-    palette: ['#6f9c58', '#87b06d', '#5c8a48', '#8d7a99', '#9cb474'],
+    palette: ['#6f9c58', '#87b06d', '#5c8a48', '#7f9463', '#9cb474'],
     jointColour: '#8a7963',
   },
   shrubs: {
@@ -277,6 +285,15 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
   hardwood: {
     palette: ['#b89a72', '#c2a67e', '#ac8e67', '#bda077'],
     jointColour: '#7d6446',
+  },
+  /*
+   * A dark stain, and deliberately not a black: at this scale a true black shed is a hole in the
+   * drawing, and the thing being drawn is timber that has been stained rather than painted, so the
+   * grain still has to read through it. The spread is narrow because stain evens a board out.
+   */
+  'dark-stained-timber': {
+    palette: ['#4b453d', '#534d44', '#433d36', '#4f4840'],
+    jointColour: '#33302b',
   },
 };
 

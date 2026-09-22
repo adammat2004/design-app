@@ -432,11 +432,22 @@ function bands(
    * The lawn is on the opposite side of the terrace from the utility, which is the whole point of
    * choosing the sides that way round: the two never compete for the same gap.
    */
-  const lawnV0 = utilityOnMin ? terrace.v1 + 0.4 : room.vMin + b;
-  const lawnV1 = utilityOnMin ? room.vMax - b : terrace.v0 - 0.4;
+  /*
+   * The two borders that bound the lawn take what the gap can spare, not what the style wants.
+   *
+   * Both are `bed(s, span)`: the side bed shares the gap beside the terrace with the lawn's width
+   * and the rear bed shares the room's depth with the lawn's depth, so neither can take the panel
+   * under its own floor. See `bed` for what that rule is answering.
+   */
+  const gap = utilityOnMin ? room.vMax - (terrace.v1 + 0.4) : terrace.v0 - 0.4 - room.vMin;
+  const sideBed = bed(s, gap);
+  const rearBed = bed(s, room.uMax - (uMin + 0.4));
+
+  const lawnV0 = utilityOnMin ? terrace.v1 + 0.4 : room.vMin + sideBed;
+  const lawnV1 = utilityOnMin ? room.vMax - sideBed : terrace.v0 - 0.4;
   const lawnRect =
     lawnV1 - lawnV0 >= LAWN_MIN_WIDTH
-      ? clampRect({ u0: uMin + 0.4, u1: room.uMax - b, v0: lawnV0, v1: lawnV1 }, room)
+      ? clampRect({ u0: uMin + 0.4, u1: room.uMax - rearBed, v0: lawnV0, v1: lawnV1 }, room)
       : null;
   /*
    * Both dimensions and the area, which is what makes a panel a lawn rather than a strip.
@@ -464,7 +475,7 @@ function bands(
         },
         room,
       )
-    : clampRect({ u0: uMin + 0.4, u1: room.uMax - b, v0: lawnV0, v1: lawnV1 }, room);
+    : clampRect({ u0: uMin + 0.4, u1: room.uMax - rearBed, v0: lawnV0, v1: lawnV1 }, room);
 
   return { terrace, lawn, utility, destination, utilityOnMin };
 }

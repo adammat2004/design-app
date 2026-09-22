@@ -28,6 +28,12 @@ import { FunctionalZoneTypeSchema } from './vocabulary.js';
  * has a location, for the same reason `shadowCast` returns null without one. `maintenanceFit` is
  * conditional in the same way: it applies only when the user stated how much upkeep they want, and
  * a plan drawn before anybody asked is not marked down for an answer nobody gave.
+ *
+ * `canopy` is the third conditional one and the reason it exists is worth stating: every other
+ * principle can be satisfied by a garden with no trees in it, so a plan with three specimens
+ * marooned in open lawn scored exactly as well as one with a boundary of them — and the candidate
+ * loop, which only ever prefers what it can measure, had no reason to choose the fuller garden.
+ * It applies only where there is a room big enough for trees to be a question at all.
  */
 export const PrincipleIdSchema = z.enum([
   'circulation',
@@ -41,6 +47,7 @@ export const PrincipleIdSchema = z.enum([
   'featureFit',
   'sun',
   'maintenanceFit',
+  'canopy',
 ]);
 export type PrincipleId = z.infer<typeof PrincipleIdSchema>;
 
@@ -115,6 +122,8 @@ export const DesignIssueCodeSchema = z.enum([
   'seating-in-shade',
   /* maintenanceFit */
   'upkeep-heavy',
+  /* canopy */
+  'sparse-canopy',
 ]);
 export type DesignIssueCode = z.infer<typeof DesignIssueCodeSchema>;
 

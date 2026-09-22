@@ -161,13 +161,19 @@ describe('the principle weights', () => {
   it('puts circulation and grouping first, and style and buildability last', () => {
     const ordered = [...PRINCIPLES].sort((a, b) => b.weight - a.weight).map((p) => p.id);
     expect(ordered.slice(0, 2).sort()).toEqual(['circulation', 'grouping']);
-    expect(ordered.slice(-4).sort()).toEqual(['buildability', 'maintenanceFit', 'style', 'sun']);
+    expect(ordered.slice(-5).sort()).toEqual([
+      'buildability',
+      'canopy',
+      'maintenanceFit',
+      'style',
+      'sun',
+    ]);
   });
 
-  it('sums to one over the principles that always apply, with the conditional two on top', () => {
+  it('sums to one over the principles that always apply, with the conditional ones on top', () => {
     const always = PRINCIPLES.filter((principle) => !CONDITIONAL.includes(principle.id));
     expect(always.reduce((sum, principle) => sum + principle.weight, 0)).toBeCloseTo(1, 9);
-    expect(CONDITIONAL).toEqual(['sun', 'maintenanceFit']);
+    expect(CONDITIONAL).toEqual(['sun', 'maintenanceFit', 'canopy']);
   });
 
   it('still sums to one over the principles that always apply, for every brief', () => {

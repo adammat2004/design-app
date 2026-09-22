@@ -1,3 +1,5 @@
+import { shadowCast, type Point, type ShadowCast, type SiteSection } from '@garden-studio/schema';
+
 /**
  * One light for the whole plan.
  *
@@ -46,8 +48,78 @@ export const CONTACT_SHADOW_OFFSET_RATIO = 0.12;
 export const CONTACT_SHADOW_SCALE = 1.15;
 export const CONTACT_SHADOW_ALPHA = 0.28;
 
+/**
+ * How tall a plant has to be before it gets a disc of its own.
+ *
+ * A contact shadow says "this stands up off the ground", which is a statement about one object
+ * standing on a surface. In a border it stops being that: at the measured densities the discs
+ * overlap two and a half times over, and since the layer is flattened and composited once the bed
+ * does not get shadows — it gets a **flat 28% blue-grey wash**, which is most of why planting read
+ * as grey-purple rather than green whatever the palette said.
+ *
+ * So the low mat — ground cover, the front-of-border layer — is drawn without one. That is also
+ * the truthful answer: a spreading mat *is* the ground there, and nothing about it stands off the
+ * surface to cast against. Shrubs, grasses, perennials with real height and every tree keep theirs,
+ * which is where the cue was doing work in the first place.
+ */
+export const MIN_CONTACT_SHADOW_HEIGHT = 0.55;
+
 /** The strip of shade along the fence panels the sun is behind. Same class of convention. */
 export const FENCE_SHADE_OPACITY = 0.14;
+
+/**
+ * How long a conventional shadow is, per metre of height.
+ *
+ * A drawing number, not an altitude. It corresponds to a sun about sixty degrees up, which is the
+ * angle an architectural drawing conventionally picks: long enough that a fence, a shed and a tree
+ * each say how tall they are, short enough that a six-metre house does not black out the garden it
+ * belongs to. Paired with `LIGHT_DIRECTION` so the shadow falls the way every slab bevel, blob
+ * highlight and contact disc on the plan already says the light is going.
+ */
+export const CONVENTIONAL_SHADOW_RATIO = 0.55;
+
+/**
+ * The cast to use when the plan has never said where on Earth it is.
+ *
+ * _This reverses_ "no location means no cast shadows at all" — and the reversal is narrower than it
+ * sounds, because what the old rule was protecting was never the shadow. A plan with no location
+ * has always drawn a contact disc under every sprite, a shade band along every fence and a ground
+ * shadow under the house, all of them pushed away from `LIGHT_DIRECTION`. Those are drawing
+ * conventions, and nobody reads them as a claim about the sun. The cast-shadow layer was the one
+ * convention held to a different standard, and the cost was a garden where nothing is attached to
+ * the ground — which is the single largest reason our renders read as diagrams beside a
+ * professional one.
+ *
+ * What stays gated on a real location is every statement about *this* garden at *this* hour: the
+ * time slider, the shadow-hours sheet, the night ramp, the lighting scheme. `ShadowCast.source`
+ * is how a consumer tells the two apart, and it is checked rather than assumed.
+ *
+ * `direction` is the light negated: `light` points towards the sun, a shadow falls away from it.
+ */
+export function conventionalCast(light: Point): ShadowCast {
+  return {
+    direction: { x: -light.x, y: -light.y },
+    lengthPerMetre: CONVENTIONAL_SHADOW_RATIO,
+    source: 'conventional',
+  };
+}
+
+/**
+ * The cast a picture of this plan should use: the real sun, the drawing's light, or nothing.
+ *
+ * One function because the middle case has a trap in it. `shadowCast` answers `null` for **two**
+ * different reasons — the plan has no location, or it has one and the sun is below the horizon —
+ * and only the first may fall back to a convention. A located garden at eleven at night has no
+ * shadows because there is no sun, and drawing conventional ones across the night wash would put a
+ * second light in a picture whose whole subject is that the first one has gone.
+ *
+ * So the test is `site.location`, not the null: no location is a plan that makes no solar claim and
+ * gets a drawing convention; a location is a plan that does, and gets the truth including the
+ * truth that it is dark.
+ */
+export function presentationCast(site: SiteSection, light: Point): ShadowCast | null {
+  return shadowCast(site) ?? (site.location ? null : conventionalCast(light));
+}
 
 /* ---------------------------------------------------------------- cast shadows */
 

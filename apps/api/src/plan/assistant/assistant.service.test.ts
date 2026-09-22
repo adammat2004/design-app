@@ -1,5 +1,9 @@
 import { HttpException } from '@nestjs/common';
-import { PlanDocumentSchema, type AssistantIntentEnvelope } from '@garden-studio/schema';
+import {
+  PlanDocumentSchema,
+  ProposeRequestSchema,
+  type AssistantIntentEnvelope,
+} from '@garden-studio/schema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantService } from './assistant.service.js';
 import type { IntentService } from './intent.service.js';
@@ -116,10 +120,30 @@ describe('AssistantService', () => {
     const history = [{ role: 'user' as const, text: 'make the patio bigger' }];
     await assistant.propose('p1', 'a bit more', document, history);
 
-    expect(interpret).toHaveBeenCalledWith('a bit more', document, history);
+    expect(interpret).toHaveBeenCalledWith('a bit more', document, history, []);
   });
 
-  /** An older client that sends no history still works: the field is additive, with a default. */
+  /**
+   * What they are pointing at reaches the model, or "make this bigger" has no subject.
+   *
+   * The selection is deixis rather than a description of the garden, which is why it is on the
+   * request at all when the elements themselves deliberately are not.
+   */
+  it('passes the selection through to the interpreter', async () => {
+    const interpret = vi.fn(async () => envelope());
+    const assistant = new AssistantService(
+      { available: true, interpret } as unknown as IntentService,
+      { plan: vi.fn(async () => ({ changes: [], unplaceable: [] })) } as unknown as PlannerService,
+      new AssistantRateLimit(),
+    );
+
+    const document = plan();
+    await assistant.propose('p1', 'make this bigger', document, [], ['e-1']);
+
+    expect(interpret).toHaveBeenCalledWith('make this bigger', document, [], ['e-1']);
+  });
+
+  /** An older client that sends neither still works: both fields are additive, with defaults. */
   it('treats a request with no history as a first turn', async () => {
     const interpret = vi.fn(async () => envelope());
     const assistant = new AssistantService(
@@ -130,7 +154,14 @@ describe('AssistantService', () => {
 
     await assistant.propose('p1', 'make the patio bigger', plan());
 
-    expect(interpret).toHaveBeenCalledWith('make the patio bigger', expect.anything(), []);
+    expect(interpret).toHaveBeenCalledWith('make the patio bigger', expect.anything(), [], []);
+  });
+
+  /** The body an older client sends still parses, with both additive fields defaulted empty. */
+  it('parses a body that carries neither history nor selection', () => {
+    const parsed = ProposeRequestSchema.parse({ message: 'make the patio bigger' });
+
+    expect(parsed).toEqual({ message: 'make the patio bigger', history: [], selection: [] });
   });
 });
 

@@ -480,6 +480,8 @@ export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
   /* ---- structure ---- */
   softwood: { patternType: 'board', moduleSize: { w: 2400, h: 120 }, jointWidth: 5 },
   'painted-timber': { patternType: 'board', moduleSize: { w: 2400, h: 140 }, jointWidth: 4 },
+  /* Feather-edge boarding, which is narrower than a sawn board and what a shed is clad in. */
+  'dark-stained-timber': { patternType: 'board', moduleSize: { w: 2400, h: 125 }, jointWidth: 5 },
   hardwood: { patternType: 'board', moduleSize: { w: 3000, h: 130 }, jointWidth: 5 },
 };
 

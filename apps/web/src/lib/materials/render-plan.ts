@@ -3,6 +3,7 @@ import {
   elementAnchor,
   elementOutline,
   geometryOutline,
+  insetPolygon,
   moduleRandom,
   OPENING_HEIGHTS,
   pick,
@@ -30,6 +31,7 @@ import type {
   RenderNode,
   RenderObjectNode,
   RenderOpening,
+  RenderPlant,
   RenderPlantNode,
   RenderScene,
   RenderSurface,
@@ -60,6 +62,7 @@ import { CATEGORY_COLOURS } from '../concept-colours';
 import { materialFill } from '../material-colours';
 import {
   BOUNDARY_SKINS,
+  ROOF_SKINS,
   canopiesForSymbol,
   CONTACT_SHADOW_SPRITE,
   elevatedFamilyFor,
@@ -69,6 +72,8 @@ import {
   SYMBOL_SPRITES,
 } from './assets/material-assets';
 import type { AssetImage, LoadedAsset } from './assets/registry';
+import { isRecolourable } from './assets/taxonomy';
+import { SPRITE_TINT, tintSprite } from './sprite-tint';
 import {
   CONTACT_SHADOW_ALPHA,
   CONTACT_SHADOW_OFFSET_RATIO,
@@ -76,6 +81,8 @@ import {
   FENCE_SHADE_OPACITY,
   LIGHT_DIRECTION,
   LIGHT_POOL_ALPHA,
+  CONVENTIONAL_SHADOW_RATIO,
+  MIN_CONTACT_SHADOW_HEIGHT,
   NIGHT_MAX_ALPHA,
   NIGHT_TONE,
   SHADOW_OPACITY,
@@ -105,7 +112,15 @@ import {
   type SwingGeometry,
 } from './symbols/property';
 import { MIN_DRAWN_SYMBOL_PX, MIN_DRAWN_UNIT_PX } from './lod';
+
+/**
+ * A drift is a couple of metres across, so this is generous — it exists to refuse the pathological
+ * case rather than to bound the ordinary one, and a cluster too big to raster draws nothing at all
+ * rather than a differently-shaded lump beside its neighbours.
+ */
+const MAX_MASS_RASTER_PX = 2048;
 import { PRESENTATION_SHADOW_SOFTNESS, renderShadowLayer } from './render-shadow-layer';
+import { renderSeamLayer, SEAM_SHADE_OPACITY } from './render-seam-layer';
 import {
   drawBlob,
   drawSprite,
@@ -273,6 +288,13 @@ export function drawScene(
   }
 
   /*
+   * The shade where the ground's own pieces meet, above the courses and below the shadows. Same
+   * place the v2 pass order puts it, or the 2D Plan on screen and the exported PNG would disagree
+   * about whether a bed sits in the lawn or on it.
+   */
+  drawSeams(context, rendered, pass, toPx);
+
+  /*
    * The retaining faces, above the edging and still below everything that stands up.
    *
    * A flat fill rather than a pattern, deliberately: at 450 mm a wall top is a couple of pixels
@@ -311,18 +333,25 @@ export function drawScene(
   drawOverlay(context, rendered, site, pass, rasterOrigin);
 
   /*
-   * The scene grade, last, and only in Visualise.
+   * The scene grade, last, and in **both** views — _this reverses_ "only in Visualise".
+   *
+   * The old split was never a claim that the plan wanted a different picture; it was that the plan
+   * already had a finishing pass of its own, `export-plan.ts`'s `finish()`, which lifted contrast
+   * and saturation. That pass predates the measurement: it was a look somebody chose, and it pulls
+   * two of this grade's terms in the opposite direction. One measured grade over every drawing is
+   * what the sheets, the thumbnails and the download can actually be compared by, and `finish()`
+   * is gone.
    *
    * Over the plot's own box rather than the whole canvas: a sheet is drawn with a paper margin and a
    * thumbnail is not, so grading everything would darken the paper on one and nothing on the other,
    * and the two would stop being the same picture at different sizes.
    *
-   * On screen this same grade arrives as a CSS `filter` on the Visualise wrapper instead, because
-   * there the WebGL ground and this 2D overlay are separate DOM canvases and no single context
-   * holds both. `grade.ts` carries the one set of constants and `grade.test.ts` pins the two
-   * applications to each other.
+   * On screen this same grade arrives as a CSS `filter` on the wrapper instead — Visualise's, and
+   * now the editor's `EditorScene` too — because in both the WebGL ground and this 2D overlay are
+   * separate DOM canvases and no single context holds both. `grade.ts` carries the one set of
+   * constants and `grade.test.ts` pins the two applications to each other.
    */
-  if (rendered.view === 'visualise' && pass.grade !== false) {
+  if (pass.grade !== false) {
     const box = boundingBox(boundary);
     const topLeft = toPx({ x: box.minX, y: box.minY });
     const bottomRight = toPx({ x: box.minX + box.width, y: box.minY + box.length });
@@ -354,7 +383,9 @@ export function drawPrimitivePass(context: PlanContext, scene: RenderScene, name
   const toPx = (point: Point): Point => ({ x: (point.x - origin.x) * pass.pxPerMetre, y: (point.y - origin.y) * pass.pxPerMetre });
   context.save();
   if (name !== 'access') { tracePath(context, scene.boundary, toPx); context.clip(); }
-  if (name === 'cast-shadows') {
+  if (name === 'seams') {
+    drawSeams(context, scene, pass, toPx);
+  } else if (name === 'cast-shadows') {
     drawShadows(context, scene, pass, toPx);
   } else if (name === 'contacts') {
     drawContactPass(context, scene, pass, toPx);
@@ -448,18 +479,48 @@ export function drawPrimitive(context: PlanContext, primitive: RenderPrimitive, 
       context.restore();
       return;
     }
+    /*
+     * One drift, not a heap of blobs.
+     *
+     * Every plant in the cluster used to be drawn straight onto the scene at the mass opacity, so
+     * wherever two of them overlapped — which, in a drift, is everywhere — the tone was laid down
+     * twice and came out darker. The cluster read as a lumpy pile rather than as one body of
+     * planting, which is the whole reason for massing it in the first place.
+     *
+     * Same trick the shadow layer uses, and for the same reason: fill the pieces **opaque** into a
+     * scratch canvas, then composite that once. Overlap merges for free, with no polygon union.
+     */
     case 'plant-mass': {
       const opacity = pass.massOpacity ?? clusterMassOpacity(primitive.cluster, pass.lodPxPerMetre ?? pass.pxPerMetre);
       if (opacity <= 0) return;
-      context.save(); context.globalAlpha = opacity;
+      const { bounds } = primitive.cluster;
+      const margin = 1;
+      const width = Math.max(1, Math.ceil((bounds.width + margin * 2) * pass.pxPerMetre));
+      const height = Math.max(1, Math.ceil((bounds.length + margin * 2) * pass.pxPerMetre));
+      if (width > MAX_MASS_RASTER_PX || height > MAX_MASS_RASTER_PX) return;
+
+      const scratch = pass.makeCanvas(width, height);
+      const drift = scratch.getContext('2d');
+      if (!drift) return;
+      const local = (point: Point) => ({
+        x: (point.x - bounds.minX + margin) * pass.pxPerMetre,
+        y: (point.y - bounds.minY + margin) * pass.pxPerMetre,
+      });
+
       for (const plant of primitive.cluster.plants) {
-        const at = toPx(plant.at);
-        drawBlob(context, { light: scene.light, form: 'clipped-mass', x: at.x, y: at.y,
+        const at = local(plant.at);
+        drawBlob(drift, { light: scene.light, form: 'clipped-mass', x: at.x, y: at.y,
           radius: plant.spread * 0.52 * pass.pxPerMetre, lobes: 7,
           tone: cssToRgb(pick(plant.blob.palette, plant.tone)),
           random: moduleRandom(`${primitive.id}:mass`, Math.round(plant.at.x * 100), Math.round(plant.at.y * 100)) });
       }
-      context.restore(); return;
+
+      const at = toPx({ x: bounds.minX - margin, y: bounds.minY - margin });
+      context.save();
+      context.globalAlpha = opacity;
+      context.drawImage(scratch, at.x, at.y, width, height);
+      context.restore();
+      return;
     }
     case 'ambient':
       context.save(); context.globalAlpha = primitive.night * NIGHT_MAX_ALPHA;
@@ -556,7 +617,7 @@ export function drawOverlay(
     context.restore();
 
     /* The house sits above the planting so a bed can run right up to the wall. */
-    if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx);
+    if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx, false);
 
     drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
   }
@@ -1190,7 +1251,7 @@ function drawHouseNode(
   context.save();
   context.translate(0, -liftPx(node.walls.height, pass.pxPerMetre));
 
-  drawHouse(context, node.house, pass, pass.pxPerMetre, toPx);
+  drawHouse(context, node.house, pass, pass.pxPerMetre, toPx, true);
 
   /*
    * The shade the eaves throw on the wall beneath them: the second half of what makes a roof read
@@ -1925,9 +1986,15 @@ function drawCanopySprite(
  * pulls the eye straight to the house, and the house is context — the subject is the garden. Just
  * enough separation to say "this is a pitched roof, and the light comes from over there".
  */
-function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) => Point): void {
+function drawRoof(
+  context: PlanContext,
+  roof: RenderRoof,
+  pass: PlanPass,
+  toPx: (point: Point) => Point,
+): void {
   const tones = ROOF_TONES[roof.material];
   const base = cssToRgb(tones.base);
+  const skin = loadSkin(ROOF_SKINS[roof.material], pass);
 
   for (const plane of roof.planes) {
     if (plane.outline.length < 3) continue;
@@ -1943,6 +2010,19 @@ function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) =
     );
     const scale = Math.hypot(b.x - a.x, b.y - a.y) / Math.max(edgeMetres, 0.001);
     if (scale < 12 || roof.form === 'flat') continue;
+
+    /*
+     * The photographed covering, where one has loaded: `skin-roof-slate` was generated with the
+     * elevated library and read by nothing until now, which is the same dead-tick fault these notes
+     * keep catching. Tiled in the plane's **own** frame rather than in screen space, for the reason
+     * `paintSkinnedFace` gives: a slate is 300 mm on every roof of every house at every rotation,
+     * and tiling in screen space runs the courses across the drawing instead of along the eaves.
+     *
+     * The procedural courses below stay as the answer when nothing has loaded, which is every
+     * environment with no asset library — including the golden tests, which is why they are
+     * unchanged by this.
+     */
+    if (skin && paintSkinnedPlane(context, plane, skin, base, toPx)) continue;
     const angle = Math.atan2(b.y - a.y, b.x - a.x);
     const local = plane.outline.map((point) => {
       const p = toPx(point);
@@ -1985,8 +2065,18 @@ function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) =
     context.restore();
   }
 
-  context.strokeStyle = tones.ridge;
-  context.lineWidth = 2.8;
+  drawRooflights(context, roof, base, toPx);
+  drawFascia(context, roof, base, toPx);
+
+  /*
+   * The ridge and the hips as **capping**, not as a line.
+   *
+   * A ridge is a course of half-round tiles sitting proud of both slopes, so it is a narrow band
+   * with its own light on top and its own shadow beneath — which is what tells the eye that two
+   * planes meet at an apex rather than that somebody drew a line on a flat surface. Drawn as a
+   * thick stroke with a highlight inside it, because a ridge at plan scale is two or three pixels
+   * across and a filled band that narrow is worse than a stroke, not better.
+   */
   context.lineCap = 'round';
   for (const [from, to] of roof.ridge) {
     const a = toPx(from);
@@ -1994,13 +2084,153 @@ function drawRoof(context: PlanContext, roof: RenderRoof, toPx: (point: Point) =
     context.beginPath();
     context.moveTo(a.x, a.y);
     context.lineTo(b.x, b.y);
+
+    /* The shadow the capping throws on the slopes either side of it, first and widest. */
+    context.strokeStyle = 'rgba(18,24,28,0.30)';
+    context.lineWidth = 4.4;
     context.stroke();
-    context.strokeStyle = 'rgba(210,220,224,0.32)';
-    context.lineWidth = 0.8;
-    context.stroke();
+
     context.strokeStyle = tones.ridge;
     context.lineWidth = 2.8;
+    context.stroke();
+
+    /* And the light along the top of the capping itself. */
+    context.strokeStyle = 'rgba(214,224,228,0.38)';
+    context.lineWidth = 0.9;
+    context.stroke();
   }
+}
+
+/**
+ * The covering, tiled in the plane's own frame. Returns false when the tile is too small to read.
+ *
+ * A roof plane is a genuine plan-space polygon — unlike a wall face, which the lift shears — so the
+ * frame here is an honest translate, rotate and scale rather than a matrix. One unit inside it is
+ * one metre along the eaves and one metre up the slope.
+ */
+function paintSkinnedPlane(
+  context: PlanContext,
+  plane: RenderRoof['planes'][number],
+  skin: FaceSkin,
+  base: { r: number; g: number; b: number },
+  toPx: (point: Point) => Point,
+): boolean {
+  const { metres } = skin;
+  if (metres.w <= 0 || metres.h <= 0) return false;
+
+  const [start, end] = plane.outline as [Point, Point];
+  const run = Math.hypot(end.x - start.x, end.y - start.y);
+  if (run <= 0) return false;
+
+  const from = toPx(start);
+  const to = toPx(end);
+  const scale = Math.hypot(to.x - from.x, to.y - from.y) / run;
+  if (metres.h * scale < MIN_SKINNED_FACE_PX) return false;
+
+  const extent = plane.outline.reduce(
+    (most, point) => Math.max(most, Math.hypot(point.x - start.x, point.y - start.y)),
+    0,
+  );
+
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const cos = Math.cos(angle) * scale;
+  const sin = Math.sin(angle) * scale;
+
+  context.save();
+  tracePath(context, plane.outline, toPx);
+  context.clip();
+  /* One unit along the eaves, one unit up the slope — rotation and scale in one matrix, because
+   * `PatternContext` carries `transform` and deliberately not `scale`. */
+  context.transform(cos, sin, -sin, cos, from.x, from.y);
+
+  const columns = Math.ceil(extent / metres.w) + 1;
+  const rows = Math.ceil(extent / metres.h) + 1;
+  for (let column = -1; column < columns; column += 1) {
+    for (let row = -rows; row < rows; row += 1) {
+      // The cast is the type being narrower than the runtime, as everywhere else in this file.
+      context.drawImage(
+        skin.image as PatternCanvas,
+        column * metres.w,
+        row * metres.h,
+        metres.w,
+        metres.h,
+      );
+    }
+  }
+
+  context.restore();
+
+  /* The light, over the photograph: the skin is flat because only the renderer knows the slope. */
+  context.save();
+  tracePath(context, plane.outline, toPx);
+  context.globalAlpha = FACE_SKIN_TINT;
+  context.fillStyle = rgbToCss(shiftBrightness(base, plane.lit * ROOF_PLANE_SHADING));
+  context.fill();
+  context.restore();
+  return true;
+}
+
+/**
+ * The rooflights, as glass rather than as holes.
+ *
+ * A dark rectangle with a lit frame round it: glass seen from above is the sky, which is brighter
+ * than any slate, so the pane is drawn *light* and the frame dark. Getting that the wrong way round
+ * — which the first version did — draws something that reads as a hole in the roof.
+ */
+function drawRooflights(
+  context: PlanContext,
+  roof: RenderRoof,
+  base: { r: number; g: number; b: number },
+  toPx: (point: Point) => Point,
+): void {
+  for (const light of roof.rooflights) {
+    /* The frame first, and the pane inside it — so the glass never touches the slate directly. */
+    tracePath(context, light, toPx);
+    context.fillStyle = rgbToCss(shiftBrightness(base, -0.3));
+    context.fill();
+
+    context.save();
+    tracePath(context, light, toPx);
+    context.clip();
+    context.globalAlpha = 0.85;
+    context.fillStyle = ROOFLIGHT_GLASS;
+    tracePath(context, insetPolygon(light, ROOFLIGHT_FRAME) ?? light, toPx);
+    context.fill();
+    context.restore();
+  }
+}
+
+/**
+ * What glass looks like from above: the sky, which is paler and cooler than any roof covering.
+ *
+ * Drawn *light*, which is the version that reads. The first attempt filled the pane darker than the
+ * slate round it on the reasoning that a window is a dark opening — true of a wall, false of a roof,
+ * and what it actually drew was two holes punched through the building.
+ */
+const ROOFLIGHT_GLASS = '#aebfc9';
+
+/** The frame round a rooflight, in metres. A real one is about this. */
+const ROOFLIGHT_FRAME = 0.09;
+
+/**
+ * The fascia: the board closing the ends of the rafters, drawn as a line round the eaves.
+ *
+ * It is the edge of the roof, and a roof with no edge reads as a pattern painted on the ground. A
+ * hair darker than the covering rather than black, because at 1:100 a hard outline round the house
+ * makes the building the loudest object in a drawing whose subject is the garden.
+ */
+function drawFascia(
+  context: PlanContext,
+  roof: RenderRoof,
+  base: { r: number; g: number; b: number },
+  toPx: (point: Point) => Point,
+): void {
+  if (roof.eaves.length < 3) return;
+  tracePath(context, roof.eaves, toPx);
+  context.lineWidth = 1.6;
+  context.lineJoin = 'round';
+  context.strokeStyle = rgbToCss(shiftBrightness(base, -0.3));
+  context.stroke();
 }
 
 /** How far a fully lit roof plane moves from a fully shaded one. See `drawRoof`. */
@@ -2024,6 +2254,28 @@ const ROOF_PLANE_SHADING = 0.14;
  *
  * Empty in `'baked'` mode, so the 2D Plan drawing is untouched by any of this.
  */
+/**
+ * A plant sprite carried towards its bed's palette, or the photograph untouched.
+ *
+ * The tint was applied inside `resolveAssets`, on the *raster* path only — so from the moment
+ * planting became sprites the palette stopped reaching it, and the tonal ladder `tones.ts` was
+ * tuned to produce (a hedge darker and tighter than shrubs, shrubs darker than a mixed border)
+ * existed nowhere in the picture. Every bed was whatever green the photographs happened to be.
+ *
+ * Gated on `recolourable`, which is exactly the flag's meaning: the plan families were written
+ * neutral and flatly lit *so that* a multiply could carry them, and the elevated ones carry their
+ * own light and must never be tinted. Shared with Pixi through `tintSprite`'s cache, so the two
+ * backends tint the same pixels rather than agreeing by arithmetic.
+ */
+export function plantTint(
+  sprite: LoadedAsset,
+  plant: RenderPlant,
+  makeCanvas: MakeCanvas | undefined,
+): LoadedAsset {
+  if (!isRecolourable(sprite.entry.id) || plant.blob.palette.length === 0) return sprite;
+  return tintSprite(sprite, pick(plant.blob.palette, plant.tone), SPRITE_TINT, makeCanvas);
+}
+
 function drawPlants(
   context: PlanContext,
   rendered: RenderScene,
@@ -2048,7 +2300,25 @@ function drawPlants(
     const sprite = variants.find((asset) => asset.entry.variant === plant.variant) ?? variants[0];
 
     if (sprite) {
-      drawSprite(context, sprite, shadow, at.x, at.y, radius, plant.rotation, light);
+      /*
+       * The same height rule the primitive path applies, and it has to be stated in both or the
+       * exported PNG carries the flat grey wash the screen has just stopped drawing. A mat has
+       * nothing standing off the ground to cast; see `MIN_CONTACT_SHADOW_HEIGHT`.
+       */
+      const grounded = plant.height >= MIN_CONTACT_SHADOW_HEIGHT ? shadow : null;
+      drawSprite(context, plantTint(sprite, plant, pass.makeCanvas), grounded, at.x, at.y, radius,
+        plant.rotation, light);
+
+      /*
+       * The flower on top, concentric and unturned. Unturned because a bloom seen from above has no
+       * orientation worth claiming, and turning it with the plant would make the same flower head
+       * point four ways across a drift and read as four species.
+       */
+      if (plant.flower) {
+        const bloom = pass.assets?.(plant.flower.assetId) ?? [];
+        const head = bloom[Math.floor(plant.tone * bloom.length)] ?? bloom[0];
+        if (head) drawSprite(context, head, null, at.x, at.y, radius * plant.flower.scale, 0, light);
+      }
       continue;
     }
 
@@ -2084,6 +2354,39 @@ function drawPlants(
  * that right. The sub-canvas covers the plot, not the shadows, so the frame the sheets draw at
  * 09:00 and the one at 19:00 have their pixels in the same places.
  */
+/**
+ * The shade where surfaces meet, at the same seam the canvases splice it in.
+ *
+ * Above the ground and its courses, below the cast shadows and everything that stands up: it is a
+ * property of the ground itself, so a tree's shadow falls across it and a shrub stands on it.
+ * Exported through `seamOutlines` rather than read off the elements here, so the composer and Pixi
+ * darken the same edges.
+ */
+export function seamOutlines(scene: RenderScene): Point[][] {
+  return scene.passes.seams.flatMap((primitive) =>
+    primitive.kind === 'seam' ? [primitive.outline] : [],
+  );
+}
+
+function drawSeams(
+  context: PlanContext,
+  rendered: RenderScene,
+  pass: PlanPass,
+  toPx: (point: Point) => Point,
+): void {
+  const raster = renderSeamLayer(seamOutlines(rendered), rendered.boundary, {
+    pxPerMetre: pass.pxPerMetre,
+    makeCanvas: pass.makeCanvas,
+  });
+  if (!raster) return;
+
+  const at = toPx(raster.originMetres);
+  const scale = pass.pxPerMetre / raster.pxPerMetre;
+  context.globalAlpha = SEAM_SHADE_OPACITY;
+  context.drawImage(raster.canvas, at.x, at.y, raster.widthPx * scale, raster.heightPx * scale);
+  context.globalAlpha = 1;
+}
+
 function drawShadows(
   context: PlanContext,
   rendered: RenderScene,
@@ -2097,7 +2400,13 @@ function drawShadows(
   const raster = renderShadowLayer(occluders, cast, rendered.boundary, {
     pxPerMetre: pass.pxPerMetre,
     makeCanvas: pass.makeCanvas,
-    softnessMetres: rendered.view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0,
+    /*
+     * Soft in both views. _This reverses_ "soft is Visualise's presentation choice; a diagram draws
+     * the hard edge" — the plan is a drawing of a garden rather than a section through one, and the
+     * hard edge was the most conspicuous thing separating it from a professional plan. The number
+     * is a switch: the blur actually applied comes from each occluder's character and height.
+     */
+    softnessMetres: PRESENTATION_SHADOW_SOFTNESS,
   });
   if (!raster) return;
   const at = toPx(raster.originMetres);
@@ -2119,6 +2428,7 @@ function drawHouse(
   pass: PlanPass,
   pxPerMetre: number,
   toPx: (point: Point) => Point,
+  elevated: boolean,
 ): void {
   const { outline, interior } = rendered;
 
@@ -2143,18 +2453,27 @@ function drawHouse(
    * here can make a legal house look as though it leaves the plot.
    */
   if (rendered.roof) {
-    drawRoof(context, rendered.roof, toPx);
+    drawRoof(context, rendered.roof, pass, toPx);
     tracePath(context, outline, toPx);
     context.lineWidth = 1.5;
     context.lineJoin = 'round';
     context.strokeStyle = COLOUR.houseStroke;
     context.stroke();
     /*
-     * No openings over a roof, deliberately. From directly above a roof you cannot see the doors
-     * beneath it, and drawing them on the slopes would be the one place this renderer told a lie
-     * about what you are looking at. Visualise is the only view with a roof; every other one gets
-     * the flat diagram below, where the openings are exactly the point.
+     * **No openings over a roof, and a threshold mark on the ground instead.**
+     *
+     * The first half is unchanged and still right: from directly above a roof you cannot see the
+     * doors beneath it, and drawing them on the slopes would be the one place this renderer told a
+     * lie about what you are looking at. In Visualise the walls carry them (`drawWallOpenings`),
+     * where you genuinely can see them.
+     *
+     * But the plan has a roof now too, and the door is the single most layout-determining object in
+     * a garden drawing — it is what the terrace is laid across and what every path starts from. A
+     * plan that hides it under the roof loses the one thing the composition is organised around. So
+     * the ground outside the building gets a threshold mark, which is what a landscape drawing does
+     * and what the reference does: you are not shown the door, you are shown where you come out.
      */
+    if (!elevated) drawThresholds(context, rendered, pxPerMetre, toPx);
     return;
   }
 
@@ -2184,6 +2503,71 @@ function drawHouse(
 
   drawOpenings(context, rendered.openings, pxPerMetre, toPx);
 }
+
+/**
+ * Where you come out of the house, drawn on the ground rather than on the building.
+ *
+ * A short bar across the doorway with the swing beside it, laid on the garden just outside the
+ * wall — the convention a landscape drawing uses when the roof is shown, and what the reference
+ * plan does. It carries the two facts the garden needs: which opening you can actually walk
+ * through, and how wide it is.
+ *
+ * **Ground-floor doors only.** A window is not a way out and an upstairs opening is not one either,
+ * so neither gets a mark: a bar under every window would draw a dozen thresholds on a house with
+ * one door and say nothing about where the terrace goes.
+ *
+ * Nothing here measures anything. `openingSegment` and `openingNormal` are the same resolvers the
+ * generator reads, so the mark cannot disagree with the door the design was composed around.
+ */
+function drawThresholds(
+  context: PlanContext,
+  rendered: RenderHouse,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  for (const { opening, segment, normal } of rendered.openings) {
+    if (opening.floorLevel > 0) continue;
+    if (opening.type === 'window' || opening.type === 'upper-window') continue;
+
+    const [start, end] = segment;
+    /* Clear of the eaves, so the mark is on the garden rather than under the roof. */
+    const out = (point: Point): Point => ({
+      x: point.x + normal.x * THRESHOLD_STANDOFF,
+      y: point.y + normal.y * THRESHOLD_STANDOFF,
+    });
+
+    const from = toPx(out(start));
+    const to = toPx(out(end));
+
+    context.save();
+    context.lineCap = 'butt';
+
+    /* A pale bar first, so the mark reads on dark paving as well as on grass. */
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.lineWidth = Math.max(4, 0.16 * pxPerMetre);
+    context.strokeStyle = 'rgba(248,250,246,0.85)';
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.lineWidth = Math.max(2, 0.07 * pxPerMetre);
+    context.strokeStyle = COLOUR.houseStroke;
+    context.stroke();
+
+    if (opening.swing !== 'none') {
+      const swing = swingGeometry(out(start), out(end), normal, opening.swing === 'inward');
+      if (swing) drawSwing(context, swing, COLOUR.houseStroke, toPx);
+    }
+
+    context.restore();
+  }
+}
+
+/** How far outside the wall a threshold mark is laid, in metres. Clear of any eaves. */
+const THRESHOLD_STANDOFF = 0.12;
 
 /**
  * The doors and windows, cut into the wall band.
@@ -2349,6 +2733,8 @@ function drawFence(
       context.fillStyle = palette.body;
       context.fill();
 
+      drawBoundaryRelief(context, run, inward, light, pxPerMetre, toPx);
+
       // A wall's coping: the light line along the top that says masonry rather than timber.
       if (palette.cap) {
         const inner = (point: Point) => ({
@@ -2396,6 +2782,80 @@ function drawFence(
     }
   }
 }
+
+/**
+ * What tells you a boundary stands up, in a view that has no height: a lit edge and a cast band.
+ *
+ * The plan draws a boundary as the band it occupies on the ground, and a band is flat — so a 1.8 m
+ * fence and a 1.1 m railing were the same drawing at different widths, and neither of them read as
+ * anything but a line on the paper. Visualise has extrusions and faces to say it; the plan has only
+ * conventions, and this is the one every drawn plan uses.
+ *
+ * **The spacing states the height.** The lit line runs along the edge the light comes from; the
+ * shade falls on the ground on the far side of it, and how far it reaches is `height ×
+ * CONVENTIONAL_SHADOW_RATIO` — the same ratio `conventionalCast` gives every other standing thing,
+ * so a fence's mark and a shed's shadow agree about where the drawing's sun is. A railing's band is
+ * a third of a fence's, and a 0.9 m wall's is half, which is the fact the drawing could not say.
+ *
+ * A **convention**, not a solar claim, in the `houseGroundShadow` and contact-disc class: it is
+ * drawn whether or not the plan knows where on Earth it is, and it is withdrawn with the rest of
+ * the shading when shadows are turned off.
+ */
+function drawBoundaryRelief(
+  context: PlanContext,
+  run: BoundaryRun,
+  inward: Point,
+  light: Point,
+  pxPerMetre: number,
+  toPx: (point: Point) => Point,
+): void {
+  if (run.height <= 0) return;
+
+  /* Which side of the band the light falls on: +1 when it comes from outside the plot. */
+  const facing = inward.x * light.x + inward.y * light.y;
+  const lit = facing < 0 ? 0 : run.thickness;
+  const shaded = facing < 0 ? run.thickness : 0;
+
+  const at = (point: Point, offset: number): Point => ({
+    x: point.x + inward.x * offset,
+    y: point.y + inward.y * offset,
+  });
+
+  /* The shade the run throws on the ground beside it, away from the light. */
+  const reach = run.height * CONVENTIONAL_SHADOW_RATIO;
+  const sign = facing < 0 ? 1 : -1;
+  const band = [
+    at(run.start, shaded),
+    at(run.end, shaded),
+    at(run.end, shaded + reach * sign),
+    at(run.start, shaded + reach * sign),
+  ];
+
+  context.save();
+  context.globalAlpha = BOUNDARY_RELIEF_SHADE;
+  context.fillStyle = SHADOW_TONE;
+  tracePath(context, band, toPx);
+  context.fill();
+  context.restore();
+
+  /* And the light along the top edge the sun reaches, which is what gives the band a thickness. */
+  const from = toPx(at(run.start, lit));
+  const to = toPx(at(run.end, lit));
+  context.save();
+  context.globalAlpha = BOUNDARY_RELIEF_LIGHT;
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.lineWidth = Math.max(0.8, Math.min(2.4, run.thickness * pxPerMetre * 0.35));
+  context.lineCap = 'butt';
+  context.strokeStyle = '#f4f7f2';
+  context.stroke();
+  context.restore();
+}
+
+/** How dark the band a boundary throws is, and how bright its lit edge. Conventions, both. */
+const BOUNDARY_RELIEF_SHADE = 0.16;
+const BOUNDARY_RELIEF_LIGHT = 0.5;
 
 /** A circle as a path, for the hedge crowns. The context has no `arc`, so it is traced. */
 function traceCircle(context: PlanContext, centre: Point, radius: number): void {

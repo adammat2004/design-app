@@ -218,20 +218,22 @@ export function generateConcepts(
 /**
  * Asks the designer what to do about a sentence.
  *
- * Sends the sentence and the last few turns, and nothing about the garden — the server reads the
- * plan it already has, which is what stops the designer reasoning about a garden that is not the
- * saved one. The history is the exception and it is not about the garden: without it "a bit more"
- * refers to nothing.
+ * Sends the sentence, the last few turns and what is selected — and nothing about the garden. The
+ * server reads the plan it already has, which is what stops the designer reasoning about a garden
+ * that is not the saved one. The two exceptions are not descriptions of the garden: without the
+ * history "a bit more" refers to nothing, and without the selection "make this bigger" has no
+ * subject at all.
  */
 export function proposeChanges(
   id: string,
   message: string,
   history: AssistantTurn[] = [],
+  selection: string[] = [],
   signal?: AbortSignal,
 ): Promise<AssistantProposal> {
   return request(`/plan-projects/${id}/assistant/messages`, AssistantProposalSchema, {
     method: 'POST',
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, selection }),
     signal,
   });
 }

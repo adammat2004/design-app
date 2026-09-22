@@ -75,6 +75,8 @@ export class AssistantService {
     message: string,
     document: PlanDocument,
     history: AssistantTurn[] = [],
+    /** Ids selected on the canvas as the sentence was typed. Deixis, not geometry. */
+    selection: string[] = [],
   ): Promise<AssistantProposal> {
     /*
      * Availability before the rate limit, not after. A server with no key answers 503 for ever, so
@@ -89,7 +91,7 @@ export class AssistantService {
 
     this.limit.check(projectId);
 
-    const envelope = await this.intent.interpret(message, document, history);
+    const envelope = await this.intent.interpret(message, document, history, selection);
     const { changes, unplaceable } = await this.planner.plan(document, envelope.intents);
 
     return {

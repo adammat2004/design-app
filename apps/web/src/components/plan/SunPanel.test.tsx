@@ -8,7 +8,10 @@ import { SunPanel } from './SunPanel';
  *
  * The behaviour worth protecting here is not the markup — it is that **location gates every solar
  * claim in the app**. A plan that has never been located must draw with the conventional light and
- * say so, and it must stay that way no matter what else the user sets.
+ * say so, and it must stay that way no matter what else the user sets. Note what the gate is *not*
+ * about since the conventional light landed: an unlocated plan still casts shadows, because a
+ * shadow drawn from the drawing's own light is a statement about height rather than about the sun.
+ * What it must never show is the time of day.
  */
 
 const store = () => useBoundaryStore.getState();
@@ -81,7 +84,7 @@ describe('location, which is the gate', () => {
     expect(store().present.location).toBeNull();
   });
 
-  it('can be cleared, which switches the shadows back off', () => {
+  it('can be cleared, which puts the drawing back on its conventional light', () => {
     // Set before rendering: a Zustand write outside `act` does not flush a re-render, so a store
     // change made after `render` would not be on screen for the click to find.
     store().setLocation({ latitude: 53.4, longitude: -2.98 });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  housePolygon,
+  polygonArea,
   rectangleHouse,
   SiteSectionSchema,
   type DesignElement,
@@ -317,9 +319,18 @@ describe('buildRenderScene', () => {
   });
 
   describe('the light', () => {
-    it('is the drawing light when the plan makes no solar claim', () => {
-      expect(buildRenderScene(scene([lawn()])).light).toEqual(LIGHT_DIRECTION);
-      expect(buildRenderScene(scene([lawn()])).shadows.cast).toBeNull();
+    /**
+     * The three states a picture's light can be in, and the distinction between the last two is
+     * the whole of how "no location, no solar claim" survives the plan drawing shadows again.
+     */
+    it('is the drawing light, casting the drawing’s own shadows, when the plan makes no solar claim', () => {
+      const built = buildRenderScene(scene([lawn()]));
+
+      expect(built.light).toEqual(LIGHT_DIRECTION);
+      // A shadow, so the garden is attached to the ground — but one that says so about itself.
+      expect(built.shadows.cast?.source).toBe('conventional');
+      // Falling away from the drawing light, which is what every bevel and contact disc assumes.
+      expect(built.shadows.cast?.direction).toEqual({ x: -LIGHT_DIRECTION.x, y: -LIGHT_DIRECTION.y });
     });
 
     it('is the real sun once the plan knows where on Earth it is', () => {
@@ -327,7 +338,31 @@ describe('buildRenderScene', () => {
         scene([lawn()], { location: { latitude: 53.4, longitude: -2.98 } }),
       );
       expect(built.light).not.toEqual(LIGHT_DIRECTION);
-      expect(built.shadows.cast).not.toBeNull();
+      expect(built.shadows.cast?.source).toBe('solar');
+    });
+
+    /**
+     * The trap in the fallback, and the reason it tests `site.location` rather than a null cast.
+     * A located garden at midnight has no shadows because there is no sun; a conventional one
+     * drawn across the night wash would be a second light in a picture about the first one going.
+     */
+    it('casts nothing at night on a located plan, rather than falling back to the convention', () => {
+      const built = buildRenderScene(
+        scene([lawn()], {
+          location: { latitude: 53.4, longitude: -2.98 },
+          sun: { dayOfYear: 172, minutes: 60 },
+        }),
+      );
+
+      expect(built.shadows.cast).toBeNull();
+    });
+
+    it('casts nothing at all when the viewer has turned shadows off', () => {
+      const off = buildRenderScene(scene([lawn()]), { shadows: false });
+
+      expect(off.shadows.cast).toBeNull();
+      // The occluders are still resolved; only the claim about the light is withdrawn.
+      expect(off.light).toEqual(LIGHT_DIRECTION);
     });
 
     it('is overridable, because one plan is drawn at four times of day', () => {
@@ -358,22 +393,35 @@ describe('buildRenderScene', () => {
   });
 
   describe('planting mode', () => {
-    it('bakes the planting into the bed by default, as the plan always has', () => {
-      const built = buildRenderScene(scene([bed('bed-a', 2)]));
-      const layers = built.ground[0]!.surface!.layers;
+    /**
+     * _This reverses_ "bakes the planting into the bed by default, as the plan always has". A bed
+     * painted inside its own clip is a cut-out: nothing crosses its edge, nothing spills onto the
+     * lawn, every border ends in a line no garden has. Both views instance it now; what differs is
+     * only which library it is drawn from, which the camera test below is about.
+     */
+    it('lifts the planting out of the bed in both views, so foliage can cross its edge', () => {
+      for (const view of ['plan', 'visualise'] as const) {
+        const built = buildRenderScene(scene([bed('bed-a', 2)]), { view });
+        const layers = built.ground[0]!.surface!.layers;
 
-      expect(layers.length).toBeGreaterThan(1);
-      expect(layers.some((layer) => layer.planting)).toBe(true);
-      expect(built.plants).toEqual([]);
+        // The ground the plants stand on stays; everything painted over it is lifted out.
+        expect(layers, view).toHaveLength(1);
+        expect(layers.some((layer) => layer.planting), view).toBe(false);
+        expect(built.plants.length, view).toBeGreaterThan(0);
+      }
     });
 
-    it('takes the planting off the surface when it is drawn as sprites instead', () => {
-      const built = buildRenderScene(scene([bed('bed-a', 2)]), { view: 'visualise' });
-      const layers = built.ground[0]!.surface!.layers;
+    /**
+     * Same garden, same seeds, same cells: a plant is in the same place whichever view drew it.
+     * That is what stops switching tabs from looking like the design changed, and it is a stronger
+     * statement than either view's own picture being right.
+     */
+    it('puts the same plants in the same places in both views', () => {
+      const plan = buildRenderScene(scene([bed('bed-a', 2)]), { view: 'plan' });
+      const visualise = buildRenderScene(scene([bed('bed-a', 2)]), { view: 'visualise' });
 
-      // The ground the plants stand on stays; everything painted over it is lifted out.
-      expect(layers).toHaveLength(1);
-      expect(layers.some((layer) => layer.planting)).toBe(false);
+      expect(plan.plants.map((plant) => plant.id)).toEqual(visualise.plants.map((plant) => plant.id));
+      expect(plan.plants.map((plant) => plant.at)).toEqual(visualise.plants.map((plant) => plant.at));
     });
   });
 
@@ -403,9 +451,14 @@ describe('buildRenderScene', () => {
       /*
        * The other half of the property. `stack` is the only route to `drawElevatedObject` and to
        * the `skin-*` face textures, neither of which records an asset id on the scene — so for
-       * those the emptiness *is* the assertion.
+       * those, what it *contains* is the assertion.
+       *
+       * It is no longer empty: the plan view's stack carries its plants, because the v2 renderer
+       * draws standing things from the stack and an empty one left the editor with no planting at
+       * all while the composer had it. What it must never carry is anything that is lifted,
+       * extruded or skinned — so the assertion is that every node in it is a plant.
        */
-      expect(built.stack).toEqual([]);
+      for (const node of built.stack) expect(node.kind, node.id).toBe('plant');
     });
 
     /*
@@ -421,6 +474,33 @@ describe('buildRenderScene', () => {
 
       expect(cameras).toContain('elevated');
       expect(built.stack.length).toBeGreaterThan(0);
+    });
+
+    /*
+     * **Both views draw a roof; only one of them lets it leave the footprint.**
+     *
+     * The plan used to get no roof at all, which is what left every concept card and judging sheet
+     * with a flat pale rectangle where the house is. It gets one now — and the rule the old
+     * arrangement was really protecting is the *overhang*, because in the plan the roof is the
+     * house's drawn extent and geometry outside `housePolygon` could make a legal house look as
+     * though it leaves the plot.
+     *
+     * So the property is stated as what it is: the plan's eaves are the wall line exactly, and
+     * Visualise's are outside it. Asserting "the plan has no roof" would pass on a build that had
+     * quietly stopped drawing one, which is the regression this replaced.
+     */
+    it('roofs both views, and oversails the walls in neither view but Visualise', () => {
+      const house = rectangleHouse({ x: 5, y: 2.5 }, 6, 4);
+      const withHouse = (): PlanScene => ({ ...scene([lawn()]), house });
+      const walls = housePolygon(house);
+
+      const planRoof = buildRenderScene(withHouse(), { view: 'plan' }).house?.roof;
+      const elevatedRoof = buildRenderScene(withHouse(), { view: 'visualise' }).house?.roof;
+
+      expect(planRoof).not.toBeNull();
+      expect(elevatedRoof).not.toBeNull();
+      expect(planRoof!.eaves).toEqual(walls);
+      expect(polygonArea(elevatedRoof!.eaves)).toBeGreaterThan(polygonArea(walls));
     });
   });
 });

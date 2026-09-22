@@ -174,26 +174,32 @@ function boxContains(
 }
 
 /**
- * The designer used to collapse inside a scrolling inspector and paint its chips over Edit.
- * Both panes must stay in the column, and the composer has to stay inside the designer card.
+ * One inspector card: the composer and the chips live inside it, and the compact sheet — when it
+ * is on screen — does not paint over the composer. The two-pane overlap this used to assert is
+ * the split the inspector no longer has.
  */
-async function assertInspectorPanesDoNotOverlap(page: Page): Promise<void> {
-  const designer = await page.getByTestId('design-agent-panel').boundingBox();
-  const edit = await page.getByTestId('selected-element').boundingBox();
-  expect(designer).not.toBeNull();
-  expect(edit).not.toBeNull();
-  expect(boxesOverlap(designer!, edit!)).toBe(false);
+async function assertInspectorIsOneCard(page: Page): Promise<void> {
+  const inspector = await page.getByTestId('editor-inspector').boundingBox();
+  expect(inspector).not.toBeNull();
+
+  const send = await page.getByTestId('assistant-send').boundingBox();
+  expect(send).not.toBeNull();
+  expect(boxContains(inspector!, send!)).toBe(true);
 
   const suggestions = page.getByTestId('assistant-suggestions');
   if (await suggestions.isVisible()) {
     const suggestionsBox = await suggestions.boundingBox();
     expect(suggestionsBox).not.toBeNull();
-    expect(boxContains(designer!, suggestionsBox!)).toBe(true);
+    expect(boxContains(inspector!, suggestionsBox!)).toBe(true);
   }
 
-  const send = await page.getByTestId('assistant-send').boundingBox();
-  expect(send).not.toBeNull();
-  expect(boxContains(designer!, send!)).toBe(true);
+  const sheet = page.getByTestId('selected-element');
+  if (await sheet.isVisible()) {
+    const sheetBox = await sheet.boundingBox();
+    expect(sheetBox).not.toBeNull();
+    expect(boxContains(inspector!, sheetBox!)).toBe(true);
+    expect(boxesOverlap(sheetBox!, send!)).toBe(false);
+  }
 }
 
 test('the AI designer visibly redesigns the plan, and the plan is still the user\'s afterwards', async ({ page }) => {
@@ -230,7 +236,7 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   const areaAfter = await terraceArea(page, terrace.id);
   expect(areaAfter).toBeGreaterThan(areaBefore);
   await expect(page.getByTestId('assistant-suggestions')).toBeVisible();
-  await assertInspectorPanesDoNotOverlap(page);
+  await assertInspectorIsOneCard(page);
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
 
   // Compare shows the plan as it was, and changes neither the plan nor its history.
@@ -247,14 +253,47 @@ test('the AI designer visibly redesigns the plan, and the plan is still the user
   expect(errors).toEqual([]);
 });
 
-test('the designer and the selected-element editor do not overlap', async ({ page }) => {
+test('the inspector is one card, with the composer inside it', async ({ page }) => {
   test.setTimeout(60_000);
   const errors = await openEditor(page);
 
   const terrace = terraceOf(originalLayout);
   await terraceArea(page, terrace.id);
   await expect(page.getByTestId('assistant-suggestions')).toBeVisible();
-  await assertInspectorPanesDoNotOverlap(page);
+  await assertInspectorIsOneCard(page);
+
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Selecting something on the plan tells the designer what "this" means.
+ *
+ * In a browser because the chip is a view of the *canvas* selection: a unit test can call
+ * `select()` on the store directly, which is exactly the step this has to prove is unnecessary.
+ * What is checked here is the round trip — pick an element the way a user does, see the composer
+ * say what it is about, clear it, and see the composer stop claiming it.
+ */
+test('the designer is told which element the plan has selected', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = await openEditor(page);
+
+  await expect(page.getByTestId('agent-focus')).toBeHidden();
+
+  const terrace = terraceOf(originalLayout);
+  await terraceArea(page, terrace.id);
+
+  const name = terrace.name ?? 'Paved area';
+  await expect(page.getByTestId('agent-focus')).toBeVisible();
+  await expect(page.getByTestId('element-name')).toHaveValue(name);
+  await expect(page.getByTestId('assistant-input')).toHaveAttribute(
+    'placeholder',
+    `Ask for a change to ${name}…`,
+  );
+
+  /* One selection: clearing it here is the same deselect as clicking bare canvas. */
+  await page.getByTestId('agent-focus-clear').click();
+  await expect(page.getByTestId('agent-focus')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Garden' })).toBeVisible();
 
   expect(errors).toEqual([]);
 });

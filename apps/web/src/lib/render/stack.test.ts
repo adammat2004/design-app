@@ -329,7 +329,9 @@ describe('edging', () => {
   it('leaves the plan view drawing its courses flat', () => {
     const built = buildRenderScene(scene([bed('concrete-kerb')]));
 
-    expect(built.stack).toEqual([]);
+    // The plan's stack carries its planting and nothing that stands up, so a kerb there is still
+    // the flat band `edging` describes rather than an extrusion with a lit face.
+    expect(built.stack.every((node) => node.kind === 'plant')).toBe(true);
     expect(built.edging.length).toBeGreaterThan(0);
   });
 });

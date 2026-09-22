@@ -70,7 +70,7 @@ const EMPHASIS_SHIFT: Record<BriefEmphasis, Shift> = {
    * are longest came out top of two of the three slots, and the same layout was offered on two
    * cards.
    */
-  planted: { privacy: 1.3, style: 1.3, proportion: 1.2 },
+  planted: { privacy: 1.3, style: 1.3, proportion: 1.2, canopy: 1.3 },
   /* A working garden: you carry things about it, and the beds have to be reachable and buildable. */
   productive: { circulation: 1.3, buildability: 1.4, relationships: 1.2, hierarchy: 0.7 },
 };

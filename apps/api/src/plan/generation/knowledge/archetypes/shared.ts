@@ -8,6 +8,7 @@ import type {
 import type { LayoutSketch, LocalRect, Room, Slot } from '../../layout/sketch.js';
 import {
   BED_MIN_DEPTH,
+  LAWN_FLOOR,
   borderDepth,
   lawnEnd,
   lawnStart,
@@ -92,9 +93,24 @@ export function edgeBed(
 
 type LocalShapeRect = { kind: 'rect'; rect: LocalRect; cornerRadius: number };
 
-/** The border depth this composition plants at, never under the sliver guard. */
-export function bed(scale: number): number {
-  return Math.max(BED_MIN_DEPTH, borderDepth(scale));
+/**
+ * The border depth this composition plants at, never under the sliver guard.
+ *
+ * `across` is the span the bed has to share with an open panel, and passing it applies the rule
+ * that settles every argument between a border and a lawn: **the lawn's floor wins over the
+ * border's profile.** A bed takes what it wants of that span only down to the point where what is
+ * left is still a lawn; past that it takes what it can and, if even the sliver guard leaves nothing
+ * usable, the panel is refused as it always was.
+ *
+ * The rule had to exist the moment `borderDepth` went from 1.5 m to 2.2: on a wide shallow plot the
+ * extra seventy centimetres came straight off a 3.2 m lawn and took it under `LAWN_FLOOR`, so a
+ * deeper border produced a garden with no open ground at all — a plainly worse plan drawn by a
+ * change meant to improve it. Omit `across` where the bed shares its span with nothing.
+ */
+export function bed(scale: number, across?: number): number {
+  const wanted = Math.max(BED_MIN_DEPTH, borderDepth(scale));
+  if (across === undefined) return wanted;
+  return Math.max(BED_MIN_DEPTH, Math.min(wanted, across - LAWN_FLOOR.minDimension));
 }
 
 /**

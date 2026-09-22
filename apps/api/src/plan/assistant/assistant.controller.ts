@@ -52,7 +52,13 @@ export class AssistantController {
   ): Promise<AssistantProposal> {
     const project = await this.projects.findOne(id);
 
-    return this.assistant.propose(id, body.message, project.document, body.history);
+    return this.assistant.propose(
+      id,
+      body.message,
+      project.document,
+      body.history,
+      body.selection,
+    );
   }
 
   /**

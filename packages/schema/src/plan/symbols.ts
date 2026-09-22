@@ -70,6 +70,12 @@ export const SymbolIdSchema = z.enum([
   'shrub-flowering',
   'shrub-architectural',
   /*
+   * The clipped one, which is a different kind of thing from the three above it: they are shrubs
+   * allowed to make their own shape, and this is one held in somebody else's. It is what makes a
+   * formal or architectural border read as deliberate from above, and there was no way to say it.
+   */
+  'shrub-topiary',
+  /*
    * Trees by kind.
    *
    * Every tree in every plan was one canopy — one deciduous sprite family, chosen by seed, so a
@@ -286,27 +292,49 @@ export const SYMBOLS: Record<SymbolId, SymbolSpec> = {
   /*
    * Shrubs, sized as the structural planting in a border: big enough to read as individual objects
    * on the plan, which is what separates them from the infill drawn around them.
+   *
+   * **Sized as the shrub is in five years, not as it arrives.** They were 1.2 to 1.4 m across, which
+   * is a two-litre pot rather than a plant, and a back-of-border viburnum, hydrangea or philadelphus
+   * is nearer two metres. Drawn at the smaller size they read as infill among the infill — the one
+   * thing structural planting exists not to do — and a border of them still showed mulch between
+   * every one. The plan drawing is of a garden that has grown, which is what the maturity control
+   * says out loud everywhere else.
    */
   'shrub-evergreen': {
     category: 'planting-bed',
     label: 'Evergreen shrub',
-    footprint: { kind: 'point', radius: 0.6 },
-    height: 1.3,
-    spread: 1.5,
+    footprint: { kind: 'point', radius: 0.85 },
+    height: 1.5,
+    spread: 1.9,
   },
   'shrub-flowering': {
     category: 'planting-bed',
     label: 'Flowering shrub',
-    footprint: { kind: 'point', radius: 0.7 },
-    height: 1.5,
-    spread: 1.8,
+    footprint: { kind: 'point', radius: 0.95 },
+    height: 1.7,
+    spread: 2.1,
   },
   'shrub-architectural': {
     category: 'planting-bed',
     label: 'Architectural shrub',
-    footprint: { kind: 'point', radius: 0.65 },
-    height: 1.4,
-    spread: 1.4,
+    footprint: { kind: 'point', radius: 0.8 },
+    height: 1.5,
+    spread: 1.7,
+  },
+  /*
+   * A clipped ball: box, yew or ilex, kept at the size it is bought at.
+   *
+   * Deliberately the one shrub that does **not** grow into the others' size, because a topiary is
+   * defined by being held — that is the whole of what it contributes to a border, and it is why a
+   * formal or architectural planting reads as deliberate from above where a mass of mounds does
+   * not. Small enough to sit in front of the backdrop rather than in it.
+   */
+  'shrub-topiary': {
+    category: 'planting-bed',
+    label: 'Clipped ball',
+    footprint: { kind: 'point', radius: 0.45 },
+    height: 0.8,
+    spread: 0.9,
   },
   /*
    * Radii are the canopy at the size a garden tree is *planted and kept*, not at forest maturity —
@@ -367,6 +395,7 @@ export const PLANT_SYMBOLS: SymbolId[] = [
   'shrub-evergreen',
   'shrub-flowering',
   'shrub-architectural',
+  'shrub-topiary',
   'tree-deciduous',
   'tree-ornamental',
   'tree-evergreen',
@@ -435,6 +464,7 @@ export const ADDABLE_SYMBOLS: SymbolId[] = [
   'shrub-evergreen',
   'shrub-flowering',
   'shrub-architectural',
+  'shrub-topiary',
   'dining-set-4',
   'dining-set-6',
   'sofa-set',

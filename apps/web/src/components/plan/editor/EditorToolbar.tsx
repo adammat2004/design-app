@@ -12,6 +12,7 @@ import {
   Redo2,
   RotateCcw,
   Ruler,
+  Sun,
   Tag,
   Undo2,
 } from 'lucide-react';
@@ -85,6 +86,8 @@ export function EditorToolbar({
   const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
   const toggleLabels = usePlanEditorStore((state) => state.toggleLabels);
   const toggleGrid = usePlanEditorStore((state) => state.toggleGrid);
+  const shadowsVisible = usePlanEditorStore((state) => state.shadowsVisible);
+  const toggleShadows = usePlanEditorStore((state) => state.toggleShadows);
   const zonesVisible = usePlanEditorStore((state) => state.zonesVisible);
   const toggleZones = usePlanEditorStore((state) => state.toggleZones);
   const dimensionsVisible = usePlanEditorStore((state) => state.dimensionsVisible);
@@ -119,6 +122,19 @@ export function EditorToolbar({
       icon: <Grid3x3 aria-hidden className="h-4 w-4" />,
       on: gridVisible,
       onClick: toggleGrid,
+    },
+    /*
+     * Shadows on is what makes the drawing read as a garden rather than a diagram, so it is the
+     * default. Off is for the drawing somebody is about to measure, print or write on — and for
+     * anyone comparing two layouts, where shade is one more thing changing between them.
+     */
+    {
+      id: 'shadows',
+      label: 'Shadows',
+      title: 'Cast shadows from the plan’s light',
+      icon: <Sun aria-hidden className="h-4 w-4" />,
+      on: shadowsVisible,
+      onClick: toggleShadows,
     },
     /*
      * Zones, off by default and deliberately so. They are scaffolding for "which parts do you want

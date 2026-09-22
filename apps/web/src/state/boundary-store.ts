@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import {
+  type RoofMaterial,
   accessAfterDelete,
   canWallHold,
   clampOffsetToEdge,
@@ -287,6 +288,7 @@ interface BoundaryState {
   setHouseRotation: (degrees: number) => void;
   /** One to three. The one vertical fact about the building — see `HouseFootprint.storeys`. */
   setStoreys: (storeys: number) => void;
+  setRoofMaterial: (material: RoofMaterial) => void;
   removeHouse: () => void;
 
   /* ---- walls and openings, all of them house edits ---- */
@@ -797,6 +799,19 @@ export const useBoundaryStore = create<BoundaryState>((set, get) => {
         if (!draft.house || !Number.isInteger(storeys) || storeys < 1 || storeys > 3) return null;
         if (draft.house.storeys === storeys) return null;
         return { ...draft, house: { ...draft.house, storeys } };
+      }),
+
+    /*
+     * The one thing about the building that is purely a drawing decision.
+     *
+     * A plain house edit like `setStoreys`, not a `commitHouse` one: the footprint does not move,
+     * so there is nothing for `houseFitsInside` to re-check. Nothing downstream measures it — see
+     * `HouseFootprint.roofMaterial` — so no violation can follow from it either.
+     */
+    setRoofMaterial: (material) =>
+      commit((draft) => {
+        if (!draft.house || draft.house.roofMaterial === material) return null;
+        return { ...draft, house: { ...draft.house, roofMaterial: material } };
       }),
 
     removeHouse: () => {

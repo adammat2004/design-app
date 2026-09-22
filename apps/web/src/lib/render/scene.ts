@@ -481,6 +481,16 @@ export interface SceneOptions {
   rendererVersion: RendererVersion;
   /** Prototype switch; whole-run ordering remains available for seam comparisons. */
   depthFragments: boolean;
+  /**
+   * Whether the plan draws cast shadows at all. A view preference beside `maturity`.
+   *
+   * On by default, because a garden whose objects are not attached to the ground reads as a
+   * diagram. Off is a real thing to want: a printed drawing somebody is going to measure or write
+   * on wants no shade across it, and so does anyone comparing two layouts rather than looking at
+   * one. It turns off the *cast* layer only — the contact disc under a sprite and the shade band
+   * along a fence stay, because those say "this stands up" rather than "the sun is over there".
+   */
+  shadows: boolean;
 }
 
 export const DEFAULT_SCENE_OPTIONS: SceneOptions = {
@@ -489,4 +499,5 @@ export const DEFAULT_SCENE_OPTIONS: SceneOptions = {
   rendererVersion: 'v2',
   // Long-run fragmentation remains a lab prototype until crossing/seam gates are signed off.
   depthFragments: false,
+  shadows: true,
 };

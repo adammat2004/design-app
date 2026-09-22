@@ -1,92 +1,128 @@
 'use client';
 
-import { CircleAlert, Columns2, RotateCcw, Sparkles, Undo2 } from 'lucide-react';
+import { Check, CircleAlert, Columns2, Loader2, RotateCcw, Square, Undo2 } from 'lucide-react';
 import type { ReviewPass } from '@/lib/ai-run/review-loop';
 import { useAiRunStore } from '@/state/ai-run-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import {
   keyOf,
   useAssistantStore,
-  type AgentPhase,
   type AssistantMessage as AssistantMessageModel,
   type UserMessage,
 } from '@/state/assistant-store';
-import { AgentActivity } from './AgentActivity';
+import { Pill } from './Pill';
 
 /**
- * One turn of the conversation.
+ * One request and what came of it, as two lines of a record rather than two bubbles of a chat.
  *
- * The designer's reply is one bubble for the whole life of a request: what it is about to do, the
- * work happening underneath it, then what it actually did. It used to be a reply plus a diff with a
- * tick against each line and an Apply button — a review step that existed because nothing could be
- * watched. Now the change *is* watched, and the review step moved to where it belongs: after, with
- * Compare and Undo.
+ * The inspector is about what can be done to the subject now; what was done to it a minute ago is
+ * context, not conversation. So a request is a quoted line and the reply is a plain line under it
+ * with a glyph for how it ended — no alignment, no speech shapes, no avatar. The reply is one
+ * element for the whole life of a request: what the designer is about to do, then what it actually
+ * did, then Compare and Undo against it.
  *
  * **Nothing here is written by the model except `text`.** The count, the refusals and the reviewer's
  * findings are all measured — see `composeOutcome` — which is what stops a reply claiming a change
  * the planner turned down.
  */
 
-export function UserBubble({ message }: { message: UserMessage }) {
+export function RequestLine({ message }: { message: UserMessage }) {
   return (
-    <li className="flex justify-end">
+    <li className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
       <p
         data-testid={`chat-user-${message.id}`}
-        className="max-w-[85%] rounded-xl rounded-br-sm bg-garden-sage px-2.5 py-1.5 text-xs leading-relaxed text-garden-forest"
+        className="min-w-0 text-xs leading-relaxed font-medium text-garden-ink"
       >
-        {message.text}
+        “{message.text}”
       </p>
+      {message.about ? <AboutTag message={message} about={message.about} /> : null}
     </li>
   );
 }
 
-export function AssistantBubble({
+/**
+ * What a past request was about, and the way back to it.
+ *
+ * "Make it bigger" is unreadable a minute later, which is the cost of letting the canvas supply the
+ * subject — so the transcript records what the subject was. The label is the one captured when the
+ * sentence was sent, not one looked up now: the element may have been renamed since, and the
+ * request was about what it was called at the time.
+ *
+ * Selecting it again is offered only where it still exists. A button that silently does nothing is
+ * worse than a line of text, and this codebase has caught that fault twice already.
+ */
+function AboutTag({
   message,
-  phase,
-  activity = false,
+  about,
+}: {
+  message: UserMessage;
+  about: NonNullable<UserMessage['about']>;
+}) {
+  const present = usePlanEditorStore((state) =>
+    state.present.elements.some((element) => element.id === about.id),
+  );
+
+  const className = 'max-w-full truncate text-[10px] text-garden-muted';
+
+  if (!present) {
+    return (
+      <span data-testid={`chat-about-${message.id}`} className={className}>
+        about {about.label}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid={`chat-about-${message.id}`}
+      onClick={() => usePlanEditorStore.getState().select(about.id)}
+      className={`${className} rounded transition-colors hover:text-garden-ink hover:underline focus-visible:ring-2 focus-visible:ring-garden-ai focus-visible:outline-none`}
+    >
+      about {about.label}
+    </button>
+  );
+}
+
+export function ReplyLine({
+  message,
+  controls = false,
 }: {
   message: AssistantMessageModel;
-  /** The conversation's phase, so the live message knows it is the live one. */
-  phase: AgentPhase;
-  /** Whether this is the newest reply, and therefore the one that carries the at-work block. */
-  activity?: boolean;
+  /** Whether this is the newest reply, and therefore the one Compare, Undo and Replay act on. */
+  controls?: boolean;
 }) {
   const acceptOffer = useAssistantStore((state) => state.acceptOffer);
   const busy = useAssistantStore((state) => state.phase) !== 'idle';
 
   return (
-    <li className="flex justify-start">
-      <div
-        data-testid={`chat-assistant-${message.id}`}
-        data-status={message.status}
-        className="w-full rounded-xl rounded-bl-sm border border-garden-line bg-white p-2.5"
-      >
+    <li>
+      <div data-testid={`chat-assistant-${message.id}`} data-status={message.status} className="min-w-0">
+        {/*
+          One line for how it ended. While the request is live this is the designer's intent; once
+          there is a measured outcome that takes the line, and the intent drops to a muted note
+          under it — what was set out to do is still worth a glance when what was done differs.
+        */}
         <p
           className={`flex items-start gap-1.5 text-xs leading-relaxed ${
             message.status === 'failed' ? 'text-amber-900' : 'text-garden-ink'
           }`}
         >
-          {message.status === 'failed' ? (
-            <CircleAlert aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+          <StatusGlyph status={message.status} />
+          {message.outcome ? (
+            <span data-testid={`agent-outcome-${message.id}`} className="min-w-0">
+              {message.outcome.text}
+            </span>
           ) : (
-            <Sparkles aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-garden-ai" />
+            <span className="min-w-0">
+              {message.text ||
+                (message.status === 'thinking' ? 'Reading the plan…' : 'Working on it…')}
+            </span>
           )}
-          <span>
-            {message.text ||
-              (message.status === 'thinking' ? 'Reading the plan…' : 'Working on it…')}
-          </span>
         </p>
 
-        {/* The work itself, sticky to the bottom of the transcript while it is happening. */}
-        {activity ? <AgentActivity phase={phase} /> : null}
-
-        {message.outcome ? (
-          <p
-            data-testid={`agent-outcome-${message.id}`}
-            className="mt-2 text-xs leading-relaxed text-garden-ink"
-          >
-            {message.outcome.text}
-          </p>
+        {message.outcome && message.text && message.text !== message.outcome.text ? (
+          <p className="mt-0.5 pl-5 text-[11px] leading-relaxed text-garden-muted">{message.text}</p>
         ) : null}
 
         {/*
@@ -96,7 +132,7 @@ export function AssistantBubble({
           garden, and the honest alternative to inventing a position for something that does not fit.
         */}
         {message.outcome && message.outcome.refused.length > 0 ? (
-          <ul data-testid={`agent-refused-${message.id}`} className="mt-1.5 space-y-1">
+          <ul data-testid={`agent-refused-${message.id}`} className="mt-1 space-y-0.5 pl-5">
             {message.outcome.refused.map((entry, index) => (
               <li
                 key={`${entry.label}-${index}`}
@@ -121,7 +157,7 @@ export function AssistantBubble({
         */}
         {message.outcome?.review ? (
           <div
-            className="mt-2 border-t border-garden-line pt-2"
+            className="mt-1 pl-5"
             data-testid="ai-review-outcome"
             data-verdict={message.outcome.review.verdict}
           >
@@ -132,7 +168,7 @@ export function AssistantBubble({
                   : 'The reviewer stopped before it finished.'}
               </p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {/* Keyed on the fault *and* what it was about: two pinched paths are two faults. */}
                 {message.outcome.review.passes.map((pass) => (
                   <li
@@ -151,7 +187,7 @@ export function AssistantBubble({
         ) : null}
 
         {/* Compare, Undo and Replay, against the redesign this message is about. */}
-        {message.outcome && message.outcome.changed > 0 ? <RunControls /> : null}
+        {controls && message.outcome && message.outcome.changed > 0 ? <RunControls /> : null}
 
         {/*
           Faults the reviewer found and left alone, because they are not what was asked about.
@@ -160,18 +196,16 @@ export function AssistantBubble({
           can be scoped at all without the user feeling the tool went quiet on them.
         */}
         {message.offers.length > 0 ? (
-          <ul data-testid={`agent-offers-${message.id}`} className="mt-2 flex flex-wrap gap-1.5">
+          <ul data-testid={`agent-offers-${message.id}`} className="mt-1.5 flex flex-wrap gap-1.5 pl-5">
             {message.offers.map((offer) => (
               <li key={keyOf(offer)}>
-                <button
-                  type="button"
-                  data-testid={`agent-offer-${keyOf(offer)}`}
+                <Pill
+                  testId={`agent-offer-${keyOf(offer)}`}
                   disabled={busy}
                   onClick={() => void acceptOffer(message.id, keyOf(offer))}
-                  className="relative h-9 rounded-full border border-garden-line bg-white px-3 text-[11px] font-medium text-garden-ink transition-colors before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-[''] hover:border-garden-ai hover:bg-garden-sage disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-garden-ai focus-visible:outline-none"
                 >
                   {offer.issue.message}
-                </button>
+                </Pill>
               </li>
             ))}
           </ul>
@@ -181,13 +215,27 @@ export function AssistantBubble({
   );
 }
 
+/** How the request ended, at a glance. */
+function StatusGlyph({ status }: { status: AssistantMessageModel['status'] }) {
+  const base = 'mt-0.5 h-3.5 w-3.5 shrink-0';
+  switch (status) {
+    case 'done':
+      return <Check aria-hidden className={`${base} text-garden-green`} strokeWidth={2.5} />;
+    case 'failed':
+      return <CircleAlert aria-hidden className={`${base} text-amber-600`} />;
+    case 'stopped':
+      return <Square aria-hidden className={`${base} p-0.5 text-garden-muted`} />;
+    default:
+      return <Loader2 aria-hidden className={`${base} animate-spin text-garden-ai`} />;
+  }
+}
+
 /**
  * Compare, Undo and Replay.
  *
  * Read off `ai-run-store` rather than off the message, because they act on the *plan* and the plan
- * has one current revision. Rendered inside the message that produced it, which is what makes
- * "undo that" mean the thing the user is looking at — but the moment they ask for something else,
- * the buttons on the older message are correctly disabled, because the garden has moved on.
+ * has one current revision. Rendered under the newest reply, which is what makes "undo that" mean
+ * the thing the user is looking at.
  */
 function RunControls() {
   const revision = useAiRunStore((state) => state.revision);
@@ -209,22 +257,24 @@ function RunControls() {
   if (!revision) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      <RunButton
+    <div className="mt-2 flex flex-wrap gap-1.5 pl-5">
+      <Pill
         testId="ai-compare"
         onClick={() => useAiRunStore.getState().toggleCompare()}
         icon={<Columns2 aria-hidden className="h-3.5 w-3.5" />}
-        label={comparing ? 'Show the changes' : 'Compare before'}
-      />
-      <RunButton
+      >
+        {comparing ? 'Show the changes' : 'Compare before'}
+      </Pill>
+      <Pill
         testId="ai-undo"
         onClick={() => useAiRunStore.getState().undoRun()}
         disabled={!undoable}
         hint={undoable ? undefined : 'You have edited the plan since. Use Undo in the toolbar.'}
         icon={<Undo2 aria-hidden className="h-3.5 w-3.5" />}
-        label="Undo changes"
-      />
-      <RunButton
+      >
+        Undo changes
+      </Pill>
+      <Pill
         testId="ai-replay"
         onClick={() => useAiRunStore.getState().replay()}
         disabled={!replayable}
@@ -236,39 +286,10 @@ function RunControls() {
               : 'The plan has changed since these were made.'
         }
         icon={<RotateCcw aria-hidden className="h-3.5 w-3.5" />}
-        label="Replay"
-      />
+      >
+        Replay
+      </Pill>
     </div>
-  );
-}
-
-function RunButton({
-  testId,
-  onClick,
-  icon,
-  label,
-  disabled = false,
-  hint,
-}: {
-  testId: string;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  disabled?: boolean;
-  hint?: string;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      disabled={disabled}
-      title={hint}
-      className="relative flex h-9 items-center gap-1.5 rounded-full border border-garden-line bg-white px-3 text-[11px] font-semibold text-garden-ink transition-colors before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-[''] hover:bg-garden-sage disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-garden-ai focus-visible:outline-none"
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
 

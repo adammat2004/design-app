@@ -164,6 +164,7 @@ describe('sending', () => {
       'p-1',
       'use gravel instead of paving',
       [],
+      [],
       expect.any(AbortSignal),
     );
   });
@@ -222,6 +223,60 @@ describe('sending', () => {
     await first;
 
     expect(proposeChanges).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * What they are pointing at goes with the sentence, so "this" has a subject.
+   *
+   * Without it the designer's only correct move is to ask which element is meant — about the one
+   * the user has already clicked on, which reads as the tool not watching.
+   */
+  it('sends what is selected on the canvas', async () => {
+    stubReview();
+    usePlanEditorStore.getState().select('e-1');
+
+    await store().send('make this bigger');
+
+    expect(proposeChanges).toHaveBeenCalledWith(
+      'p-1',
+      'make this bigger',
+      [],
+      ['e-1'],
+      expect.any(AbortSignal),
+    );
+  });
+
+  /**
+   * A selection can go stale — an undo or a hydration can leave an id behind. Sending a ghost
+   * would have the designer talk about something that is not on the plan.
+   */
+  it('sends nothing for a selected id that names no element', async () => {
+    stubReview();
+    usePlanEditorStore.setState({ selectedId: 'e-gone' });
+
+    await store().send('make this bigger');
+
+    expect(proposeChanges.mock.calls[0]![3]).toEqual([]);
+    expect(store().messages[0]).toMatchObject({ role: 'user', about: null });
+  });
+
+  /**
+   * The transcript records what a sentence was about, with the name as it stood at the time.
+   *
+   * Looked up when the bubble renders instead, a rename would rewrite history: the request was
+   * about what the thing was called when it was made.
+   */
+  it('records what the request was about, keeping the name it had', async () => {
+    stubReview();
+    usePlanEditorStore.getState().select('e-1');
+
+    await store().send('make this bigger');
+    usePlanEditorStore.getState().renameElement('e-1', 'Dining terrace');
+
+    expect(store().messages[0]).toMatchObject({
+      role: 'user',
+      about: { id: 'e-1', label: 'Seating patio' },
+    });
   });
 
   it('keeps what could not be placed, with the planner’s reason', async () => {
@@ -353,6 +408,48 @@ describe('the phases of one request', () => {
     const reviewed = stubReview();
 
     await store().send('make the patio bigger');
+
+    expect(reviewed).toHaveBeenCalledWith({ subjects: ['e-1'] });
+  });
+
+  /**
+   * A request made with something selected is a request *about* that thing, whether or not the
+   * designer ended up changing it. One that only moved its furniture is still work on the terrace.
+   */
+  it('keeps the selection in scope even when the changes went elsewhere', async () => {
+    const bench = { ...patio, id: 'e-2', name: 'Bench' } as DesignElement;
+    const moved = {
+      ...bench,
+      shape: { kind: 'rect' as const, centre: { x: 9, y: 9 }, width: 4, depth: 3, rotation: 0 },
+    } as DesignElement;
+    usePlanEditorStore.setState((current) => ({
+      present: { ...current.present, elements: [patio, bench] },
+    }));
+    usePlanEditorStore.getState().select('e-1');
+
+    proposeChanges.mockResolvedValue(
+      proposal({
+        changes: [
+          { ...resizeChange, kind: 'move', elementId: 'e-2', previous: bench, next: moved },
+        ],
+      }),
+    );
+    stubRun({ result: [patio, moved] });
+    const reviewed = stubReview();
+
+    await store().send('move the bench off this');
+
+    expect(reviewed).toHaveBeenCalledWith({ subjects: ['e-2', 'e-1'] });
+  });
+
+  /** One subject, not two, when the thing selected is also the thing that changed. */
+  it('does not name the same element twice', async () => {
+    usePlanEditorStore.getState().select('e-1');
+    proposeChanges.mockResolvedValue(proposal({ changes: [resizeChange] }));
+    stubRun({ result: [bigger] });
+    const reviewed = stubReview();
+
+    await store().send('make this bigger');
 
     expect(reviewed).toHaveBeenCalledWith({ subjects: ['e-1'] });
   });

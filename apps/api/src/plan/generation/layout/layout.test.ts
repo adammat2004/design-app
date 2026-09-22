@@ -191,8 +191,8 @@ describe('the terrace', () => {
     const T = terraceDepth(1, 9);
     expect(lawnEnd(1, 9, T) - lawnStart(1, 9, T)).toBeGreaterThanOrEqual(LAWN_FLOOR.minDimension);
     expect(rearBedDepth(1, 9, T)).toBeGreaterThanOrEqual(BED_MIN_DEPTH);
-    // Never deeper than twice the border, however deep the garden.
-    expect(rearBedDepth(1, 30, 3.6)).toBeCloseTo(3);
+    // Never deeper than twice the border, however deep the garden. 2 × 2.2 since borders deepened.
+    expect(rearBedDepth(1, 30, 3.6)).toBeCloseTo(4.4);
     // Never thinner than the sliver guard, however shallow.
     expect(rearBedDepth(1, 4, 3)).toBe(BED_MIN_DEPTH);
   });
@@ -581,10 +581,20 @@ describe('behindTerrace', () => {
 
 describe('the utility notch', () => {
   it('cuts the shed corner out of the lawn on the gate side, and only when a shed is wanted', () => {
-    const room: Room = { uMin: 0, uMax: 16, vMin: -9, vMax: 9 };
-    const withShed = TEMPLATES.rectilinear(request({ scale: 1.4 }), room);
+    /*
+     * A ten-metre room rather than the sixteen this used to use, and the reason is the deeper
+     * borders rather than the notch.
+     *
+     * The notch exists for the case where the utility corner would otherwise be *inside* the lawn.
+     * With `borderDepth` at 2.2 m the rear border on a deep room is wide enough to contain the shed
+     * on its own, so the lawn is not cut at all — a better answer than a notch, and the one the
+     * template now gives on a big plot. Where the room is shallow the rear border is shallow with
+     * it, the corner lands in the grass, and this is what happens instead.
+     */
+    const room: Room = { uMin: 0, uMax: 10, vMin: -9, vMax: 9 };
+    const withShed = TEMPLATES.rectilinear(request({ scale: 1 }), room);
     const without = TEMPLATES.rectilinear(
-      request({ scale: 1.4, features: ['seating', 'play', 'firePit'] }),
+      request({ scale: 1, features: ['seating', 'play', 'firePit'] }),
       room,
     );
 
@@ -618,6 +628,9 @@ describe('the utility notch', () => {
      * in a thicket. A designed garden is bordered unevenly: deep at the back, a mowing strip on the
      * side you walk down. This pins the deep end.
      */
-    expect(Math.max(...withShed.lawn.points.map((p) => p.u))).toBeCloseTo(16 - 2 * 2.1, 1);
+    expect(Math.max(...withShed.lawn.points.map((p) => p.u))).toBeCloseTo(
+      lawnEnd(1, 10, terraceDepth(1, 10)),
+      6,
+    );
   });
 });

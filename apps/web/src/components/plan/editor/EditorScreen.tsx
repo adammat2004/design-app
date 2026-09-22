@@ -11,12 +11,11 @@ import { PlanBottomBar } from '../PlanBottomBar';
 import { usePlanHref } from '../ProjectContext';
 import { AddFeaturePalette } from './AddFeaturePalette';
 import { AreaSummaryPanel } from './AreaSummaryPanel';
-import { DesignAgentPanel } from './DesignAgentPanel';
 import { EditorCanvasLoader } from './EditorCanvasLoader';
+import { EditorInspector } from './EditorInspector';
 import { EditorToolbar } from './EditorToolbar';
 import { VisualisePanel } from './VisualisePanel';
 import { PlacedElementsList } from './PlacedElementsList';
-import { SelectedElementPanel } from './SelectedElementPanel';
 
 export function EditorScreen() {
   const planHref = usePlanHref();
@@ -146,22 +145,12 @@ export function EditorScreen() {
           conversation you are meant to hold. At 320–384px a reply is a readable line rather than
           three words wide, and the canvas absorbs the loss because it fits itself to the plot.
 
-          Two panes, not one scrolling column. A `flex-1 min-h-0` child inside `overflow-y-auto`
-          collapses — the same trap step 2 already recorded — and the conversation then paints over
-          the form underneath. The column clips; each pane scrolls inside itself.
+          One inspector, not two cards. A `flex-1 min-h-0` child inside `overflow-y-auto`
+          collapses — the same trap step 2 already recorded — so the column clips and the inspector
+          scrolls inside itself.
         */}
-        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col gap-3 border-l border-garden-line bg-white p-3 lg:min-h-0 lg:w-80 lg:shrink-0 lg:overflow-hidden xl:w-96"}>
-          {/*
-            The designer above the properties panel, not below it.
-
-            Properties grow with the selected element — a bed with edging and a retaining wall runs
-            to most of a column — so anything under them is below the fold exactly when a run is in
-            progress and has selected something. What is happening to the garden has to be readable
-            without scrolling; which material the selected patio is can wait. Each pane now has its
-            own scroll, so that still holds without the two overlapping.
-          */}
-          {concept ? <DesignAgentPanel /> : null}
-          <SelectedElementPanel />
+        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col border-l border-garden-line bg-white lg:min-h-0 lg:w-80 lg:shrink-0 lg:overflow-hidden xl:w-96"}>
+          {concept ? <EditorInspector /> : null}
         </aside>
       </div>
 

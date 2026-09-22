@@ -44,18 +44,20 @@ const PAPER = '#f4f2ed';
  */
 const SUPERSAMPLE = 2;
 
-/**
- * The finishing pass: a small contrast lift and a little saturation.
+/*
+ * **There is no finishing pass here any more, and that is a deletion rather than a move.**
  *
- * Restrained on purpose and applied last, over the whole sheet. Compositing a garden out of
- * dozens of independently tinted photographs tends to converge on the average of them, which is a
- * slightly flat mid-tone; this puts back the separation that averaging took out. It is not a
- * filter and must not become one — the output should still read as an architectural
- * visualisation, so the numbers are barely above 1 and there is no colour grading, no vignette
- * and no warmth.
+ * There used to be one: a contrast and saturation lift, plan view only, on the delivered canvas —
+ * written to put back the separation that compositing dozens of independently tinted photographs
+ * averages away. It was a look somebody chose, and it pulled two of the measured scene grade's
+ * terms in the opposite direction, which is why it had to be switched off for Visualise and left on
+ * for the plan. Two finishing passes disagreeing about one picture is not a policy.
+ *
+ * `drawPlan` grades both views now, from the one set of constants in `grade.ts` that were solved
+ * against the reference rather than dialled. A downloaded plan is therefore no longer
+ * byte-identical to one downloaded before this work — deliberately, and it is the judging sheets
+ * rather than this file that the change was looked at on.
  */
-const FINISH_CONTRAST = 1.06;
-const FINISH_SATURATION = 1.08;
 
 const makeBrowserCanvas: MakeCanvas = (width, height) => {
   const canvas = document.createElement('canvas');
@@ -77,6 +79,8 @@ export interface ExportOptions {
    */
   view?: SceneView;
   maturity?: Maturity;
+  /** The editor's own shadows toggle, for the reason `labels` and `maturity` are here. */
+  shadows?: boolean;
   rendererVersion?: RendererVersion;
 }
 
@@ -115,7 +119,8 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
     },
     rasterOrigin,
     { view: options.view ?? 'plan', ...(options.rendererVersion ? { rendererVersion: options.rendererVersion } : {}),
-      ...(options.maturity ? { maturity: options.maturity } : {}) },
+      ...(options.maturity ? { maturity: options.maturity } : {}),
+      ...(options.shadows === undefined ? {} : { shadows: options.shadows }) },
   );
 
   if (options.labels) {
@@ -136,62 +141,12 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
   out.imageSmoothingQuality = 'high';
   out.drawImage(big, 0, 0, width, height);
 
-  /*
-   * The finishing pass, on the plan view only.
-   *
-   * It lifts contrast and saturation a little to put back the separation that compositing dozens of
-   * independently tinted photographs averages away. That is still the right thing for the plan
-   * drawing, and keeping it here unchanged is what makes a downloaded 2D Plan byte-identical to
-   * every one downloaded before this work.
-   *
-   * Visualise must not have it. `drawPlan` has already applied the measured scene grade on the
-   * large canvas above, and this pass pulls contrast and saturation in the opposite direction from
-   * two of that grade's three terms — running both would leave the download somewhere between the
-   * two and no longer matching the screen. Flipping this pass's own constants instead was the
-   * obvious alternative and is wrong: it would quietly change the plan-view download, which nobody
-   * asked for and the judging sheets could never catch, because they do not come through here.
-   */
-  if ((options.view ?? 'plan') !== 'visualise') {
-    finish(out, width, height);
-  }
-
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('PNG encoding failed'))),
       'image/png',
     );
   });
-}
-
-/**
- * The finishing pass, in place on the delivered canvas.
- *
- * Deliberately arithmetic on the pixels rather than a `filter` string: `context.filter` is not
- * supported everywhere and fails silently where it is not, which would make the export quietly
- * differ between browsers. Luminance-preserving saturation, so nothing shifts hue.
- */
-function finish(context: CanvasRenderingContext2D, width: number, height: number): void {
-  const image = context.getImageData(0, 0, width, height);
-  const { data } = image;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]!;
-    const g = data[i + 1]!;
-    const b = data[i + 2]!;
-
-    // Rec. 709 luma, which is what keeps a saturation lift from also changing brightness.
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-    data[i] = clamp255((luma + (r - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
-    data[i + 1] = clamp255((luma + (g - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
-    data[i + 2] = clamp255((luma + (b - luma) * FINISH_SATURATION - 128) * FINISH_CONTRAST + 128);
-  }
-
-  context.putImageData(image, 0, 0);
-}
-
-function clamp255(value: number): number {
-  return value < 0 ? 0 : value > 255 ? 255 : value;
 }
 
 /**

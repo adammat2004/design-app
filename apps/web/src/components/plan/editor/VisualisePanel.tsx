@@ -36,6 +36,8 @@ export function VisualisePanel() {
   const setPreviewMinutes = usePlanEditorStore((state) => state.setPreviewMinutes);
   const minutes = previewMinutes ?? sun.minutes;
   const maturity = usePlanEditorStore((state) => state.maturity);
+  const shadowsVisible = usePlanEditorStore((state) => state.shadowsVisible);
+  const toggleShadows = usePlanEditorStore((state) => state.toggleShadows);
   const setMaturity = usePlanEditorStore((state) => state.setMaturity);
   const pendingTime = useRef<number | null>(null);
   const timeFrame = useRef<number | null>(null);
@@ -106,10 +108,31 @@ export function VisualisePanel() {
             <span className="w-10 tabular-nums text-garden-muted">{clockLabel(minutes)}</span>
           </label>
         ) : (
-          <p className="text-xs text-garden-muted">
-            Presentation lighting
+          /*
+           * What the picture is lit by, said plainly. The shadows are real geometry projected from
+           * the drawing's own light rather than from a sun — so they say how tall things are and
+           * nothing about where the shade falls at four o'clock. Naming it is what keeps the
+           * distinction the user's rather than ours.
+           */
+          <p className="text-xs text-garden-muted" data-testid="conventional-light">
+            Conventional light. Set a location in step 1 for the real sun.
           </p>
         )}
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={shadowsVisible}
+          data-testid="toggle-shadows"
+          onClick={toggleShadows}
+          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+            shadowsVisible
+              ? 'border-garden-green bg-garden-green/10 text-garden-forest'
+              : 'border-garden-line text-garden-muted hover:text-garden-forest'
+          }`}
+        >
+          Shadows
+        </button>
         <div className="ml-auto"><DownloadPlanButton view="visualise" /></div>
       </div>
 

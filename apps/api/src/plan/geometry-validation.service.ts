@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   geometryOutline,
   housePolygon,
+  legalFootprint,
   polygonToWkt,
   scopeRing,
   type PlanDocument,
@@ -122,10 +123,20 @@ export class GeometryValidationService {
     }
 
     if (elements.length > 0) {
+      /*
+       * `legalFootprint`, not `element.shape`, and the difference is trees.
+       *
+       * A tree's stored shape is its **canopy**, because that is what the drawing, the schedule
+       * and the shadow model are about. What occupies the ground is the trunk, and a canopy
+       * reaching over a fence is what a garden with trees in it looks like rather than a thing
+       * built outside the plot. The client's `elementIsLegal` asks exactly this question of
+       * exactly this shape; asking a different one here is how the server comes to refuse the save
+       * of a plan the editor drew and would not let the user correct.
+       */
       ctes.push(
         shapesCte(
           'elements',
-          elements.map((element) => shapeRow(element.id, element.shape)),
+          elements.map((element) => shapeRow(element.id, legalFootprint(element))),
         ),
       );
 

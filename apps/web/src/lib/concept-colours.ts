@@ -45,6 +45,17 @@ export const CATEGORY_COLOURS: Record<ElementCategory, CategoryStyle> = {
   },
 };
 
+/**
+ * What to call an element on screen: its own name, or what its category is called.
+ *
+ * One function because the answer has to be the same everywhere it is given — the properties
+ * panel, the agent's focus chip and the transcript all name one element, and a fallback written
+ * out a second time is how they come to disagree about an unnamed bed.
+ */
+export function elementLabel(element: { name?: string; category: ElementCategory }): string {
+  return element.name ?? CATEGORY_COLOURS[element.category].label;
+}
+
 /** Legend order, which is also the order surfaces stack on the plan. */
 export const CATEGORY_ORDER: ElementCategory[] = [
   'lawn',

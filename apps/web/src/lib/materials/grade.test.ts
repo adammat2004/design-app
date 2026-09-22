@@ -4,7 +4,10 @@ import {
   applyGrade,
   BRIGHTNESS,
   CONTRAST,
+  GRADE_FILTER_ID,
+  WARMTH,
   gradeCss,
+  warmthMatrix,
   gradePixel,
   SATURATION,
   type GradeTarget,
@@ -54,10 +57,24 @@ function specFilter(r: number, g: number, b: number): [number, number, number] {
     lr * (1 - s), lg * (1 - s), lb + s * (1 - lb),
   ];
 
+  const sr = m[0]! * cr + m[1]! * cg + m[2]! * cb;
+  const sg = m[3]! * cr + m[4]! * cg + m[5]! * cb;
+  const sb = m[6]! * cr + m[7]! * cg + m[8]! * cb;
+
+  /*
+   * And the `feColorMatrix` the filter list references last, driven from the *published* matrix
+   * string rather than from `WARMTH` — so this replicates what the browser is actually handed
+   * rather than what the module meant to hand it. A typo in `warmthMatrix()` is exactly the failure
+   * this sweep exists to catch, and reading the constants directly would sail past it.
+   *
+   * Row-major, twenty values, RGBA plus offsets, over **sRGB** — see `GradeFilter` for why that
+   * last word is load-bearing.
+   */
+  const w = warmthMatrix().split(' ').map(Number);
   return [
-    clamp(m[0]! * cr + m[1]! * cg + m[2]! * cb),
-    clamp(m[3]! * cr + m[4]! * cg + m[5]! * cb),
-    clamp(m[6]! * cr + m[7]! * cg + m[8]! * cb),
+    clamp(w[0]! * sr + w[1]! * sg + w[2]! * sb + w[4]! * 255),
+    clamp(w[5]! * sr + w[6]! * sg + w[7]! * sb + w[9]! * 255),
+    clamp(w[10]! * sr + w[11]! * sg + w[12]! * sb + w[14]! * 255),
   ];
 }
 
@@ -87,11 +104,34 @@ describe('the scene grade', () => {
     expect(css).toContain(`brightness(${BRIGHTNESS})`);
     expect(css).toContain(`contrast(${CONTRAST})`);
     expect(css).toContain(`saturate(${SATURATION})`);
+    expect(css).toContain(`url(#${GRADE_FILTER_ID})`);
 
     // The order is load-bearing: these operations do not commute, and the arithmetic applies
     // brightness, then contrast, then saturation.
     expect(css.indexOf('brightness')).toBeLessThan(css.indexOf('contrast'));
     expect(css.indexOf('contrast')).toBeLessThan(css.indexOf('saturate'));
+    expect(css.indexOf('saturate')).toBeLessThan(css.indexOf('url('));
+  });
+
+  /*
+   * The warm term is the one part of the grade CSS cannot say in shorthand, so it travels as a
+   * matrix — and a matrix that disagrees with `WARMTH` is a screen that disagrees with the
+   * download, which is the fault this whole module exists to prevent.
+   */
+  it('publishes the warm term as a diagonal matrix carrying exactly those gains', () => {
+    const values = warmthMatrix().split(' ').map(Number);
+
+    expect(values).toHaveLength(20);
+    expect(values[0]).toBeCloseTo(WARMTH.r, 6);
+    expect(values[6]).toBeCloseTo(WARMTH.g, 6);
+    expect(values[12]).toBeCloseTo(WARMTH.b, 6);
+    expect(values[18]).toBe(1);
+
+    // Everything off the diagonal: a per-channel gain mixes nothing and offsets nothing.
+    const diagonal = new Set([0, 6, 12, 18]);
+    values.forEach((value, index) => {
+      if (!diagonal.has(index)) expect(value, `cell ${index}`).toBe(0);
+    });
   });
 
   /*

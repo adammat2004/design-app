@@ -3,7 +3,8 @@ import { DEFAULT_PARAMS } from '../../knowledge/archetypes/types.js';
 import { designedBeds } from '../beds.js';
 import {
   behindTerrace,
-  borderDepth,
+  MOWING_STRIP,
+  borderIn,
   isCourtyard,
   lawnEnd,
   lawnStart,
@@ -40,9 +41,20 @@ export function curved(
 ): LayoutSketch {
   const s = request.scale;
   const D = room.uMax;
-  const b = borderDepth(s);
+  /*
+   * The border the plan actually has room for: `borderIn`, not `borderDepth`.
+   *
+   * `isCourtyard` asks the same question with the same function, so what the template *draws* and
+   * what the composition believes about whether a lawn fits are one answer. Deepening the border
+   * without this had a small garden reported as a courtyard and paved corner to corner.
+   */
   const terrace = terraceRect(request, room, params.terraceDepth);
   const T = terrace.u1;
+  const b = borderIn(
+    s,
+    room.vMax - room.vMin - MOWING_STRIP,
+    lawnEnd(s, D, T) - lawnStart(s, D, T),
+  );
 
   const gate = request.gateSide ?? 'right';
   const gateSign = gate === 'right' ? 1 : -1;

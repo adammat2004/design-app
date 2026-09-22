@@ -10,8 +10,11 @@ import {
   geometryClearsHouse,
   geometryFitsInside,
   scopeRing,
+  elementArea,
   geometryIsLegal,
   geometryOutline,
+  elementOutline,
+  trunkFootprint,
   housePolygon,
   polygonCentroid,
   polygonArea,
@@ -87,6 +90,12 @@ import {
 } from './layout/frame.js';
 import { FRONT_PATH_WIDTH, frontGarden } from './layout/front.js';
 import { rectSize, type LayoutSketch, type SketchRequest } from './layout/sketch.js';
+import {
+  BACKDROP_TREE_INSET,
+  BACKDROP_TREE_SPACING,
+  MIN_TREES,
+  treeBudget,
+} from './layout/trees.js';
 import {
   baseFillFor,
   passageBorderWidth,
@@ -173,8 +182,17 @@ import { FEATURE_LIBRARY, placementLadder } from './knowledge/feature-library.js
  * Wide enough to clear `MIN_FILL_SIDE` — a narrower band is rejected piece by piece as a sliver and
  * the border never appears at all — and about what a real mixed border is: deep enough to plant in
  * layers, shallow enough to reach the back of.
+ *
+ * **2.2 m, and the old 1.5 was the bottom of that range rather than the middle of it.** A bed a
+ * metre and a half deep holds two ranks of plants: something at the back and something in front of
+ * it, which is a strip rather than a border, and it is why a generated plan's planting reads as an
+ * edging round a lawn where the traced reference's reads as the body of the garden. The reference's
+ * own beds run from 2.2 to 6.9 m. Three ranks is the least a layered planting needs, and 2.2 m is
+ * what three ranks of the shrubs, grasses and perennials `planting.ts` specifies actually occupy.
+ * `passageBorderWidth` still narrows it where a bed that deep would block the way past the house,
+ * so nothing here can close an access lane.
  */
-const BORDER_WIDTH = 1.5;
+const BORDER_WIDTH = 2.2;
 
 /**
  * How far inside the drawn redesign area everything is composed, in metres.
@@ -201,15 +219,29 @@ const TREE_RADIUS = 1.6;
 
 /** A specimen shrub's drawn radius. Between a border plant and a small tree. */
 /**
- * A ceiling on the structural plants one concept places.
+ * A ceiling on the structural plants one concept places, and a floor under it per bed.
  *
  * The sampler is a *drawn density* — it will happily return forty backdrop shrubs for a large
  * border, which is the right answer for a texture and the wrong one for a list of objects the user
- * has to scroll. Thirty is roughly where the placed-elements panel stops being readable, and it is
- * far more structure than a garden this size would specify anyway.
+ * has to scroll.
+ *
+ * **Scaled by how much planting there is, rather than a flat thirty.** A flat cap is a cap on the
+ * whole plan, so a garden with four deep borders spent it on the first two and left the last ones
+ * as bare texture — the beds furthest from the house, which is where the structure matters most.
+ * One shrub per five square metres of bed is roughly what a designer specifies for a mixed border,
+ * and the hard ceiling stays because the panel still has to be scrollable.
  */
-const MAX_STRUCTURAL_PLANTS = 30;
-const MAX_TREES = 5;
+const METRES_PER_STRUCTURAL_PLANT = 5;
+const MIN_STRUCTURAL_PLANTS = 12;
+const MAX_STRUCTURAL_PLANTS = 60;
+
+/** How many placed shrubs this much planting should carry. */
+function structuralBudget(plantedArea: number): number {
+  return Math.max(
+    MIN_STRUCTURAL_PLANTS,
+    Math.min(MAX_STRUCTURAL_PLANTS, Math.round(plantedArea / METRES_PER_STRUCTURAL_PLANT)),
+  );
+}
 
 /**
  * The least a room beside the house may be. A pair of chairs and a small table, which is what a
@@ -421,6 +453,86 @@ export class ConceptsService {
     const featureLayer: DesignElement[] = [];
     /** Collected separately only so the count can be capped across every zone, not per zone. */
     const trees: DesignElement[] = [];
+    const treeCap = treeBudget(designedArea);
+
+    /**
+     * Plants one tree, if a tree belongs there. The only place a tree is created.
+     *
+     * Three things happen here that used to happen somewhere else or not at all.
+     *
+     * **The species is chosen before the geometry, not stamped on afterwards.** `stampPlanting`
+     * used to assign the species at the very end, so every tree was placed as a 1.6 m circle and
+     * then told it was a seven-metre hornbeam — a canopy drawn at two thirds the size its own
+     * symbol declares, and the same size whatever it turned out to be. Asking first means a rowan
+     * is a rowan's width and a fruit tree is a fruit tree's.
+     *
+     * **What must fit is the trunk; what must not collide is the canopy, and only with things a
+     * canopy genuinely cannot pass through.** See `legalFootprint`. A canopy over a terrace, a path
+     * or a border is what a garden with trees in it looks like; a canopy through a shed is not, and
+     * neither is one through another canopy — so structures and trees are tested against the crown
+     * while the ground it overhangs is tested against the trunk.
+     *
+     * **A tree is not an obstacle to everything.** Only its trunk goes on `obstacles`, so a bed or
+     * a path laid afterwards may run under the branches. That is the whole point.
+     */
+    /**
+     * The buildings a crown may not grow through, tessellated once per change rather than per try.
+     *
+     * A backdrop walk offers a couple of hundred candidate points and every one of them used to
+     * re-outline every element in the plan. Keyed on how many elements there are, which is the only
+     * way this list grows: nothing here is ever removed or reshaped after it is pushed.
+     */
+    let solidCount = -1;
+    let solidRings: Point[][] = [];
+    const solids = (): Point[][] => {
+      const count = elements.length + featureLayer.length;
+      if (count !== solidCount) {
+        solidCount = count;
+        solidRings = [...elements, ...featureLayer]
+          .filter((element) => element.category === 'structure')
+          .map((element) => elementOutline(element));
+      }
+      return solidRings;
+    };
+
+    const plantTree = (at: Point, zoneId?: ZoneId): boolean => {
+      if (trees.length >= treeCap) return false;
+
+      const symbol = treeSpeciesFor(brief.style, trees.length);
+      const spec = SYMBOLS[symbol].footprint;
+      const radius = spec.kind === 'point' ? spec.radius : TREE_RADIUS;
+      const canopy: PlanGeometry = { kind: 'point', at, radius };
+      const crown = geometryOutline(canopy);
+      const trunk = trunkFootprint(canopy);
+      const stem = geometryOutline(trunk);
+      /*
+       * What a crown may not pass through: a building. A canopy over paving, a path or a border is
+       * the ordinary case and the thing this change exists to allow; a canopy through a shed or a
+       * garden room is not, and neither is one through another crown.
+       */
+      if (!placeable(trunk, houseRing, boundary, scopePolygon)) return false;
+      /* The crown may hang over the ground, but not over the building it would be growing into. */
+      if (!geometryClearsHouse(canopy, houseRing)) return false;
+      if (obstacles.some((obstacle) => polygonsIntersect(stem, obstacle))) return false;
+      if (solids().some((obstacle) => polygonsIntersect(crown, obstacle))) return false;
+      if (trees.some((tree) => polygonsIntersect(crown, geometryOutline(tree.shape)))) return false;
+
+      trees.push({
+        id: nextId(),
+        category: 'planting-bed',
+        role: 'feature',
+        name: 'Tree',
+        symbol,
+        shape: canopy,
+        zone: zoneId ?? zoneOf(crown, allZones.length > 0 ? allZones : zones),
+        material: materialFor('planting-bed', constraints, index),
+        ...(symbol === 'tree-ornamental'
+          ? { plantId: 'acer-palmatum-red', name: 'Japanese maple', height: 3 }
+          : {}),
+      });
+      obstacles.push(stem);
+      return true;
+    };
 
     for (const feature of document.features.features.filter((f) => f.status === 'keep')) {
       const outline = featureOutline(feature);
@@ -576,6 +688,7 @@ export class ConceptsService {
         shape: geometry,
         zone: zoneOf(geometryOutline(geometry), allZones.length > 0 ? allZones : zones),
         material: spec.material ?? materialFor(spec.category, constraints, materialIndex),
+        ...(spec.edging ? { edging: spec.edging } : {}),
         ...(symbol ? { symbol } : {}),
       };
     };
@@ -1377,25 +1490,8 @@ export class ConceptsService {
           });
         }
 
-        if (frontSketch.tree && trees.length < MAX_TREES) {
-          const at = front.toWorld(frontSketch.tree.u, frontSketch.tree.v);
-          const shape: PlanGeometry = { kind: 'point', at, radius: TREE_RADIUS };
-          const outline = geometryOutline(shape);
-          if (
-            placeable(shape, houseRing, boundary, scopePolygon) &&
-            !obstacles.some((obstacle) => polygonsIntersect(outline, obstacle))
-          ) {
-            trees.push({
-              id: nextId(),
-              category: 'planting-bed',
-              role: 'feature',
-              name: 'Tree',
-              shape,
-              zone: frontZone.id,
-              material: materialFor('planting-bed', constraints, index),
-            });
-            obstacles.push(outline);
-          }
+        if (frontSketch.tree) {
+          plantTree(front.toWorld(frontSketch.tree.u, frontSketch.tree.v), frontZone.id);
         }
       }
     }
@@ -1409,40 +1505,58 @@ export class ConceptsService {
      */
     if (sketch && grammar) {
       for (const point of sketch.trees) {
-        if (trees.length >= MAX_TREES) break;
+        if (trees.length >= treeCap) break;
         // The sketched point, then a little way along each axis of the frame: a tree a metre
         // from where it was drawn is the same design, where a tree the sampler put in the side
         // return is not.
-        let placed: { shape: PlanGeometry; outline: Point[] } | null = null;
         for (const [du, dv] of TREE_NUDGES.slice(adjustments.treeNudge % TREE_NUDGES.length)) {
           const at = grammar.frame.toWorld(point.u + du, point.v + dv);
-          const shape: PlanGeometry = { kind: 'point', at, radius: TREE_RADIUS };
-          const outline = geometryOutline(shape);
-          if (!placeable(shape, houseRing, boundary, scopePolygon)) continue;
-          if (!withinRing(outline, grammar.room)) continue;
-          if (obstacles.some((obstacle) => polygonsIntersect(outline, obstacle))) continue;
-          placed = { shape, outline };
-          break;
+          if (!withinRing(geometryOutline(trunkFootprint({ kind: 'point', at, radius: 1 })), grammar.room)) continue;
+          if (plantTree(at)) break;
         }
-        if (!placed) continue;
-        const { shape, outline } = placed;
+      }
 
-        trees.push({
-          id: nextId(),
-          category: 'planting-bed',
-          role: 'feature',
-          name: 'Tree',
-          shape,
-          zone: zoneOf(outline, allZones),
-          material: materialFor('planting-bed', constraints, index),
-        });
-        obstacles.push(outline);
+      /*
+       * The backdrop, which is what the templates never had.
+       *
+       * Every composition places its trees as *framing* — a pair at the far corners, one by the
+       * gate — which is three or four specimens standing in open ground. What a designed garden
+       * has instead, and what the reference has most conspicuously, is a **line of trees along the
+       * boundary**: the thing that encloses the garden, screens what is behind it and gives
+       * everything else a scale to be read against.
+       *
+       * Walked here rather than added to each of the seven templates, because it is the same move
+       * in all of them and a template is about what makes its composition *different*. The
+       * sketch's own points are tried first, so a composition that has an opinion about where a
+       * specimen goes keeps it; this fills the boundary behind them until the plot has had enough.
+       */
+      const room = grammar.room;
+      for (const [index, corner] of room.entries()) {
+        if (trees.length >= treeCap) break;
+        const next = room[(index + 1) % room.length]!;
+        const run = Math.hypot(next.x - corner.x, next.y - corner.y);
+        if (run < BACKDROP_TREE_SPACING) continue;
+
+        const steps = Math.floor(run / BACKDROP_TREE_SPACING);
+        for (let step = 1; step <= steps; step += 1) {
+          if (trees.length >= treeCap) break;
+          const t = step / (steps + 1);
+          /* Inset from the edge by a trunk's own standoff: the crown may overhang, the stem may not. */
+          const on = { x: corner.x + (next.x - corner.x) * t, y: corner.y + (next.y - corner.y) * t };
+          const inward = { x: -(next.y - corner.y) / run, y: (next.x - corner.x) / run };
+          for (const direction of [1, -1]) {
+            const at = { x: on.x + inward.x * direction * BACKDROP_TREE_INSET,
+              y: on.y + inward.y * direction * BACKDROP_TREE_INSET };
+            if (!withinRing([at], room)) continue;
+            if (plantTree(at)) break;
+          }
+        }
       }
     }
 
-    if (trees.length < 2) {
+    if (trees.length < MIN_TREES) {
       for (const zone of zones) {
-        if (trees.length >= MAX_TREES) break;
+        if (trees.length >= treeCap) break;
 
         sqlStep += 1;
 
@@ -1456,24 +1570,8 @@ export class ConceptsService {
         });
 
         for (const at of candidates) {
-          if (trees.length >= MAX_TREES) break;
-
-          const shape: PlanGeometry = { kind: 'point', at, radius: TREE_RADIUS };
-          const outline = geometryOutline(shape);
-
-          if (!placeable(shape, houseRing, boundary, scopePolygon)) continue;
-          if (obstacles.some((obstacle) => polygonsIntersect(outline, obstacle))) continue;
-
-          trees.push({
-            id: nextId(),
-            category: 'planting-bed',
-            role: 'feature',
-            name: 'Tree',
-            shape,
-            zone: zone.id,
-            material: materialFor('planting-bed', constraints, index),
-          });
-          obstacles.push(outline);
+          if (trees.length >= treeCap) break;
+          plantTree(at, zone.id);
         }
       }
     }
@@ -1601,7 +1699,19 @@ export class ConceptsService {
     // Fit each designed bed into the garden and clear the places people use.
     const designed: DesignElement[] = [];
     if (sketch && grammar) {
-      for (const bed of sketch.beds) {
+      /*
+       * Each bed takes its own planting, the way the leftover border runs already do.
+       *
+       * Every designed bed used to be `materialFor('planting-bed', constraints, index)` — one
+       * argument, one answer, so the rear border, both side beds and the terrace flanks were the
+       * same mixture in the same plan. A real garden changes its planting where the border turns a
+       * corner, and it is the cheapest variety available here: the palette is already written, the
+       * schemes already differ by material, and nothing about the geometry moves.
+       *
+       * Ordered by the sketch rather than by the pieces PostGIS returns, so two pieces of one bed
+       * that a feature happened to cut in half are still one bed of one thing.
+       */
+      for (const [order, bed] of sketch.beds.entries()) {
         const local = bed.shape;
         const points =
           local.kind === 'polygon'
@@ -1637,7 +1747,7 @@ export class ConceptsService {
             fillKind: 'accent',
             shape,
             zone: roomZone?.id ?? 'back',
-            material: materialFor('planting-bed', constraints, index),
+            material: materialFor('planting-bed', constraints, index + order),
             plantingStyle: constraints.plantingStyle,
           });
         }
@@ -1821,6 +1931,11 @@ export class ConceptsService {
         element.material !== 'hedging',
     );
 
+    /* Read once from what was actually drawn, so a garden of borders carries a garden's structure. */
+    const structuralCap = structuralBudget(
+      plantedBeds.reduce((total, bed) => total + elementArea(bed), 0),
+    );
+
     for (const bed of plantedBeds) {
       if (bed.shape.kind !== 'polygon') continue;
 
@@ -1831,7 +1946,7 @@ export class ConceptsService {
         if (!isStructuralRole(layer.role)) continue;
 
         for (const placement of samplePlanting(outline, layer, bed.id)) {
-          if (specimens.length >= MAX_STRUCTURAL_PLANTS) break;
+          if (specimens.length >= structuralCap) break;
 
           // The plant's own variant picks its species, so a backdrop is a few kinds and not one.
           const symbol = symbolForLayer(layer, placement.variant) as SymbolId;
@@ -1879,7 +1994,7 @@ export class ConceptsService {
     // Sparse structural layers can miss a narrow border. Give each empty bed one deliberate
     // evergreen anchor, choosing the greatest clearance from its edge rather than a random point.
     for (const bed of plantedBeds) {
-      if (specimens.length >= MAX_STRUCTURAL_PLANTS) break;
+      if (specimens.length >= structuralCap) break;
       if (specimens.some((plant) => plant.bedId === bed.id)) continue;
       const outline = geometryOutline(bed.shape);
       const symbol: SymbolId = 'shrub-evergreen';
@@ -2321,6 +2436,8 @@ function stampEdging(elements: DesignElement[], constraints: DesignConstraints):
   if (!edging) return elements;
 
   return elements.map((element) => {
+    /* An edging the feature itself asked for is a decision already taken. See `FeatureSpec.edging`. */
+    if (element.edging) return element;
     if (element.role === 'fill' && element.fillKind === 'base') return element;
     if (element.category !== 'planting-bed' && element.category !== 'gravel-mulch') return element;
     // A point is a shrub or a tree, not a bed with a perimeter.

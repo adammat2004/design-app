@@ -56,10 +56,19 @@ export function compilePlantClusters(plants: RenderPlant[]): PlantCluster[] {
   }).sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** A continuous transition, independent of DPR. High tiers always remain individual plants. */
+/**
+ * A continuous transition, independent of DPR. High tiers always remain individual plants.
+ *
+ * **The band ends where the plan zoom begins.** It used to run from 40 down to 24 px/m, which put
+ * the ordinary editing zoom of 32 exactly half way: every low plant was drawn at half opacity
+ * *and* its mass blob at half opacity, one over the other. Two representations of the same plants
+ * ghosted together is not a transition between them — it is the mush that reads as noise at the
+ * zoom the user spends all their time at. From 32 down to 24 the crossover still happens, entirely
+ * below the zoom where individual plants are worth drawing.
+ */
 export function clusterMassOpacity(cluster: PlantCluster, pxPerMetre: number): number {
   if (!cluster.massEligible) return 0;
-  return Math.max(0, Math.min(1, (40 - pxPerMetre) / 16));
+  return Math.max(0, Math.min(1, (32 - pxPerMetre) / 8));
 }
 
 const clusterIndexes = new WeakMap<PlantCluster[], Map<string, PlantCluster>>();

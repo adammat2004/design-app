@@ -42,6 +42,7 @@ export const MaterialIdSchema = z.enum([
   // structure
   'softwood',
   'painted-timber',
+  'dark-stained-timber',
   'hardwood',
   'powder-coated-steel',
   // water-feature
@@ -115,6 +116,16 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
   structure: [
     { id: 'softwood', label: 'Treated softwood', cost: 1 },
     { id: 'painted-timber', label: 'Painted timber', cost: 2 },
+    /*
+     * The finish a garden building actually has, and the one the catalogue was missing.
+     *
+     * Every shed, store and garden room this app drew came out pale honey, because `softwood` is
+     * the cheap default and a photograph of untreated softwood is what it is. A real garden
+     * building is stained — and a dark one *recedes*, which is the whole reason designers specify
+     * it: a store you can see from the house is a store you are looking at instead of the garden.
+     * Same price band as paint, because it is the same job.
+     */
+    { id: 'dark-stained-timber', label: 'Dark-stained timber', cost: 2 },
     { id: 'hardwood', label: 'Hardwood', cost: 4 },
     { id: 'powder-coated-steel', label: 'Powder-coated steel', cost: 4 },
   ],

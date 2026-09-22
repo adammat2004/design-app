@@ -13,6 +13,7 @@ import { scaleOffsets } from './along-edge.js';
 import { BoundaryEdgeStyleSchema } from './boundary-style.js';
 import { GateSchema } from './gate.js';
 import { OpeningSchema } from './opening.js';
+import { DEFAULT_ROOF_MATERIAL, RoofMaterialSchema } from './roof-material.js';
 import { ZoneIdSchema } from './zone-id.js';
 
 /**
@@ -89,6 +90,21 @@ export const HouseFootprintSchema = z.object({
    * disturbing this. Defaults to two, which is the six-metre eaves every stored plan already had.
    */
   storeys: z.number().int().min(1).max(3).default(2),
+  /**
+   * What the roof is covered with — the second fact captured about the building, and the only one
+   * that is purely a *drawing* decision.
+   *
+   * Unlike the roof's **shape**, which the footprint genuinely constrains, the covering is not
+   * derivable from anything: guessing would be inventing a fact about somebody's house, which is
+   * the trap `site.location` exists to avoid. So it is asked rather than inferred, and defaulted to
+   * slate because a dark neutral recedes and a garden drawing wants the house to sit back.
+   *
+   * An addition with a default, so every stored plan reads back as the slate roof it was already
+   * drawn with — no migration and no `PLAN_DOCUMENT_VERSION` bump. **Nothing measures it**: it
+   * reaches `roofFor` and stops there, and deleting the field leaves every area, quantity and
+   * validation identical.
+   */
+  roofMaterial: RoofMaterialSchema.default('slate'),
 });
 export type HouseFootprint = z.infer<typeof HouseFootprintSchema>;
 
@@ -275,6 +291,7 @@ export function rectangleHouse(centre: Point, width: number, depth: number): Hou
     centre,
     rotation: 0,
     storeys: DEFAULT_STOREYS,
+    roofMaterial: DEFAULT_ROOF_MATERIAL,
   };
 }
 

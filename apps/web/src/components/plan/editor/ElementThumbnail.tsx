@@ -53,7 +53,7 @@ export function ElementThumbnail({ element }: { element: DesignElement }) {
       data-testid="element-thumbnail"
       role="img"
       aria-label={element.name ?? CATEGORY_COLOURS[element.category].label}
-      className="block h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-garden-line bg-[#f6f7f4] p-1.5"
+      className="block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-garden-line bg-[#f6f7f4] p-1"
     >
       <CatalogueThumbnail element={element} />
     </span>

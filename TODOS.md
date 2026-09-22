@@ -9,6 +9,118 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## In flight — professional-render programme (plan: `~/.claude/plans/i-want-to-upgrade-happy-penguin.md`)
+
+Closing the gap between our drawing and `target_design.png`. The gap was traced to five causes,
+ranked by how much of the picture each accounts for: planting that reads as dots rather than plants,
+nothing attached to the ground, trees too few and too small to give the garden scale, the house and
+boundaries drawn as outlines rather than built things, and borders too shallow to layer. The asset
+library is **not** among them — that was measured before and after the v2 regeneration.
+
+- [x] **Phase 2 — shadows, everywhere and soft.** `presentationCast` gives an unlocated plan the
+      drawing's own light (`conventionalCast`, 0.55 m per metre, away from `LIGHT_DIRECTION`) while
+      `ShadowCast.source` keeps every *solar* claim — time of day, shade study, night, lighting —
+      gated on a real location. Soft in both views, with the penumbra growing with the caster's
+      height in three bands; **3.1 ms against 0.9 ms** on the 56-occluder suburban fixture, on a
+      cache miss only. A **Shadows** view toggle in the toolbar, the Visualise controls and the PNG
+      export. Goldens re-captured; the courtyard fixture is where the change is worth looking at.
+      **The trap:** fall back on `site.location`, never on a null cast — a located garden at
+      midnight must stay dark, or the convention draws a second sun over the night wash.
+- [x] **Phase 1 — measure what the planting actually is.** `measure:render` gained a planting table
+      read off the scene rather than the pixels: plants per m² of bed, mean drawn diameter, the
+      share under half a metre, sampled cover and canopy share. It found 8–15 per m² against a
+      designed border's 5–7, 71–83% of them under half a metre, and 14–30% bare — which is the
+      whole diagnosis in four numbers, and none of it was visible to a colour statistic.
+- [x] **Phase 3 — the planting rework.** `INSTANCE_DENSITY` 1.25 → 0.8 and a new `CROWN_FILL` 1.45
+      on the drawn spread only; a real shrub storey in every bed (1–1.8 m); both views instanced, so
+      the 2D Plan's beds stop being cut-outs and foliage crosses onto the lawn; the mass LOD band
+      moved to 32→24 so the editing zoom no longer draws both representations at half opacity; no
+      contact disc under a mat (`MIN_CONTACT_SHADOW_HEIGHT`); the mauve out of the mixed-border
+      palette. **Measured**: 5.4–9.7 per m², mean 0.64–0.81 m, 6–25% under half a metre. The
+      browser parity and performance suite passes at DPR 1 and 2.
+- [ ] **Still open from phase 3.** Flowers are hard-coded off in instanced mode (`plants.ts`
+      `flower: null`) and the material's `flowers.share` is dropped by the layered path, so a border
+      has no flower accents at all in either view; the palette never reaches an instanced sprite
+      (`SPRITE_TINT` is applied only inside the raster painter), so the tonal ladder `tones.ts` was
+      tuned for does not exist where the plants now are; and the low-zoom "mass" is still one blob
+      per plant in the contacts pass rather than one merged drift.
+- [x] **Phase 4 — seam shading and grounding in the plan view.** `'seams'` is a pass in
+      `RENDER_PASSES` between the courses and the cast shadows, drawn by `renderSeamLayer` in both
+      backends: every ground feature's outline gets a soft band of shade on the ground just outside
+      it, blurred and then punched back out with `destination-out` so the interior stays clean. It
+      cannot be done inside a per-surface raster — a surface is clipped to its own outline and
+      cannot see what it meets — which is the same reason the paving kerb was reverted. The plan
+      view builds its stack too, so contact discs and foot bands ground the editor's objects.
+- [x] **Phase 5 — trees.** The species is chosen **before** the geometry, so a rowan is a rowan's
+      width; the **trunk** is the legal footprint and the canopy is presentation
+      (`packages/schema/src/plan/footprint.ts`), which is what finally lets a crown hang over a
+      terrace, a path or a fence; the count is `treeBudget(designedArea)` — one per 22 m², 3 to 12,
+      from the reference's own ten canopies over 220 m² — instead of a flat cap of five; and a
+      **boundary backdrop walk** plants along the room's own edges at 5 m spacing, inset 1.1 m, in
+      `concepts.service` and in the preview alike. A **`canopy` principle** scores the share of the
+      room under crown against a 0.15–0.35 band, so the candidate loop prefers the fuller garden
+      rather than merely tolerating it. **Measured**: canopy 0.912 mean over 117 concepts, 33
+      `sparse-canopy` faults, all still valid and deterministic with no critical faults.
+      **The trap:** `legalFootprint` has to reach *all four* deciders — the editor's drag, the run
+      executor, the assistant's planner and the PostGIS validator — or the server refuses the save
+      of a plan the editor drew.
+- [x] **Phase 6 — the generator's planting.** `BORDER_WIDTH` 1.5 → 2.2 m and `borderDepth`'s
+      ceiling 2.5 → 3.5, because a metre and a half holds two ranks of plants and a layered border
+      needs three; a `backdrop` shrub layer in the `naturalistic` and `pollinator` schemes, which
+      had grasses and perennials all the way to the fence; shrub symbols sized as the shrub is in
+      five years rather than as it arrives, plus `shrub-topiary` for the architectural palette; the
+      structural-plant cap scaled by planted area (one per 5 m²) instead of a flat thirty; each
+      designed bed taking its own planting material; steel edging for the default style at a dear
+      budget and `timber-sleeper` reachable at last, on the veg patch that is built of them.
+      **The trap it paid for:** a deeper border took the lawn under `LAWN_FLOOR` and a 9 × 10 m
+      garden came back paved corner to corner. `borderIn` is the rule — the lawn's floor wins over
+      the border's profile — and `isCourtyard` asks its question at the *thinnest* border, because
+      whether a room can hold a lawn is a fact about the room and not about what we would like to
+      plant round it.
+- [ ] **The cost of phase 6, measured and not hidden.** Composition-band compliance fell 72% → 64%
+      and `route-through-planting` rose 53 → 77 over the 117-concept harness; mean score 0.863 →
+      0.856, min 0.728 → 0.734, repairs accepted 15% → 23% of concepts. Both regressions are the
+      same fact: there is more planting and the routes were composed without knowing how deep the
+      beds would be. The routes are the thing to fix — they are laid from the sketch's own points
+      before `designedBeds` cuts anything — and the planting band may want re-deriving from a
+      re-traced target, which is phase F2 and still open.
+- [x] **Phase 7 — the house, the boundaries and the shed as built things.** The 2D Plan draws a
+      **roof** (at zero overhang, so nothing measurable changes) with the slate skin consumed, ridge
+      and hip capping, a fascia and a rooflight per plane over 30 m²; the door is not hidden under
+      it but marked on the ground outside, which is what a landscape drawing does. `roofMaterial` is
+      on the house and offered as three swatches in step 1. `MAX_DRAWN_LIFT` 3 → 4.5, so the
+      elevated wall is tall enough to carry its own openings. A boundary in plan gets a lit edge and
+      a cast band **whose reach states its height**, which is the only cue a flat band has; a hedge
+      face is skinned with `tex-hedge-top`. A `dark-stained-timber` structure material, which is
+      what a garden building actually is and what the generator now specifies for modern and
+      low-upkeep briefs. A pergola throws **slat shadows**, which is the one thing that says
+      "pergola" from above.
+- [x] **Phase 8 — the grade, and the fixtures re-captured.** `measure:render` gained a **colour
+      balance** row, because saturation, luminance and contrast are each computed over collapsed
+      channels and none of them can see warmth. It measured the reference 4.2% redder and 8.0% less
+      blue than our render, so the grade gained a fourth term, `WARMTH`, solved from that and
+      normalised to leave luminance alone. The grade now covers **both views** and the legacy
+      `finish()` in `export-plan.ts` — a look somebody chose, pulling two of the grade's terms the
+      other way — is deleted. Fixtures re-captured, sheets and goldens regenerated.
+- [ ] **Two things phase 7-8 measured and left.** The `cover` and `bare` columns in
+      `measure:render`'s planting table count **plant sprites only**, so a bed under a tree reads as
+      bare: the re-captured suburban fixture shows 36% cover against 27% canopy, and most of that
+      gap is canopy rather than soil. And the grade's `contrast` term is fitted to a whole-plot
+      standard deviation, which is a function of what the garden *contains* as much as of how it is
+      graded — closing it to zero was tried, achieved, and looked visibly worse (see `grade.ts`).
+      Both are measurement questions rather than drawing ones.
+- [ ] **What phase 7 did not do, with reasons.** The generator does **not** set `boundaryStyles` to
+      hedge on the rear edge for cottage briefs: boundary styles are a step-1 `site` field, one
+      section per step written by the one screen that owns it, and generation rewriting the user's
+      description of their own fence is the kind of silent inference `suggestedDoorWall` exists to
+      avoid. The honest shape is a chip that *offers* it. And `skin-roof-felt` is still unread: it
+      was consumed, looked at and reverted, because at 1.5 m a whole shed roof is two tiles by two
+      and reads as a dark slab quartered by its own seams (recorded in `draw-symbol.ts`).
+- [ ] **Still deferred: F2, the re-traced target.** `target.plan.json` is a thin trace — it carries
+      about six per cent canopy where the photograph has ten trees — so `COMPOSITION_BANDS` and the
+      new `CANOPY_BAND` both rest on a reading of the reference that under-counts its planting and
+      its trees. Re-tracing is what would let either be tightened.
+
 ## In flight — visual AI agents (plan: `~/.claude/plans/i-want-you-to-rippling-tide.md`)
 
 All six phases are built and verified. A shared `DesignOperation` schema, a pure executor, the
@@ -30,6 +142,21 @@ ten repair kinds are performable in the editor, against three before.
 What is left is mostly what the new measurements *found*: a third of generated plans do not honour
 the room they claim to be organised around, and the one repair verb with no planner behind it is
 laying a route — which is the third commonest fault in the harness.
+
+Phase B gave the designer the canvas selection, so "make this bigger" has a subject. See "The
+selection is what 'this' means" in CLAUDE.md. What that opened up rather than closed:
+
+- [ ] **Multi-select on the canvas.** `ProposeRequest.selection` already carries up to eight ids
+      and the prompt already words itself for a set, so the wire and the model are done; what is
+      missing is the gesture. Shift-click touches `selectedId`, the handles, delete, nudge and the
+      properties panel, which is why it was left out rather than folded in.
+- [ ] **Place a new thing *at* the selection.** "Put a bench here" is the obvious next sentence and
+      `add` cannot express it: `affinity` is an enum of relations to the house and the boundary with
+      no element in it. Adding one costs grammar budget on a schema already pinned at
+      `optionals <= 2` — run `probe:assistant` before assuming it compiles.
+- [ ] **The two planners disagree about an id that names nothing.** Step 5's `resolve` drops it in
+      silence; the garden planner reports it as unplaceable. A stale selection is now a second way
+      to reach that path, which makes the silent one worth closing.
 
 - [x] **Phase 0 — measurement.** One editor scene build is ~34 ms on a 50-element garden, almost
       entirely planting (1,355 plants; 1.3 ms with instancing off). Settled the frame path.

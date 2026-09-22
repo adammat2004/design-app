@@ -67,6 +67,15 @@ export interface GardenBuilder {
     name?: string,
     over?: Partial<DesignElement>,
   ) => DesignElement;
+  /**
+   * A tree: a point with the radius of its **canopy**, carrying a species symbol.
+   *
+   * The symbol is what makes it a tree to everything downstream — `buildSubject` reads it to keep
+   * canopies out of the planting regions, `measureComposition` reads it to keep them out of the
+   * shares, and `legalFootprint` reads it to know that what occupies the ground is the trunk. A
+   * bare point with no symbol is a pond.
+   */
+  tree: (at: Point, radius?: number, over?: Partial<DesignElement>) => DesignElement;
 }
 
 /**
@@ -108,5 +117,12 @@ export function gardenBuilder(prefix = 'e'): GardenBuilder {
   const path: GardenBuilder['path'] = (points, width = 1.2, name = 'Service path', over = {}) =>
     feature(name, { kind: 'polyline', points, width }, { material: 'stone-setts', ...over });
 
-  return { feature, fill, path };
+  const tree: GardenBuilder['tree'] = (at, radius = 2.2, over = {}) =>
+    feature(
+      'Tree',
+      { kind: 'point', at, radius },
+      { category: 'planting-bed', symbol: 'tree-deciduous', material: 'mixed-border', ...over },
+    );
+
+  return { feature, fill, path, tree };
 }

@@ -9,6 +9,7 @@ import {
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
+import type { BuildOptions } from '../render/build-scene';
 import { drawPlan, firstFeatureIndex, type PlanContext, type PlanScene } from './render-plan';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
 
@@ -96,13 +97,23 @@ function scene(elements: DesignElement[], over: Partial<SiteSection> = {}): Plan
   return { boundary: plot, house, elements, site: site(over) };
 }
 
-function render(input: PlanScene, pxPerMetre = PX): { pixels: Uint8ClampedArray; width: number } {
+function render(
+  input: PlanScene,
+  pxPerMetre = PX,
+  options: BuildOptions = {},
+): { pixels: Uint8ClampedArray; width: number } {
   const width = 20 * pxPerMetre;
   const height = 14 * pxPerMetre;
   const canvas = createCanvas(width, height);
   const context = canvas.getContext('2d');
 
-  drawPlan(context as unknown as PlanContext, input, { pxPerMetre, makeCanvas }, { x: 0, y: 0 });
+  drawPlan(
+    context as unknown as PlanContext,
+    input,
+    { pxPerMetre, makeCanvas },
+    { x: 0, y: 0 },
+    options,
+  );
 
   return { pixels: context.getImageData(0, 0, width, height).data, width };
 }
@@ -228,8 +239,18 @@ describe('drawPlan', () => {
     });
   });
 
-  it('casts shadows only when the plan knows where it is', () => {
-    const unlit = render(scene([lawn, tree]));
+  /**
+   * Where the shade falls is the sun's business; that there *is* shade is the drawing's.
+   *
+   * _This reverses_ "casts shadows only when the plan knows where it is". A plan with no location
+   * now casts the same conventional shadow it already drew as a contact disc under every sprite
+   * and a shade band along every fence — what it still refuses to do is claim that this is where
+   * the shade falls at ten in the morning, which is what the located case below asserts by putting
+   * the shadow somewhere the convention would never put it.
+   */
+  it('casts the drawing’s own shadows with no location, and the sun’s once it has one', () => {
+    const unlit = render(scene([lawn, tree]), PX, { shadows: false });
+    const conventional = render(scene([lawn, tree]));
     const lit = render(
       scene([lawn, tree], {
         location: { latitude: 53.4, longitude: -2.98 },
@@ -237,16 +258,27 @@ describe('drawPlan', () => {
       }),
     );
 
-    // A patch of lawn nowhere near anything tall is the same in both.
-    expect(at(lit, 2, 12)).toEqual(at(unlit, 2, 12));
-
-    // But the lawn in the tree's morning shadow — which falls north-west, up and left on screen
-    // with north up — is darker than the same lawn unlit.
-    const shaded = at(lit, 13.5, 8.8);
-    const open = at(unlit, 13.5, 8.8);
-    expect(at(lit, 17.5, 11.5)).toEqual(at(unlit, 17.5, 11.5));
     const luminance = (rgba: number[]) => rgba[0]! + rgba[1]! + rgba[2]!;
-    expect(luminance(shaded)).toBeLessThan(luminance(open));
+
+    // A patch of lawn nowhere near anything tall is untouched however the picture is lit.
+    expect(at(lit, 2, 12)).toEqual(at(unlit, 2, 12));
+    expect(at(conventional, 2, 12)).toEqual(at(unlit, 2, 12));
+
+    /*
+     * Both throw a shadow; they throw it in opposite directions, which is the whole point. The
+     * conventional light comes from the upper left so its shade falls to the lower right; the real
+     * morning sun throws it north-west, up and left on screen. So each is darker than no shadow at
+     * all on its own side, and *lighter* than the other one there. Compared rather than pinned to
+     * a pixel, because a soft edge reaches a little way into both.
+     */
+    const lowerRight = [15.4, 11.4] as const;
+    const upperLeft = [13.5, 8.8] as const;
+
+    expect(luminance(at(conventional, ...lowerRight))).toBeLessThan(luminance(at(unlit, ...lowerRight)));
+    expect(luminance(at(conventional, ...lowerRight))).toBeLessThan(luminance(at(lit, ...lowerRight)));
+
+    expect(luminance(at(lit, ...upperLeft))).toBeLessThan(luminance(at(unlit, ...upperLeft)));
+    expect(luminance(at(lit, ...upperLeft))).toBeLessThan(luminance(at(conventional, ...upperLeft)));
   });
 
   it('draws point and polyline symbols without throwing', () => {

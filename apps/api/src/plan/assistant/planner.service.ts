@@ -12,6 +12,7 @@ import {
   findMaterial,
   formatArea,
   geometryClearsHouse,
+  elementIsLegal,
   geometryIsLegal,
   geometryOutline,
   housePolygon,
@@ -56,7 +57,9 @@ import { PlacementService } from '../generation/placement.service.js';
  * Two rules run through all of it:
  *
  *  - **Nothing illegal is proposed.** Every produced element goes through the shared
- *    `geometryIsLegal`, the same predicate the canvas and the PostGIS validator use. The editor
+ *    `elementIsLegal`, the same predicate the canvas and the PostGIS validator use — and it is
+ *    asked about the element rather than its shape, so a tree is judged on the ground its trunk
+ *    occupies and not on how far its branches reach. The editor
  *    store re-checks on apply, so there are now two courtesies and one guarantee. The house is
  *    not part of that rule — a patio may be attached to the wall — but a newly *added* element
  *    is still sampled clear of the building; see the `add` branch.
@@ -351,7 +354,7 @@ export class PlannerService {
         }))
         .find(
           (candidate) =>
-            geometryIsLegal(candidate.shape, context.boundary) &&
+            elementIsLegal(candidate, context.boundary) &&
             clearOfOthers(candidate, element, context),
         );
 
@@ -485,7 +488,7 @@ export class PlannerService {
         continue;
       }
 
-      if (!geometryIsLegal(next.shape, context.boundary)) {
+      if (!elementIsLegal(next, context.boundary)) {
         result.unplaceable.push({
           description: `Reshape ${label(element)}`,
           reason: 'That side would end up outside the boundary.',
@@ -628,7 +631,7 @@ export class PlannerService {
           continue;
         }
 
-        if (!geometryIsLegal(moved.shape, context.boundary)) {
+        if (!elementIsLegal(moved, context.boundary)) {
           result.unplaceable.push({
             description: `Move ${label(piece)} with ${label(element)}`,
             reason: 'It would end up outside the boundary.',
@@ -1187,7 +1190,7 @@ function largestLegalFactor(
   context: Context,
 ): number | null {
   const legal = (factor: number) =>
-    geometryIsLegal(scaled(element, factor).shape, context.boundary) &&
+    elementIsLegal(scaled(element, factor), context.boundary) &&
     clearOfOthers(scaled(element, factor), element, context);
 
   if (legal(requested)) return requested;
@@ -1220,7 +1223,7 @@ function firstLegalStep(
     const dy = direction.y * fraction;
     const moved: DesignElement = { ...element, shape: translateGeometry(element.shape, dx, dy) };
 
-    if (geometryIsLegal(moved.shape, context.boundary) && clearOfOthers(moved, element, context)) {
+    if (elementIsLegal(moved, context.boundary) && clearOfOthers(moved, element, context)) {
       return moved;
     }
   }

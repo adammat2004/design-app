@@ -42,6 +42,16 @@ export interface FeatureSpec {
    * low-maintenance concept too.
    */
   material?: MaterialId;
+  /**
+   * An edging the feature always has, whatever the style says.
+   *
+   * One entry, and it is structural rather than decorative: a kitchen garden is *built* of timber
+   * sleepers, and `timber-sleeper` had been in `EDGING_MATERIALS` since edging landed with nothing
+   * anywhere able to choose it — `edgingFor` answers by style and no style asks for sleepers. A
+   * veg patch with a granite sett course round it because the garden is formal is the wrong
+   * drawing; a raised bed with no sides at all is not a raised bed.
+   */
+  edging?: MaterialId;
 }
 
 /**
@@ -71,6 +81,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     prefer: ['back', 'right', 'left'],
     affinity: 'far-from-house',
     planName: 'Veg beds',
+    edging: 'timber-sleeper',
   },
   water: {
     category: 'water-feature',
@@ -408,8 +419,21 @@ export function materialFor(
           ? 'slate-chippings'
           : (['decorative-gravel', 'bark-mulch'] as const)[index % 2]!;
 
+      /*
+       * A garden building is stained, and until `dark-stained-timber` existed it could not be.
+       *
+       * Every shed, store and garden room came out pale honey — `softwood` is the cheap default and
+       * a photograph of untreated softwood is what it is — so the most conspicuous object in the
+       * garden after the house was also the brightest. A dark stain *recedes*, which is the whole
+       * reason a designer specifies one: a store you notice is a store you are looking at instead
+       * of the garden. It leads the modern and low-upkeep branch for that reason, and shares the
+       * rotation elsewhere so a plan with two buildings still differs between them.
+       */
       case 'structure':
-        return dear ? 'hardwood' : (['softwood', 'painted-timber'] as const)[index % 2]!;
+        if (dear) return 'hardwood';
+        if (constraints.style === 'modern' || lowUpkeep)
+          return (['dark-stained-timber', 'softwood'] as const)[index % 2]!;
+        return (['softwood', 'dark-stained-timber', 'painted-timber'] as const)[index % 3]!;
 
       case 'water-feature':
         return formal ? 'formal-pool' : 'naturalistic-pond';
@@ -476,7 +500,18 @@ export function edgingFor(constraints: DesignConstraints): MaterialId | null {
   if (constraints.style === 'cottage') return 'brick-edging';
   if (constraints.style === 'modern' || lowUpkeep) return 'steel-edging';
 
-  return null;
+  /*
+   * And the default style takes a steel edge where the budget is dear, which _reverses_ the line
+   * above saying everything else gets nothing.
+   *
+   * That was right about municipal planting and wrong about the drawing. `naturalistic` is what
+   * most briefs resolve to, so "everything else" was the commonest answer rather than a rare one —
+   * and the thing a spade cut cannot do on a plan is hold the line between a border and the lawn it
+   * runs into, so a bed read as a stain on the grass rather than as a bed. Steel is the edging that
+   * costs the least visual weight, which is what makes it the one that can be spent here; and only
+   * at a dear budget, so a concept never quietly specifies ninety metres of anything.
+   */
+  return dear ? 'steel-edging' : null;
 }
 
 /**

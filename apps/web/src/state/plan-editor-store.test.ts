@@ -684,17 +684,36 @@ describe('plant properties and bed membership', () => {
     hydratePlanEditorStore(layout, Date.now());
     expect(store().present.elements.find((e) => e.id === 'tree')).toMatchObject(planted);
   });
-  it('detaches a plant moved out of its bed and refuses an out-of-bounds canopy', () => {
+  it('detaches a plant moved out of its bed, and lets a canopy grow past the fence', () => {
     seed([bed, tree]);
     store().setPosition('tree', { x: 3, y: 7 });
     expect(store().present.elements.find((e) => e.id === 'tree')?.bedId).toBeUndefined();
+
+    /*
+     * A canopy wider than the plot is **accepted**, and _this reverses_ what this test used to
+     * assert. What has to be inside the fence is the trunk — see `legalFootprint` — because a
+     * canopy reaching over a boundary is what a garden with trees in it looks like rather than a
+     * thing planted next door. The editor, the AI run executor, the assistant's planner and the
+     * server's validator all ask that same question of that same shape now, so a tree the user
+     * grows here is a tree the save accepts.
+     */
     store().setCanopyDiameter('tree', 30);
+    expect(store().present.elements.find((e) => e.id === 'tree')?.shape).toMatchObject({
+      radius: 15,
+    });
+
+    store().undo();
     expect(store().present.elements.find((e) => e.id === 'tree')?.shape).toMatchObject({
       radius: 0.6,
     });
-    store().undo();
+  });
+
+  it('still refuses a tree whose trunk would leave the plot', () => {
+    seed([bed, tree]);
+    store().setPosition('tree', { x: -4, y: 3 });
     expect(store().present.elements.find((e) => e.id === 'tree')?.shape).toMatchObject({
       at: { x: 3, y: 3 },
     });
+    expect(store().clash).not.toBeNull();
   });
 });

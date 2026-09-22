@@ -90,12 +90,46 @@ export const FOLIAGE_SHADOW_SOFTNESS = 0.45;
 export const FOLIAGE_SHADOW_TONE = '#7c8a91';
 
 /**
+ * How much softer a shadow edge gets per metre the thing casting it stands above the ground.
+ *
+ * A presentation choice, like the base softness itself, and the honest reading is not the sun's
+ * angular size — at these ratios the true penumbra of a six-metre house is about 3 cm, well under
+ * the 6 cm the drawing already uses. It is that the further a shadow edge falls from the object
+ * that made it, the more of the sky is diffusing it, and the more a hard edge there looks drawn on.
+ * A kerb keeps its crisp line; a house, a tree and a shed get an edge that reads as air between the
+ * object and its shadow.
+ *
+ * At 0.25 a 6 m house is 2.5× the base and a 0.3 m edging course is within 8% of it.
+ */
+export const PENUMBRA_GROWTH_PER_METRE = 0.25;
+
+/**
+ * Heights are quantised into these bands before they reach the blur, and the reason is cost.
+ *
+ * Every distinct softness is another opaque union, another blur and another composite over a
+ * raster that reaches 4096². Three bands — ground level, garden scale, building scale — is the
+ * resolution at which the difference is visible; a continuous version would be a pass per object.
+ */
+const HEIGHT_BANDS = [0, 1.5, 4] as const;
+
+function heightBand(height: number): number {
+  let band = 0;
+  for (let index = 1; index < HEIGHT_BANDS.length; index += 1) {
+    if (height >= HEIGHT_BANDS[index]!) band = index;
+  }
+  return band;
+}
+
+/**
  * Draw order, and it is the whole of how the overlap rule stays honest.
  *
  * Built last, so where a tree's shadow crosses a wall's the **darker** one wins. That is what
  * actually happens: the wall blocks the sun completely, and a porous canopy in front of it cannot
  * un-block it. Fixed order rather than input order means the result does not depend on which
  * occluder the scene happened to list first.
+ *
+ * Within a character the bands run **low to high**, so where a tree's crown shadow crosses its own
+ * trunk's the softer edge is laid over the crisper one rather than under it.
  */
 const CHARACTER_ORDER = ['foliage', 'built'] as const;
 
@@ -128,9 +162,15 @@ export function renderShadowLayer(
    *
    * Any value above zero turns the presentation path on; the blur actually applied then comes from
    * the occluder's own character (`PRESENTATION_SHADOW_SOFTNESS` for built, `FOLIAGE_SHADOW_SOFTNESS`
-   * for foliage), because one number cannot be right for both a brick wall and a tree canopy. So
-   * passing 0.2 here does not give a 0.2 m penumbra; it gives the same picture 0.06 would. Zero or
-   * absent is the plan view, which takes the old single-union path untouched.
+   * for foliage) and its own height (`PENUMBRA_GROWTH_PER_METRE`), because one number cannot be
+   * right for both a brick kerb and a tree canopy six metres up. So passing 0.2 here does not give
+   * a 0.2 m penumbra; it gives the same picture 0.06 would.
+   *
+   * Zero or absent takes the old single-union path: one tone, no blur, no buckets. _This reverses_
+   * "zero is the plan view": both views now pass the presentation softness, because a hard-edged
+   * shadow is what a shadow looks like on the moon and the plan is a drawing of a garden. The
+   * hard path is kept because a context with no `filter` support falls back to it, and because a
+   * caller that genuinely wants the union — a mask, a coverage measurement — should be able to ask.
    *
    * Kept as a number rather than a boolean because it is in `shadowLayerKey`, and a caller that
    * varies it should still miss the cache rather than silently reuse a raster.
@@ -206,23 +246,30 @@ export function renderShadowLayer(
   context.clip();
 
   for (const character of CHARACTER_ORDER) {
-    const bucket = occluders.filter((occluder) => (occluder.character ?? 'built') === character);
-    if (bucket.length === 0) continue;
+    for (let band = 0; band < HEIGHT_BANDS.length; band += 1) {
+      const bucket = occluders.filter(
+        (occluder) =>
+          (occluder.character ?? 'built') === character && heightBand(occluder.height) === band,
+      );
+      if (bucket.length === 0) continue;
 
-    scratchContext.clearRect(0, 0, widthPx, heightPx);
-    drawShadowLayer(
-      scratchContext,
-      bucket,
-      cast,
-      boundary,
-      { pxPerMetre: scale },
-      originMetres,
-      TONE[character],
-    );
+      scratchContext.clearRect(0, 0, widthPx, heightPx);
+      drawShadowLayer(
+        scratchContext,
+        bucket,
+        cast,
+        boundary,
+        { pxPerMetre: scale },
+        originMetres,
+        TONE[character],
+      );
 
-    context.filter = `blur(${SOFTNESS[character] * scale}px)`;
-    context.drawImage(scratch, 0, 0, widthPx, heightPx);
-    context.filter = 'none';
+      const softness =
+        SOFTNESS[character] * (1 + HEIGHT_BANDS[band]! * PENUMBRA_GROWTH_PER_METRE);
+      context.filter = `blur(${softness * scale}px)`;
+      context.drawImage(scratch, 0, 0, widthPx, heightPx);
+      context.filter = 'none';
+    }
   }
 
   context.restore();

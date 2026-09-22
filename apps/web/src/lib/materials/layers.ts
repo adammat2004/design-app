@@ -7,7 +7,7 @@ import {
   type PlantingScheme,
 } from '@garden-studio/schema';
 import type { AssetId } from './assets/asset-spec';
-import { materialAssets, type MaterialAssetSpec } from './assets/material-assets';
+import { materialAssets, MATERIAL_ASSETS, type MaterialAssetSpec } from './assets/material-assets';
 import type { MaterialManifestEntry } from './palette';
 import { cellSize } from './planting/sample';
 
@@ -175,12 +175,29 @@ function plantingLayers(material: MaterialManifestEntry, scheme: PlantingScheme)
             type: layer.taxon.type,
             ...(layer.taxon.tags ? { tags: layer.taxon.tags } : {}),
           },
+          /*
+           * The flowers, on the layer that is *about* flowers.
+           *
+           * The material carries one accent spec — `mixed-border` names `plant-flower` — and the
+           * layered path dropped it, because a layer's spec replaces the material's wholesale. So a
+           * mixed border had no flowers in it at all: the one thing every photograph of a border
+           * has, and the reason ours read as a bank of foliage. Only the flowering layer gets it,
+           * or a bed of ground cover comes out in bloom.
+           */
+          ...(flowering(layer) && MATERIAL_ASSETS[material.id]?.flowers
+            ? { flowers: MATERIAL_ASSETS[material.id]!.flowers }
+            : {}),
         },
         planting: layer,
       };
     });
 
   return [ground, ...layers];
+}
+
+/** A layer is in bloom if the scheme said so — by its tags or by being the accent. */
+function flowering(layer: PlantingLayer): boolean {
+  return layer.role === 'accent' || (layer.taxon.tags ?? []).includes('flowering');
 }
 
 /**

@@ -639,6 +639,32 @@ function lights(
 
 /* ---------------------------------------------------------------- the gallery */
 
+/**
+ * Four trees down the two side boundaries, given to **every** garden in the gallery.
+ *
+ * Every pair holds its contents constant, so a fixture that gains trees has to gain them on both
+ * sides of the pair — what differs between a good garden and its counterpart is still only where
+ * things stand and how big they are. The reason they are here at all is that the `canopy` principle
+ * asks a question none of these gardens could answer: hand-built to isolate circulation, grouping
+ * and proportion, not one of the nine had a tree in it, so all nine were reported as bare and the
+ * principle discriminated between none of them. A well-composed garden has trees; leaving them out
+ * was a gap in the fixtures rather than a finding about the scorer.
+ *
+ * Down the sides and never at the far end, deliberately: a tree within `FOCAL_REACH` of the axis's
+ * end terminates the view, which is exactly the fault `planted-poor` and `family-poor` are built to
+ * exhibit. A fixture change that quietly repairs the fault a pair exists to show would make the
+ * pair agree about a garden nobody looked at.
+ */
+function boundaryTrees(prefix: string): DesignElement[] {
+  const garden = gardenBuilder(`${prefix}-t`);
+  return [
+    garden.tree({ x: 1.6, y: 4.5 }),
+    garden.tree({ x: 1.6, y: 9.5 }),
+    garden.tree({ x: WIDTH - 1.6, y: 4.5 }),
+    garden.tree({ x: WIDTH - 1.6, y: 9.5 }),
+  ];
+}
+
 function entry(
   key: string,
   description: string,
@@ -646,7 +672,14 @@ function entry(
   built: Built,
   counterpart: string | null,
 ): GalleryGarden {
-  return { key, description, brief: gardenBrief, ...built, counterpart };
+  return {
+    key,
+    description,
+    brief: gardenBrief,
+    ...built,
+    elements: [...built.elements, ...boundaryTrees(key)],
+    counterpart,
+  };
 }
 
 export const GALLERY: GalleryGarden[] = [

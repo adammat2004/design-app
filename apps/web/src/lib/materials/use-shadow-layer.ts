@@ -3,13 +3,15 @@
 import { useMemo } from 'react';
 import {
   boundaryRuns,
-  shadowCast,
+  lightDirection,
   shadowOccluders,
   type DesignElement,
   type HouseFootprint,
   type Point,
   type SiteSection,
 } from '@garden-studio/schema';
+import { LIGHT_DIRECTION, presentationCast } from './light';
+import { PRESENTATION_SHADOW_SOFTNESS } from './render-shadow-layer';
 import { getShadowLayer } from './shadow-cache';
 import type { PatternCanvas, MakeCanvas } from './render-surface-pattern';
 import { useDevicePixelRatio } from './use-device-pixel-ratio';
@@ -21,9 +23,10 @@ import { useDevicePixelRatio } from './use-device-pixel-ratio';
  * does: everything below it is a pure function of data, so the shadow renderer can be tested
  * against a real canvas in Node without mounting anything.
  *
- * `null` is the ordinary answer, not a failure. It means "draw no shadow layer at all", and it
- * covers every case where claiming to know where the shade is would be inventing something: the
- * plan has no location, the sun is below the horizon, or nothing on the plan has any height.
+ * `null` is the ordinary answer, not a failure. It means "draw no shadow layer at all": a located
+ * plan whose sun is below the horizon, a plot with no outline, or nothing on the plan with any
+ * height. A plan that has never stated a location is no longer one of those cases — it draws the
+ * conventional shadow every other drawing convention here already implies. See `presentationCast`.
  */
 export interface ShadowLayer {
   image: PatternCanvas;
@@ -54,12 +57,12 @@ export function useShadowLayer(
     if (typeof document === 'undefined') return null;
 
     /*
-     * The gate on every solar claim in the app. No location means the plan has never said where
-     * it is, and a shadow drawn from a guessed latitude would be the design built confidently
-     * around a fact the user never stated — the same failure `suggestedDoorWall` avoids by
-     * offering the inferred patio door rather than applying it.
+     * The real sun where the plan has stated a location, the drawing's own light where it has not,
+     * and nothing where it has one and the sun is down. The solar claim is still gated —
+     * `ShadowCast.source` says which this is — but the *picture* no longer loses its depth for
+     * want of a latitude. See `presentationCast`.
      */
-    const cast = shadowCast(site);
+    const cast = presentationCast(site, lightDirection(site) ?? LIGHT_DIRECTION);
     if (!cast) return null;
 
     if (boundary.length < 3) return null;
@@ -68,7 +71,14 @@ export function useShadowLayer(
     if (occluders.length === 0) return null;
 
     const raster = getShadowLayer(
-      { occluders, cast, boundary, pxPerMetre: scale, pixelRatio },
+      {
+        occluders,
+        cast,
+        boundary,
+        pxPerMetre: scale,
+        pixelRatio,
+        softnessMetres: PRESENTATION_SHADOW_SOFTNESS,
+      },
       makeBrowserCanvas,
     );
 

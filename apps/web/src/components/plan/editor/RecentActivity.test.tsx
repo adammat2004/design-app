@@ -3,10 +3,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { DesignElement } from '@garden-studio/schema';
 import { layoutFingerprint } from '@/lib/concepts';
 import { resetAiRunStoreForTests, useAiRunStore } from '@/state/ai-run-store';
-import { resetAssistantStoreForTests } from '@/state/assistant-store';
+import { resetAssistantStoreForTests, useAssistantStore } from '@/state/assistant-store';
 import { resetBoundaryStoreForTests, useBoundaryStore } from '@/state/boundary-store';
 import { resetPlanEditorStoreForTests, usePlanEditorStore } from '@/state/plan-editor-store';
-import { DesignAgentPanel } from './DesignAgentPanel';
+import { EditorInspector } from './EditorInspector';
 
 /**
  * The way back to a redesign this session did not do.
@@ -79,7 +79,7 @@ function reloadedWithRedesign(elements: DesignElement[] = after) {
 describe('the redesign carried over from a previous session', () => {
   it('offers a way back, naming what was asked for', () => {
     reloadedWithRedesign();
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     expect(screen.getByTestId('ai-carried-revision')).toHaveTextContent('make the terrace bigger');
     expect(screen.getByTestId('ai-undo-carried')).toBeEnabled();
@@ -87,7 +87,7 @@ describe('the redesign carried over from a previous session', () => {
 
   it('puts the garden back when it is taken', () => {
     reloadedWithRedesign();
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     fireEvent.click(screen.getByTestId('ai-undo-carried'));
 
@@ -100,7 +100,7 @@ describe('the redesign carried over from a previous session', () => {
   /* It commits like any other edit, so the ordinary toolbar Undo can take the undo back. */
   it('is itself undoable', () => {
     reloadedWithRedesign();
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     fireEvent.click(screen.getByTestId('ai-undo-carried'));
     usePlanEditorStore.getState().undo();
@@ -110,7 +110,7 @@ describe('the redesign carried over from a previous session', () => {
 
   it('says nothing on a plan nobody has asked anything of', () => {
     usePlanEditorStore.setState((state) => ({ present: { ...state.present, elements: after } }));
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     expect(screen.queryByTestId('ai-carried-revision')).toBeNull();
   });
@@ -135,7 +135,7 @@ describe('the redesign carried over from a previous session', () => {
       },
     });
 
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     expect(screen.queryByTestId('ai-carried-revision')).toBeNull();
   });
@@ -147,8 +147,85 @@ describe('the redesign carried over from a previous session', () => {
    */
   it('withdraws the offer once the plan has been edited since', () => {
     reloadedWithRedesign([...after, patio({ id: 'e-2', name: 'Fire pit' })]);
-    render(<DesignAgentPanel />);
+    render(<EditorInspector />);
 
     expect(screen.queryByTestId('ai-carried-revision')).toBeNull();
+  });
+});
+
+/**
+ * The composer still names the selection, even though the header is what shows it.
+ *
+ * The placeholder is how a sentence with no noun in it ("use porcelain instead") resolves: the
+ * composer says what "this" will mean, so the short sentence is the obvious one to type.
+ */
+describe('the composer names the selection', () => {
+  it('offers to change the selected element by name', () => {
+    usePlanEditorStore.setState((state) => ({
+      present: { ...state.present, elements: [patio()] },
+    }));
+    usePlanEditorStore.getState().select('e-1');
+    render(<EditorInspector />);
+
+    expect(screen.getByTestId('assistant-input')).toHaveAttribute(
+      'placeholder',
+      'Ask for a change to Seating patio…',
+    );
+  });
+});
+
+/**
+ * What a past request was about, recorded in the transcript.
+ *
+ * "Make it bigger" is unreadable a minute later, which is the cost of letting the canvas supply the
+ * subject — so the bubble carries the subject with it, under the name it had at the time.
+ */
+describe('what a request was about', () => {
+  function asked(about: { id: string; label: string } | null) {
+    useAssistantStore.setState({
+      messages: [{ id: 'm1', role: 'user', text: 'make it bigger', at: Date.now(), about }],
+    });
+  }
+
+  it('names it under the question', () => {
+    usePlanEditorStore.setState((state) => ({
+      present: { ...state.present, elements: [patio()] },
+    }));
+    asked({ id: 'e-1', label: 'Seating patio' });
+    render(<EditorInspector />);
+
+    expect(screen.getByTestId('chat-about-m1')).toHaveTextContent('about Seating patio');
+  });
+
+  it('selects it again when taken', () => {
+    usePlanEditorStore.setState((state) => ({
+      present: { ...state.present, elements: [patio()] },
+    }));
+    asked({ id: 'e-1', label: 'Seating patio' });
+    render(<EditorInspector />);
+
+    fireEvent.click(screen.getByTestId('chat-about-m1'));
+
+    expect(usePlanEditorStore.getState().selectedId).toBe('e-1');
+  });
+
+  /*
+   * A control that looks available and does nothing is the fault this codebase keeps catching. The
+   * record still reads, because what the request was about is true whether the thing survived.
+   */
+  it('still says what it was about once the element has gone, without offering to select it', () => {
+    asked({ id: 'e-1', label: 'Seating patio' });
+    render(<EditorInspector />);
+
+    const tag = screen.getByTestId('chat-about-m1');
+    expect(tag).toHaveTextContent('about Seating patio');
+    expect(tag.tagName).not.toBe('BUTTON');
+  });
+
+  it('says nothing about a request that named no element', () => {
+    asked(null);
+    render(<EditorInspector />);
+
+    expect(screen.queryByTestId('chat-about-m1')).toBeNull();
   });
 });

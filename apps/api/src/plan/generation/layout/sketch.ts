@@ -181,9 +181,41 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** How deep the planting round the edges is. Never under `MIN_FILL_SIDE`, or it drops out. */
+/**
+ * How deep the planting round the edges is. Never under `MIN_FILL_SIDE`, or it drops out.
+ *
+ * Quoted at the same 2.2 m `BORDER_WIDTH` is, and capped at 3.5 rather than 2.5, for the reason
+ * given there: a metre and a half holds two ranks of plants, and a layered border needs three. The
+ * cap is what a border stays *reachable* at from one side — past about three and a half metres you
+ * are standing in it to weed the back, which is a planting a designer only draws where there is a
+ * path behind it.
+ */
 export function borderDepth(scale: number): number {
-  return clamp(1.5 * scale, MIN_FILL_SIDE, 2.5);
+  return clamp(2.2 * scale, MIN_FILL_SIDE, 3.5);
+}
+
+/**
+ * The border depth that fits across this span while leaving the open panel its floor.
+ *
+ * **The lawn's floor wins over the border's profile**, which is the rule that had to be written the
+ * moment `borderDepth` went from 1.5 m to 2.2. Those seventy centimetres come off the lawn, and on
+ * a small garden they took it under `LAWN_FLOOR` — so `isCourtyard` said the plot could not hold a
+ * lawn at all and the whole garden came back paved. A deeper border producing a worse plan is the
+ * change arguing against itself; what a border may take is what is left over, down to its own
+ * sliver guard and no further.
+ *
+ * `across` is the span the border shares with the panel, and `panelDepth` the panel's other
+ * dimension where the caller knows it. Both are needed because `LAWN_FLOOR` is an area as well as a
+ * minimum side: leaving the lawn 2.5 m across a 2.5 m deep strip leaves 6 m², which `lawnViable`
+ * rightly refuses, and the garden comes back paved anyway. Below the point where even
+ * `BED_MIN_DEPTH` leaves a viable lawn the answer is the guard, and the plot really is a courtyard.
+ */
+export function borderIn(scale: number, across: number, panelDepth?: number): number {
+  const needed =
+    panelDepth && panelDepth > 0
+      ? Math.max(LAWN_FLOOR.minDimension, LAWN_FLOOR.area / panelDepth)
+      : LAWN_FLOOR.minDimension;
+  return Math.max(BED_MIN_DEPTH, Math.min(borderDepth(scale), across - needed));
 }
 
 /* ---------------------------------------------------------------- the floors */
@@ -331,7 +363,17 @@ export function isCourtyard(
 ): boolean {
   const T = terraceDepth(scale, roomDepth, factor);
   const depth = lawnEnd(scale, roomDepth, T) - lawnStart(scale, roomDepth, T);
-  const width = roomWidth - borderDepth(scale) - MOWING_STRIP;
+  /*
+   * Measured against the **thinnest** border, not the one the style would like.
+   *
+   * Whether this room can hold a lawn is a fact about the room; how deep the borders round it are
+   * is a preference, and `borderIn` already gives the preference way to the lawn's floor. Asking
+   * this question at the preferred depth made the two disagree the moment `borderDepth` went to
+   * 2.2 m: a 9 × 10 m garden was reported as unable to hold a lawn, the courtyard composition
+   * claimed it on that basis, and a plan that had been 38% hard came back 82% — paved corner to
+   * corner because the border we *wanted* was seventy centimetres deeper.
+   */
+  const width = roomWidth - BED_MIN_DEPTH - MOWING_STRIP;
   return !lawnViable(width, depth);
 }
 

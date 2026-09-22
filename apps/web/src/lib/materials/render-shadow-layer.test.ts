@@ -6,7 +6,7 @@ import { drawShadowLayer, renderShadowLayer, type ShadowOccluder } from './rende
 import type { MakeCanvas, PatternCanvas, PatternContext } from './render-surface-pattern';
 
 /** Sun due south at 45 degrees: shadows fall due north, one metre per metre of height. */
-const NORTHWARD: ShadowCast = { direction: { x: 0, y: -1 }, lengthPerMetre: 1 };
+const NORTHWARD: ShadowCast = { direction: { x: 0, y: -1 }, lengthPerMetre: 1, source: 'solar' };
 
 const PX_PER_METRE = 10;
 
@@ -195,7 +195,7 @@ describe('drawShadowLayer', () => {
       { x: 20, y: 0 },
       { x: 0, y: 20 },
     ];
-    const eastward: ShadowCast = { direction: { x: 1, y: 0 }, lengthPerMetre: 2 };
+    const eastward: ShadowCast = { direction: { x: 1, y: 0 }, lengthPerMetre: 2, source: 'solar' };
 
     const canvas = createCanvas(20 * PX_PER_METRE, 20 * PX_PER_METRE);
     const context = canvas.getContext('2d');
@@ -288,7 +288,7 @@ describe('renderShadowLayer', () => {
     const noon = renderShadowLayer(occluders, NORTHWARD, PLOT, { pxPerMetre: 10, makeCanvas })!;
     const evening = renderShadowLayer(
       occluders,
-      { direction: { x: -1, y: 0 }, lengthPerMetre: 6 },
+      { direction: { x: -1, y: 0 }, lengthPerMetre: 6, source: 'solar' },
       PLOT,
       { pxPerMetre: 10, makeCanvas },
     )!;

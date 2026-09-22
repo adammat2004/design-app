@@ -1,4 +1,12 @@
-import { boundingBox, insetPolygon, outsetPolygon, type Point } from '@garden-studio/schema';
+import {
+  DEFAULT_ROOF_MATERIAL,
+  boundingBox,
+  insetPolygon,
+  outsetPolygon,
+  polygonArea,
+  type Point,
+  type RoofMaterial,
+} from '@garden-studio/schema';
 
 /**
  * A plausible roof over the mapped footprint.
@@ -45,14 +53,13 @@ export type RoofForm = 'gable' | 'hipped' | 'flat';
 /**
  * The covering. A single restrained default, with the other two named.
  *
- * Nothing in the plan says what the roof is made of, and unlike the *shape* — which the footprint
- * genuinely constrains — the material is not derivable from anything: a guess would be inventing
- * a fact about somebody's house, which is the trap `site.location` exists to avoid. Slate is the
- * default because a dark neutral recedes, and a garden drawing wants the house to sit back.
+ * Unlike the *shape* — which the footprint genuinely constrains — the material is not derivable
+ * from anything, so it is **asked** rather than guessed: `HouseFootprint.roofMaterial`, defaulted to
+ * slate because a dark neutral recedes and a garden drawing wants the house to sit back. The type
+ * lives in the schema so the document and the painter cannot hold two different lists.
  */
-export type RoofMaterial = 'slate' | 'dark-tile' | 'red-tile';
-
-export const DEFAULT_ROOF_MATERIAL: RoofMaterial = 'slate';
+export type { RoofMaterial };
+export { DEFAULT_ROOF_MATERIAL };
 
 export const ROOF_TONES: Record<RoofMaterial, { base: string; ridge: string }> = {
   slate: { base: '#5a6169', ridge: '#464c53' },
@@ -91,6 +98,75 @@ export interface RenderRoof {
    * planes that meet somewhere other than a ridge.
    */
   eaves: Point[];
+  /**
+   * Rooflights, as rings on the planes they sit in. Empty on a small or flat roof.
+   *
+   * A house of any size has something in its roof — a conservation light over a stair, a dormer,
+   * a flue — and a slope that is one unbroken field of tile is the most obvious way a drawn roof
+   * reads as a texture swatch rather than as a building. It is a **drawing convention** in the
+   * contact-shadow class rather than a claim: the document does not know whether this house has
+   * one, and one small rectangle on a large plane says "this is a roof" without saying anything
+   * about the room underneath.
+   */
+  rooflights: Point[][];
+}
+
+/**
+ * How big a plane has to be before it carries a rooflight, in square metres.
+ *
+ * Large enough that only a real slope gets one: a hip end on an ordinary house is well under it,
+ * and so is every plane of a small outrigger, so the convention shows up where a roof is broad
+ * enough for the eye to want something on it and nowhere else.
+ */
+const ROOFLIGHT_MIN_PLANE = 30;
+
+/** A rooflight's own size, in metres. A conservation light is about this. */
+const ROOFLIGHT = { along: 1.1, up: 0.8 };
+
+/**
+ * One light per plane big enough to carry it, centred on the plane and square to its eaves.
+ *
+ * Square to the eaves rather than to the world, so a rotated house's rooflights turn with it — the
+ * same reason the slate courses follow the eaves edge rather than the screen.
+ */
+function rooflightsFor(planes: RoofPlane[]): Point[][] {
+  const lights: Point[][] = [];
+
+  for (const plane of planes) {
+    if (plane.outline.length < 4) continue;
+    if (polygonArea(plane.outline) < ROOFLIGHT_MIN_PLANE) continue;
+
+    const [a, b] = plane.outline as [Point, Point];
+    const run = Math.hypot(b.x - a.x, b.y - a.y);
+    if (run <= 0) continue;
+
+    const along = { x: (b.x - a.x) / run, y: (b.y - a.y) / run };
+    const up = { x: -along.y, y: along.x };
+
+    /* The centre of the plane, and the direction from the eaves towards the ridge. */
+    const centre = plane.outline.reduce(
+      (total, point) => ({
+        x: total.x + point.x / plane.outline.length,
+        y: total.y + point.y / plane.outline.length,
+      }),
+      { x: 0, y: 0 },
+    );
+
+    const half = { along: ROOFLIGHT.along / 2, up: ROOFLIGHT.up / 2 };
+    lights.push(
+      [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ].map(([u, v]) => ({
+        x: centre.x + along.x * u! * half.along + up.x * v! * half.up,
+        y: centre.y + along.y * u! * half.along + up.y * v! * half.up,
+      })),
+    );
+  }
+
+  return lights;
 }
 
 /**
@@ -125,7 +201,16 @@ const RIDGE_INSET_RATIO = 0.46;
  */
 export const EAVES_OVERHANG = 0.35;
 
-export function roofFor(walls: Point[], light: Point, overhang = 0): RenderRoof | null {
+export interface RoofOptions {
+  /** How far the roof oversails its walls. Zero in the plan view; see `EAVES_OVERHANG`. */
+  overhang?: number;
+  /** What it is covered with, from the document. */
+  material?: RoofMaterial;
+}
+
+export function roofFor(walls: Point[], light: Point, options: RoofOptions = {}): RenderRoof | null {
+  const overhang = options.overhang ?? 0;
+  const material = options.material ?? DEFAULT_ROOF_MATERIAL;
   if (walls.length < 3) return null;
 
   /*
@@ -139,7 +224,7 @@ export function roofFor(walls: Point[], light: Point, overhang = 0): RenderRoof 
   const grown = overhang > 0 ? outsetPolygon(walls, overhang) : null;
   const outline = grown && grown.length === walls.length ? grown : walls;
 
-  const rectangular = rectangularRoof(outline, light);
+  const rectangular = rectangularRoof(outline, light, material);
   if (rectangular) return rectangular;
 
   const box = boundingBox(outline);
@@ -157,10 +242,11 @@ export function roofFor(walls: Point[], light: Point, overhang = 0): RenderRoof 
   if (!ridgeRing || ridgeRing.length !== outline.length) {
     return {
       form: 'flat',
-      material: DEFAULT_ROOF_MATERIAL,
+      material,
       planes: [{ outline, lit: 0 }],
       ridge: [],
       eaves: outline,
+      rooflights: [],
     };
   }
 
@@ -197,11 +283,11 @@ export function roofFor(walls: Point[], light: Point, overhang = 0): RenderRoof 
     ridgeRing[(index + 1) % ridgeRing.length]!,
   ]);
 
-  return { form, material: DEFAULT_ROOF_MATERIAL, planes, ridge, eaves: outline };
+  return { form, material, planes, ridge, eaves: outline, rooflights: rooflightsFor(planes) };
 }
 
 /** Orthogonal footprints get a real ridge in the building's frame, including rotated houses. */
-function rectangularRoof(outline: Point[], light: Point): RenderRoof | null {
+function rectangularRoof(outline: Point[], light: Point, material: RoofMaterial): RenderRoof | null {
   if (outline.length !== 4) return null;
   const [a, b, c, d] = outline as [Point, Point, Point, Point];
   const ab = { x: b.x - a.x, y: b.y - a.y };
@@ -237,13 +323,15 @@ function rectangularRoof(outline: Point[], light: Point): RenderRoof | null {
         ]
       : []),
   ];
+  const planes = rings.map((ring) => ({
+    outline: ring,
+    lit: litness(ring[0]!, ring[1]!, ring[2]!, light),
+  }));
   return {
     form,
-    material: DEFAULT_ROOF_MATERIAL,
-    planes: rings.map((ring) => ({
-      outline: ring,
-      lit: litness(ring[0]!, ring[1]!, ring[2]!, light),
-    })),
+    material,
+    planes,
+    rooflights: rooflightsFor(planes),
     ridge: [
       [r0, r1],
       ...(form === 'hipped'

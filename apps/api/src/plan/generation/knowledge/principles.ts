@@ -94,6 +94,12 @@ export const PRINCIPLES: Principle[] = [
     reason:
       'How much work the garden asks for against how much was offered. Only when the user said: an upkeep level nobody stated is not a standard to mark against.',
   },
+  {
+    id: 'canopy',
+    weight: 0.05,
+    reason:
+      'Whether anything grows over the garden. Every other principle can be satisfied by a flat plan with no trees in it, so without this the loop had no reason to prefer the fuller one.',
+  },
 ];
 
 export const PRINCIPLE_WEIGHTS: Record<string, number> = Object.fromEntries(
@@ -103,11 +109,12 @@ export const PRINCIPLE_WEIGHTS: Record<string, number> = Object.fromEntries(
 /**
  * The principles that only apply when the document says enough to ask them.
  *
- * `sun` needs a location; `maintenanceFit` needs an upkeep level. Both sit on top of the eight that
- * always apply rather than among them, so a plan that can answer neither is judged on eight things
- * out of eight rather than on eight out of ten.
+ * `sun` needs a location; `maintenanceFit` needs an upkeep level; `canopy` needs a room big enough
+ * for a tree to be a question. All three sit on top of the eight that always apply rather than among
+ * them, so a plan that can answer none of them is judged on eight things out of eight rather than on
+ * eight out of eleven.
  */
-export const CONDITIONAL: PrincipleId[] = ['sun', 'maintenanceFit'];
+export const CONDITIONAL: PrincipleId[] = ['sun', 'maintenanceFit', 'canopy'];
 
 /**
  * The score a candidate must reach to be offered without qualification.

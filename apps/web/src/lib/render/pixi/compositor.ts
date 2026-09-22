@@ -5,7 +5,9 @@ import { getSurfacePattern, bucketScale, zoomBucket, patternCacheStats } from '.
 import { getShadowLayer, shadowCacheStats } from '../../materials/shadow-cache';
 import { PRESENTATION_SHADOW_SOFTNESS } from '../../materials/render-shadow-layer';
 import { SHADOW_OPACITY, NIGHT_MAX_ALPHA } from '../../materials/light';
-import { drawPrimitive, drawContactPass, drawScene, type PlanContext, type PlanPass } from '../../materials/render-plan';
+import { drawPrimitive, drawContactPass, drawScene, plantTint, seamOutlines, type PlanContext, type PlanPass } from '../../materials/render-plan';
+import { renderSeamLayer, SEAM_SHADE_OPACITY } from '../../materials/render-seam-layer';
+import type { LoadedAsset } from '../../materials/assets/registry';
 import type { MakeCanvas, PatternCanvas } from '../../materials/render-surface-pattern';
 import { RasterLru } from '../../materials/raster-lru';
 import { elevatedPlacement } from '../../materials/symbols/elevated';
@@ -137,6 +139,7 @@ export class SceneRenderer {
       }
     } else {
       for (const name of RENDER_PASSES) {
+        if (name === 'seams') { this.seamShade(scene, scale, ratio, pass); continue; }
         if (name === 'cast-shadows') { this.castShadows(scene, scale, ratio); continue; }
         if (name === 'contacts') {
           const key = fingerprint([scene.passes.contacts.filter((p) => p.kind === 'contact-shadow').map((primitive) => primitive.cacheKey), scene.boundary, scene.light]);
@@ -149,9 +152,23 @@ export class SceneRenderer {
           if (primitive.kind === 'contact-shadow') continue;
           if (primitive.clip !== 'none' && !intersects(primitive.bounds, this.coverage!)) continue;
           if (primitive.kind === 'sprite' && primitive.node.kind === 'plant') {
-            const sprite = this.plantSprite(primitive.node.plant, scene);
-            if (sprite) { this.add(sprite, name, primitive.bounds);
-              this.fades.push({ sprite, plantId: primitive.node.id }); continue; }
+            const plant = primitive.node.plant;
+            const sprite = this.plantSprite(plant, scene);
+            if (sprite) {
+              this.add(sprite, name, primitive.bounds);
+              this.fades.push({ sprite, plantId: primitive.node.id });
+              /*
+               * The bloom is its own sprite added straight after, so it sits on its plant in the
+               * layer's insertion order, and it joins the same fade so a drift that masses at low
+               * zoom takes its flowers with it.
+               */
+              const bloom = this.flowerSprite(plant);
+              if (bloom) {
+                this.add(bloom, name, primitive.bounds);
+                this.fades.push({ sprite: bloom, plantId: primitive.node.id });
+              }
+              continue;
+            }
           }
           if (primitive.kind === 'surface' && primitive.item.surface?.material) {
             const surface = primitive.item.surface;
@@ -187,15 +204,38 @@ export class SceneRenderer {
     }
   }
 
+  /**
+   * The ambient shade round every surface laid on the ground, as one cached raster.
+   *
+   * Keyed on the outlines alone: it has no light in it — an edge is dark because two things meet
+   * there, not because the sun is somewhere — so moving the time of day must not throw it away.
+   */
+  private seamShade(scene: RenderScene, scale: number, ratio: number, pass: PlanPass): void {
+    const outlines = seamOutlines(scene);
+    if (outlines.length === 0) return;
+
+    const raster = this.raster(`seams:${fingerprint(outlines)}`, scene.bounds, scale, ratio,
+      (context, rasterPass) => {
+        const layer = renderSeamLayer(outlines, scene.boundary,
+          { pxPerMetre: rasterPass.pxPerMetre, makeCanvas });
+        if (!layer) return;
+        context.drawImage(layer.canvas, 0, 0, layer.widthPx, layer.heightPx);
+      }, pass);
+    if (!raster) return;
+
+    const sprite = this.addRaster(raster, 'seams', scene.bounds);
+    sprite.alpha = SEAM_SHADE_OPACITY;
+  }
+
   private castShadows(scene: RenderScene, scale: number, ratio: number): void {
     if (!scene.shadows.cast || !scene.passes['cast-shadows'].length) return;
     const started = clockNow();
     const misses = shadowCacheStats().misses;
     const raster = getShadowLayer({ occluders: scene.passes['cast-shadows'].flatMap((p) => p.kind === 'shadow-caster' ? [p.occluder] : []),
       cast: scene.shadows.cast, boundary: scene.boundary, pxPerMetre: scale, pixelRatio: ratio,
-      // Soft is Visualise's presentation choice; a diagram draws the hard edge. Same rule as the
-      // composer's `drawShadowLayer`, or the screen and the PNG disagree about a plan's shadows.
-      softnessMetres: scene.view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0 }, makeCanvas);
+      // Soft in both views, and the same rule as the composer's `drawShadows` — or the screen and
+      // the PNG disagree about a plan's shadows. See `renderShadowLayer` on why this reversed.
+      softnessMetres: PRESENTATION_SHADOW_SOFTNESS }, makeCanvas);
     if (shadowCacheStats().misses > misses) this.rasterTime.shadowRasterMs += clockNow() - started;
     if (!raster) return;
     const sprite = this.addRaster({ canvas: raster.canvas, origin: raster.originMetres, pxPerMetre: raster.pxPerMetre }, 'cast-shadows', scene.bounds);
@@ -241,12 +281,56 @@ export class SceneRenderer {
     this.displayBounds.push({ container, bounds });
   }
 
+  /**
+   * The flower head on a plant that carries one: concentric, unturned, drawn after its plant.
+   *
+   * Unturned because a bloom seen from above has no orientation worth claiming, and turning it with
+   * the plant would point the same head four ways across one drift and read as four species. The
+   * variant is picked with the plant's own tone, so a drift flowers in one colour.
+   */
+  private flowerSprite(plant: RenderPlant): Sprite | null {
+    if (!plant.flower) return null;
+    const heads = getAssetVariants(plant.flower.assetId);
+    const head = heads[Math.floor(plant.tone * heads.length)] ?? heads[0];
+    if (!head) return null;
+
+    const sprite = new Sprite(this.plantTexture(head, `${plant.flower.assetId}:${head.entry.variant}`));
+    const size = plant.spread * plant.flower.scale;
+    sprite.anchor.set(0.5);
+    const factor = size / Math.max(head.image.width, head.image.height);
+    sprite.width = head.image.width * factor;
+    sprite.height = head.image.height * factor;
+    sprite.position.set(plant.at.x, plant.at.y);
+    return sprite;
+  }
+
+  /** One mipmapped texture per distinct image, shared by plants and their flowers. */
+  private plantTexture(asset: LoadedAsset, id: string): Texture {
+    const key = `${assetVersion()}:${id}`;
+    this.usedAssets.add(key);
+    let texture = this.textures.get(key);
+    if (!texture) {
+      texture = Texture.from(asset.image as HTMLImageElement, true);
+      texture.source.autoGenerateMipmaps = true;
+      texture.source.mipmapFilter = 'linear';
+      this.textures.set(key, texture);
+    }
+    return texture;
+  }
+
   private plantSprite(plant: RenderPlant, scene: RenderScene): Sprite | null {
     if (!plant.assetId) return null;
     const variants = getAssetVariants(plant.assetId);
-    const asset = variants.find((candidate) => candidate.entry.variant === plant.variant) ?? variants[0];
-    if (!asset) return null;
-    const key = `${assetVersion()}:${plant.assetId}:${asset.entry.variant}`;
+    const found = variants.find((candidate) => candidate.entry.variant === plant.variant) ?? variants[0];
+    if (!found) return null;
+    /*
+     * Tinted through the composer's own helper rather than through Pixi's `tint`. A Pixi tint is a
+     * multiply and `tintSprite` is a `source-atop` blend, so using the cheap one here would make
+     * the WebGL view and the exported PNG disagree about the colour of every plant on the plan.
+     * The cache is shared, so this is one canvas per family, variant and tone for the whole app.
+     */
+    const asset = plantTint(found, plant, makeCanvas);
+    const key = `${assetVersion()}:${plant.assetId}:${asset.entry.variant}:${asset === found ? 'raw' : 'tint'}`;
     this.usedAssets.add(key);
     let texture = this.textures.get(key);
     if (!texture) {

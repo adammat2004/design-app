@@ -6,6 +6,7 @@ import type {
   ProposedChange,
 } from '@garden-studio/schema';
 import { create } from 'zustand';
+import { elementLabel } from '@/lib/concept-colours';
 import { ApiError, assistantAvailability, proposeChanges, repairDesign } from '@/lib/plan-api';
 import { runFromProposal } from '@/lib/ai-run/from-proposal';
 import { composeOutcome, type AgentOutcome } from '@/lib/ai-run/outcome';
@@ -37,6 +38,15 @@ export interface UserMessage {
   role: 'user';
   text: string;
   at: number;
+  /**
+   * What was selected on the canvas when this was sent, so the transcript records what a sentence
+   * was *about*. "Make it bigger" is unreadable a minute later without it.
+   *
+   * The label is captured here rather than looked up when the bubble renders, because the element
+   * can be renamed or deleted in between — and a past request was about what the thing was called
+   * at the time. The id is kept so the bubble can offer to select it again where it still exists.
+   */
+  about: { id: string; label: string } | null;
 }
 
 /**
@@ -203,6 +213,25 @@ export const useAssistantStore = create<AgentState>((set, get) => {
   }
 
   /**
+   * What is selected on the canvas, resolved to something worth sending and worth reading.
+   *
+   * Null when nothing is selected, and null when the selected id names nothing — the editor clears
+   * the selection on delete, but an undo or a hydration can leave one behind, and a ghost is worse
+   * than no subject at all. The label is the same fallback the properties panel shows, so the chip,
+   * the panel and the transcript all call one element by one name.
+   */
+  function focus(): { id: string; label: string } | null {
+    const editor = usePlanEditorStore.getState();
+    const id = editor.selectedId;
+    if (!id) return null;
+
+    const element = editor.present.elements.find((candidate) => candidate.id === id);
+    if (!element) return null;
+
+    return { id, label: elementLabel(element) };
+  }
+
+  /**
    * Everything after the model has answered: perform it, review it, say what happened.
    *
    * Shared by `send` and `acceptOffer`, because an offer accepted is a request the user made by
@@ -215,6 +244,8 @@ export const useAssistantStore = create<AgentState>((set, get) => {
     request: string,
     unplaceable: { description: string; reason: string }[],
     signal: AbortSignal,
+    /** What the sentence was about, which is in scope for the review whether or not it changed. */
+    selection: string[] = [],
   ): Promise<void> {
     const run = usePlanEditorStore.getState();
     const initial = run.present.elements;
@@ -275,16 +306,22 @@ export const useAssistantStore = create<AgentState>((set, get) => {
     if (abandoned(signal)) return;
 
     /*
-     * The review pass, scoped to what this request touched.
+     * The review pass, scoped to what this request touched and what it was about.
+     *
+     * The selection is in scope even when nothing about it changed: a request made with the terrace
+     * selected is a request about the terrace, and one that ended up only moving its furniture is
+     * still work on that terrace. Scope decides what may be acted on, never what may be looked at —
+     * the scorer still reads every element.
      *
      * Skipped after a stop, which is the one case where more work is plainly not wanted: the user
      * has just said they have seen enough.
      */
     let review: ReviewOutcome | null = null;
     if (!stopped) {
-      const subjects = changes
+      const touched = changes
         .map((change) => change.elementId)
         .filter((id): id is string => id !== null);
+      const subjects = [...new Set([...touched, ...selection])];
 
       set({ phase: 'reviewing' });
       patch(messageId, { status: 'reviewing' });
@@ -372,11 +409,21 @@ export const useAssistantStore = create<AgentState>((set, get) => {
        */
       const turns = history();
 
+      /*
+       * What they are pointing at, read before anything else happens.
+       *
+       * Taken here rather than at the moment of the request for the same reason the history is: a
+       * sentence is about the garden as it stood when it was typed. `flushAll` awaits, and the
+       * selection could change under a slow save.
+       */
+      const about = focus();
+      const selection = about ? [about.id] : [];
+
       const id = nextMessageId();
       set((state) => ({
         messages: [
           ...state.messages,
-          { id: nextMessageId(), role: 'user', text: trimmed, at: Date.now() },
+          { id: nextMessageId(), role: 'user', text: trimmed, at: Date.now(), about },
           {
             id,
             role: 'assistant',
@@ -404,7 +451,13 @@ export const useAssistantStore = create<AgentState>((set, get) => {
         const target = projectRevision();
         if (!target) throw new Error('No plan is loaded.');
 
-        const proposal = await proposeChanges(target.projectId, trimmed, turns, signal);
+        const proposal = await proposeChanges(
+          target.projectId,
+          trimmed,
+          turns,
+          selection,
+          signal,
+        );
         if (abandoned(signal)) return;
 
         patch(id, {
@@ -414,7 +467,7 @@ export const useAssistantStore = create<AgentState>((set, get) => {
           suggestions: proposal.suggestions,
         });
 
-        await perform(id, proposal.changes, trimmed, proposal.unplaceable, signal);
+        await perform(id, proposal.changes, trimmed, proposal.unplaceable, signal, selection);
       });
     },
 
@@ -426,7 +479,8 @@ export const useAssistantStore = create<AgentState>((set, get) => {
       set((state) => ({
         messages: [
           ...state.messages,
-          { id: nextMessageId(), role: 'user', text: request, at: Date.now() },
+          /* Nobody pointed at anything: this is a scripted run, not a sentence about a selection. */
+          { id: nextMessageId(), role: 'user', text: request, at: Date.now(), about: null },
           {
             id,
             role: 'assistant',
@@ -477,7 +531,14 @@ export const useAssistantStore = create<AgentState>((set, get) => {
       set((state) => ({
         messages: [
           ...state.messages,
-          { id: nextMessageId(), role: 'user', text: 'Review my design', at: Date.now() },
+          /* The whole plan is the subject here, which is precisely not a selection. */
+          {
+            id: nextMessageId(),
+            role: 'user',
+            text: 'Review my design',
+            at: Date.now(),
+            about: null,
+          },
           {
             id,
             role: 'assistant',
@@ -525,7 +586,12 @@ export const useAssistantStore = create<AgentState>((set, get) => {
       set((state) => ({
         messages: [
           ...state.messages,
-          { id: nextMessageId(), role: 'user', text: request, at: Date.now() },
+          /*
+           * The reviewer's own sentence, taken by pressing a chip. It names its subjects in the
+           * fault it carries, and those are not always elements — so there is nothing honest to
+           * put here.
+           */
+          { id: nextMessageId(), role: 'user', text: request, at: Date.now(), about: null },
           {
             id,
             role: 'assistant',

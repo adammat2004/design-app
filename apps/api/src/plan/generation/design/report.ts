@@ -21,6 +21,7 @@ const SHORT: Record<PrincipleId, string> = {
   featureFit: 'fit',
   sun: 'sun',
   maintenanceFit: 'upkp',
+  canopy: 'tree',
 };
 
 export function describeScore(name: string, score: DesignScore): string {

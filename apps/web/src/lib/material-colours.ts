@@ -42,6 +42,7 @@ export const MATERIAL_FILLS: Record<MaterialId, string | null> = {
   // structure
   softwood: '#c8b394',
   'painted-timber': '#d5c6ae',
+  'dark-stained-timber': '#4b453d',
   hardwood: '#b89a72',
   'powder-coated-steel': '#b9bcb5',
   // water-feature

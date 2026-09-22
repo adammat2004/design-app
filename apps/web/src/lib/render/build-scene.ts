@@ -19,7 +19,6 @@ import {
   patternAnchor,
   polylineStrip,
   resolveSymbol,
-  shadowCast,
   shadowOccluders,
   type BoundaryRun,
   type DesignElement,
@@ -28,7 +27,7 @@ import {
   type SiteSection,
 } from '@garden-studio/schema';
 import { resolveLayers } from '../materials/layers';
-import { LIGHT_DIRECTION } from '../materials/light';
+import { LIGHT_DIRECTION, presentationCast } from '../materials/light';
 import { materialFill } from '../material-colours';
 import { cssToRgb, rgbToCss, shiftBrightness } from '../materials/light';
 import { edgingWidth, resolvePattern } from '../materials/palette';
@@ -88,7 +87,7 @@ export interface BuildOptions extends Partial<SceneOptions> {
  */
 export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): RenderScene {
   const started = clockNow();
-  const { view, maturity, rendererVersion, depthFragments } = { ...DEFAULT_SCENE_OPTIONS, ...options };
+  const { view, maturity, rendererVersion, depthFragments, shadows } = { ...DEFAULT_SCENE_OPTIONS, ...options };
   const instanced = view === 'visualise';
 
   const elements = scene.elements.filter((element) => !element.hidden);
@@ -110,16 +109,30 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
      * speak for exclusions", so the pass's own value stands and a caller that set one keeps it.
      */
     const exclusions = plantingExclusions(element, elements);
-    const surface = resolveSurface(element, exclusions, instanced);
+    const surface = resolveSurface(element, exclusions, true);
 
     /*
-     * Instanced mode takes the plant layers off the surface and emits them here instead. The
-     * exclusions travel with them: a structure standing in a bed leaves the same gap in the
+     * Planting is instanced in **both** views — _this reverses_ "instanced mode" being the Visualise
+     * one. A bed painted inside `clip(outline)` is a cut-out by construction: no plant can cross its
+     * own edge, nothing spills onto the lawn beside it, and every border on the drawing ends in a
+     * hard line no garden has. That clip was the largest single reason the 2D Plan read as a
+     * diagram, and it was never what made the plan *measurable* — the outline is still the geometry
+     * of record, still what selection, handles, dimensions and the schedule use. Only the picture
+     * overhangs, exactly as a tree canopy has always been allowed to.
+     *
+     * The camera is the thing that must not travel with it. `chooseAsset` resolves a family and
+     * then swaps it for its elevated twin, so instancing the plan view without saying which camera
+     * it is drawing to is precisely how `vis-*` art once shipped into the 2D Plan. `audit:assets`
+     * fails on that now; this passes the answer down rather than leaving it to be inferred.
+     *
+     * The exclusions travel with them: a structure standing in a bed leaves the same gap in the
      * sprites that it left in the texture.
      */
-    if (instanced && surface?.material) {
+    if (surface?.material) {
       const stack = resolveLayers(surface.material, element);
-      plants.push(...buildPlants(element, stack, surface.outline, exclusions, maturity));
+      plants.push(
+        ...buildPlants(element, stack, surface.outline, exclusions, maturity, instanced ? 'elevated' : 'plan'),
+      );
     }
 
     return { element, part: 'ground', surface, visualLayer: layerForElement(element) };
@@ -133,7 +146,7 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     visualLayer: layerForElement(element),
   }));
 
-  const house = resolveHouse(scene.house, instanced ? light : null);
+  const house = resolveHouse(scene.house, instanced ? light : null, light);
   const runs = boundaryRuns(scene.site);
   const levels = buildLevels(elements, scene);
   const edging = buildEdging(elements, scene);
@@ -151,8 +164,18 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     objects,
     plants,
     house,
+    /*
+     * The real sun where the plan knows where on Earth it is, the drawing's own light where it
+     * does not, nothing where it knows and the sun is down, and nothing at all when the user has
+     * turned shadows off.
+     *
+     * `presentationCast` carries `source: 'conventional'` on the middle case so that everything
+     * which would be a claim about this garden at this hour — the time slider, the shadow-hours
+     * sheet, the night ramp — can keep refusing to make it. See `light.ts` for why the cast layer
+     * was the one drawing convention held to the solar standard, and what that cost the picture.
+     */
     shadows: {
-      cast: shadowCast(scene.site),
+      cast: shadows ? presentationCast(scene.site, light) : null,
       occluders: casters.map((caster) => caster.occluder),
       sourceIds: casters.map((caster) => caster.sourceId),
     },
@@ -164,9 +187,19 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     maturity,
     view,
     boundaryRuns: runs,
+    /*
+     * The plan's stack holds its **plants and nothing else**.
+     *
+     * The v2 renderer draws standing things from the stack rather than from `scene.plants`, so a
+     * plan view with an empty stack has no planting under Pixi at all — while the composer, which
+     * draws `plants` directly, would have it. Giving the plan view a plants-only stack is what
+     * keeps those two agreeing. Everything else in a full stack is the *elevated* drawing — lifted
+     * extrusions, skinned faces, a roof — and none of it may reach the plan; `buildStack` is not
+     * called here, so it cannot arrive by a later edit to a flag.
+     */
     stack: instanced
       ? buildStack({ boundary: scene.boundary, objects, plants, house, runs, levels, edging, light })
-      : [],
+      : plantNodes(plants),
   };
   const rendered: RenderScene = { ...content, ...compilePrimitives(content, scene.site, depthFragments) };
   recordCompilation(rendered, clockNow() - started);
@@ -241,21 +274,18 @@ function sortGroup(node: RenderNode): number {
  * forward than it is. A z-buffer would need real depth per pixel, which needs a real camera, which
  * is the thing this projection exists not to have.
  */
-function buildStack(scene: {
-  boundary: Point[];
-  objects: RenderItem[];
-  plants: RenderPlant[];
-  house: RenderHouse | null;
-  runs: BoundaryRun[];
-  levels: RenderLevel[];
-  edging: RenderSurface[];
-  light: Point;
-}): RenderNode[] {
-  const nodes: RenderNode[] = [];
-
-  for (const plant of scene.plants) {
+/**
+ * One node per plant, which is the whole of the plan view's stack and the start of Visualise's.
+ *
+ * `visualBounds` lifts the box by half the plant's height because that is what the *drawing* does
+ * — the sprite is drawn a little up the screen so a tall thing reads as standing — and the bounds
+ * have to cover what is painted or the raster clips it. In the plan view that lift is a couple of
+ * pixels; keeping the same function for both is worth more than saving them.
+ */
+function plantNodes(plants: RenderPlant[]): RenderNode[] {
+  return plants.map((plant) => {
     const half = (plant.spread / 2) * NODE_MARGIN;
-    nodes.push({
+    return {
       kind: 'plant',
       id: plant.id,
       depth: plant.at.y,
@@ -268,8 +298,21 @@ function buildStack(scene: {
       ),
       visualLayer: plant.visualLayer,
       plant,
-    });
-  }
+    };
+  });
+}
+
+function buildStack(scene: {
+  boundary: Point[];
+  objects: RenderItem[];
+  plants: RenderPlant[];
+  house: RenderHouse | null;
+  runs: BoundaryRun[];
+  levels: RenderLevel[];
+  edging: RenderSurface[];
+  light: Point;
+}): RenderNode[] {
+  const nodes: RenderNode[] = plantNodes(scene.plants);
 
   for (const item of scene.objects) {
     const outline = elementOutline(item.element);
@@ -672,7 +715,11 @@ function resolveSurface(
  * The house as a building. The outline is the geometry of record; the wall band is derived here,
  * every build, and `insetPolygon` refuses a footprint too small to hold one rather than guessing.
  */
-function resolveHouse(house: HouseFootprint | null, roofLight: Point | null): RenderHouse | null {
+function resolveHouse(
+  house: HouseFootprint | null,
+  roofLight: Point | null,
+  light: Point,
+): RenderHouse | null {
   if (!house) return null;
 
   const outline = housePolygon(house);
@@ -681,11 +728,25 @@ function resolveHouse(house: HouseFootprint | null, roofLight: Point | null): Re
   return {
     outline,
     interior: insetPolygon(outline, WALL_THICKNESS),
-    /* Only Visualise gets a roof: step 1 and the editor want the wall-and-floor diagram, where a
-     * building the user is positioning has to read as the footprint they are positioning. And only
-     * Visualise gets eaves — see `EAVES_OVERHANG` for why that reverses an earlier refusal without
-     * contradicting it. */
-    roof: roofLight ? roofFor(outline, roofLight, EAVES_OVERHANG) : null,
+    /*
+     * **Both views get a roof now, and _this reverses_ "only Visualise gets one".**
+     *
+     * The old rule protected step 1, where a building the user is *positioning* has to read as the
+     * footprint they are positioning — and it still does, because step 1 draws through its own
+     * Konva canvas and never touches this function. What it was also doing, unintentionally, was
+     * leaving every concept card, every export and every judging sheet with a flat pale rectangle
+     * where the house is: the eye parses that as another paved surface, and the drawing loses the
+     * one object that gives the garden its scale and its orientation.
+     *
+     * **Only Visualise gets eaves.** The overhang is what may not appear in the plan, where the
+     * roof *is* the house's drawn extent and geometry outside `housePolygon` could make a legal
+     * house look illegal. See `EAVES_OVERHANG`. The plan's roof is drawn strictly within the
+     * outline the validator measures, so nothing measurable changes.
+     */
+    roof: roofFor(outline, roofLight ?? light, {
+      overhang: roofLight ? EAVES_OVERHANG : 0,
+      material: house.roofMaterial,
+    }),
     openings: resolveOpenings(house),
     house,
   };

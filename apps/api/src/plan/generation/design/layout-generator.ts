@@ -1,6 +1,9 @@
 import {
   geometryOutline,
   polygonArea,
+  trunkFootprint,
+  SYMBOLS,
+  type SymbolId,
   polygonCentroid,
   type DesignBrief,
   type DesiredFeature,
@@ -10,6 +13,7 @@ import {
   type ZoneId,
 } from '@garden-studio/schema';
 import { FEATURE_SPECS, inradius, scaledSpec } from '../archetypes.js';
+import { treeSpeciesFor } from '../constraints.js';
 import type { DesignConstraints } from '../constraints.js';
 import type { LayoutArchetype } from '../knowledge/archetypes/types.js';
 import { FEATURE_LIBRARY, placementLadder } from '../knowledge/feature-library.js';
@@ -17,6 +21,7 @@ import { assignByPriority } from '../layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from '../layout/fit.js';
 import type { DesignFrame, LocalBox } from '../layout/frame.js';
 import { rectSize, type LayoutSketch, type Slot, type SketchRequest } from '../layout/sketch.js';
+import { BACKDROP_TREE_INSET, BACKDROP_TREE_SPACING, treeBudget } from '../layout/trees.js';
 import { circulationFor } from '../room-policy.js';
 import {
   accessName,
@@ -75,8 +80,27 @@ const TREE_NUDGES: [number, number][] = [
   [1.2, 1.2],
 ];
 
-/** A drawn canopy's radius, matching the generator's own. */
+/** The fallback canopy radius, for a species whose symbol is not a disc. `concepts.service`'s own. */
 const TREE_RADIUS = 1.6;
+
+/**
+ * A previewed tree: where it stands, how wide its crown is drawn and what it is.
+ *
+ * A bare `Point` was enough while every tree was 1.6 m whatever species it turned out to be. Now
+ * that the species is chosen before the geometry, a preview that forgot the radius would hand the
+ * scorer ten identical circles for a garden of hornbeams, rowans and fruit trees — and canopy
+ * cover, screening and what the crowns overhang are exactly what the extra trees are judged on.
+ */
+export interface PreviewTree {
+  at: Point;
+  radius: number;
+  symbol: SymbolId;
+}
+
+/** A previewed tree as the geometry everything else in this file speaks. */
+function canopyOf(tree: PreviewTree): PlanGeometry {
+  return { kind: 'point', at: tree.at, radius: tree.radius };
+}
 
 /** What a preview found a place for. */
 export interface PlacedItem {
@@ -104,7 +128,7 @@ export interface LayoutPreview {
   sketch: LayoutSketch;
   placed: PlacedItem[];
   routes: PreviewRoute[];
-  trees: Point[];
+  trees: PreviewTree[];
   /** The open panel in world metres, before the fill pass cuts it. */
   lawn: { ring: Point[]; category: 'lawn' | 'gravel-mulch' } | null;
   beds: { name: string; ring: Point[] }[];
@@ -381,21 +405,78 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
 
   /* ---- the trees ---- */
 
-  const trees: Point[] = [];
+  const trees: PreviewTree[] = [];
+  const treeCap = treeBudget(polygonArea(request.room));
+  const structures = placed
+    .filter((item) => item.category === 'structure')
+    .map((item) => item.ring);
+
+  /**
+   * Whether a tree stands here, asked exactly as `concepts.service` asks it.
+   *
+   * The trunk is what has to fit inside the room and clear of what is already drawn; the crown may
+   * hang over paving, a path or a border, and may not pass through a building or another crown.
+   * Any divergence here and the preview scores a garden with a different number of trees in it.
+   */
+  const treeFits = (at: Point, radius: number): boolean => {
+    const canopy: PlanGeometry = { kind: 'point', at, radius };
+    const crown = geometryOutline(canopy);
+    const stem = geometryOutline(trunkFootprint(canopy));
+    return (
+      isPlaceablePreview(trunkFootprint(canopy), request) &&
+      !obstacles.some((obstacle) => intersects(stem, obstacle)) &&
+      !structures.some((structure) => intersects(crown, structure)) &&
+      trees.every((other) => intersects(crown, geometryOutline(canopyOf(other))) === false)
+    );
+  };
+
+  /** The species this tree would be, and therefore how wide it is drawn. Chosen before the place. */
+  const nextTree = (): { symbol: SymbolId; radius: number } => {
+    const symbol = treeSpeciesFor(constraints.style, trees.length);
+    const spec = SYMBOLS[symbol].footprint;
+    return { symbol, radius: spec.kind === 'point' ? spec.radius : TREE_RADIUS };
+  };
+
   for (const point of sketch.trees) {
-    if (trees.length >= 5) break;
+    if (trees.length >= treeCap) break;
+    const { symbol, radius } = nextTree();
     const ladder = TREE_NUDGES.slice(adjustments.treeNudge % TREE_NUDGES.length);
     const at = ladder
       .map(([du, dv]) => frame.toWorld(point.u + du, point.v + dv))
-      .find((candidate) => {
-        const geometry: PlanGeometry = { kind: 'point', at: candidate, radius: TREE_RADIUS };
-        return (
-          isPlaceablePreview(geometry, request) &&
-          !obstacles.some((obstacle) => intersects(geometryOutline(geometry), obstacle)) &&
-          trees.every((other) => Math.hypot(other.x - candidate.x, other.y - candidate.y) > 2.6)
-        );
-      });
-    if (at) trees.push(at);
+      .find((candidate) => treeFits(candidate, radius));
+    if (at) trees.push({ at, radius, symbol });
+  }
+
+  /*
+   * The boundary backdrop the realised pipeline walks, previewed the same way. Without it the
+   * preview scores a garden with three trees in it and the built plan has ten, so enclosure and
+   * canopy — the things the extra trees are *for* — are measured on a plan nobody sees.
+   */
+  const ring = request.room;
+  for (let corner = 0; corner < ring.length && trees.length < treeCap; corner += 1) {
+    const from = ring[corner]!;
+    const to = ring[(corner + 1) % ring.length]!;
+    const run = Math.hypot(to.x - from.x, to.y - from.y);
+    if (run < BACKDROP_TREE_SPACING) continue;
+
+    const steps = Math.floor(run / BACKDROP_TREE_SPACING);
+    const inward = { x: -(to.y - from.y) / run, y: (to.x - from.x) / run };
+    for (let step = 1; step <= steps && trees.length < treeCap; step += 1) {
+      const t = step / (steps + 1);
+      const on = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+      const { symbol, radius } = nextTree();
+      /* Which side of the edge is the garden is not known here, so both are offered. */
+      for (const direction of [1, -1]) {
+        const at = {
+          x: on.x + inward.x * direction * BACKDROP_TREE_INSET,
+          y: on.y + inward.y * direction * BACKDROP_TREE_INSET,
+        };
+        if (treeFits(at, radius)) {
+          trees.push({ at, radius, symbol });
+          break;
+        }
+      }
+    }
   }
 
   return {

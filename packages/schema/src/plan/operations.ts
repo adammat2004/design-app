@@ -1,12 +1,8 @@
 import { z } from 'zod';
 import { PointSchema, polygonIsSimple, type Point } from '../geometry/primitives.js';
 import { DesignElementSchema, isLocked, type DesignElement } from './concepts.js';
-import {
-  MIN_FEATURE_SIDE,
-  geometryIsLegal,
-  moveGeometry,
-  type PlanGeometry,
-} from './features.js';
+import { MIN_FEATURE_SIDE, moveGeometry, type PlanGeometry } from './features.js';
+import { elementIsLegal } from './footprint.js';
 
 /**
  * What an AI designer is allowed to do to a layout, as data.
@@ -28,7 +24,7 @@ import {
  *    only ever a finished, legal `DesignElement`. Same reasoning as `DesignIntent` having no field
  *    that can hold a coordinate.
  * 3. **Nothing here decides legality.** `resolveOperation` does, against the same
- *    `geometryIsLegal` and `isLocked` the editor's own gestures answer to — so an operation can
+ *    `elementIsLegal` and `isLocked` the editor's own gestures answer to — so an operation can
  *    never animate a change the store would refuse to keep. An animation that showed a change the
  *    plan did not accept would be the one lie this feature cannot afford.
  *
@@ -357,7 +353,9 @@ export function resolveOperation(
       return { ok: false, reason: `${before.name ?? 'That'} would be too small.` };
     if (shape.kind === 'polygon' && !polygonIsSimple(shape.points))
       return { ok: false, reason: 'That outline would cross itself.' };
-    if (!geometryIsLegal(shape, context.boundary)) return { ok: false, reason: FENCE_REFUSAL };
+    /* `elementIsLegal`, so a tree is judged on its trunk exactly as the editor's own drag is. */
+    if (!elementIsLegal({ ...before, shape }, context.boundary))
+      return { ok: false, reason: FENCE_REFUSAL };
     return { ok: true, effect: 'replace', before, after: { ...before, shape } };
   };
 
@@ -450,8 +448,7 @@ export function resolveOperation(
         return { ok: false, reason: 'That element is already on the plan.' };
 
       const after: DesignElement = { ...operation.element, id };
-      if (!geometryIsLegal(after.shape, context.boundary))
-        return { ok: false, reason: FENCE_REFUSAL };
+      if (!elementIsLegal(after, context.boundary)) return { ok: false, reason: FENCE_REFUSAL };
       return { ok: true, effect: 'append', after };
     }
 

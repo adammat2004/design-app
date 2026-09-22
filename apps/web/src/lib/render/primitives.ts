@@ -1,5 +1,9 @@
 import { boundingBox, edgingHeight, elementAnchor, elementOutline, type Point, type ShadowOccluder, type SiteSection } from '@garden-studio/schema';
-import { CONTACT_SHADOW_OFFSET_RATIO, CONTACT_SHADOW_SCALE } from '../materials/light';
+import {
+  CONTACT_SHADOW_OFFSET_RATIO,
+  CONTACT_SHADOW_SCALE,
+  MIN_CONTACT_SHADOW_HEIGHT,
+} from '../materials/light';
 import { LAYER_ORDER } from './visual-layer';
 import { fingerprint } from './fingerprint';
 import { compileLinearCourse, type LinearCourse } from './linear-course';
@@ -9,7 +13,7 @@ import { boundaryContributions, structureContributions } from './depth-fragments
 import { visualBounds } from './projection';
 import { footBand, footBandDepth } from '../materials/symbols/elevated';
 
-export const RENDER_PASSES = ['terrain', 'surfaces', 'courses', 'cast-shadows', 'contacts',
+export const RENDER_PASSES = ['terrain', 'surfaces', 'courses', 'seams', 'cast-shadows', 'contacts',
   'ground-light', 'standing', 'emissive', 'access'] as const;
 export type RenderPassName = typeof RENDER_PASSES[number];
 export type WorldBounds = RenderNode['bounds'];
@@ -42,16 +46,21 @@ export interface GroundLightPrimitive extends PrimitiveBase { kind: 'ground-ligh
 export interface EmissivePrimitive extends PrimitiveBase { kind: 'emissive'; light: RenderLight }
 export interface PlantMassPrimitive extends PrimitiveBase { kind: 'plant-mass'; cluster: PlantCluster }
 export interface TerrainPrimitive extends PrimitiveBase { kind: 'terrain'; outline: Point[] }
+/**
+ * One surface that darkens the ground around it. Drawn as a single layer, never per surface —
+ * see `render-seam-layer.ts` for why a per-surface raster cannot hold its neighbours' shade.
+ */
+export interface SeamPrimitive extends PrimitiveBase { kind: 'seam'; outline: Point[] }
 export interface AmbientPrimitive extends PrimitiveBase { kind: 'ambient'; night: number }
 export interface AccessPrimitive extends PrimitiveBase { kind: 'access'; site: SiteSection }
 export type StandingPrimitive = SpritePrimitive | ExtrusionPrimitive;
 export type RenderPrimitive = SurfacePrimitive | LinearCoursePrimitive | StandingPrimitive | ShadowCaster |
   ContactShadowPrimitive | GroundLightPrimitive | EmissivePrimitive | PlantMassPrimitive | TerrainPrimitive |
-  AmbientPrimitive | AccessPrimitive;
+  SeamPrimitive | AmbientPrimitive | AccessPrimitive;
 export type RenderPasses = Record<RenderPassName, RenderPrimitive[]>;
 
 export function emptyRenderPasses(): RenderPasses {
-  return { terrain: [], surfaces: [], courses: [], 'cast-shadows': [], contacts: [],
+  return { terrain: [], surfaces: [], courses: [], seams: [], 'cast-shadows': [], contacts: [],
     'ground-light': [], standing: [], emissive: [], access: [] };
 }
 
@@ -76,6 +85,16 @@ export function compilePrimitives(scene: SceneContent, site: SiteSection, depthF
     } else {
       add({ ...base(`${item.element.id}:ground`, item.element.id, 'surfaces', bounds, [item, scene.light]),
         kind: 'surface', item, lod: 'surface', clip: 'surface' });
+    }
+    /*
+     * What darkens the ground around it, and what does not. A **base fill is the ground** — one per
+     * zone, covering the whole of it — so a band round its outline would draw a dark line along
+     * every internal zone seam, straight across the middle of a garden where nothing meets
+     * anything. Everything laid *on* the ground casts: a bed, a patio, a path, a gravel panel.
+     */
+    if (item.element.fillKind !== 'base' && item.surface && item.surface.outline.length >= 3) {
+      add({ ...base(`${item.element.id}:seam`, item.element.id, 'seams', bounds, item.surface.outline),
+        kind: 'seam', outline: item.surface.outline, lod: 'surface' });
     }
   }
   for (const surface of scene.edging) {
@@ -109,7 +128,9 @@ export function compilePrimitives(scene: SceneContent, site: SiteSection, depthF
       const at = node.kind === 'plant' ? node.plant.at : elementAnchor(node.item.element);
       const box = node.kind === 'object' ? boundingBox(elementOutline(node.item.element)) : null;
       const radius = node.kind === 'plant' ? node.plant.spread / 2 : Math.max(box!.width, box!.length) / 2;
-      if (radius > 0) {
+      // A mat has nothing standing off the ground to cast; see `MIN_CONTACT_SHADOW_HEIGHT`.
+      const grounded = node.kind === 'plant' && node.plant.height < MIN_CONTACT_SHADOW_HEIGHT;
+      if (radius > 0 && !grounded) {
         const reach = radius * (CONTACT_SHADOW_SCALE + CONTACT_SHADOW_OFFSET_RATIO);
         add({ ...base(`${node.id}:contact`, sourceId, 'contacts',
           { minX: at.x - reach, minY: at.y - reach, width: reach * 2, length: reach * 2 }, [at, radius, scene.light]),

@@ -14,6 +14,7 @@ import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
 import { gradeCss } from '@/lib/materials/grade';
+import { GradeFilter } from './GradeFilter';
 
 /**
  * Visualise, drawn by WebGL and driven live.
@@ -236,6 +237,10 @@ export function VisualiseView() {
   }, []);
 
   return (
+    <>
+    {/* Mounted beside the view rather than inside it: a filter inside the element it filters would
+        be filtered by itself. See `GradeFilter`. */}
+    <GradeFilter />
     <div
       ref={wrapperRef}
       data-testid="visualise-canvas"
@@ -282,5 +287,6 @@ export function VisualiseView() {
         </p>
       ) : null}
     </div>
+    </>
   );
 }

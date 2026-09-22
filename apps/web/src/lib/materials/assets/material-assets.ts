@@ -342,6 +342,17 @@ export function elevatedFamilyFor(element: {
 export const BOUNDARY_SKINS: Partial<Record<string, AssetId>> = {
   fence: 'skin-fence-boards',
   wall: 'skin-render',
+  /*
+   * A hedge's face is its own clipped foliage, and `tex-hedge-top` is a photograph of exactly that
+   * — which is why it does the job with no new family. A hedge is the one boundary whose top and
+   * whose side are the same material seen from two angles: a fence has a capping rail and a wall a
+   * coping, and neither top would do as a face, but clipped box or beech is clipped box or beech.
+   *
+   * It leaves a hedge lit by the renderer like every other face rather than carrying its own light,
+   * which is the whole rule skins follow. A face drawn from a flat green tone read as a painted
+   * strip; this reads as the mass it is.
+   */
+  hedge: 'tex-hedge-top',
 };
 
 /** Every pitched roof in the library is slate today; the field exists so that can change. */

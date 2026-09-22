@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { IntentService } from './intent.service.js';
 import { INTENT_JSON_SCHEMA } from './intent-schema.js';
+import { ASSISTANT_RULES } from './rules.js';
 import { AssistantIntentEnvelopeSchema, DesignIntentSchema } from '@garden-studio/schema';
 
 /**
@@ -166,11 +167,65 @@ describe('IntentService', () => {
     expect(prompt).not.toContain('EARLIER IN THIS CONVERSATION');
   });
 
+  /**
+   * What they are pointing at, so a sentence with no subject has one.
+   *
+   * After the inventory, because it names an element the inventory has already introduced — put
+   * first it would be an id with nothing yet to attach to.
+   */
+  it('tells the model which element they have selected', async () => {
+    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+
+    await service.interpret('make this bigger', plan(), [], ['e-1']);
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+
+    expect(prompt).toContain('WHAT THEY HAVE SELECTED');
+    expect(prompt).toContain('"This", "it", "that" mean this one.');
+    /* The garden is now that, they are pointing at this, they want this — in that order. */
+    expect(prompt.indexOf('Elements on the plan')).toBeLessThan(
+      prompt.indexOf('WHAT THEY HAVE SELECTED'),
+    );
+    expect(prompt.indexOf('WHAT THEY HAVE SELECTED')).toBeLessThan(prompt.indexOf('The user says'));
+  });
+
+  /* Nothing selected is the ordinary case, and a heading with nothing under it invites a question. */
+  it('says nothing about a selection that was not made', async () => {
+    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+
+    await service.interpret('make the seating area bigger', plan());
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+    expect(prompt).not.toContain('WHAT THEY HAVE SELECTED');
+  });
+
+  /**
+   * A selection can go stale between the click and the send — the element is deleted, or an undo
+   * takes it away. Naming a ghost would have the designer talk about something not on the plan, so
+   * it is dropped exactly as the planner drops an id that resolves to nothing.
+   */
+  it('drops a selected id that no longer names an element', async () => {
+    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+
+    await service.interpret('make this bigger', plan(), [], ['e-gone']);
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+    expect(prompt).not.toContain('WHAT THEY HAVE SELECTED');
+    expect(prompt).not.toContain('e-gone');
+  });
+
   it('does not tell the model any coordinates', async () => {
     const create = vi.fn(() => message(JSON.stringify(envelope)));
     const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
 
-    await service.interpret('make it bigger', plan());
+    /* With a selection, so the newest section is held to the rule as well as the inventory. */
+    await service.interpret('make it bigger', plan(), [], ['e-1']);
 
     const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
       .content;
@@ -183,6 +238,11 @@ describe('IntentService', () => {
     expect(prompt).not.toContain('vertices');
     expect(prompt).not.toMatch(/\bx\s*[:=]/);
     expect(prompt).not.toMatch(/\bcentre\b/);
+  });
+
+  /** The rules have to answer the selection, or the section above it is a heading nothing reads. */
+  it('tells the model what a selection means', () => {
+    expect(ASSISTANT_RULES).toContain('WHAT THEY HAVE SELECTED');
   });
 
   it('is unavailable rather than broken when there is no key', async () => {

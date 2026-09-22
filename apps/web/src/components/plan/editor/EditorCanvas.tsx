@@ -150,9 +150,11 @@ export function EditorCanvas() {
    * oblique lifted stack, so the 2D Plan was a 2.5D picture and the PNG export (which passes the
    * real view) disagreed with what was on screen. See the note in CLAUDE.md.
    */
+  const shadowsVisible = usePlanEditorStore((state) => state.shadowsVisible);
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
-    house: boundaryDraft.house, site: boundaryDraft, elements }, { view: 'plan', maturity, rendererVersion: browserRendererVersion() }),
-  [boundaryDraft, elements, maturity]);
+    house: boundaryDraft.house, site: boundaryDraft, elements },
+    { view: 'plan', maturity, shadows: shadowsVisible, rendererVersion: browserRendererVersion() }),
+  [boundaryDraft, elements, maturity, shadowsVisible]);
 
   /*
    * One sun for the whole drawing. `undefined` means the plan has never said where it is, and

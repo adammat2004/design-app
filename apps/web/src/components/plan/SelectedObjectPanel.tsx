@@ -1,6 +1,7 @@
 'use client';
 
 import { House, MousePointer2, RotateCcw } from 'lucide-react';
+import { ROOF_MATERIAL_LABELS, RoofMaterialSchema } from '@garden-studio/schema';
 import { vertexLabel } from '@/lib/boundary-geometry';
 import { houseArea, houseSize } from '@/lib/house';
 import { formatArea } from '@/lib/units';
@@ -11,6 +12,9 @@ import { LengthInput } from './SideLengthsPanel';
 
 /** How many floors a house can be said to have here. Bigger is a block of flats, not a house. */
 const STOREY_OPTIONS = [1, 2, 3];
+
+/** The three coverings, from the schema's own list so the panel cannot offer a fourth. */
+const ROOF_MATERIAL_OPTIONS = RoofMaterialSchema.options;
 
 /**
  * Two-way bound properties for whatever is selected. Dragging on the canvas writes here;
@@ -28,6 +32,7 @@ export function SelectedObjectPanel() {
   const setHouseSize = useBoundaryStore((state) => state.setHouseSize);
   const setHouseRotation = useBoundaryStore((state) => state.setHouseRotation);
   const setStoreys = useBoundaryStore((state) => state.setStoreys);
+  const setRoofMaterial = useBoundaryStore((state) => state.setRoofMaterial);
 
   return (
     <section className="rounded-xl border border-garden-line bg-white p-4 shadow-sm">
@@ -109,6 +114,34 @@ export function SelectedObjectPanel() {
                   ].join(' ')}
                 >
                   {storeys}
+                </button>
+              ))}
+            </span>
+          </Field>
+
+          {/*
+            What the roof is covered with: asked rather than guessed, for the reason
+            `HouseFootprint.roofMaterial` gives. It is the only field on this panel that changes
+            nothing but the picture — there is no area, no quantity and no violation behind it —
+            which is exactly why it can be offered as three swatches with no explanation.
+          */}
+          <Field label="Roof">
+            <span className="flex gap-1" role="group" aria-label="What the roof is covered with">
+              {ROOF_MATERIAL_OPTIONS.map((material) => (
+                <button
+                  key={material}
+                  type="button"
+                  data-testid={`house-roof-${material}`}
+                  aria-pressed={draft.house?.roofMaterial === material}
+                  onClick={() => setRoofMaterial(material)}
+                  className={[
+                    'flex-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                    draft.house?.roofMaterial === material
+                      ? 'border-garden-forest bg-garden-forest text-white'
+                      : 'border-garden-line bg-white text-garden-ink hover:border-garden-green',
+                  ].join(' ')}
+                >
+                  {ROOF_MATERIAL_LABELS[material]}
                 </button>
               ))}
             </span>

@@ -17,7 +17,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ANTHROPIC, type AnthropicClient } from './anthropic.module.js';
 import { INTENT_JSON_SCHEMA } from './intent-schema.js';
-import { renderInventory } from './inventory.js';
+import { renderInventory, renderSelection } from './inventory.js';
 import { ASSISTANT_RULES } from './rules.js';
 import { logAssistantUsage } from './usage.js';
 
@@ -48,6 +48,8 @@ export class IntentService {
     message: string,
     document: PlanDocument,
     history: AssistantTurn[] = [],
+    /** Ids selected on the canvas as the sentence was typed, so "this" resolves to one of them. */
+    selection: string[] = [],
   ): Promise<AssistantIntentEnvelope> {
     if (!this.claude) {
       throw new ServiceUnavailableException(
@@ -84,17 +86,20 @@ export class IntentService {
           },
         ],
         /*
-         * What was said, then what is there now, then what they want.
+         * What was said, then what is there now, then what they are pointing at, then what they
+         * want.
          *
-         * All three are in one user turn, below the cache breakpoint, rather than as real
+         * All four are in one user turn, below the cache breakpoint, rather than as real
          * alternating turns. The reason is that **the assistant's previous replies described a
          * garden that has since been redrawn**: sent as assistant turns they read as statements of
          * current fact and compete with the inventory, which is the only description of the plan
          * that is still true. Quoted as history under a heading, they are what they actually are —
          * a record of the conversation, there so that "a bit more" has something to refer to.
          *
-         * History before the inventory because "we said this, the garden is now that, they want
-         * this" is the order the request is reasoned in.
+         * The order is the order the request is reasoned in: we said this, the garden is now that,
+         * they are pointing at this, they want this. The selection goes *after* the inventory
+         * because it names an element the inventory has already introduced — put first, it would be
+         * an id with nothing yet to attach to.
          */
         messages: [
           {
@@ -102,6 +107,7 @@ export class IntentService {
             content: [
               renderHistory(history),
               renderInventory(document, zones),
+              renderSelection(selection, document),
               `The user says:\n${message}`,
             ]
               .filter((section) => section !== '')

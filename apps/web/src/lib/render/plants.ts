@@ -8,7 +8,7 @@ import {
   type PlantingLayer,
   type Point,
 } from '@garden-studio/schema';
-import type { AssetId } from '../materials/assets/asset-spec';
+import type { AssetCamera, AssetId } from '../materials/assets/asset-spec';
 import { catalogueVariants } from '../materials/assets/catalogue';
 import { elevatedTwin } from '../materials/assets/material-assets';
 import { assetsMatching, type TaxonQuery } from '../materials/assets/taxonomy';
@@ -35,8 +35,43 @@ import { plantingClusterAt } from './plant-clusters';
  *
  * Saturating is harmless: the sampler places at most one unit per cell, so a share above 1 simply
  * stops rejecting and the layer tops out at `1 / cellSize²`. It still cannot move a plant.
+ *
+ * **Measured down from 1.25.** `measure:render` counts what the scene actually contains, and it
+ * was 8 to 15 plants per square metre of bed against a designed border's 5 to 7 — with 71 to 83%
+ * of them under half a metre across. That is not a dense border; it is a carpet of dots, and more
+ * of them was making it worse rather than better. Fewer and larger is the same coverage with
+ * plants you can tell apart, which is what the reference has. Paired with `CROWN_FILL`.
  */
-const INSTANCE_DENSITY = 1.25;
+const INSTANCE_DENSITY = 0.8;
+
+/**
+ * How much bigger a plant is drawn than the spread band it was sampled from.
+ *
+ * The bands in `SCHEMES` were authored for the *painted* bed, where a unit is a soft blob that
+ * bleeds into its neighbours; read as real plants they are nursery sizes rather than mature ones —
+ * a mass perennial at 0.4 to 0.7 m is a pot, where the hardy geranium or alchemilla it stands for
+ * is 0.6 to 1.0 m across in its third year. The garden this app draws is the mature one: that is
+ * what `maturity` means and what the whole planting model claims.
+ *
+ * Applied to the **drawn** spread only, after the clamp, and deliberately not to `cellSize`. The
+ * sampler's world grid, every plant's identity and the `year-1 ⊆ year-3 ⊆ mature` nesting all key
+ * on the band, so widening the band itself would move every plant in every saved plan and change
+ * what the generator places from the same layers. This moves nothing and only fills the gaps.
+ *
+ * At 1.45, with the density above, the model is 6 plants per m² at a mean 0.65 m rather than 10 at
+ * 0.45 — and because cover goes as `1 − exp(−λ·area)`, the bare ground between them falls even
+ * though there are fewer of them.
+ */
+const CROWN_FILL = 1.45;
+
+/**
+ * How big a flower head is against the plant carrying it — the painter's own number.
+ *
+ * Flowers sit *on* foliage rather than beside it, so the sprite is drawn concentric and small. Much
+ * larger and the plant disappears under its own bloom, which is a garden-centre photograph rather
+ * than a border.
+ */
+const FLOWER_SCALE = 0.55;
 
 /**
  * A bed's infill, as things rather than as texture.
@@ -72,6 +107,12 @@ export function buildPlants(
   outline: Point[],
   exclusions: Point[][],
   maturity: Maturity,
+  /**
+   * Which library to draw from. **Never inferred**: resolving a family and then translating it to
+   * its elevated twin is how `vis-*` art reached the 2D Plan once already, and nothing below this
+   * line can tell which view it is being built for.
+   */
+  camera: AssetCamera = 'elevated',
 ): RenderPlant[] {
   const factors = MATURITY[maturity];
   const plants: RenderPlant[] = [];
@@ -82,6 +123,7 @@ export function buildPlants(
     if (!layer.planting) return;
 
     const query = layer.assets?.sprites;
+    const flowers = layer.assets?.flowers ?? null;
     const pattern = layer.entry.pattern;
     if (pattern.patternType !== 'scatter') return;
 
@@ -123,7 +165,7 @@ export function buildPlants(
       // Keep this middle-height layer in genuine planting bays. Narrow transition beds retain
       // their low infill, and real structural plants keep their own exclusion space.
       if (layer === understorey && distanceToEdge(placement.at, outline) < drawn * 0.45) continue;
-      const spread = drawn * factors.crown;
+      const spread = drawn * factors.crown * CROWN_FILL;
 
       /*
        * Height from where this plant's spread fell in its band, mapped onto the height band. A
@@ -135,7 +177,7 @@ export function buildPlants(
       const height = (band.min + (band.max - band.min) * t) * factors.crown;
 
       const familyChoice = plantingClusterAt(seed, placement.at).family;
-      const asset = query ? chooseAsset(query, placement.variant, familyChoice) : null;
+      const asset = query ? chooseAsset(query, placement.variant, familyChoice, camera) : null;
 
       plants.push({
         id: `${bed.id}:${layer.planting.role}:${col},${row}`,
@@ -152,7 +194,19 @@ export function buildPlants(
         rotation: asset?.elevated ? foldRotation(placement.rotation) : placement.rotation,
         assetId: asset?.assetId ?? null,
         variant: asset?.variant ?? 0,
-        flower: null,
+        /*
+         * In bloom or not, decided by a draw the sampler **already made**. `PlantPlacement.flower`
+         * is a unit interval drawn in the same sequence as the tone and the variant, so reading it
+         * here costs no draw and cannot shift a single plant — which is what lets flowers arrive
+         * without renumbering a garden. The share is the material's own accent rate.
+         *
+         * Hard-coded `null` until now, so a mixed border had no flowers in either view: the field
+         * existed, the asset existed, the share existed, and nothing joined them up.
+         */
+        flower:
+          flowers && placement.flower < flowers.share
+            ? { assetId: flowers.sprite, scale: FLOWER_SCALE }
+            : null,
         tone: placement.tone,
         visualLayer,
         hostId: bed.id,
@@ -180,6 +234,7 @@ function chooseAsset(
   query: TaxonQuery,
   unitInterval: number,
   familyChoice: number,
+  camera: AssetCamera,
 ): { assetId: AssetId; variant: number; elevated: boolean } | null {
   // Species repeat in short drifts, while individuals retain their own crown variant.
   const families = assetsMatching(query).filter((id) => catalogueVariants(id).length > 0);
@@ -196,7 +251,7 @@ function chooseAsset(
    * with three elevated variants still spreads its plants across all three rather than collapsing
    * onto whichever one happened to share a number with the plan sprite.
    */
-  const twin = elevatedTwin(planId);
+  const twin = camera === 'elevated' ? elevatedTwin(planId) : null;
   const assetId = twin ?? planId;
   const variants = catalogueVariants(assetId);
   if (!variants.length) return null;
@@ -204,17 +259,37 @@ function chooseAsset(
   return { assetId, variant: entry.variant, elevated: twin !== null };
 }
 
-/** Presentation-only middle storey. Never fed back to the structural sampler or schedule. */
+/**
+ * The shrubs, as picture rather than as elements. Never fed back to the sampler or the schedule.
+ *
+ * Every bed needs a back-of-border storey and almost none of them has one. `STRUCTURAL_ROLES`
+ * takes `backdrop` and `specimen` out of the drawn stack because the *generator* emits those as
+ * real `DesignElement`s — which is right, they are decisions somebody can move — but it emits at
+ * most thirty of them across a whole plan, and two of the six schemes (`naturalistic`, the default,
+ * and `pollinator`) declare neither role at all. So what was left to draw was the herbaceous
+ * layers: a bed of things all the same size, which is the single clearest difference between our
+ * borders and a designed one.
+ *
+ * Sized as a shrub actually is — a metre to nearly two across, standing a metre or more — rather
+ * than as the largest perennial. Real structural plants keep their own space through the ordinary
+ * exclusion path, so this fills between them instead of doubling them.
+ */
 function understoreyLayer(bed: DesignElement, layers: SurfaceLayer[]): SurfaceLayer | null {
   const reference = layers.find((layer) => layer.planting);
   if (!reference || bed.material === 'ground-cover') return null;
   const planting: PlantingLayer = {
-    role: 'backdrop', taxon: { type: 'shrub' }, heightBand: { min: 0.7, max: 1.6 },
-    spread: { min: 0.8, max: 1.45 }, share: 0.28, clustering: 0.8, edgeAffinity: -0.55,
+    role: 'backdrop', taxon: { type: 'shrub' }, heightBand: { min: 0.9, max: 1.9 },
+    /*
+     * `share` is high because this is a *layer of shrubs*, not an accent: at this spread the cell
+     * is 0.84 m, so 0.8 of the cells accepted and thinned by `INSTANCE_DENSITY` is about one shrub
+     * per square metre — which is what a mixed border holds. The old 0.28 gave 0.8 per m² of a
+     * much smaller plant, and it was the only large thing in the picture.
+     */
+    spread: { min: 1, max: 1.8 }, share: 0.8, clustering: 0.8, edgeAffinity: -0.55,
   };
   return {
     entry: { ...reference.entry, pattern: { patternType: 'scatter', density: 1 / cellSize(planting) ** 2,
-      sizeRange: { min: 800, max: 1450 }, lobes: 9, form: 'blob' } },
+      sizeRange: { min: 1000, max: 1800 }, lobes: 9, form: 'blob' } },
     assets: { sprites: { group: 'vegetation', type: 'shrub' } }, planting,
   };
 }

@@ -35,6 +35,25 @@ export interface ShadowCast {
   direction: Point;
   /** Multiply by an object's height to get its shadow's length in metres. */
   lengthPerMetre: number;
+  /**
+   * Where this cast came from, and it is the field that keeps the solar claim honest.
+   *
+   * `'solar'` is a real sun computed from a stated location and time. `'conventional'` is the
+   * drawing convention a renderer may supply instead — shadows falling away from the same
+   * top-left light that bevels every slab, at a fixed ratio — so that a plan which has never said
+   * where on Earth it is still reads as a drawing rather than a diagram.
+   *
+   * The distinction is not cosmetic and nothing may blur it. Anything that would be *a claim about
+   * this garden at this hour* — the time-of-day slider, the shadow-hours sheet, the night ramp and
+   * every lighting decision — stays gated on `'solar'`. Only the picture's own sense of depth is
+   * allowed to run on the conventional one, exactly as the contact shadow under a sprite and the
+   * shade band along a fence already do without a location.
+   *
+   * This is the sense in which the rule "no location, no solar claim" is unchanged: what was
+   * missing was not a sun but a shadow, and a shadow drawn from the drawing's own light says
+   * nothing about the sun at all.
+   */
+  source: 'solar' | 'conventional';
 }
 
 /**
@@ -124,6 +143,7 @@ export function shadowCast(site: SiteSection): ShadowCast | null {
     // +y is downwards, so screen-up is -y. A bearing of 0 with no rotation points straight up.
     direction: { x: Math.sin(screenAngle), y: -Math.cos(screenAngle) },
     lengthPerMetre: Math.min(1 / Math.tan(toRadians(position.altitude)), MAX_SHADOW_RATIO),
+    source: 'solar',
   };
 }
 

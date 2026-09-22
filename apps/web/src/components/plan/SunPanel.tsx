@@ -14,7 +14,9 @@ import { useBoundaryStore } from '@/state/boundary-store';
  * here.
  *
  * **Location is the gate on every solar claim in the app.** Until it is filled in, the plan draws
- * with the conventional top-left light and says nothing about sun or shade. That is deliberate:
+ * with the conventional top-left light — shadows that say how tall things are and nothing about
+ * where the shade falls at four o'clock — and the time of day, the shade study and the lighting
+ * have nothing to answer to. See `presentationCast`. That is deliberate:
  * `orientation` can sensibly default because "north is up" is a real statement about a drawing,
  * but there is no latitude that is true of anywhere, and a plausible-looking guess would have the
  * design built confidently around a fact the user never stated. Offered, not applied — the same
@@ -103,8 +105,9 @@ export function SunPanel() {
         />
       ) : (
         <p data-testid="sun-unset" className="text-[11px] leading-relaxed text-garden-muted">
-          Shadows are off until Garden Studio knows where the garden is. Latitude is what sets how
-          high the sun gets, so there is no sensible default to guess.
+          The plan is drawn with a conventional light, so things cast a shadow but nothing claims
+          where the shade falls. Add a location for the real sun and the time of day. Latitude is
+          what sets how high the sun gets, so there is no sensible default to guess.
         </p>
       )}
 

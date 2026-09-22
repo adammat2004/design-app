@@ -30,7 +30,7 @@ import {
   type GeneratedConcept,
 } from '@/lib/concepts';
 import {
-  geometryIsLegal,
+  elementIsLegal,
   geometryOutline,
   translateFeature,
   type PlanGeometry,
@@ -166,6 +166,18 @@ interface PlanEditorState {
    * garden they are drawing.
    */
   maturity: Maturity;
+  /**
+   * Whether the drawing casts shadows. A view preference beside `gridVisible` and `maturity`.
+   *
+   * On by default: a garden whose objects are not attached to the ground reads as a diagram, and
+   * since the conventional light landed every plan can draw them rather than only the ones that
+   * have stated a location. Off is a real thing to want — a drawing somebody is about to measure,
+   * print or write on, or two layouts being compared rather than one being admired.
+   *
+   * A preference and not a design decision, so it is ephemeral for the same reason the grid is:
+   * nothing about the geometry, the areas or the schedule can see it.
+   */
+  shadowsVisible: boolean;
   previewMinutes: number | null;
   /**
    * Whether the plan is annotated.
@@ -232,6 +244,7 @@ interface PlanEditorState {
 
   toggleSnap: () => void;
   toggleGrid: () => void;
+  toggleShadows: () => void;
   setMaturity: (maturity: Maturity) => void;
   setPreviewMinutes: (minutes: number | null) => void;
   toggleLabels: () => void;
@@ -276,9 +289,16 @@ function boundaryNow(): Point[] {
   return draftPolygon(useBoundaryStore.getState().present);
 }
 
-/** Why an edit was refused, or null if it is fine. Step 2's rule, verbatim. */
-function refusalFor(geometry: PlanGeometry): string | null {
-  return geometryIsLegal(geometry, boundaryNow()) ? null : FENCE_CLASH;
+/**
+ * Why an edit was refused, or null if it is fine. Step 2's rule, verbatim.
+ *
+ * Takes the **element** rather than its shape, so `elementIsLegal` can ask about the right one: a
+ * tree's stored shape is its canopy and what has to be inside the fence is its trunk. Handed a
+ * bare geometry this could not tell a tree from a pond, and the editor would refuse a tree the
+ * generator drew and the server accepts — with no way for the user to see why or put it right.
+ */
+function refusalFor(element: DesignElement): string | null {
+  return elementIsLegal(element, boundaryNow()) ? null : FENCE_CLASH;
 }
 
 /** Default sizes for a hand-placed element, by category. */
@@ -354,7 +374,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       if (checkGeometry) {
         // A resize or a move has no meaningful partial version, so an impossible one is refused
         // rather than half-applied — the same call step 2's features make.
-        refusal = refusalFor(next.shape);
+        refusal = refusalFor(next);
         if (refusal) return null;
       }
 
@@ -388,7 +408,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       const next = mutate(element);
       if (next === element) return state;
 
-      const refusal = refusalFor(next.shape);
+      const refusal = refusalFor(next);
       if (refusal) return { clash: refusal };
 
       return {
@@ -459,6 +479,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     snapEnabled: true,
     gridVisible: false,
     maturity: 'mature',
+    shadowsVisible: true,
     previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,
@@ -523,35 +544,34 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           ? { kind: 'point', at: centre, radius: plant ? plant.spread / 2 : footprint.radius }
           : { kind: 'rect', centre, width: size.width, depth: size.depth, rotation: 0 };
 
-      const refusal = refusalFor(shape);
+      const id = nextElementId();
+      const zones = selectZones({ present: useBoundaryStore.getState().present });
+
+      /*
+       * Built before it is checked, rather than after, because what makes a placement legal is a
+       * property of the element and not of its outline: `refusalFor` reads the symbol to know
+       * whether this point is a canopy over a trunk or a pond.
+       */
+      const added: DesignElement = {
+        id,
+        category,
+        role: 'feature',
+        name: plant?.name ?? (symbol ? SYMBOLS[symbol].label : defaultName(category, get().present.elements)),
+        shape,
+        zone: zoneAt(centre, zones)?.id ?? 'back',
+        material: defaultMaterial(category),
+        elevation: 0,
+        ...(symbol ? { symbol, height: plant?.height ?? SYMBOLS[symbol].height } : {}),
+        ...(plantId ? { plantId } : {}),
+      };
+
+      const refusal = refusalFor(added);
       if (refusal) {
         set({ clash: refusal });
         return;
       }
 
-      const id = nextElementId();
-      const zones = selectZones({ present: useBoundaryStore.getState().present });
-
-      commit((draft) => ({
-        ...draft,
-        elements: [
-          ...draft.elements,
-          {
-            id,
-            category,
-            role: 'feature',
-            name:
-              plant?.name ??
-              (symbol ? SYMBOLS[symbol].label : defaultName(category, draft.elements)),
-            shape,
-            zone: zoneAt(centre, zones)?.id ?? 'back',
-            material: defaultMaterial(category),
-            elevation: 0,
-            ...(symbol ? { symbol, height: plant?.height ?? SYMBOLS[symbol].height } : {}),
-            ...(plantId ? { plantId } : {}),
-          },
-        ],
-      }));
+      commit((draft) => ({ ...draft, elements: [...draft.elements, added] }));
 
       set({ selectedId: id, placingCategory: null, placingSymbol: null, placingPlantId: null });
       /* Something the generator did not think of. See `state/design-events.ts`. */
@@ -730,7 +750,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         name: defaultName(element.category, get().present.elements),
       };
 
-      const refusal = refusalFor(copy.shape);
+      const refusal = refusalFor(copy);
       if (refusal) {
         set({ clash: refusal });
         return;
@@ -878,6 +898,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      */
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
 
+    toggleShadows: () => set((state) => ({ shadowsVisible: !state.shadowsVisible })),
+
     setMaturity: (maturity) => set({ maturity }),
     setPreviewMinutes: (minutes) => set({ previewMinutes: minutes === null ? null : Math.max(0, Math.min(1425, minutes)) }),
 
@@ -950,7 +972,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         const draft = get().present;
 
         if (change.kind === 'add') {
-          if (!geometryIsLegal(change.next.shape, boundary)) {
+          if (!elementIsLegal(change.next, boundary)) {
             outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
             continue;
           }
@@ -993,7 +1015,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           continue;
         }
 
-        if (movesGeometry && !geometryIsLegal(change.next.shape, boundary)) {
+        if (movesGeometry && !elementIsLegal(change.next, boundary)) {
           outcome.refused.push({ changeId: change.id, reason: FENCE_CLASH });
           continue;
         }
@@ -1152,6 +1174,7 @@ function ephemeralState() {
     snapEnabled: true,
     gridVisible: false,
     maturity: 'mature' as Maturity,
+    shadowsVisible: true,
     previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,

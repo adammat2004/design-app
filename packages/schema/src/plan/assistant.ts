@@ -254,20 +254,31 @@ export const AssistantTurnSchema = z.object({
 export type AssistantTurn = z.infer<typeof AssistantTurnSchema>;
 
 /**
- * The request: the sentence, and what was said just before it.
+ * The request: the sentence, what was said just before it, and what they are pointing at.
  *
  * It used to carry the elements, zones, boundary, house and unit. The server has all five in the
  * stored plan, and sending them again would mean the assistant could be asked to reason about a
- * garden that is not the one saved. The history is the one exception, and it is not about the
- * garden: **"a bit more" is the second thing anybody types**, and with no history it resolves to
- * nothing at all. Four turns, because the inventory says what the garden is now and older turns
- * describe a garden that has been redrawn since.
+ * garden that is not the one saved. There are two exceptions and **neither is a description of the
+ * garden**, which is the line that decides what may be here at all.
  *
- * Optional with a default, so an older client and every existing test still parse.
+ * `history` is what was *said*: **"a bit more" is the second thing anybody types**, and with no
+ * history it resolves to nothing. Four turns, because the inventory says what the garden is now and
+ * older turns describe a garden that has been redrawn since.
+ *
+ * `selection` is what they are *pointing at* — the element selected on the canvas as they typed. It
+ * is deixis, not geometry: "make this bigger" is a complete sentence at the screen and an unanswerable
+ * one on the wire, and without it the designer's only correct move is to ask which element they mean
+ * about the one they have already clicked. Ids only, resolved against the stored plan; an id naming
+ * nothing is dropped, exactly as the planner drops one.
+ *
+ * An array although the editor selects one element, so multi-select needs no change to this contract.
+ *
+ * Both are optional with a default, so an older client and every existing test still parse.
  */
 export const ProposeRequestSchema = z.object({
   message: z.string().min(1).max(1000),
   history: z.array(AssistantTurnSchema).max(8).default([]),
+  selection: z.array(z.string()).max(8).default([]),
 });
 export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
 

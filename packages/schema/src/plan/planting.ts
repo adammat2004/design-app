@@ -97,7 +97,19 @@ export function isStructuralRole(role: PlantingRole): boolean {
  * woven through it, which is what makes it read as chosen rather than as mixed.
  */
 const LAYER_PALETTES: Record<string, string[]> = {
-  architectural: ['shrub-architectural', 'shrub-architectural', 'shrub-evergreen'],
+  /*
+   * The clipped ball goes in the architectural palette and nowhere else. It is the one shrub whose
+   * shape is somebody's decision rather than the plant's, so it reads as deliberate in a formal or
+   * architectural border and as a mistake in a naturalistic one — which is exactly the palette that
+   * falls through to `evergreen`. A quarter of the backdrop, so it is a repeated motif rather than
+   * a row of green buttons.
+   */
+  architectural: [
+    'shrub-architectural',
+    'shrub-architectural',
+    'shrub-evergreen',
+    'shrub-topiary',
+  ],
   flowering: ['shrub-flowering', 'shrub-flowering', 'shrub-evergreen'],
   evergreen: ['shrub-evergreen', 'shrub-evergreen', 'shrub-flowering'],
 };
@@ -229,10 +241,22 @@ const SCHEMES: Record<PlantingStyle, PlantingScheme> = {
       { ...EDGE_COVER, share: 0.3, clustering: 0.2, edgeAffinity: 0.7 },
     ],
   },
+  /*
+   * A backdrop was added here and to `pollinator`, and the omission was the largest single reason a
+   * generated border reads as flatter than a designed one.
+   *
+   * Both were grasses and perennials all the way to the fence — a true description of a prairie
+   * planting and a bad description of a British garden border, which is held up at the back by
+   * shrubs whatever the style at the front. `backdrop` is also the role that becomes a *placed*
+   * element rather than texture, so a scheme without one gives the user nothing structural to move
+   * and the drawing nothing with a silhouette. Modest shares, heavily clustered and pushed to the
+   * back edge: a few groups of shrubs behind the grasses, not a hedge.
+   */
   naturalistic: {
     style: 'naturalistic',
     base: 'bark-mulch',
     layers: [
+      { ...BACKDROP_SHRUB, share: 0.2, clustering: 0.8, edgeAffinity: -0.75 },
       { ...MID_GRASS, share: 0.5, clustering: 0.85, edgeAffinity: -0.2 },
       { ...MASS_PERENNIAL, share: 0.4, clustering: 0.8, edgeAffinity: 0 },
       { ...ACCENT_FLOWER, share: 0.15, clustering: 0.9, edgeAffinity: 0.2 },
@@ -258,6 +282,14 @@ const SCHEMES: Record<PlantingStyle, PlantingScheme> = {
     style: 'pollinator',
     base: 'bark-mulch',
     layers: [
+      /* Flowering rather than plain, because a pollinator border's shrubs are part of the point. */
+      {
+        ...BACKDROP_SHRUB,
+        taxon: { type: 'shrub', tags: ['flowering'] },
+        share: 0.16,
+        clustering: 0.6,
+        edgeAffinity: -0.75,
+      },
       { ...MASS_PERENNIAL, share: 0.5, clustering: 0.5, edgeAffinity: -0.1 },
       { ...ACCENT_FLOWER, share: 0.4, clustering: 0.45, edgeAffinity: 0.1 },
       { ...MID_GRASS, share: 0.2, clustering: 0.6, edgeAffinity: -0.3 },

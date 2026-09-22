@@ -6,6 +6,8 @@ import type { CanvasTransform } from '@/lib/canvas-transform';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
 import { drawBrowserOverlay } from '@/lib/render/draw-browser-overlay';
 import { SceneRenderer } from '@/lib/render/pixi/renderer';
+import { gradeCss } from '@/lib/materials/grade';
+import { GradeFilter } from './GradeFilter';
 import type { RenderScene } from '@/lib/render/scene';
 
 /** Paint only. All pointer events and the only camera belong to EditorCanvas/Konva. */
@@ -71,11 +73,33 @@ export function EditorScene({ scene, site, transform, onReady }: {
    * commit while every unit test passed — because each guard one layer down was intact and the
    * fault was a caller asking for the wrong camera. Nothing below the call site can catch that,
    * so the call site's answer has to be visible from outside.
+   *
+   * `data-stack` is the corroborating half, and it took over from `data-plants` when the planting
+   * rework made the 2D Plan draw instanced sprites too: a plan scene has plants now, so their
+   * absence stopped being evidence of anything. What is still true of the plan camera and only of
+   * it is that its stack holds **plants and nothing else** — `buildStack`, which is the whole of
+   * the elevated drawing, is not called on that path — so the two counts are equal there and are
+   * not in Visualise, where the objects, the house and the fence join them.
    */
-  return <div ref={host} data-testid="editor-scene" data-plants={scene.plants.length}
-    data-view={scene.view}
-    data-scale={transform.scale} data-offset-x={transform.offsetX} data-offset-y={transform.offsetY}
-    aria-hidden className="pointer-events-none absolute inset-0">
-    <canvas ref={overlay} className="absolute inset-0 h-full w-full" />
-  </div>;
+  return <>
+    <GradeFilter />
+    <div ref={host} data-testid="editor-scene" data-plants={scene.plants.length}
+      data-view={scene.view}
+      data-stack={scene.stack.length}
+      data-scale={transform.scale} data-offset-x={transform.offsetX} data-offset-y={transform.offsetY}
+      aria-hidden className="pointer-events-none absolute inset-0"
+      /*
+       * The same grade the sheets and the download get, and for the same reason the Visualise
+       * wrapper carries one: this div is the only element that contains **both** the Pixi canvas
+       * and the 2D overlay, so it is the only place a single filter reaches all the design pixels.
+       * As CSS rather than as arithmetic because this repaints on every frame of every drag, and
+       * `getImageData` over the viewport per frame is a cost the download does not pay.
+       *
+       * The Konva chrome is a *sibling* in `EditorCanvas`, so handles, guides and the tape stay
+       * ungraded — which is right: they are the interface, not the garden.
+       */
+      style={{ filter: gradeCss() }}>
+      <canvas ref={overlay} className="absolute inset-0 h-full w-full" />
+    </div>
+  </>;
 }

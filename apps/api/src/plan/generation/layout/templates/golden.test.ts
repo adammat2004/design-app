@@ -7,11 +7,16 @@ import { TEMPLATE_ORDER, TEMPLATES } from './index.js';
 /**
  * The three templates, pinned exactly, so the archetype refactor can be proved to change nothing.
  *
- * **Temporary, and it says so here rather than in a commit message.** Phase 2 turns the three
- * layout templates into archetypes that read a zone plan and take parameters; every one of those
- * changes is supposed to be a pure restructuring at the default parameters, and the only way to be
- * sure is to compare against what they drew before anybody touched them. It is deleted when the
- * candidate loop lands in Phase 3 and the sketches start varying on purpose.
+ * **Written to prove the archetype refactor changed nothing, and kept because it is the only thing
+ * that notices when a template changes at all.** Every sketch here is drawn at the default
+ * parameters, so the candidate loop varying them on purpose is invisible to it; what it catches is
+ * a change to the geometry every candidate starts from, which is a thing that should never happen
+ * by accident and has to be deliberate when it does.
+ *
+ * Regenerated once since, on 21 September 2026, for `borderDepth` going from 1.5 m to 2.2 m and its
+ * ceiling from 2.5 to 3.5 — the deliberate change recorded under "deeper borders". Every difference
+ * in that diff is a bed edge; nothing else moved, which is what the regeneration was checked
+ * against.
  *
  * **Structure exactly, numbers to 1e-9.** Not `toEqual`: anchors are computed directly today
  * (`{ u: farRoom.u, v: farV(b + 2.1 * s) }`) and will be read back out of a stored rectangle

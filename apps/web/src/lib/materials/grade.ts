@@ -40,19 +40,44 @@
  * than 11% darker. Desaturating by 30% and lifting luminance would have moved the render away from
  * the target on both axes while the original measurement applauded.
  *
- * What is left is small and real: come down about a tenth in brightness, open the contrast about a
- * fifteenth, leave the colour alone. `BRIGHTNESS` and `CONTRAST` below are solved for rather than
- * dialled — given `brightness` then `contrast` applied in that order, matching the mean and the
- * standard deviation of the control to the reference has exactly one solution.
+ * What is left is small and real: come down about a tenth in brightness and open the contrast.
+ * `BRIGHTNESS` and `CONTRAST` below are solved for rather than dialled — given `brightness` then
+ * `contrast` applied in that order, matching the mean and the standard deviation of the control to
+ * the reference has exactly one solution.
+ *
+ * ---
+ *
+ * **The grade covers both views now**, and the constants were *not* refitted when it did — which is
+ * the one place in this file where a measurement was tried, achieved exactly, and then declined.
+ *
+ * Fitted against the graded plan rather than the graded Visualise picture, the solution is
+ * brightness 0.918, contrast 1.234 and — because saturation compensates contrast — 0.690. Measured,
+ * that reads `saturation +1.0%, luminance 0.0%, contrast -0.0%` with the balance at zero: every row
+ * closed. Looked at, on `11-target-close.png`, it is **visibly worse**: the lawn goes flat and
+ * saturated and the paving bleaches, because expanding contrast far enough to match a whole-plot
+ * standard deviation crushes both ends of a drawing whose regions are hard-edged where the
+ * reference's are photographic.
+ *
+ * The statistic is not wrong; it is the wrong target for that term. `contrast` here is the standard
+ * deviation of luminance *over the plot*, so it is a function of what the garden contains as much as
+ * of how it is graded — two plans with different shares of dark planting and pale paving differ on
+ * it before any grade runs. A global expansion cannot close a composition difference without damage,
+ * and the residual **-5.2%** is the honest place to leave it.
+ *
+ * Kept: 0.932 / 1.152 / 0.773, the Visualise fit, which measures `saturation +0.2%, luminance
+ * +3.0%, contrast -5.2%` on the plan — closer than ungraded on all three and worse on none.
  *
  * Re-derive rather than re-guess: `pnpm --filter @garden-studio/web measure:render` prints the
- * control row, and these numbers are correct when the gap row reads about zero on all three.
+ * control row and the balance row. Solve in order — brightness and contrast together against the
+ * mean and the standard deviation, then saturation, then warmth — because that is the order they
+ * are applied in and each later term is chosen to leave the earlier ones where they landed. And
+ * **look at the sheet**: the balance row may be closed to zero and the others may not.
  */
 
-/** Linear transfer. Below 1 because the control measured 10% brighter than the reference. */
+/** Linear transfer. Below 1 because the control measured brighter than the reference. */
 export const BRIGHTNESS = 0.932;
 
-/** Around mid-grey. Above 1 because the control measured 6.7% flatter than the reference. */
+/** Around mid-grey. Above 1 because the control measured flatter than the reference. */
 export const CONTRAST = 1.152;
 
 /**
@@ -61,7 +86,8 @@ export const CONTRAST = 1.152;
  * The **raw** saturation gap is 1.1%, which is nothing: ungraded, we already match the reference on
  * colour. But `contrast()` pushes every channel away from mid-grey, and that widens `max − min`
  * faster than it moves `max`, so expanding the contrast enough to fix the flatness drags measured
- * saturation from 0.338 up to 0.408 on its own. This pulls it back down to where it already was.
+ * saturation well above the reference on its own. This pulls it back down to where it already was —
+ * which is why it had to come down again when `CONTRAST` went up in the re-solve.
  *
  * So the brief that asked for a 30% desaturation arrives at a similar-looking number by a
  * completely different route, and the difference matters: **delete `CONTRAST` and this must go back
@@ -73,6 +99,35 @@ export const CONTRAST = 1.152;
  */
 export const SATURATION = 0.773;
 
+/**
+ * The warm term: a red and green lift and a blue cut, and the one thing the three terms above
+ * cannot see.
+ *
+ * Saturation, luminance and contrast are each computed over channels that have already been
+ * collapsed — HSV `(max − min) / max`, Rec. 709 luma, the standard deviation of that luma — so a
+ * render and its reference can match on all three and still be one golden and one blue. Colour
+ * *temperature* is the balance between the channels, and nothing measured it until now.
+ *
+ * **Measured, not dialled**, by the same like-for-like comparison the other three use: each channel
+ * against its own picture's mean, inside the plot, with the hand-traced `target.plan.json` as the
+ * control so it is the same garden on both sides.
+ *
+ *                             red     green      blue
+ *     target_design.png     1.067     1.109     0.824
+ *     ours, same garden     1.024     1.081     0.895
+ *     gap                   +4.2%     +2.6%     -8.0%
+ *
+ * So the reference is warmer than our render, which is what the design review guessed and this is
+ * the first measurement that could confirm it. The gains below are that gap, **normalised to leave
+ * luminance alone**: the Rec. 709 weighted mean of the raw gains is 1.0217, and dividing through by
+ * it is what keeps `BRIGHTNESS` and `CONTRAST` where they were solved to rather than making all
+ * five terms a joint problem.
+ *
+ * Re-derive rather than re-guess: `measure:render` prints the balance row, and these are correct
+ * when its gap reads about zero on all three channels.
+ */
+export const WARMTH = { r: 1.0199, g: 1.0042, b: 0.9004 };
+
 /** Rec. 709, the same weights `export-plan.ts` uses, so a saturation change never shifts hue. */
 const LUMA_R = 0.2126;
 const LUMA_G = 0.7152;
@@ -80,12 +135,57 @@ const LUMA_B = 0.0722;
 
 const EPSILON = 1e-6;
 
+function warmthIsIdentity(): boolean {
+  return (
+    Math.abs(WARMTH.r - 1) < EPSILON &&
+    Math.abs(WARMTH.g - 1) < EPSILON &&
+    Math.abs(WARMTH.b - 1) < EPSILON
+  );
+}
+
 function isIdentity(): boolean {
   return (
     Math.abs(BRIGHTNESS - 1) < EPSILON &&
     Math.abs(CONTRAST - 1) < EPSILON &&
-    Math.abs(SATURATION - 1) < EPSILON
+    Math.abs(SATURATION - 1) < EPSILON &&
+    warmthIsIdentity()
   );
+}
+
+/**
+ * The id of the SVG filter that carries the warm term on screen, and why one is needed at all.
+ *
+ * CSS has shorthand filter functions for brightness, contrast and saturation and **none for a
+ * per-channel gain** — `sepia()` is a fixed matrix, not a temperature control. So the warm term is
+ * the one part of this grade that cannot be written as shorthand, and the choice was between
+ * applying it only where the pixels are actually processed (the sheets and the export) and finding
+ * a way to say it in CSS.
+ *
+ * The first is the fault this module exists to prevent: a grade the screen has and the download
+ * does not is two different pictures of one garden, which is the *symptom* two separate bugs in
+ * these notes already shared. The second is an `feColorMatrix` referenced by `filter: url(#id)`,
+ * which CSS filter lists accept alongside the shorthand functions in the same declaration.
+ *
+ * **`color-interpolation-filters="sRGB"` is load-bearing** and is the trap here: an SVG filter
+ * operates in *linearRGB* by default, so the identical matrix produces visibly different pixels
+ * from the arithmetic below unless it is told otherwise. `GradeFilter` sets it and `grade.test.ts`
+ * holds the two to within one channel step of each other.
+ */
+export const GRADE_FILTER_ID = 'garden-grade-warmth';
+
+/**
+ * The warm term as an `feColorMatrix` value: twenty numbers, row-major, RGBA plus offsets.
+ *
+ * A diagonal matrix, because a per-channel gain is exactly that. Written here rather than in the
+ * component so there is one source for both applications, which is the whole point of this file.
+ */
+export function warmthMatrix(): string {
+  return [
+    WARMTH.r, 0, 0, 0, 0,
+    0, WARMTH.g, 0, 0, 0,
+    0, 0, WARMTH.b, 0, 0,
+    0, 0, 0, 1, 0,
+  ].join(' ');
 }
 
 /**
@@ -101,6 +201,8 @@ export function gradeCss(): string {
   if (Math.abs(BRIGHTNESS - 1) >= EPSILON) parts.push(`brightness(${BRIGHTNESS})`);
   if (Math.abs(CONTRAST - 1) >= EPSILON) parts.push(`contrast(${CONTRAST})`);
   if (Math.abs(SATURATION - 1) >= EPSILON) parts.push(`saturate(${SATURATION})`);
+  /* Last, exactly as `gradePixel` applies it: these operations do not commute. */
+  if (!warmthIsIdentity()) parts.push(`url(#${GRADE_FILTER_ID})`);
 
   return parts.join(' ');
 }
@@ -134,6 +236,11 @@ export function gradePixel(r: number, g: number, b: number): [number, number, nu
     cg = luma + (cg - luma) * SATURATION;
     cb = luma + (cb - luma) * SATURATION;
   }
+
+  // The warm term: a per-channel gain, last. See `WARMTH` and `GRADE_FILTER_ID`.
+  cr *= WARMTH.r;
+  cg *= WARMTH.g;
+  cb *= WARMTH.b;
 
   return [clamp255(cr), clamp255(cg), clamp255(cb)];
 }

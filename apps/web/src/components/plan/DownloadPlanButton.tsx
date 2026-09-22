@@ -56,6 +56,7 @@ export function DownloadPlanButton({
           labels: view === 'visualise' ? false : editor.labelsVisible,
           view,
           maturity: editor.maturity,
+          shadows: editor.shadowsVisible,
           rendererVersion: browserRendererVersion(),
           fileName: planFileName(projectName),
         },

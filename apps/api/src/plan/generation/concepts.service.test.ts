@@ -7,8 +7,10 @@ import {
   elementArea,
   edgingRuns,
   geometryOutline,
+  isCanopy,
   isCounted,
   housePolygon,
+  legalFootprint,
   openingCentre,
   planSchedule,
   pointInPolygon,
@@ -206,7 +208,19 @@ function rotatedPlan(): PlanDocument {
   });
 }
 
-describe.skipIf(connection === null)('ConceptsService', () => {
+/**
+ * Every test here generates three whole concepts against real PostGIS, and Vitest's 5 s default is
+ * not a budget any of them was written to. The largest already sat at about 4.3 s on a warm
+ * database; giving a garden its full complement of trees rather than five put the rotated-house
+ * case over the line, which is the generator doing more work rather than doing it worse — the
+ * feasible-region query is the dominant cost in the whole generator and it gets harder the more
+ * obstacles a plan carries. Stated here rather than raised globally, exactly as
+ * `reference-fixture.test.ts` states its own, so the fast unit suites keep a timeout that means
+ * something.
+ */
+const GENERATION_TIMEOUT_MS = 30_000;
+
+describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TIMEOUT_MS }, () => {
   let service: ConceptsService;
   let validation: GeometryValidationService;
   let fill: FillService;
@@ -505,11 +519,16 @@ describe.skipIf(connection === null)('ConceptsService', () => {
        * Different templates, not the same layout with a different badge: as many different main
        * panels as there are different compositions.
        *
-       * Asserted against the composition count rather than at three, because two slots on the same
-       * archetype legitimately draw the same open panel — the panel is the composition's own sketch,
-       * and what differs between two candidates of one archetype is everything else. On the modern
-       * set those two concepts come back with 56 and 49 elements, different furniture and a second
-       * water feature in one of them; only the lawn outline coincides.
+       * **At least** as many distinct panels as there are compositions, which _relaxes_ what this
+       * used to demand.
+       *
+       * It asserted equality, on the reasoning that two slots on one archetype draw the same open
+       * panel and differ in everything else. That stopped being true when the border depth started
+       * answering to what the room can spare: `borderIn` reads the lawn's own depth, which moves
+       * with the candidate's terrace depth, so two candidates of one composition now cut two
+       * different panels. More variety than the test was written to expect is not a failure — what
+       * it is really guarding is that two *different* compositions never coincide, and that is what
+       * a floor rather than an equality says.
        */
       const panels = set.map((concept) =>
         JSON.stringify(
@@ -520,7 +539,7 @@ describe.skipIf(connection === null)('ConceptsService', () => {
           )?.shape,
         ),
       );
-      expect(new Set(panels).size).toBe(archetypes.size);
+      expect(new Set(panels).size).toBeGreaterThanOrEqual(archetypes.size);
       // And the plans themselves are three, whatever they share.
       expect(new Set(set.map((concept) => JSON.stringify(concept.elements))).size).toBe(3);
     }
@@ -1175,13 +1194,31 @@ describe.skipIf(connection === null)('ConceptsService', () => {
       expect(polygonsIntersect(outline, house)).toBe(false);
     }
 
-    // Paths are allowed to run up to things; the built footprints are not.
+    /*
+     * Paths are allowed to run up to things; the built footprints are not. Measured on
+     * `legalFootprint`, so a tree is its trunk here — for the same reason the counted categories
+     * are excluded above. A canopy over the terrace it shades is the ordinary case rather than two
+     * things claiming one piece of ground, and what a tree actually occupies is its stem. What a
+     * crown may *not* pass through is asserted separately below, because that is a question about
+     * what the other thing is rather than about disjointness.
+     */
     const footprints = placed.filter((element) => element.shape.kind !== 'polyline');
     for (let i = 0; i < footprints.length; i += 1) {
       for (let j = i + 1; j < footprints.length; j += 1) {
-        const a = geometryOutline(footprints[i]!.shape);
-        const b = geometryOutline(footprints[j]!.shape);
+        const a = geometryOutline(legalFootprint(footprints[i]!));
+        const b = geometryOutline(legalFootprint(footprints[j]!));
         expect(polygonsIntersect(a, b)).toBe(false);
+      }
+    }
+
+    // A canopy may hang over the ground. It may not grow through a building.
+    const structures = placed
+      .filter((element) => element.category === 'structure')
+      .map((element) => geometryOutline(element.shape));
+    for (const tree of placed.filter((element) => isCanopy(element))) {
+      const crown = geometryOutline(tree.shape);
+      for (const structure of structures) {
+        expect(polygonsIntersect(crown, structure)).toBe(false);
       }
     }
   });
@@ -1231,13 +1268,30 @@ describe.skipIf(connection === null)('ConceptsService', () => {
 
     for (const tree of trees) {
       expect(tree.shape.kind).toBe('point');
-      // A canopy that overhangs the fence is what the exact disc erosion exists to prevent.
-      expect(polygonContainsPolygon(boundary, geometryOutline(tree.shape))).toBe(true);
+      /*
+       * The **trunk** is what has to be inside the fence, and _this reverses_ what this test used
+       * to assert. A canopy overhanging a boundary is not a tree planted in the neighbour's
+       * garden; it is what every designed plan draws, and demanding the crown fit left every tree
+       * marooned in open ground with its own radius of clearance round it. What the rule protects
+       * is unchanged — a tree is in this garden if its stem is — and the server's validator now
+       * asks the identical question of the identical shape.
+       */
+      expect(polygonContainsPolygon(boundary, geometryOutline(legalFootprint(tree)))).toBe(true);
       /*
        * Never an accent: `geometryArea` is 0 for a point, so a tree tagged as one would sail past
        * the sliver rule above and quietly break the "every accent has a real area" guarantee.
        */
       expect(tree.fillKind).toBeUndefined();
+    }
+
+    /* Clear of each other is about the crowns: two canopies growing through one another is not a
+     * pair of trees, it is one. This is the half of the old containment rule worth keeping. */
+    for (let i = 0; i < trees.length; i += 1) {
+      for (let j = i + 1; j < trees.length; j += 1) {
+        const a = geometryOutline(trees[i]!.shape);
+        const b = geometryOutline(trees[j]!.shape);
+        expect(polygonsIntersect(a, b)).toBe(false);
+      }
     }
   });
 
@@ -1516,7 +1570,13 @@ describe.skipIf(connection === null)('ConceptsService', () => {
 
       for (const seed of [1, 2, 3]) {
         for (const concept of await service.generate(document, seed)) {
-          const rings = concept.elements.map((element) => geometryOutline(element.shape));
+          /*
+           * `legalFootprint` for the same reason the boundary rule reads it: a crown reaching a
+           * little past the line the user drew is a branch over their own garden, not a bed the
+           * generator laid outside the area they asked to have designed. Everything that covers
+           * ground is still held to the area exactly.
+           */
+          const rings = concept.elements.map((element) => geometryOutline(legalFootprint(element)));
           expect(rings.length).toBeGreaterThan(0);
 
           const [row] = await connection!.db.execute<{ outside: number }>(sql`

@@ -48,9 +48,16 @@ it('changes species and canopy size from the inspector', () => {
 });
 it('restores the accepted value after a rejected position edit', () => {
   render(<SelectedElementPanel />);
+  fireEvent.click(screen.getByText('Details'));
   const position = screen.getByTestId('element-position-x');
   fireEvent.change(position, { target: { value: '40' } });
   fireEvent.blur(position);
   expect(position).toHaveValue(4);
   expect(usePlanEditorStore.getState().clash).not.toBeNull();
+});
+
+it('draws nothing when nothing is selected', () => {
+  usePlanEditorStore.getState().select(null);
+  render(<SelectedElementPanel />);
+  expect(screen.queryByTestId('selected-element')).toBeNull();
 });

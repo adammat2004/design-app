@@ -114,7 +114,20 @@ export function measureComposition(
   const shares = sampleShares(covers, zones, step);
 
   const terrace = largestPavedRect(elements);
-  const panel = largestPanel(elements, terrace?.rotation ?? 0);
+  /*
+   * The open panel is looked for **in the zones being measured**, not across the whole plan.
+   *
+   * `courtyard` is "this plan has nowhere open at all", and it decides which set of bands the
+   * generator's own rules judge a concept by. Scanning every element made a gravel front garden
+   * count as the back garden's open ground: a courtyard plan — paved corner to corner by design,
+   * which is what a courtyard is — was then judged as a garden, reported as having no lawn, and
+   * failed a band it can never meet. The shares beside it were already sampled per zone.
+   */
+  const inScope = new Set(zones.map((zone) => zone.id));
+  const panel = largestPanel(
+    elements.filter((element) => inScope.has(element.zone)),
+    terrace?.rotation ?? 0,
+  );
 
   const baseByZone: Partial<Record<ZoneId, ElementCategory>> = {};
   for (const element of elements) {
