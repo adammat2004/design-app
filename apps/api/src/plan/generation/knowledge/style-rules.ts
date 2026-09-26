@@ -1,5 +1,6 @@
 import type {
   CirculationStyle,
+  GeometryLanguage,
   GardenBrief,
   LayoutArchetypeId,
   StyleDirection,
@@ -32,6 +33,12 @@ export interface StyleRules {
   /** How much the ground shapes should curve. `none` means every edge is straight. */
   curvature: 'none' | 'some' | 'strong';
   /**
+   * The shape language the style asks for, or `null` where it leaves the choice to the plot. What
+   * the deterministic brief states, what the candidate loop tries first, and what the geometry
+   * principle then judges a plan against.
+   */
+  language: GeometryLanguage | null;
+  /**
    * How many distinct surface materials a plan of this style should use.
    *
    * The single most reliable difference between a designed garden and an assembled one, and the
@@ -60,6 +67,7 @@ export interface StyleRules {
 const DEFAULT_RULES: StyleRules = {
   symmetry: 'preferred',
   curvature: 'some',
+  language: null,
   maxMaterials: 4,
   bedMassing: 'runs',
   alignment: 'loose',
@@ -71,6 +79,7 @@ export const STYLE_RULES: Record<StyleDirection, StyleRules> = {
   modern: {
     symmetry: 'preferred',
     curvature: 'none',
+    language: 'asymmetric_geometric',
     // Fewer, larger surfaces is most of what "modern" means on the ground.
     maxMaterials: 3,
     bedMassing: 'masses',
@@ -91,6 +100,12 @@ export const STYLE_RULES: Record<StyleDirection, StyleRules> = {
   cottage: {
     symmetry: 'avoid',
     curvature: 'strong',
+    /*
+     * Curves are preferred rather than required: a traditional cottage garden is straight paths
+     * and rectangular beds, and stating a language here would mark every such plan as a
+     * contradiction of its own brief. The candidate loop still tries soft first (`styleLanguages`).
+     */
+    language: null,
     maxMaterials: 4,
     bedMassing: 'runs',
     alignment: 'loose',
@@ -111,6 +126,7 @@ export const STYLE_RULES: Record<StyleDirection, StyleRules> = {
   formal: {
     symmetry: 'required',
     curvature: 'none',
+    language: 'formal_symmetric',
     maxMaterials: 3,
     bedMassing: 'runs',
     alignment: 'strict',
@@ -130,6 +146,7 @@ export const STYLE_RULES: Record<StyleDirection, StyleRules> = {
   lowMaintenance: {
     symmetry: 'preferred',
     curvature: 'none',
+    language: 'rectilinear',
     // The fewest materials of any style: every junction between two of them is a detail to maintain.
     maxMaterials: 2,
     bedMassing: 'masses',

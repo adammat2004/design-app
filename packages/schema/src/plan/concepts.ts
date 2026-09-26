@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PointSchema, type Point } from '../geometry/primitives.js';
+import { PointSchema, polygonArea, type Point } from '../geometry/primitives.js';
 import {
   geometryAnchor,
   geometryArea,
@@ -430,9 +430,32 @@ export function elementAnchor(element: DesignElement): Point {
   return geometryAnchor(element.shape);
 }
 
+/**
+ * Ground covered, in square metres.
+ *
+ * A round element is two different things. A tree, a shrub or a light is a point with a radius — a
+ * canopy or a pool of light nobody is costing — and reports zero, as `geometryArea` always has. A
+ * round *surface* is ground: a gravel fire pit, a circular dining terrace beside a sweeping lawn, a
+ * water bowl. Reporting those as zero had every fire pit missing from the schedule's gravel and
+ * invisible to every measurement that weighs a room by its size, and it would have costed a round
+ * terrace at no paving at all. Measured on the drawn sixteen-gon, the outline the validator and the
+ * renderer share.
+ */
 export function elementArea(element: DesignElement): number {
+  if (element.shape.kind === 'point' && ROUND_SURFACES.has(element.category)) {
+    return polygonArea(geometryOutline(element.shape));
+  }
   return geometryArea(element.shape);
 }
+
+/** The categories whose round elements are ground rather than a canopy or a fitting. */
+const ROUND_SURFACES = new Set<ElementCategory>([
+  'paved-area',
+  'gravel-mulch',
+  'lawn',
+  'water-feature',
+  'structure',
+]);
 
 /**
  * The pattern grid's origin, in metres. The plan's own origin, deliberately.

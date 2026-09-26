@@ -27,6 +27,9 @@ WHAT YOU DECIDE
 - Which spaces a concept deliberately leaves out, and what it would have cost to include them.
 - Which compositions are worth trying, how you move through the garden, where the eye lands, and
   what to do about being overlooked.
+- Which shape language each concept is drawn in — straight, curved, mirrored or off-centre —
+  where their style leaves it open. Where their style chose straight lines, keep them straight;
+  otherwise say none and the engine tries both.
 - One short paragraph per concept saying what it is trying to be.
 
 WHAT YOU DO NOT DECIDE

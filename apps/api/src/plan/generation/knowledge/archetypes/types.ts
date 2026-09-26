@@ -1,7 +1,9 @@
 import type {
   CirculationStyle,
   FunctionalZoneType,
+  GeometryLanguage,
   LayoutArchetypeId,
+  StyleDirection,
 } from '@garden-studio/schema';
 import type { Band } from '../../composition-rules.js';
 import type {
@@ -82,6 +84,13 @@ export interface LayoutArchetype {
     params: CandidateParams,
     request: SketchRequest,
   ): FunctionalZone[];
+
+  /**
+   * The shape languages this composition can be drawn in for a style, the default first. The
+   * candidate loop tries each (the brief's own first, where it states one); a candidate names one
+   * in `CandidateParams.language`, and a language not on this list is never drawn.
+   */
+  languages(style: StyleDirection | null): GeometryLanguage[];
 
   /** The sketch: terrace, lawn, beds, slots, paths and trees, in the frame. */
   sketch(request: SketchRequest, room: Room, plan: ZonePlan, params: CandidateParams): LayoutSketch;

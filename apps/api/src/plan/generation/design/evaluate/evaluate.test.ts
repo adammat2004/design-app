@@ -477,6 +477,15 @@ describe('hierarchy', () => {
 
     expect(codes(result)).not.toContain('view-blocked');
   });
+
+  it('does not count a flight of steps down off the terrace as blocking the view', () => {
+    /* Where the garden room in the first case stands, and the same size: only the symbol differs. */
+    const patio = feature('Seating patio', rect(7, 13, 6, 3.5));
+    const steps = feature('Steps', rect(7, 11, 4, 3), { category: 'structure', symbol: 'steps' });
+    const result = score([patio, steps], [[patio.id, 'seating']]);
+
+    expect(codes(result)).not.toContain('view-blocked');
+  });
 });
 
 /* ---------------------------------------------------------------- style */

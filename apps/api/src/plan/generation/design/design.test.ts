@@ -378,6 +378,18 @@ describe('building the design briefs', () => {
     expect(briefs[0]!.emphasis).toBe('social');
   });
 
+  it("states the style's shape language on the recommendation, and leaves the alternatives open", () => {
+    const base = scenario('small-entertaining').document;
+    const withStyle = (style: 'modern' | 'formal' | 'cottage') =>
+      readingOf({ ...base, brief: { ...base.brief, style } }).briefs.map(
+        (brief) => brief.geometryLanguage,
+      );
+    expect(withStyle('modern')).toEqual(['asymmetric_geometric', null, null]);
+    expect(withStyle('formal')).toEqual(['formal_symmetric', null, null]);
+    /* Cottage prefers curves without requiring them: a traditional cottage garden is straight. */
+    expect(withStyle('cottage')).toEqual([null, null, null]);
+  });
+
   it('makes the three differ in what they are for, not only in name', () => {
     const { briefs } = readingOf(scenario('family-play').document);
     expect(new Set(briefs.map((brief) => brief.emphasis)).size).toBe(3);

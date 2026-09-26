@@ -1,5 +1,6 @@
 import {
   distanceToSegment,
+  isCurvedLanguage,
   pointInPolygon,
   polygonsIntersect,
   polylineLength,
@@ -46,8 +47,9 @@ import type { DesignSubject, SubjectItem, SubjectRegion, SubjectRoute } from './
  *   symmetry, because `style` already measures that and would count it twice.
  * - **panel shape** — an open space whose outline is the leftover of everything placed round it:
  *   many inside corners, or a perimeter far longer than a compact shape of its area needs.
- * - **geometry** — a curve in a straight plan or a rectangle in a curved one. Mixed geometry is
- *   allowed; a minority language that is a fifth of the ground is not a decision.
+ * - **geometry** — a curve in a straight plan or a rectangle in a curved one, read off the designed
+ *   edges by length. Mixed geometry is allowed; a minority language that is a fifth of the edges
+ *   is not a decision.
  *
  * Deliberately reads nothing off `emphasis` or `intent`. What a social or an open concept wants is
  * already said by the bands and the weight profile, and saying it a third time here is the mistake
@@ -280,7 +282,12 @@ function bisects(route: SubjectRoute, ring: Point[]): boolean {
 function gridInside(ring: Point[], step: number): Point[] {
   const xs = ring.map((point) => point.x);
   const ys = ring.map((point) => point.y);
-  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const [minX, maxX, minY, maxY] = [
+    Math.min(...xs),
+    Math.max(...xs),
+    Math.min(...ys),
+    Math.max(...ys),
+  ];
 
   const points: Point[] = [];
   for (let x = minX + step / 2; x < maxX; x += step) {
@@ -427,7 +434,9 @@ function balance(
   if (!frame || !box) return;
   if (styleRules(subject.brief.style).symmetry === 'required') return;
 
-  const masses = built.filter((item) => item.area >= MASS_AREA && item.category !== 'water-feature');
+  const masses = built.filter(
+    (item) => item.area >= MASS_AREA && item.category !== 'water-feature',
+  );
   if (masses.length < 2) return;
 
   const half = (box.vMax - box.vMin) / 2;
@@ -548,6 +557,31 @@ function turnDegrees(before: Point, point: Point, after: Point): number {
 
 /* ---------------------------------------------------------------- geometry language */
 
+/**
+ * A plan's shape language is set by its open space, and the rooms are read against it.
+ *
+ * The first reading took every shape — beds included — as straight only if *every* edge was, weighed
+ * the two classes by area, and called the smaller one a mixture. That measured the wrong thing, and
+ * the harness showed how:
+ *
+ * - **A bed is what the lawn, the paths and the rooms leave.** Its edge against the lawn is the
+ *   lawn's edge, its edge against a path is the path's, and its edge against the fence is the
+ *   fence's. Read as shapes of their own, the borders beside a sweeping lawn — straight along the
+ *   side path, which runs straight because the fence does — made every soft plan "mixed", and an
+ *   L-plot's beds, angled because its fence is, made a formal plan on it "curved or angled".
+ * - **A building is a rectangle in every garden, and the terrace takes the house's geometry.** A shed
+ *   has corners because it is built, and the paving against the back wall is where the house's
+ *   lines meet the garden's. The designer's rule is that geometry loosens with distance from the
+ *   building, not that a curved garden needs a curved patio.
+ *
+ * So the shapes read are the ones a designer draws to set the language: the open ground, and the
+ * rooms standing in the body of the garden. The **open space decides** which language the plan is
+ * in, because it is the largest designed shape and the one everything is arranged round; a room in
+ * the other language — a rectangular dining area beside a sweeping lawn, a gravel circle beside a
+ * rectangular one — is the contradiction. Edges lying along the boundary or the house wall are the
+ * site's and are not read, and they are weighed by length, because an edge is what the eye reads.
+ * Only the garden room is read: the side return and the front are rooms of their own.
+ */
 function languages(
   subject: DesignSubject,
   built: SubjectItem[],
@@ -557,46 +591,83 @@ function languages(
   const frame = subject.analysis.frame;
   if (!frame) return;
 
-  const shapes: { id: string; name: string; area: number; straight: boolean }[] = [
-    ...subject.panels.map((panel) => ({
+  const house = subject.analysis.house?.ring ?? null;
+  const given = [...segmentsOf(subject.analysis.boundary), ...(house ? segmentsOf(house) : [])];
+  /*
+   * The language is the garden room's. A deck in the side return or gravel in the front garden
+   * stands in another room, whose lines are the house's and the passage's, and a sweeping lawn
+   * behind the house says nothing about what shape they should be.
+   */
+  const gardenRoom = subject.analysis.room;
+  const inRoom = (centre: Point) => !gardenRoom || pointInPolygon(centre, gardenRoom);
+
+  const read = (ring: Point[]) => {
+    let straight = 0;
+    let curved = 0;
+    const simplified = simplify(ring);
+    for (let i = 0; i < simplified.length; i += 1) {
+      const a = simplified[i]!;
+      const b = simplified[(i + 1) % simplified.length]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length < LANGUAGE_EDGE) continue;
+      const seen = length * (1 - shareBeside(a, b, given, ALONG_GIVEN));
+      const heading = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+      if (offAxis(heading, frame.wallBearing) > ALIGNED) curved += seen;
+      else straight += seen;
+    }
+    return { straight, curved };
+  };
+
+  const panels = subject.panels
+    .filter((panel) => inRoom(panel.centre))
+    .map((panel) => ({
       id: panel.id,
       name: ground(panel),
-      area: panel.area,
-      straight: isStraight(panel.ring, frame.wallBearing),
-    })),
-    ...subject.beds.map((bed) => ({
-      id: bed.id,
-      name: 'a planting bed',
-      area: bed.area,
-      straight: isStraight(bed.ring, frame.wallBearing),
-    })),
-    ...built
-      .filter((item) => item.area >= MASS_AREA)
-      .map((item) => ({
-        id: item.id,
-        name: label(item),
-        area: item.area,
-        straight: isStraight(item.ring, frame.wallBearing),
-      })),
-  ];
+      ...read(panel.ring),
+    }));
+  const rooms = built
+    .filter(
+      (item) =>
+        item.area >= MASS_AREA &&
+        item.category !== 'structure' &&
+        inRoom(item.centre) &&
+        !(house && againstHouse(item.ring, house)),
+    )
+    .map((item) => ({ id: item.id, name: label(item), ...read(item.ring) }));
+  const shapes = [...panels, ...rooms];
   if (shapes.length < 2) return;
 
-  const total = shapes.reduce((sum, shape) => sum + shape.area, 0);
+  const sum = (list: typeof shapes, key: 'straight' | 'curved') =>
+    list.reduce((total, shape) => total + shape[key], 0);
+  const total = sum(shapes, 'straight') + sum(shapes, 'curved');
   if (total <= 0) return;
-  const straight = shapes.filter((shape) => shape.straight).reduce((sum, s) => sum + s.area, 0);
-  const curved = total - straight;
-  const minority = Math.min(straight, curved) / total;
+
+  /*
+   * The brief's language, where it states one: a concept whose brief asked for straight lines is
+   * judged against straight lines, and a sweeping lawn drawn for it is the contradiction rather than
+   * the standard the rooms are held to. Otherwise the open space sets it, and where there is none,
+   * whichever the rooms mostly speak.
+   */
+  const stated = subject.brief.geometryLanguage;
+  const setBy =
+    panels.length > 0 && sum(panels, 'straight') + sum(panels, 'curved') > 0 ? panels : shapes;
+  const curvedPlan = stated
+    ? isCurvedLanguage(stated)
+    : sum(setBy, 'curved') > sum(setBy, 'straight');
+  const against: 'straight' | 'curved' = curvedPlan ? 'straight' : 'curved';
+  const minority = sum(shapes, against) / total;
 
   parts.push(clamp01(1 - minority / 0.5));
   if (minority <= MIXED_SHARE) return;
 
-  const straightIsMinority = straight < curved;
-  const offenders = shapes.filter((shape) => shape.straight === straightIsMinority);
+  const offenders = shapes
+    .filter((shape) => shape[against] > 0)
+    .sort((x, y) => y[against] - x[against]);
   issues.push({
     code: 'geometry-mixed',
     principle: 'composition',
     severity: 'minor',
-    message: `${pct(minority)} of the designed ground is ${straightIsMinority ? 'straight-edged' : 'curved or angled'} in a plan that is otherwise ${straightIsMinority ? 'curved' : 'straight'}: ${offenders
+    message: `${pct(minority)} of the designed edges are ${against === 'straight' ? 'straight' : 'curved or angled'} in a plan ${stated ? `whose brief asks for ${curvedPlan ? 'curves' : 'straight lines'}` : `whose open space is ${curvedPlan ? 'curved' : 'straight'}`}: ${offenders
       .slice(0, 3)
       .map((shape) => shape.name)
       .join(', ')}.`,
@@ -604,19 +675,35 @@ function languages(
   });
 }
 
-/** Every edge worth reading runs along the house or square to it. */
-function isStraight(ring: Point[], bearing: number): boolean {
-  const simplified = simplify(ring);
-  for (let i = 0; i < simplified.length; i += 1) {
-    const a = simplified[i]!;
-    const b = simplified[(i + 1) % simplified.length]!;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    if (Math.hypot(dx, dy) < LANGUAGE_EDGE) continue;
-    const heading = (Math.atan2(dy, dx) * 180) / Math.PI;
-    if (offAxis(heading, bearing) > ALIGNED) return false;
+/** An edge within this of the boundary or the house wall, all along it, is the site's rather than the plan's. */
+const ALONG_GIVEN = 0.35;
+
+/** Paving within this of the house wall is the house's terrace, drawn in the house's lines. */
+const HOUSE_TOUCH = 0.3;
+
+/** Samples taken along an edge to find how much of it runs beside something. */
+const EDGE_SAMPLES = 9;
+
+type Segment = [Point, Point];
+
+function segmentsOf(ring: Point[]): Segment[] {
+  return ring.map((point, i) => [point, ring[(i + 1) % ring.length]!] as Segment);
+}
+
+/** The share of the edge a→b that lies within `reach` of one of the segments. */
+function shareBeside(a: Point, b: Point, segments: Segment[], reach: number): number {
+  let near = 0;
+  for (let k = 0; k < EDGE_SAMPLES; k += 1) {
+    const t = (k + 0.5) / EDGE_SAMPLES;
+    const point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    if (segments.some(([p, q]) => distanceToSegment(point, p, q) <= reach)) near += 1;
   }
-  return true;
+  return near / EDGE_SAMPLES;
+}
+
+function againstHouse(ring: Point[], house: Point[]): boolean {
+  const wall = segmentsOf(house);
+  return ring.some((point) => wall.some(([p, q]) => distanceToSegment(point, p, q) <= HOUSE_TOUCH));
 }
 
 /* ---------------------------------------------------------------- words */

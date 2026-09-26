@@ -4,6 +4,8 @@ packages:
   - 'tools/*'
 allowBuilds:
   '@nestjs/core': true
+  # apps/mobile, via jest. It ships prebuilt binaries, so its build-from-source fallback is not needed.
+  '@parcel/watcher': false
   esbuild: true
   unrs-resolver: true
 minimumReleaseAgeExclude:

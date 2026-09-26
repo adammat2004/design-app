@@ -1,6 +1,7 @@
 import type { DesignBrief } from '@garden-studio/schema';
 import { rankArchetypes, type ArchetypeFit } from './archetype-selector.js';
 import { previewLayout, type LayoutPreview, type PreviewRequest } from './layout-generator.js';
+import type { GeometryLanguage } from '@garden-studio/schema';
 import type { CandidateParams, SiteAnalysis } from './types.js';
 
 /**
@@ -24,7 +25,10 @@ import type { CandidateParams, SiteAnalysis } from './types.js';
 const ARCHETYPES_PER_BRIEF = 3;
 
 /** How many variations of each composition. Beyond this they stop differing in ways that show. */
-const PARAMS_PER_ARCHETYPE = 6;
+const PARAMS_PER_ARCHETYPE = 8;
+
+/** What `PARAMS_PER_ARCHETYPE` was before each composition was drawn several ways. */
+const PARAMS_BEFORE_DRAWINGS = 6;
 
 /** The most previews one brief will ever produce, whatever the two numbers above multiply to. */
 const CEILING = 24;
@@ -57,13 +61,24 @@ export function enumerateCandidates(request: EnumerateRequest): Candidate[] {
 
   const candidates: Candidate[] = [];
   for (const fit of ranked) {
-    const variations = fit.archetype
-      .params(request.analysis, request.brief)
-      .slice(0, PARAMS_PER_ARCHETYPE);
+    /*
+     * `DESIGN_DRAWINGS=0` enumerates the archetype's own variations alone, in its default language —
+     * the field before languages and framing were candidates — so a benchmark can say what drawing
+     * each composition several ways changed, on otherwise identical code.
+     */
+    const variations =
+      process.env.DESIGN_DRAWINGS === '0'
+        ? fit.archetype.params(request.analysis, request.brief).slice(0, PARAMS_BEFORE_DRAWINGS)
+        : drawings(
+            fit.archetype.params(request.analysis, request.brief),
+            fit.archetype.languages(request.brief.style),
+            request.brief.geometryLanguage,
+          ).slice(0, PARAMS_PER_ARCHETYPE);
 
+    const own: Candidate[] = [];
     for (const [index, params] of variations.entries()) {
-      if (candidates.length >= ceiling) break;
-      candidates.push({
+      if (candidates.length + own.length >= ceiling) break;
+      own.push({
         id: `${request.brief.id}-${fit.archetype.id}-${index}`,
         brief: request.brief,
         fit,
@@ -77,7 +92,53 @@ export function enumerateCandidates(request: EnumerateRequest): Candidate[] {
         }),
       });
     }
+    /*
+     * A variation the composition declined is the hand-drawn template again, not another drawing of
+     * the composition — and its preview is the one that flatters: it cannot show the features the
+     * realisation will then sample in wherever there is room, so it scores the plan without them.
+     * Where some variations composed, the declined ones are dropped; where none did, the template
+     * stands, because it is the only drawing of this composition the plot allows.
+     */
+    const composed = own.filter((candidate) => candidate.preview.sketch.composed);
+    candidates.push(...(composed.length > 0 ? composed : own));
   }
 
   return candidates;
+}
+
+/**
+ * The parameter sets to preview, as drawings: each of the archetype's own variations in the language
+ * it is drawn in by default — the brief's language first, where the brief states one the archetype
+ * speaks — interleaved with the same composition drawn the other ways it can be.
+ *
+ * The composition as designed comes first, as `params()` promises. Then the alternatives worth the
+ * most: the default parameters in the other language, and the default parameters with the lawn left
+ * unframed; then the rest of the archetype's own variations; then those in the other languages.
+ * Interleaved rather than appended because the list is cut at `PARAMS_PER_ARCHETYPE`, and an
+ * alternative drawing of the plan as designed tells the scorer more than a fifth nudge of the
+ * terrace's depth does.
+ *
+ * An unframed variant only where the language frames at all, or it draws the identical garden and
+ * spends a preview to learn nothing.
+ */
+export function drawings(
+  params: CandidateParams[],
+  languages: GeometryLanguage[],
+  stated: GeometryLanguage | null,
+): CandidateParams[] {
+  const ordered =
+    stated && languages.includes(stated)
+      ? [stated, ...languages.filter((language) => language !== stated)]
+      : languages;
+  const [first, ...rest] = params;
+  if (!first) return [];
+  const [main, ...others] = ordered as [GeometryLanguage, ...GeometryLanguage[]];
+  const frames = main === 'rectilinear' || main === 'asymmetric_geometric';
+  return [
+    { ...first, language: main },
+    ...others.map((language) => ({ ...first, language })),
+    ...(frames ? [{ ...first, language: main, framed: false }] : []),
+    ...rest.map((variation) => ({ ...variation, language: main })),
+    ...others.flatMap((language) => rest.map((variation) => ({ ...variation, language }))),
+  ];
 }

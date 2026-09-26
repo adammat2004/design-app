@@ -4,7 +4,8 @@ import {
   type GardenIntent,
   type PriorityTier,
 } from '@garden-studio/schema';
-import { FEATURE_SPECS, REPEATABLE_FEATURES, type FeatureSpec } from '../archetypes.js';
+import { FEATURE_SPECS, REPEATABLE_FEATURES, specIn, type FeatureSpec } from '../archetypes.js';
+import type { GeometryLanguage } from '../design/composition/types.js';
 import { hostFloor } from '../furnishings.js';
 import type { Footprint } from '../layout/fit.js';
 import type { SlotKind } from '../layout/sketch.js';
@@ -118,7 +119,11 @@ export const FEATURE_LIBRARY: Record<DesiredFeature, FeatureKnowledge> = {
   seating: knows('seating', {
     zone: 'terrace',
     withinZone: 'core',
-    placement: ['terrace'],
+    /*
+     * The terrace, unless the table took it (`terraceClaim`): then a room of its own at the lawn's
+     * near corner, where the sofas can catch the evening sun rather than share the kitchen door.
+     */
+    placement: ['terrace', 'terrace-corner', 'far-room'],
     clearance: 0,
     access: 'house',
     visibility: 'wants',
@@ -368,3 +373,41 @@ export function tierFor(feature: DesiredFeature, intent: GardenIntent): Priority
 export const COMPOSED: DesiredFeature[] = (Object.keys(FEATURE_LIBRARY) as DesiredFeature[]).filter(
   (feature) => FEATURE_LIBRARY[feature].composed,
 );
+
+/**
+ * The rooms drawn larger when a concept is organised around them.
+ *
+ * Only rooms whose size is a choice: a dining terrace, a pergola, a play area, a fire pit circle, a
+ * kitchen garden. A hot tub is a product that comes in one size and an outdoor kitchen is a counter,
+ * so neither grows because the concept is about dining or relaxing.
+ */
+const GROWS: DesiredFeature[] = ['dining', 'pergola', 'play', 'firePit', 'vegPatch'];
+
+/** How much larger, along each side, the room a concept is organised around is drawn. */
+export const PRIMARY_GROWTH = 1.25;
+
+/**
+ * The feature as this concept draws it: in the plan's shape language (`specIn`), and a quarter
+ * larger along each side where it is the room the concept is organised around — so the dining
+ * pergola of a social concept is the most generous room in it rather than a pergola beside a
+ * larger patio. The composition, the preview and the realisation all size a feature through this
+ * one function, or the bay would be reserved for one size and the feature fitted at another.
+ */
+export function roomSpec(
+  feature: DesiredFeature,
+  language: GeometryLanguage | null | undefined,
+  primaryZone: FunctionalZoneType | null | undefined,
+): FeatureSpec {
+  const spec = specIn(feature, language);
+  if (!primaryZone || FEATURE_LIBRARY[feature].zone !== primaryZone || !GROWS.includes(feature)) {
+    return spec;
+  }
+  const k = PRIMARY_GROWTH;
+  return {
+    ...spec,
+    footprint:
+      spec.footprint.kind === 'point'
+        ? { kind: 'point', radius: spec.footprint.radius * k }
+        : { kind: 'rect', width: spec.footprint.width * k, depth: spec.footprint.depth * k },
+  };
+}

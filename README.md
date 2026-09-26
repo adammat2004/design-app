@@ -14,7 +14,10 @@ from it, never the other way around.
 > all still there tomorrow. Each concept is a layout template — a terrace across the garden doors,
 > one lawn panel, planting round it, the shed by the gate, paths between them and a front path to
 > the kerb — rather than a scatter of legally placed features. Costing and the 3D preview are not
-> built yet.
+> built yet. An **AR viewer** for the phone has been started: the shared scene format and an Expo
+> skeleton exist, and the AR view itself is next. See [`docs/ar/ar-architecture.md`](docs/ar/ar-architecture.md).
+>
+> New to the project? Start with [`docs/onboarding.md`](docs/onboarding.md).
 
 ## Stack
 
@@ -24,15 +27,18 @@ from it, never the other way around.
 | Backend  | NestJS, Drizzle ORM, PostgreSQL + PostGIS                  |
 | Frontend | Next.js (App Router), TypeScript, Tailwind v4, React-Konva |
 | 3D       | React Three Fiber (installed, not used yet)                |
+| Mobile   | Expo SDK 57 + Expo Router (AR viewer; AR not built yet)    |
 | State    | Zustand                                                    |
 | Shared   | Zod schemas in `packages/schema`, imported by both apps    |
-| AI       | Anthropic SDK (`claude-opus-5`), structured outputs        |
-| Testing  | Vitest (unit), Playwright (e2e)                            |
+| AI       | Anthropic SDK (`claude-opus-5-5`), structured outputs        |
+| Testing  | Vitest (unit), Playwright (e2e), jest-expo (mobile)        |
 
 ```
-apps/web          Next.js frontend — the plan editor
-apps/api          NestJS backend — persistence and spatial validation
-packages/schema   Zod schemas + geometry helpers shared by both
+apps/web               Next.js frontend — the plan editor
+apps/api               NestJS backend — persistence and spatial validation
+apps/mobile            Expo app — the AR viewer (skeleton; see apps/mobile/README.md)
+packages/schema        Zod schemas + geometry helpers shared by web and api
+packages/ar-contract   The AR scene format shared by the scene builder and the mobile app
 ```
 
 ## Prerequisites
@@ -70,6 +76,11 @@ pnpm dev
 The frontend reads `NEXT_PUBLIC_API_URL` from `apps/web/.env.local`; a copy is committed as
 `apps/web/.env.example`.
 
+`./script/setup` does steps 1–5 in one go (and builds `packages/ar-contract` too).
+
+For the AR app, run `pnpm mobile` and scan the QR code with Expo Go. It needs no database, API or
+key; see [`apps/mobile/README.md`](apps/mobile/README.md).
+
 ## Scripts
 
 Run from the repository root:
@@ -77,7 +88,8 @@ Run from the repository root:
 | Script              | Does                                      |
 | ------------------- | ----------------------------------------- |
 | `pnpm dev`          | Runs the API and web dev servers together |
-| `pnpm build`        | Builds schema, API, then web              |
+| `pnpm mobile`       | Starts the Expo dev server for the AR app |
+| `pnpm build`        | Builds schema, AR contract, API, then web |
 | `pnpm test`         | Runs every package's unit tests           |
 | `pnpm lint`         | ESLint across all packages                |
 | `pnpm format`       | Prettier write                            |
@@ -170,8 +182,11 @@ so in its own words rather than inventing a position.
 
 **It is optional.** With no `ANTHROPIC_API_KEY` set, the endpoint returns 503 and the chat panel
 says the assistant is unavailable; every other part of the app, and the whole test suite, works
-unchanged. The API has no authentication, so keep it on localhost — a reachable deployment would
-expose the key's spend. Requests are rate-limited regardless (20/min overall, 6/min per plan).
+unchanged. The API has no authentication, so keep it off shared networks. A reachable deployment
+would expose every plan and the key's spend. **Note:** `apps/api/src/main.ts` currently calls
+`listen(port)` with no host, so the server accepts connections on every network interface, not only
+localhost (despite what its log line says). Binding to `127.0.0.1` is in `TODOS.md`. Requests are
+rate-limited regardless (20/min overall, 6/min per plan).
 
 ## API
 

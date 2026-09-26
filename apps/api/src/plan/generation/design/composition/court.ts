@@ -9,6 +9,7 @@ import {
   type Room,
   type SketchRequest,
   type SlotKind,
+  terraceClaim,
 } from '../../layout/sketch.js';
 import { inRect, rectsOverlap } from './cells.js';
 import {
@@ -225,11 +226,7 @@ export function composeCourt(input: ComposeInput): GardenComposition | null {
     return null;
   };
 
-  const terraceFeature: DesiredFeature | null = request.features.includes('seating')
-    ? 'seating'
-    : request.features.includes('dining')
-      ? 'dining'
-      : null;
+  const terraceFeature = terraceClaim(request.features, request.primaryZone);
   const wanted = request.features.filter(
     (feature) => feature !== terraceFeature && !FEATURE_LIBRARY[feature].composed,
   );
@@ -243,7 +240,7 @@ export function composeCourt(input: ComposeInput): GardenComposition | null {
     let placed = false;
     for (const kind of placementLadder(feature)) {
       if (!HOSTS.includes(kind) || bays.some((bay) => bay.kind === kind)) continue;
-      const want = wantFor(feature, kind, s);
+      const want = wantFor(feature, kind, s, input.language, request.primaryZone);
       const rect = carve(want, bays);
       if (!rect || !seats(want, rect)) continue;
       bays.push(bayOf(want, rect));

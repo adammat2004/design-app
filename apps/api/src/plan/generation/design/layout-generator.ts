@@ -16,15 +16,21 @@ import { FEATURE_SPECS, inradius, scaledSpec } from '../archetypes.js';
 import { treeSpeciesFor } from '../constraints.js';
 import type { DesignConstraints } from '../constraints.js';
 import type { LayoutArchetype } from '../knowledge/archetypes/types.js';
-import { FEATURE_LIBRARY, placementLadder } from '../knowledge/feature-library.js';
+import { FEATURE_LIBRARY, placementLadder, roomSpec } from '../knowledge/feature-library.js';
 import { assignByPriority } from '../layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from '../layout/fit.js';
 import type { DesignFrame, LocalBox } from '../layout/frame.js';
-import { rectSize, type LayoutSketch, type Slot, type SketchRequest } from '../layout/sketch.js';
+import {
+  rectSize,
+  terraceClaim,
+  type LayoutSketch,
+  type Slot,
+  type SketchRequest,
+} from '../layout/sketch.js';
 import { localShapeRing, treeBudget, treeCandidates } from '../layout/trees.js';
 import { circulationFor } from '../room-policy.js';
 import { layRoutes } from './circulation.js';
-import { lowSides } from './site-analysis.js';
+import { localShade, lowSides } from './site-analysis.js';
 import { planZones } from './zone-planner.js';
 import {
   NO_ADJUSTMENTS,
@@ -184,6 +190,8 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
       .map((priority) => priority.feature),
     privacy: request.brief.privacy,
     lowSides: lowSides(analysis),
+    primaryZone: request.brief.primaryZone,
+    shade: localShade(analysis),
   };
 
   const zonePlan = planZones({
@@ -229,13 +237,12 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     if (geometry) {
       /*
        * Which of seating and dining claims it matters for the same reason it does in the real
-       * pipeline: they are furnished differently, and seating wins when both were asked for.
+       * pipeline: they are furnished differently. `terraceClaim` decides, and only a composition —
+       * which reserves a room for the seating the table displaces — hands it the primary zone.
        */
-      const feature: DesiredFeature = placing.includes('seating')
-        ? 'seating'
-        : placing.includes('dining')
-          ? 'dining'
-          : 'seating';
+      const feature: DesiredFeature =
+        terraceClaim(placing, sketch.composed ? sketchRequest.primaryZone : undefined) ??
+        'seating';
       terrace = record(feature, geometry, terraceSlot, nextId());
       placed.push(terrace);
       filled.set(terraceSlot.id, terrace);
@@ -258,7 +265,10 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
 
   const unplaced: DesiredFeature[] = [];
   for (const feature of toPlace) {
-    const spec = scaledSpec(FEATURE_SPECS[feature], constraints);
+    const spec = scaledSpec(
+      roomSpec(feature, sketch.composed?.language, sketchRequest.primaryZone),
+      constraints,
+    );
     const entry = assigned.find((candidate) => candidate.feature === feature);
     const candidates = [
       ...sketch.slots.filter((slot) => slot.id === entry?.slotId),

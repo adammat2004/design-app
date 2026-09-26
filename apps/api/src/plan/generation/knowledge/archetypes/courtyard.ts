@@ -97,7 +97,7 @@ export const courtyard: LayoutArchetype = {
    * feature the courtyard has no room for reported rather than stood on the floor. The hand-drawn
    * plan below draws where that declines — an essential feature with nowhere off the floor to go.
    */
-  ...composed('courtyard', 'rectilinear', handDrawn()),
+  ...composed('courtyard', ['rectilinear'], handDrawn()),
 };
 
 /** The hand-drawn courtyard: the same floor and beds, with its slots on the floor as well. */

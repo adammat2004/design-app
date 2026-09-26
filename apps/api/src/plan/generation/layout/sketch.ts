@@ -1,6 +1,8 @@
 import {
   clipToHalfPlane,
   type DesiredFeature,
+  type FunctionalZoneType,
+  type GeometryLanguage,
   type GardenBrief,
   type PrivacyStrategy,
 } from '@garden-studio/schema';
@@ -125,7 +127,7 @@ export interface SketchPath {
  * planted where the composition put them for the reason it gave, and nowhere else.
  */
 export interface ComposedFacts {
-  language: 'rectilinear' | 'soft_organic' | 'formal_symmetric';
+  language: GeometryLanguage;
   /** Why each of `LayoutSketch.trees` is there, in the same order. */
   treeRoles: { role: 'focal' | 'framing' | 'screening' | 'backdrop'; purpose: string }[];
   /** Why each of `LayoutSketch.beds` is there, in the same order. */
@@ -199,6 +201,38 @@ export interface SketchRequest {
    * against these: a tall fence already screens, and planting in front of it only costs the lawn.
    */
   lowSides?: ('left' | 'right')[];
+  /**
+   * The room this concept is organised around (`DesignBrief.primaryZone`). A composition gives it
+   * the most generous place: the dining room takes the terrace at the doors, and a plan organised
+   * round its lawn keeps the terrace from outgrowing it.
+   */
+  primaryZone?: FunctionalZoneType;
+  /**
+   * Where the shade falls mid-afternoon in midsummer, in the frame (`localShade`), or absent where
+   * the plan has no location. A room that wants the sun takes the first place on its list that is
+   * not mostly in shade.
+   */
+  shade?: LocalPoint[][] | null;
+}
+
+/**
+ * Which of seating and dining claims the terrace across the doors.
+ *
+ * Seating, when both were asked for — except in a concept organised around dining, where the table
+ * takes the terrace by the kitchen door and the seating goes to a room of its own. That is how a
+ * garden with both is usually laid out, and it is what makes the dining room the concept claims to
+ * be about the most generous room in it rather than a pergola beside a larger patio. One function,
+ * because the composition, the preview and the realisation must agree about it or they furnish the
+ * terrace with one thing and reserve a bay for the other.
+ */
+export function terraceClaim(
+  features: readonly DesiredFeature[],
+  primaryZone?: FunctionalZoneType | null,
+): DesiredFeature | null {
+  if (primaryZone === 'dining' && features.includes('dining')) return 'dining';
+  if (features.includes('seating')) return 'seating';
+  if (features.includes('dining')) return 'dining';
+  return null;
 }
 
 export interface Room {

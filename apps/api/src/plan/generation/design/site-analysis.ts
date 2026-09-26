@@ -433,3 +433,13 @@ export function localView(
     axisEnd: frame.toLocal(primaryAxis.to),
   };
 }
+
+/**
+ * Where the shade falls mid-afternoon in midsummer, in the frame — or `null` where the plan has no
+ * location and so no sun anybody can claim. What a composition reads to put a seat in the light.
+ */
+export function localShade(analysis: SiteAnalysis): { u: number; v: number }[][] | null {
+  const { frame, sun } = analysis;
+  if (!frame || !sun || sun.shade.length === 0) return null;
+  return sun.shade.map((ring) => ring.map((point) => frame.toLocal(point)));
+}

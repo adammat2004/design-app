@@ -64,9 +64,15 @@ export function scoreHierarchy(subject: DesignSubject): PrincipleResult {
   const cone = subject.analysis.viewCone;
   const door = subject.analysis.exits.primary?.centre ?? null;
   if (cone && door) {
+    /*
+     * Not a flight of steps: it is the way down off a raised terrace, at the level of the ground it
+     * reaches, and nothing stands up out of it to block a view — the rule the composition principle
+     * already applies to it.
+     */
     const blockers = subject.items.filter(
       (item) =>
         item.category === 'structure' &&
+        item.symbol !== 'steps' &&
         isInView(cone, item.ring, item.centre) &&
         Math.min(...item.ring.map((point) => Math.hypot(point.x - door.x, point.y - door.y))) <
           OUTLOOK_CLEAR,

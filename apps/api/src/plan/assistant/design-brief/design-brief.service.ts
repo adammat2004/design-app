@@ -65,7 +65,7 @@ export class DesignBriefService {
     @Inject(ANTHROPIC) private readonly claude: AnthropicClient,
     config: ConfigService,
   ) {
-    this.model = config.get<string>('ANTHROPIC_MODEL') ?? 'claude-opus-5';
+    this.model = config.get<string>('ANTHROPIC_MODEL') ?? 'claude-opus-5-5';
     this.enabled = config.get<string>('DESIGN_BRIEF_LLM') === 'true';
   }
 

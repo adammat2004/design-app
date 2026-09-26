@@ -1,4 +1,3 @@
-import type { DesiredFeature } from '@garden-studio/schema';
 import { bed } from '../../knowledge/archetypes/shared.js';
 import { FEATURE_LIBRARY, placementLadder } from '../../knowledge/feature-library.js';
 import {
@@ -8,6 +7,7 @@ import {
   terraceRect,
   type LocalRect,
   type SlotKind,
+  terraceClaim,
 } from '../../layout/sketch.js';
 import {
   grow,
@@ -67,6 +67,10 @@ export const ACCESS_LANE = 1.6;
 /** The share of the plot's width the lawn's side of the terrace keeps, where the terrace can give it. */
 const LAWN_SHARE = 0.4;
 
+/** The same two shares in a concept organised round its lawn. */
+const LAWN_LED_SHARE = 0.55;
+const LAWN_LED_TERRACE_SHARE = 0.45;
+
 /** The rooms that stand in bays, in the order the bays are offered. */
 const ROOM_KINDS: SlotKind[] = ['far-room', 'terrace-end', 'beside-terrace'];
 
@@ -84,11 +88,20 @@ export function composeBeside(input: ComposeInput): GardenComposition | null {
   /* ---- 1. the terrace, deep because nothing is behind it ---- */
 
   const sized = terraceRect(request, room, params.terraceDepth);
+  /*
+   * A concept organised round its lawn gives the lawn more of the width and the terrace less of the
+   * depth, so the lawn beside the terrace is the larger of the two rather than a strip beside a
+   * patio.
+   */
+  const lawnLed = request.primaryZone === 'lawn';
   const deep = Math.max(
     0,
     Math.min(
       depth - b - 0.3,
-      Math.max(terraceDepth(s, depth, params.terraceDepth), depth * TERRACE_SHARE),
+      Math.max(
+        terraceDepth(s, depth, params.terraceDepth),
+        depth * (lawnLed ? LAWN_LED_TERRACE_SHARE : TERRACE_SHARE),
+      ),
     ),
   );
   let terrace: LocalRect = {
@@ -112,7 +125,7 @@ export function composeBeside(input: ComposeInput): GardenComposition | null {
    * garden it opens onto, which the hierarchy principle reports. It narrows on the lawn's side, never
    * off the door and never below its own floor.
    */
-  const lawnShare = LAWN_SHARE * (room.vMax - room.vMin);
+  const lawnShare = (lawnLed ? LAWN_LED_SHARE : LAWN_SHARE) * (room.vMax - room.vMin);
   const floorWidth = Math.max(terraceFloor(room).width, request.doorWidth ?? 0);
   const doorHalf = (request.doorWidth ?? 0) / 2;
   if (L > 0 && room.vMax - terrace.v1 < lawnShare) {
@@ -133,11 +146,7 @@ export function composeBeside(input: ComposeInput): GardenComposition | null {
 
   /* ---- 2. what the brief needs, and the kind of place each goes ---- */
 
-  const terraceFeature: DesiredFeature | null = request.features.includes('seating')
-    ? 'seating'
-    : request.features.includes('dining')
-      ? 'dining'
-      : null;
+  const terraceFeature = terraceClaim(request.features, request.primaryZone);
   const wants: Want[] = [];
   let storeTaken = false;
   const roomKinds = [...ROOM_KINDS];
@@ -145,18 +154,18 @@ export function composeBeside(input: ComposeInput): GardenComposition | null {
     if (feature === terraceFeature || FEATURE_LIBRARY[feature].composed) continue;
     const ladder = placementLadder(feature);
     if (feature === 'play') {
-      wants.push(wantFor(feature, 'lawn-far', s));
+      wants.push(wantFor(feature, 'lawn-far', s, input.language, request.primaryZone));
     } else if ((ladder[0] === 'utility' || ladder[0] === 'utility-2') && !storeTaken) {
       storeTaken = true;
-      wants.push(wantFor(feature, 'utility', s));
+      wants.push(wantFor(feature, 'utility', s, input.language, request.primaryZone));
     } else {
       const kind = roomKinds.shift();
-      if (kind) wants.push(wantFor(feature, kind, s));
+      if (kind) wants.push(wantFor(feature, kind, s, input.language, request.primaryZone));
     }
   }
   for (let spare = 0; spare < (request.extraRooms ?? 0); spare += 1) {
     const kind = roomKinds.shift();
-    if (kind) wants.push(wantFor(null, kind, s));
+    if (kind) wants.push(wantFor(null, kind, s, input.language, request.primaryZone));
   }
   const essentials = request.essential;
   const isEssential = (want: Want) =>
@@ -299,7 +308,7 @@ export function composeBeside(input: ComposeInput): GardenComposition | null {
     if (ROOM_KINDS.includes(want.kind) && want.feature) {
       for (const kind of ROOM_KINDS) {
         if (kind !== want.kind && !bays.some((bay) => bay.kind === kind)) {
-          options.push(wantFor(want.feature, kind, s));
+          options.push(wantFor(want.feature, kind, s, input.language, request.primaryZone));
         }
       }
     }

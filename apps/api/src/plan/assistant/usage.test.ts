@@ -17,7 +17,7 @@ function message(usage: Partial<Anthropic.Usage> = {}): Anthropic.Message {
     id: 'msg_1',
     type: 'message',
     role: 'assistant',
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
     stop_reason: 'end_turn',
     content: [],
     usage: { input_tokens: 0, output_tokens: 0, ...usage },

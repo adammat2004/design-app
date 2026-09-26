@@ -6,6 +6,7 @@ import {
   FOCAL_STRATEGIES,
   FUNCTIONAL_ZONES,
   GARDEN_INTENTS,
+  GEOMETRY_LANGUAGES,
   LAYOUT_ARCHETYPES,
   PRIORITY_TIERS,
   PRIVACY_STRATEGIES,
@@ -43,6 +44,7 @@ const brief = {
     'circulation',
     'focal',
     'privacy',
+    'geometryLanguage',
     'featurePriorities',
     'excludedFeatures',
     'rationale',
@@ -102,6 +104,12 @@ const brief = {
       type: 'string',
       enum: PRIVACY_STRATEGIES,
       description: 'What this concept does about being overlooked.',
+    },
+    geometryLanguage: {
+      type: 'string',
+      enum: GEOMETRY_LANGUAGES,
+      description:
+        'The shape language this concept is drawn in: straight and square to the house, soft and curved, mirrored about the view, or straight and off-centre. Use none to leave it to their style. Never curves for a style they chose for its straight lines.',
     },
     featurePriorities: {
       type: 'array',

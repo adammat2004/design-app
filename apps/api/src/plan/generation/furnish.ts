@@ -40,6 +40,11 @@ export interface FurnishOptions {
   houseRing: Point[] | null;
   boundary: Point[];
   nextId: () => string;
+  /**
+   * Degrees clockwise the garden's frame is turned, so a table set in a round room is square to
+   * the house rather than to the page. A round host has no rotation of its own to inherit.
+   */
+  bearing?: number;
 }
 
 /** The symbol the host itself carries, if its feature implies one. */
@@ -68,7 +73,7 @@ export function furnish(
 
   for (let step = 0; step < choices.length; step += 1) {
     const symbol = choices[(start + step) % choices.length]!;
-    const shape = fitInside(host.shape, symbol);
+    const shape = fitInside(host.shape, symbol, options.bearing ?? 0);
     if (!shape) continue;
     if (!geometryIsLegal(shape, options.boundary)) continue;
     if (!geometryClearsHouse(shape, options.houseRing)) continue;
@@ -101,29 +106,67 @@ export function furnishRoom(
   const hostRing = geometryOutline(host.shape);
   const add = (symbol: SymbolId, shape: PlanGeometry) => {
     const outline = geometryOutline(shape);
-    if (!polygonContainsPolygon(hostRing, outline) || !geometryIsLegal(shape, options.boundary) ||
+    if (
+      !polygonContainsPolygon(hostRing, outline) ||
+      !geometryIsLegal(shape, options.boundary) ||
       !geometryClearsHouse(shape, options.houseRing) ||
-      items.some((item) => polygonsIntersect(outline, geometryOutline(item.shape)))) return;
+      items.some((item) => polygonsIntersect(outline, geometryOutline(item.shape)))
+    )
+      return;
     items.push({
-      id: options.nextId(), category: 'furniture', role: 'feature', zone: host.zone,
-      name: SYMBOLS[symbol].label, symbol, shape, height: SYMBOLS[symbol].height,
+      id: options.nextId(),
+      category: 'furniture',
+      role: 'feature',
+      zone: host.zone,
+      name: SYMBOLS[symbol].label,
+      symbol,
+      shape,
+      height: SYMBOLS[symbol].height,
       material: materialFor('furniture', options.constraints, options.index),
     });
   };
+
+  if (
+    feature === 'firePit' &&
+    host.shape.kind === 'rect' &&
+    Math.min(host.shape.width, host.shape.depth) >= 3.4
+  ) {
+    /* The square pit's answer: a bench on two opposite sides, entered from the other two. */
+    const square = host.shape;
+    const radians = (square.rotation * Math.PI) / 180;
+    const offset = square.depth / 2 - 0.3 - 0.3;
+    for (const sign of [-1, 1]) {
+      add('bench', {
+        kind: 'rect',
+        centre: {
+          x: square.centre.x - sign * offset * Math.sin(radians),
+          y: square.centre.y + sign * offset * Math.cos(radians),
+        },
+        width: 1.6,
+        depth: 0.6,
+        rotation: square.rotation + (sign === 1 ? 180 : 0),
+      });
+    }
+  }
 
   if (feature === 'firePit' && host.shape.kind === 'point' && host.shape.radius >= 1.8) {
     // Two seats facing the bowl, with a clear entry on either side of the circle.
     for (const sign of [-1, 1]) {
       const offset = host.shape.radius - 0.65;
       if (offset - 0.3 < 0.85) continue;
-      add('bench', { kind: 'rect', centre: { x: host.shape.at.x, y: host.shape.at.y + sign * offset },
-        width: 1.6, depth: 0.6, rotation: sign === 1 ? 180 : 0 });
+      add('bench', {
+        kind: 'rect',
+        centre: { x: host.shape.at.x, y: host.shape.at.y + sign * offset },
+        width: 1.6,
+        depth: 0.6,
+        rotation: sign === 1 ? 180 : 0,
+      });
     }
   }
 
   if ((feature === 'seating' || feature === 'pergola') && host.shape.kind === 'rect') {
     const hostShape = host.shape;
-    const radians = hostShape.rotation * Math.PI / 180;
+    const radians = (hostShape.rotation * Math.PI) / 180;
     const at = (x: number, y: number) => ({
       x: hostShape.centre.x + x * Math.cos(radians) - y * Math.sin(radians),
       y: hostShape.centre.y + x * Math.sin(radians) + y * Math.cos(radians),
@@ -137,8 +180,13 @@ export function furnishRoom(
     }
     if (options.constraints.budget !== 'low') {
       for (const sign of [-1, 1]) {
-        add('planter', { kind: 'rect', centre: at(sign * (hostShape.width / 2 - 0.65), hostShape.depth / 2 - 0.65),
-          width: 0.6, depth: 0.6, rotation: hostShape.rotation });
+        add('planter', {
+          kind: 'rect',
+          centre: at(sign * (hostShape.width / 2 - 0.65), hostShape.depth / 2 - 0.65),
+          width: 0.6,
+          depth: 0.6,
+          rotation: hostShape.rotation,
+        });
       }
     }
   }
@@ -149,13 +197,27 @@ export function furnishRoom(
  * The item's geometry, centred in the host with `MARGIN` clear all round, or `null` if it will
  * not go. A rect item may be turned a quarter to fit a host that runs the other way.
  */
-export function fitInside(host: PlanGeometry, symbol: SymbolId): PlanGeometry | null {
+export function fitInside(host: PlanGeometry, symbol: SymbolId, bearing = 0): PlanGeometry | null {
   const { footprint } = SYMBOLS[symbol];
 
   if (host.kind === 'point') {
-    if (footprint.kind !== 'point') return null;
-    if (footprint.radius + MARGIN > host.radius) return null;
-    return { kind: 'point', at: host.at, radius: footprint.radius };
+    /*
+     * Measured against the circle as drawn — a sixteen-gon, whose flats sit a little inside the
+     * radius — because that is the outline the host's containment is checked against.
+     */
+    const inner = host.radius * Math.cos(Math.PI / 16);
+    if (footprint.kind === 'point') {
+      if (footprint.radius + MARGIN > inner) return null;
+      return { kind: 'point', at: host.at, radius: footprint.radius };
+    }
+    if (Math.hypot(footprint.width, footprint.depth) / 2 + MARGIN > inner) return null;
+    return {
+      kind: 'rect',
+      centre: host.at,
+      width: footprint.width,
+      depth: footprint.depth,
+      rotation: bearing,
+    };
   }
 
   if (host.kind !== 'rect') return null;

@@ -163,7 +163,7 @@ export const sideBySide: LayoutArchetype = {
    * a bay the lawn is notched round rather than grass with a fire pit on it — and a path along the
    * house and down the fence to reach it. The hand-drawn plan below draws where that declines.
    */
-  ...composed('side_by_side', 'rectilinear', handDrawn()),
+  ...composed('side_by_side', ['rectilinear'], handDrawn()),
 };
 
 /** The hand-drawn plan: bands across the garden — terrace, lawn, utility — with planting round them. */

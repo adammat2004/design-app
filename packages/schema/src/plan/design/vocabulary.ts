@@ -107,6 +107,24 @@ export type CirculationStyle = z.infer<typeof CirculationStyleSchema>;
 export const FocalStrategySchema = z.enum(['axis-end', 'far-corner', 'water', 'none']);
 export type FocalStrategy = z.infer<typeof FocalStrategySchema>;
 
+/**
+ * The shape language a plan is drawn in: straight and square to the house, soft and curved, mirrored
+ * about the view, or straight and deliberately off-centre. A statement about the drawing, not about
+ * where anything goes — which is why it may sit on a `DesignBrief` a model writes.
+ */
+export const GeometryLanguageSchema = z.enum([
+  'rectilinear',
+  'soft_organic',
+  'formal_symmetric',
+  'asymmetric_geometric',
+]);
+export type GeometryLanguage = z.infer<typeof GeometryLanguageSchema>;
+
+/** Whether a language's edges are curved — the one distinction the scorer's geometry rule reads. */
+export function isCurvedLanguage(language: GeometryLanguage): boolean {
+  return language === 'soft_organic';
+}
+
 /** What the planting and structures are asked to screen. */
 export const PrivacyStrategySchema = z.enum([
   'screen-street',

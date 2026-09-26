@@ -28,23 +28,22 @@ const TEMPLATE: Record<GeometryLanguage, TemplateId> = {
   rectilinear: 'rectilinear',
   soft_organic: 'curved',
   formal_symmetric: 'formal',
+  asymmetric_geometric: 'rectilinear',
 };
 
 export function composeSketch(composition: GardenComposition, room: Room): LayoutSketch {
   const slots: Slot[] = [
     { ...terraceSlot(composition.terrace, room), zoneId: 'terrace', purpose: 'terrace' },
-    ...composition.bays.map(
-      (bay): Slot => ({
-        id: bay.id,
-        kind: bay.kind,
-        zoneId: bay.zoneId,
-        anchor: rectCentre(bay.rect),
-        maxSize: rectSize(bay.rect),
-        purpose: bay.purpose,
-        ...(bay.turn ? { turn: true } : {}),
-        ...(bay.minSize ? { minSize: bay.minSize } : {}),
-      }),
-    ),
+    ...composition.bays.map((bay): Slot => ({
+      id: bay.id,
+      kind: bay.kind,
+      zoneId: bay.zoneId,
+      anchor: rectCentre(bay.rect),
+      maxSize: rectSize(bay.rect),
+      purpose: bay.purpose,
+      ...(bay.turn ? { turn: true } : {}),
+      ...(bay.minSize ? { minSize: bay.minSize } : {}),
+    })),
   ];
 
   const paths: SketchPath[] = composition.circulation.map((edge) => ({

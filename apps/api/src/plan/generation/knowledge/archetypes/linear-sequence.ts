@@ -8,7 +8,7 @@ import {
   type Slot,
 } from '../../layout/sketch.js';
 import type { CandidateParams } from '../../design/types.js';
-import { composed, styleLanguage } from './composed.js';
+import { composed, styleLanguages } from './composed.js';
 import { bed, clampRect, extents, slotIn, withZoneIds } from './shared.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
@@ -93,7 +93,7 @@ export const linearSequence: LayoutArchetype = {
    * and the room at the far end, with the path down the side through the gaps. The hand-drawn plan
    * below draws where the composition declines — a plot with nothing that belongs at the far end.
    */
-  ...composed('linear_sequence', styleLanguage, handDrawn(), { primary: ['destination'] }),
+  ...composed('linear_sequence', styleLanguages, handDrawn(), { primary: ['destination'] }),
 };
 
 /** The hand-drawn plan: bands along the length, dividers alternating sides, a path that swings. */

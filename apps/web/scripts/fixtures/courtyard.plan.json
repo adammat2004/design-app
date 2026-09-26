@@ -553,7 +553,7 @@
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
               "subjects": []
             },
             {
@@ -975,7 +975,7 @@
           "candidateId": "c2-1"
         },
         "score": {
-          "total": 0.9487148266600816,
+          "total": 0.9553517374046183,
           "categories": {
             "style": 0.8333333333333334,
             "canopy": 0.9928774928774928,
@@ -985,7 +985,7 @@
             "featureFit": 1,
             "proportion": 0.6921052631578947,
             "circulation": 1,
-            "composition": 0.9229786508096517,
+            "composition": 1,
             "buildability": 1,
             "relationships": 1,
             "maintenanceFit": 1
@@ -1044,7 +1044,7 @@
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
               "subjects": []
             },
             {
@@ -1483,7 +1483,7 @@
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 6 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
               "subjects": []
             },
             {

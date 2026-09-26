@@ -9,7 +9,7 @@ import {
   type Room,
   type SketchRequest,
 } from '../../layout/sketch.js';
-import type { GeometryLanguage } from '../../design/composition/types.js';
+import type { GeometryLanguage, StyleDirection } from '@garden-studio/schema';
 import { composed } from './composed.js';
 import type { LayoutSketch } from '../../layout/sketch.js';
 import { curved } from '../../layout/templates/curved.js';
@@ -39,10 +39,10 @@ import { defaultParams, type LayoutArchetype } from './types.js';
  */
 function classic(
   id: LayoutArchetype['id'],
-  language: GeometryLanguage,
+  languages: GeometryLanguage[] | ((style: StyleDirection | null) => GeometryLanguage[]),
   template: (request: SketchRequest, room: Room, params: CandidateParams) => LayoutSketch,
-): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
-  return composed(id, language, {
+): Pick<LayoutArchetype, 'sketch' | 'zonePattern' | 'languages'> {
+  return composed(id, languages, {
     sketch: (request, room, _plan, params) => withZoneIds(template(request, room, params)),
     zonePattern: lawnPlanZones,
   });
@@ -198,7 +198,19 @@ export const terraceAndLawn: LayoutArchetype = {
     return variants.filter((entry) => brief.style !== 'formal' || entry.lawnBias !== 'away');
   },
 
-  ...classic('terrace_and_lawn', 'rectilinear', rectilinear),
+  /*
+   * A modern brief draws the same plan asymmetrically: the lawn pushed to one side and a block of
+   * planting set into its opposite corner, balanced rather than mirrored. Every other style keeps
+   * the plain rectilinear plan.
+   */
+  ...classic(
+    'terrace_and_lawn',
+    (style) =>
+      style === 'modern'
+        ? ['asymmetric_geometric', 'rectilinear']
+        : ['rectilinear', 'asymmetric_geometric'],
+    rectilinear,
+  ),
 };
 
 export const sweepingLawn: LayoutArchetype = {
@@ -247,7 +259,7 @@ export const sweepingLawn: LayoutArchetype = {
     return variants;
   },
 
-  ...classic('sweeping_lawn', 'soft_organic', curved),
+  ...classic('sweeping_lawn', ['soft_organic'], curved),
 };
 
 export const formalAxis: LayoutArchetype = {
@@ -335,7 +347,7 @@ export const formalAxis: LayoutArchetype = {
     return variants;
   },
 
-  ...classic('formal_axis', 'formal_symmetric', formal),
+  ...classic('formal_axis', ['formal_symmetric'], formal),
 };
 
 function refuseSmall(site: SiteAnalysis): { score: number; reasons: string[] } {

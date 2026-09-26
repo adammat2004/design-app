@@ -11,7 +11,7 @@ import type { LayoutSketch, SlotKind } from './sketch.js';
  * and asking for seating furnishes it.
  */
 const PREFERENCES: Record<DesiredFeature, SlotKind[]> = {
-  seating: ['terrace'],
+  seating: ['terrace', 'terrace-corner', 'far-room'],
   // Off the end of the terrace rather than on it: the terrace is already somewhere to sit, and a
   // table set down in the middle of it leaves neither room its own floor.
   dining: ['terrace-end', 'beside-terrace', 'far-room', 'lawn-far'],

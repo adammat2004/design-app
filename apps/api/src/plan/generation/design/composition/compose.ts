@@ -1,6 +1,6 @@
-import type { DesiredFeature, LayoutArchetypeId } from '@garden-studio/schema';
+import type { DesiredFeature, FunctionalZoneType, LayoutArchetypeId } from '@garden-studio/schema';
 import { FEATURE_SPECS } from '../../archetypes.js';
-import { FEATURE_LIBRARY, placementLadder } from '../../knowledge/feature-library.js';
+import { FEATURE_LIBRARY, placementLadder, roomSpec } from '../../knowledge/feature-library.js';
 import {
   BED_MIN_DEPTH,
   LAWN_FLOOR,
@@ -17,14 +17,19 @@ import {
   terraceFloor,
   terraceRect,
   terraceWidth,
+  rectSize,
   type LocalPoint,
   type LocalRect,
   type Room,
   type SketchRequest,
   type Slot,
   type SlotKind,
+  terraceClaim,
 } from '../../layout/sketch.js';
 import { floorScale, sizeToSlot, type Footprint } from '../../layout/fit.js';
+import { hostFloor } from '../../furnishings.js';
+import { SHADE_LIMIT, WANTS_SUN } from '../evaluate/sun.js';
+import { RELATIONSHIP_RULES } from '../../knowledge/relationship-rules.js';
 import { SHALLOW_LAWN } from '../../knowledge/archetypes/shared.js';
 import type { CandidateParams } from '../types.js';
 import {
@@ -122,10 +127,35 @@ const AXIS_WIDTH = 1.2;
 export const LAWN_KEEPS = 0.6;
 
 /**
+ * How much bigger than the terrace the room a concept is organised around is kept: the ratio the
+ * hierarchy principle calls a main space rather than one of two similar ones.
+ */
+const DOMINANCE = 1.5;
+
+/** The most of its width the terrace gives up to the room a concept is organised around. */
+const HOLD_MOST = 0.3;
+
+/**
+ * The second pass is sized against the first pass's lawn with a little in hand, because a narrower
+ * terrace changes the step-outs and the notches, and the lawn it leaves moves with them.
+ */
+const DOMINANCE_MARGIN = 0.92;
+
+/**
  * Where the brief does not say which rooms are essential, the first this many in priority order are
  * treated as the ones the lawn gives way to.
  */
 export const PROTECTED = 2;
+
+/**
+ * A spare seat — a second sitting area the plot can carry beyond the brief — drawn at this much of
+ * a seating patio along each side. It is a supporting room, and at full size it outgrew the room
+ * a concept was organised around: a second patio larger than the dining pergola of a social plan.
+ */
+const SPARE_SCALE = 0.8;
+
+/** The least a spare seat holds: the smallest thing `FURNISHINGS.seating` furnishes one with. */
+const SPARE_FLOOR: Footprint = { kind: 'rect', ...hostFloor('seating', 'smallest') };
 
 /**
  * A screening bed where the brief asks for one on a side that would otherwise be a mowing edge: a
@@ -134,20 +164,28 @@ export const PROTECTED = 2;
  */
 const SCREEN_BED = BED_MIN_DEPTH + 0.3;
 
+/**
+ * Half the width of the view line kept clear of trees: a canopy is about three metres across, so a
+ * trunk nearer than this stands in the view rather than beside it.
+ */
+const SIGHTLINE = 1.6;
+
 /** Trees along a border are spaced at this, times the plot's scale. */
 const TREE_SPACING = 5;
 
 /** Which slot kinds each language can host a room in. */
+const RECTILINEAR_HOSTS: SlotKind[] = [
+  'terrace-end',
+  'beside-terrace',
+  'terrace-corner',
+  'far-room',
+  'lawn-far',
+  'utility',
+  'utility-2',
+];
 const HOSTS: Record<GeometryLanguage, SlotKind[]> = {
-  rectilinear: [
-    'terrace-end',
-    'beside-terrace',
-    'terrace-corner',
-    'far-room',
-    'lawn-far',
-    'utility',
-    'utility-2',
-  ],
+  rectilinear: RECTILINEAR_HOSTS,
+  asymmetric_geometric: RECTILINEAR_HOSTS,
   soft_organic: [
     'terrace-end',
     'beside-terrace',
@@ -170,6 +208,7 @@ const HOSTS: Record<GeometryLanguage, SlotKind[]> = {
 /** Where a spare room goes, best first. */
 const SPARE: Record<GeometryLanguage, SlotKind[]> = {
   rectilinear: ['far-room', 'terrace-corner'],
+  asymmetric_geometric: ['far-room', 'terrace-corner'],
   soft_organic: ['far-room', 'terrace-corner'],
   formal_symmetric: ['axis-end'],
 };
@@ -250,7 +289,51 @@ export interface Want {
   minSize?: { width: number; depth: number };
 }
 
+/**
+ * The composition, held to the room the concept is organised around.
+ *
+ * The room a concept is organised around is its most generous: the lawn of an open concept, the
+ * dining pergola of a social one. How big that room comes out depends on everything the composition
+ * then does — the lawn on its notches, a pergola on the bay it was given — so it is measured rather
+ * than guessed: composed once, and where the terrace came out too big for the room it serves,
+ * composed again with the terrace held to it. Estimated up front, the lawn on an L-plot was promised
+ * half as much again as the rooms left, and a pergola was sized at a footprint its bay could not
+ * seat, so the terrace was never held at all.
+ */
 export function composeGarden(input: ComposeInput): GardenComposition | null {
+  const first = composeOnce(input, Infinity);
+  if (!first || input.language === 'formal_symmetric') return first;
+  const main = mainRoomArea(first, input);
+  if (main === null || main >= DOMINANCE * rectArea(first.terrace)) return first;
+  return composeOnce(input, (main * DOMINANCE_MARGIN) / DOMINANCE) ?? first;
+}
+
+/**
+ * How big the room the concept is organised around came out, or `null` where the terrace is that
+ * room (or there is none to measure). A room in a bay is measured as the fitter will seat it —
+ * the feature sized to the bay — because that is the element the scorer will compare.
+ */
+function mainRoomArea(composition: GardenComposition, input: ComposeInput): number | null {
+  const zone = input.request.primaryZone;
+  if (!zone) return null;
+  if (zone === 'lawn') return composition.openSpace ? shapeArea(composition.openSpace.shape) : null;
+  const claimed = terraceClaim(input.request.features, zone);
+  if (claimed && FEATURE_LIBRARY[claimed].zone === zone) return null;
+  const seated = composition.bays
+    .filter((bay) => bay.feature !== null && FEATURE_LIBRARY[bay.feature].zone === zone)
+    .map((bay) => {
+      const want = wantFor(bay.feature, bay.kind, input.request.scale, input.language, zone);
+      const slot = { maxSize: rectSize(bay.rect), ...(bay.turn ? { turn: true } : {}) } as Slot;
+      return footprintArea(sizeToSlot(want.footprint, slot));
+    });
+  return seated.length > 0 ? Math.max(...seated) : null;
+}
+
+function shapeArea(shape: OpenSpace['shape']): number {
+  return shape.kind === 'polygon' ? Math.abs(signedArea(shape.points)) : rectArea(shape.rect);
+}
+
+function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition | null {
   const { request, room, params, language } = input;
   const s = request.scale;
   const D = room.uMax;
@@ -286,11 +369,7 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
 
   /* ---- 2. the rooms the brief needs, each to the first bay on its own ladder ---- */
 
-  const terraceFeature: DesiredFeature | null = request.features.includes('seating')
-    ? 'seating'
-    : request.features.includes('dining')
-      ? 'dining'
-      : null;
+  const terraceFeature = terraceClaim(request.features, request.primaryZone);
   const hosts = HOSTS[language];
   const wants: Want[] = [];
   const taken = new Set<SlotKind>();
@@ -328,9 +407,9 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
               placementLadder(candidate).includes('far-room'),
           )
         : undefined);
-    if (feature) destination = wantFor(feature, 'far-room', s);
+    if (feature) destination = wantFor(feature, 'far-room', s, language, request.primaryZone);
     else if ((request.extraRooms ?? 0) > 0) {
-      destination = wantFor(null, 'far-room', s);
+      destination = wantFor(null, 'far-room', s, language, request.primaryZone);
       sparesUsed = 1;
     } else return null;
     destination = withinShare(destination, DESTINATION_SHARE * (D - T));
@@ -344,13 +423,13 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
     const kind = placementLadder(feature).find((k) => hosts.includes(k) && !taken.has(k));
     if (!kind) continue;
     taken.add(kind);
-    wants.push(wantFor(feature, kind, s));
+    wants.push(wantFor(feature, kind, s, language, request.primaryZone));
   }
   for (let spare = sparesUsed; spare < (request.extraRooms ?? 0); spare += 1) {
     const kind = SPARE[language].find((k) => !taken.has(k));
     if (!kind) break;
     taken.add(kind);
-    wants.push(wantFor(null, kind, s));
+    wants.push(wantFor(null, kind, s, language, request.primaryZone));
   }
 
   /*
@@ -440,7 +519,8 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
   const b = borderIn(s, width - MOWING_STRIP, end - start);
 
   const deepOnGate = !formal && params.lawnBias === 'away';
-  const even = formal || params.lawnBias === 'centre';
+  /* An asymmetric plan is never centred: balance across the diagonal is what it is. */
+  const even = formal || (params.lawnBias === 'centre' && language !== 'asymmetric_geometric');
   /*
    * A corridor runs along a fence wherever something at the far end on that side needs reaching.
    * In a rectilinear or soft plan it runs at the fence itself — the side path — with the border
@@ -538,6 +618,45 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
   void formalBoth;
   if (end - u0 < LAWN_FLOOR.minDimension) return null;
 
+  /*
+   * A plan organised round its lawn keeps the terrace from outgrowing it. The terrace is sized off
+   * the house wall, and on a wide house and a shallow garden that made the paving the biggest thing
+   * in a concept whose whole claim was the open ground. It gives up width — from both ends towards
+   * the door, never off the door and never below its floor — until the lawn it opens onto is the
+   * dominant space by `LAWN_DOMINANCE`.
+   */
+  /*
+   * Held to the room the concept is about, where the first pass found it too big for it
+   * (`composeGarden`): the terrace gives up width from both ends towards the door, never off the
+   * door and never below its floor.
+   */
+  if (Number.isFinite(terraceCap) && !formal) {
+    /*
+     * Never more than `HOLD_MOST` of the terrace's width. Where the room it serves is so small that
+     * holding the terrace to it would take more, the plot cannot be organised round that room, and
+     * the width the terrace gave up only became a planted flank in front of the house — on the
+     * L-plot a terrace of 4.2 m by 4.2 m and a garden over its planting band.
+     */
+    const most = Math.max(
+      terraceCap / (terrace.u1 - terrace.u0),
+      (1 - HOLD_MOST) * (terrace.v1 - terrace.v0),
+    );
+    const excess = terrace.v1 - terrace.v0 - Math.max(most, floorWidth);
+    if (excess > 0) {
+      const left = Math.min(excess / 2, Math.max(0, -doorHalf - terrace.v0));
+      const right = Math.min(excess - left, Math.max(0, terrace.v1 - doorHalf));
+      const rest = Math.min(excess - left - right, Math.max(0, -doorHalf - terrace.v0 - left));
+      terrace = { ...terrace, v0: terrace.v0 + left + rest, v1: terrace.v1 - right };
+      decisions.push({
+        kind: 'terrace-held',
+        text:
+          request.primaryZone === 'lawn'
+            ? 'Kept the terrace smaller than the lawn it opens onto, because the lawn is what this concept is about.'
+            : `Kept the terrace modest so the ${request.primaryZone} area, which this concept is about, is the most generous room.`,
+      });
+    }
+  }
+
   /* ---- 5. the rooms, in bays at the corners and down the axis ---- */
 
   const bays: Bay[] = [];
@@ -614,6 +733,22 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
           v1: want.width / 2,
         };
       case 'terrace-corner': {
+        /*
+         * Where the away path runs inboard — beside the lawn rather than at the fence — the corner
+         * room stands in the border band outside it, no wider than that band. Placed from the fence
+         * as though the path were there, it stood across the path, and the router could not get
+         * past it to the room at the far end.
+         */
+        if (awayCorridor && inboard('away')) {
+          const band = awayInset - CORRIDOR - BAY_GAP - FENCE_GAP / 2;
+          if (band <= 0) return null;
+          const across = Math.min(want.width, band);
+          return {
+            u0,
+            u1: u0 + want.depth,
+            ...vRange(span(aIn(FENCE_GAP / 2), aIn(FENCE_GAP / 2 + across))),
+          };
+        }
         const from = awayCorridor ? CORRIDOR + FENCE_GAP / 2 : BAY_GAP;
         return { u0, u1: u0 + want.depth, ...vRange(span(aIn(from), aIn(from + want.width))) };
       }
@@ -653,8 +788,24 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
           rectsOverlap(bay.rect, candidate, BAY_GAP - 1e-9),
       );
     if (rect && REAR.includes(want.kind) && clashing(rect).length > 0) {
-      /* The far end is taken on this side: stand in front of whatever took it. */
-      const front = Math.min(...clashing(rect).map((bay) => bay.rect.u0)) - BAY_GAP;
+      /*
+       * The far end is taken on this side: stand in front of whatever took it — unless what took it
+       * ends the view from the doors. Standing a room in front of the focal point hides it and
+       * blocks the walk to it; the ground in front of it is left clear. A store behind is another
+       * matter: a destination may stand in front of one, because the store is not what the eye is
+       * meant to land on.
+       */
+      const behind = clashing(rect);
+      const viewV = request.view?.axisEnd.v ?? 0;
+      const focalBehind = behind.some(
+        (bay) =>
+          bay.kind !== 'utility' &&
+          bay.kind !== 'utility-2' &&
+          bay.rect.v0 <= viewV &&
+          bay.rect.v1 >= viewV,
+      );
+      if (focalBehind && rect.v0 < viewV + SIGHTLINE && rect.v1 > viewV - SIGHTLINE) return null;
+      const front = Math.min(...behind.map((bay) => bay.rect.u0)) - BAY_GAP;
       rect = { ...rect, u0: front - (rect.u1 - rect.u0), u1: front };
     }
     const ok =
@@ -706,10 +857,11 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
   const sideBay = (want: Want, side: 'away' | 'gate', where: 'near' | 'mid'): LocalRect | null => {
     if (where === 'mid' && !corridorOn(side)) return null;
     /*
-     * Where the path runs inside a screen, a bay set into that border would stand across it: the
-     * bays assume a path at the fence. The side with no path still takes one.
+     * Where the path runs inboard — inside a screen, or beside the lawn on its way to a destination
+     * — a bay set into that border would stand across it: the bays assume a path at the fence. The
+     * side with no path still takes one.
      */
-    if (screens(side) && corridorOn(side)) return null;
+    if (inboard(side) && corridorOn(side)) return null;
     const long = Math.max(want.width, want.depth);
     const short = Math.min(want.width, want.depth);
     const from = corridorOn(side) ? CORRIDOR : FENCE_GAP / 2;
@@ -769,7 +921,7 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
     if (want.feature === null && want !== destination) {
       for (const kind of SPARE[language]) {
         if (kind === want.kind) continue;
-        const next = wantFor(null, kind, s);
+        const next = wantFor(null, kind, s, language, request.primaryZone);
         options.push({ want: next, rect: place(next) });
       }
     }
@@ -780,11 +932,11 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
         /* A store changes the corridors; a room centred at the far end needs only the walk down the view. */
         if (kind === 'utility' || kind === 'utility-2') continue;
         if (kind === 'lawn-far' && want.feature === 'play') continue;
-        const next = wantFor(want.feature, kind, s);
+        const next = wantFor(want.feature, kind, s, language, request.primaryZone);
         options.push({ want: next, rect: place(next) });
       }
       if (want.kind !== 'utility' && want.kind !== 'utility-2' && !formal) {
-        const centred = wantFor(want.feature, 'lawn-far', s);
+        const centred = wantFor(want.feature, 'lawn-far', s, language, request.primaryZone);
         options.push({ want: centred, rect: place(centred), id: 'far-centre' });
         options.push(...sideOptions(want));
       }
@@ -794,11 +946,30 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
       options.push(...sideOptions(want));
     }
 
-    const chosen = options.find(
+    const valid = options.filter(
       (option) =>
         option.rect !== null &&
         !usedIds.has(option.id ?? option.want.kind) &&
         lawnKeeps(option.rect, essential),
+    );
+    /*
+     * Among the places that will hold it, the one that gives the room what it is for: the sun, for a
+     * seat or a kitchen garden, where the plan knows where the shade falls; the view from the doors,
+     * for the things the relationship rules say must be seen — a water feature, a play area. The
+     * list's own order decides among equals, and a room with no place that satisfies it keeps its
+     * first choice: a water feature out of sight beats no water feature, and a seat in the shade no
+     * seat.
+     */
+    const merit = (rect: LocalRect) =>
+      (want.feature && WANTS_SUN.includes(want.feature) && request.shade
+        ? Number(shadeShare(rect, request.shade) <= SHADE_LIMIT)
+        : 0) +
+      (want.feature && SEEN_FROM_HOUSE.has(want.feature) && request.view
+        ? Number(inView(rect, request.view.cone))
+        : 0);
+    const chosen = valid.reduce<(typeof valid)[number] | undefined>(
+      (best, option) => (!best || merit(option.rect!) > merit(best.rect!) ? option : best),
+      undefined,
     );
     if (!chosen) {
       /*
@@ -1182,6 +1353,92 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
     return null;
   }
 
+  /*
+   * The asymmetric plan's signature: a block of planting set into one corner of the lawn, on the
+   * side the lawn was pushed towards, so the deep border down one side is answered by a mass across
+   * the diagonal rather than mirrored — balanced, not symmetric. Refused where it would take a
+   * room's or a path's ground, or leave the lawn under what a notch may take.
+   */
+  let block: LocalRect | null = null;
+  /*
+   * Only a lawn generous enough to give it up. On a small plot the lawn is already at its floor and
+   * the planting at its ceiling; a block there tipped the reference plot over the planting band.
+   */
+  if (language === 'asymmetric_geometric' && rectArea(lawnRect) >= BLOCK_LAWN_MIN) {
+    const shallowOnGate = !deepOnGate;
+    const high = shallowOnGate === g > 0;
+    block = interlock(lawnRect, high, s, [
+      ...bays.filter((bay) => bay.feature !== 'play').map((bay) => grow(bay.rect, COLLAR)),
+      ...bays.filter((bay) => bay.feature === 'play').map((bay) => bay.rect),
+      ...corridors.map((corridor) => corridor.rect),
+    ]);
+    const cut = block ? outlineWithout(lawnRect, [...cutsFor(bays), block]) : null;
+    if (block && cut && keeps(cut, true)) {
+      outline = cut;
+      decisions.push({
+        kind: 'lawn-interlocked',
+        text: 'Set a block of planting into the corner of the lawn across from the deep border, so the garden is balanced rather than mirrored.',
+      });
+    } else {
+      block = null;
+    }
+  }
+
+  /*
+   * Framing: the borders step in at the lawn's near corners, so the lawn is entered between two
+   * masses of planting and opens out beyond them — the narrow-to-wide move that makes a rectangle of
+   * grass a space you look into rather than a carpet laid to the fences. Both corners in a
+   * rectilinear plan; only the deep side's in an asymmetric one, where the block across the diagonal
+   * is the other half of the balance. A soft lawn has this already in the curve's corners, and a
+   * formal or sequenced plan is framed by its corridors and its divider.
+   *
+   * Refused on a corner a path or a room already takes, and refused outright where it would leave
+   * the lawn under what a notch may take or give it more than `FRAMED_REFLEX` inside corners — past
+   * that the scorer reads the lawn as the ground the rooms left over, and so would anyone.
+   */
+  const framing: LocalRect[] = [];
+  if (
+    params.framed !== false &&
+    !sequence &&
+    (language === 'rectilinear' || language === 'asymmetric_geometric')
+  ) {
+    const lawnWidth = lawnRect.v1 - lawnRect.v0;
+    const fw = clamp(0.2 * lawnWidth, BED_MIN_DEPTH, 2 * Math.sqrt(s));
+    const fd = clamp(0.25 * (lawnRect.u1 - lawnRect.u0), BED_MIN_DEPTH + 0.3, 3 * Math.sqrt(s));
+    const clear = [
+      ...bays.map((bay) => grow(bay.rect, COLLAR)),
+      ...corridors.map((corridor) => corridor.rect),
+      ...(block ? [grow(block, BED_MIN_DEPTH)] : []),
+    ];
+    const deepHigh = deepOnGate === g > 0;
+    const sides: boolean[] = language === 'asymmetric_geometric' ? [deepHigh] : [true, false];
+    for (const high of sides) {
+      if (lawnWidth - fw * (framing.length + 1) < LAWN_FLOOR.minDimension + 1) break;
+      const rect: LocalRect = {
+        u0: lawnRect.u0,
+        u1: lawnRect.u0 + fd,
+        v0: high ? lawnRect.v1 - fw : lawnRect.v0,
+        v1: high ? lawnRect.v1 : lawnRect.v0 + fw,
+      };
+      if (clear.some((other) => rectsOverlap(other, rect, -1e-9))) continue;
+      const cut = outlineWithout(lawnRect, [
+        ...cutsFor(bays),
+        ...(block ? [block] : []),
+        ...framing,
+        rect,
+      ]);
+      if (!cut || !keeps(cut, true) || reflexCount(cut) > FRAMED_REFLEX) continue;
+      framing.push(rect);
+      outline = cut;
+    }
+    if (framing.length > 0) {
+      decisions.push({
+        kind: 'lawn-framed',
+        text: `Stepped the planting in at ${framing.length === 1 ? 'one of the lawn’s near corners' : 'the lawn’s near corners'}, so the lawn is entered between planting and opens out beyond.`,
+      });
+    }
+  }
+
   const intrusions = bays.filter(
     (bay) => bay.feature !== 'play' && intersectRects(grow(bay.rect, COLLAR), lawnRect),
   );
@@ -1277,6 +1534,7 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
     enclosing: screened,
     sequence,
     screening: { gate: screens('gate'), away: screens('away') },
+    block,
   });
 
   /* ---- 10. trees, each for a reason ---- */
@@ -1294,6 +1552,8 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
      * A pair in the screen either side of the destination, so from the doors the far end is
      * glimpsed between them rather than seen whole: the reason to walk down and look.
      */
+    specimen: block ? { u: (block.u0 + block.u1) / 2, v: (block.v0 + block.v1) / 2 } : null,
+    sightline: { v: axisEnd.v, u1: onAxis ? onAxis.rect.u0 : D },
     glimpse:
       screened && destinationBay
         ? {
@@ -1335,11 +1595,23 @@ export function composeGarden(input: ComposeInput): GardenComposition | null {
 
 /* ---------------------------------------------------------------- the rooms */
 
-export function wantFor(feature: DesiredFeature | null, kind: SlotKind, s: number): Want {
-  const spec = FEATURE_SPECS[feature ?? 'seating'];
+export function wantFor(
+  feature: DesiredFeature | null,
+  kind: SlotKind,
+  s: number,
+  language?: GeometryLanguage,
+  primaryZone?: FunctionalZoneType,
+): Want {
+  /*
+   * In the plan's own shape language — a square fire pit in a rectilinear plan, a round room in a
+   * curved one — and larger where it is the room the concept is about.
+   */
+  const spec = roomSpec(feature ?? 'seating', language, feature ? primaryZone : undefined);
   const fp = spec.footprint;
-  let along = fp.kind === 'point' ? fp.radius * 2 * s : fp.width * s;
-  let out = fp.kind === 'point' ? fp.radius * 2 * s : fp.depth * s;
+  /* A spare seat is a supporting room: never the size of the terrace it is a second helping of. */
+  const k = feature === null ? SPARE_SCALE : 1;
+  let along = (fp.kind === 'point' ? fp.radius * 2 : fp.width) * s * k;
+  let out = (fp.kind === 'point' ? fp.radius * 2 : fp.depth) * s * k;
   /* A store and a working bay stand long side to the fence. */
   if ((kind === 'utility' || kind === 'utility-2') && out > along) [along, out] = [out, along];
 
@@ -1353,7 +1625,12 @@ export function wantFor(feature: DesiredFeature | null, kind: SlotKind, s: numbe
    * it holds wherever the footprint was bigger than that to begin with. Growing a footprint up to its
    * floor is the proportional-sizing work, and it belongs where every placement reads it.
    */
-  const min = feature ? FEATURE_LIBRARY[feature].minSize : undefined;
+  /*
+   * A spare seat has no entry of its own, and without a floor a spare squeezed into a band between a
+   * fence and a path came out as a "second seating patio" under a square metre. It holds at least
+   * the smallest thing a seat is furnished with, or it is not a seat.
+   */
+  const min = feature ? FEATURE_LIBRARY[feature].minSize : SPARE_FLOOR;
   const [fpShort, fpLong] = [Math.min(along, out), Math.max(along, out)];
   const minSize = min
     ? min.kind === 'point'
@@ -1369,8 +1646,8 @@ export function wantFor(feature: DesiredFeature | null, kind: SlotKind, s: numbe
     kind,
     footprint:
       fp.kind === 'point'
-        ? { kind: 'point', radius: fp.radius * s }
-        : { kind: 'rect', width: fp.width * s, depth: fp.depth * s },
+        ? { kind: 'point', radius: fp.radius * s * k }
+        : { kind: 'rect', width: fp.width * s * k, depth: fp.depth * s * k },
     width: along + 2 * BAY_MARGIN,
     depth: out + 2 * BAY_MARGIN,
     ...(minSize ? { minSize } : {}),
@@ -1394,6 +1671,12 @@ export function seats(want: Want, rect: LocalRect): boolean {
   };
   const sized = sizeToSlot(want.footprint, slot as Slot);
   return floorScale(sized, want.minSize) <= 1 + 1e-9;
+}
+
+function footprintArea(footprint: Footprint): number {
+  return footprint.kind === 'point'
+    ? Math.PI * footprint.radius * footprint.radius
+    : footprint.width * footprint.depth;
 }
 
 export function isTurned(kind: SlotKind): boolean {
@@ -1534,7 +1817,14 @@ function softLawn(
   const a = (rect.u1 - rect.u0) / 2;
   const bb = (rect.v1 - rect.v0) / 2;
   const bulgeRight = params.lawnBias === 'away' ? g < 0 : g > 0;
-  const phase = bulgeRight ? Math.PI / 4 : -Math.PI / 4 + Math.PI;
+  /*
+   * The two lobes bulge towards opposite corners — the far one on the chosen side and the near one
+   * across from it — where the rectangle has room for them. Phased to bulge towards the middles of
+   * the sides instead, they ran past the rectangle and were clamped flat against it, and a sweeping
+   * lawn came out with two straight runs down its sides: a quarter of its edge straight in a plan
+   * whose whole point is the curve.
+   */
+  const phase = bulgeRight ? 0 : Math.PI;
   const keepOut = [
     ...bays.filter((bay) => bay.feature !== 'play').map((bay) => grow(bay.rect, COLLAR)),
     ...corridors.map((corridor) => corridor.rect),
@@ -1589,6 +1879,85 @@ function wedgesOf(rect: LocalRect, lawn: LocalPoint[]): LocalPoint[][] {
   });
 }
 
+/**
+ * The asymmetric plan's planting block: a corner of the lawn on the `high` side (towards `v1`),
+ * tried at the far end first and then the near end, and refused where it would reach into any of
+ * `keepClear`. A third of the lawn's width and a third of its depth, never under a bed a shrub can
+ * stand in, and never so big on a large plot that it stops reading as a block.
+ */
+function interlock(
+  lawn: LocalRect,
+  high: boolean,
+  s: number,
+  keepClear: LocalRect[],
+): LocalRect | null {
+  const width = clamp(0.38 * (lawn.v1 - lawn.v0), BLOCK_MIN, 4 * Math.sqrt(s));
+  const depth = clamp(0.32 * (lawn.u1 - lawn.u0), BLOCK_MIN, 4.5 * Math.sqrt(s));
+  const v: [number, number] = high ? [lawn.v1 - width, lawn.v1] : [lawn.v0, lawn.v0 + width];
+  for (const [u0, u1] of [
+    [lawn.u1 - depth, lawn.u1],
+    [lawn.u0, lawn.u0 + depth],
+  ] as const) {
+    const rect: LocalRect = { u0, u1, v0: v[0], v1: v[1] };
+    if (!keepClear.some((other) => rectsOverlap(other, rect, -1e-9))) return rect;
+  }
+  return null;
+}
+
+/**
+ * The most inside corners a framed lawn may have. The scorer calls three a lawn that is the ground
+ * the rooms left over, and framing that took a clean lawn there would be adding the fault it exists
+ * to prevent.
+ */
+const FRAMED_REFLEX = 2;
+
+/** How many of a ring's corners turn inwards. */
+function reflexCount(ring: LocalPoint[]): number {
+  const orientation = Math.sign(signedArea(ring)) || 1;
+  let reflex = 0;
+  for (let i = 0; i < ring.length; i += 1) {
+    const a = ring[(i + ring.length - 1) % ring.length]!;
+    const b = ring[i]!;
+    const c = ring[(i + 1) % ring.length]!;
+    const cross = (b.u - a.u) * (c.v - b.v) - (b.v - a.v) * (c.u - b.u);
+    if (Math.abs(cross) > 1e-9 && Math.sign(cross) === -orientation) reflex += 1;
+  }
+  return reflex;
+}
+
+/** The least lawn an asymmetric plan will set a planting block into, in square metres. */
+const BLOCK_LAWN_MIN = 50;
+
+/** The planting block is never thinner than a bed a shrub can stand in, with room to plant round it. */
+const BLOCK_MIN = BED_MIN_DEPTH + 0.6;
+
+/** The features the relationship rules say must be seen from the house. */
+const SEEN_FROM_HOUSE = new Set(
+  RELATIONSHIP_RULES.filter(
+    (rule) => rule.kind === 'requireVisibleFrom' && rule.object === 'house',
+  ).map((rule) => rule.subject),
+);
+
+/** Whether any corner or the centre of a rectangle lies in the view from the doors. */
+function inView(rect: LocalRect, cone: LocalPoint[]): boolean {
+  if (cone.length < 3) return false;
+  return [...rectPoints(rect), { u: (rect.u0 + rect.u1) / 2, v: (rect.v0 + rect.v1) / 2 }].some(
+    (point) => insideLocal(point, cone),
+  );
+}
+
+/** The share of a rectangle's corners and centre that fall in the shade — the sun principle's own probes. */
+function shadeShare(rect: LocalRect, shade: LocalPoint[][]): number {
+  const probes = [
+    ...rectPoints(rect),
+    { u: (rect.u0 + rect.u1) / 2, v: (rect.v0 + rect.v1) / 2 },
+  ];
+  const shaded = probes.filter((point) =>
+    shade.some((ring) => ring.length >= 3 && insideLocal(point, ring)),
+  ).length;
+  return shaded / probes.length;
+}
+
 export function rectPoints(rect: LocalRect): LocalPoint[] {
   return [
     { u: rect.u0, v: rect.v0 },
@@ -1629,6 +1998,8 @@ export interface MassInput {
    * behind the lawn, past its far end, between it and the terrace, or on the terrace's other side.
    */
   beside?: 1 | -1;
+  /** The asymmetric plan's planting block, set into a corner of the lawn. */
+  block?: LocalRect | null;
 }
 
 /**
@@ -1679,7 +2050,13 @@ export function plantingMasses(input: MassInput): PlantingMass[] {
     ...(axis ? [axis] : []),
     ...slivers,
   ];
-  const grid = gridOver(bounds, [lawn, threshold, ...solids, ...lawnCuts(lawnOutline)]);
+  const grid = gridOver(bounds, [
+    lawn,
+    threshold,
+    ...solids,
+    ...lawnCuts(lawnOutline),
+    ...(input.block ? [input.block] : []),
+  ]);
   const roomPolygon = room.polygon && room.polygon.length >= 3 ? room.polygon : null;
 
   const planted = (i: number, j: number): boolean => {
@@ -1694,6 +2071,7 @@ export function plantingMasses(input: MassInput): PlantingMass[] {
   const store = bays.find((bay) => bay.kind === 'utility');
   const label = (i: number, j: number): string => {
     const c = cellCentre(grid, i, j);
+    if (input.block && inRect(c, input.block)) return 'block';
     if (input.beside) {
       if (store && inRect(c, grow(store.rect, 1.2))) return 'screen';
       if (c.u >= lawn.u1) return 'rear';
@@ -1726,10 +2104,11 @@ export function plantingMasses(input: MassInput): PlantingMass[] {
       : { name: input.formal ? 'Side border' : 'Flowering border', purpose: 'framing-planting' },
     flank: { name: 'Terrace flank', purpose: 'threshold-planting' },
     screen: { name: 'Screening border', purpose: 'screening-planting' },
+    block: { name: 'Planting block', purpose: 'framing-planting' },
   };
 
   const masses: PlantingMass[] = [];
-  for (const key of ['rear', 'away', 'gate', 'screen', 'flank', 'divider']) {
+  for (const key of ['rear', 'away', 'gate', 'screen', 'flank', 'divider', 'block']) {
     const loops = loopsOf(grid, (i, j) => planted(i, j) && label(i, j) === key);
     for (const loop of loops) {
       if (!loop.outer) continue;
@@ -1803,6 +2182,13 @@ export interface TreeInput {
   scale: number;
   /** Where a pair either side of a destination garden's far room should stand, if it has a screen. */
   glimpse: { u: number; vs: number[] } | null;
+  /** The middle of the asymmetric plan's planting block, where a specimen tree stands. */
+  specimen?: LocalPoint | null;
+  /**
+   * The line from the doors to what terminates the view, kept clear: no tree stands in it but the
+   * focal tree itself. Negative space in front of the focal point is what lets it be one.
+   */
+  sightline?: { v: number; u1: number } | null;
 }
 
 /**
@@ -1827,7 +2213,11 @@ export function planTrees(input: TreeInput): TreePlan[] {
     !bays.some((bay) => inRect(at, grow(bay.rect, by)));
   const clearOfTrees = (at: LocalPoint, by: number) =>
     plans.every((plan) => Math.hypot(plan.at.u - at.u, plan.at.v - at.v) >= by);
+  const sight = input.sightline;
+  const inSightline = (at: LocalPoint) =>
+    sight !== null && sight !== undefined && at.u < sight.u1 && Math.abs(at.v - sight.v) < SIGHTLINE;
   const add = (at: LocalPoint, role: TreePlan['role'], purpose: ElementPurpose, gap = 3) => {
+    if (role !== 'focal' && inSightline(at)) return false;
     if (inBed(at) && clearOfBays(at, 1) && clearOfTrees(at, gap)) {
       plans.push({ at, role, purpose });
       return true;
@@ -1845,6 +2235,9 @@ export function planTrees(input: TreeInput): TreePlan[] {
 
   for (const v of input.glimpse?.vs ?? [])
     add({ u: input.glimpse!.u, v }, 'framing', 'framing-tree');
+
+  /* The asymmetric block's one tree: the counterweight the block is there to be. */
+  if (input.specimen) add(input.specimen, 'framing', 'framing-tree');
 
   const awaySide = (lawn.v0 + lawn.v1) / 2 - g * ((lawn.v1 - lawn.v0) / 2 + 1.1);
   const gateSide = (lawn.v0 + lawn.v1) / 2 + g * ((lawn.v1 - lawn.v0) / 2 + 1.1);

@@ -118,6 +118,11 @@ head1 "Build"
 pnpm --filter @garden-studio/schema build >/dev/null
 ok "Shared schema built"
 
+# The AR scene format. apps/mobile imports its compiled output the same way, and its own tests
+# check it against the schema, which is why it comes second.
+pnpm --filter @garden-studio/ar-contract build >/dev/null
+ok "AR scene contract built"
+
 pnpm --filter @garden-studio/api db:migrate >/dev/null
 ok "Migrations applied"
 
@@ -170,6 +175,7 @@ fi
 ELAPSED=$(( $(date +%s) - START ))
 head1 "Ready in ${ELAPSED}s"
 printf '  pnpm dev              start the API and web app (schema rebuilds on change)\n'
+printf '  pnpm mobile           start the AR app'"'"'s dev server (scan the QR code with Expo Go)\n'
 printf '  pnpm render:material  render the material contact sheet to look at\n'
 printf '  pnpm test             unit tests\n'
 printf '  pnpm test:e2e         end-to-end (needs pnpm dev running)\n\n'

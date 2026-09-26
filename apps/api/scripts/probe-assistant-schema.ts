@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
+import { DESIGN_BRIEF_JSON_SCHEMA } from '../src/plan/assistant/design-brief/design-brief-schema.js';
 import { GARDEN_ACTION_JSON_SCHEMA } from '../src/plan/assistant/garden/garden-action-schema.js';
 import { INTENT_JSON_SCHEMA } from '../src/plan/assistant/intent-schema.js';
 
@@ -22,6 +23,7 @@ import { INTENT_JSON_SCHEMA } from '../src/plan/assistant/intent-schema.js';
  * ```
  *   pnpm --filter @garden-studio/api probe:assistant          # the design assistant's schema
  *   pnpm --filter @garden-studio/api probe:assistant garden   # the one that works, as a control
+ *   pnpm --filter @garden-studio/api probe:assistant brief    # the strategic brief's
  * ```
  *
  * The control matters as much as the subject. If the garden schema also fails, the schema is not
@@ -33,6 +35,7 @@ import { INTENT_JSON_SCHEMA } from '../src/plan/assistant/intent-schema.js';
 const VARIANTS: Record<string, unknown> = {
   intent: INTENT_JSON_SCHEMA,
   garden: GARDEN_ACTION_JSON_SCHEMA,
+  brief: DESIGN_BRIEF_JSON_SCHEMA,
 };
 
 /**
@@ -64,7 +67,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const model = readEnv('ANTHROPIC_MODEL') ?? 'claude-opus-5';
+  const model = readEnv('ANTHROPIC_MODEL') ?? 'claude-opus-5-5';
   const serialised = JSON.stringify(schema);
 
   console.log(`\n  variant   ${name}`);

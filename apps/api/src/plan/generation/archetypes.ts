@@ -18,6 +18,7 @@ import {
 import type { DesignConstraints } from './constraints.js';
 import { TEMPLATE_NAMES } from './layout/templates/index.js';
 import type { TemplateId } from './layout/sketch.js';
+import type { GeometryLanguage } from './design/composition/types.js';
 
 /**
  * Generator *policy*: what the brief's answers become on the ground, and how the three concepts
@@ -53,6 +54,14 @@ export interface FeatureSpec {
    * drawing; a raised bed with no sides at all is not a raised bed.
    */
   edging?: MaterialId;
+  /**
+   * The shape the feature takes in a plan speaking a particular language, where it is not the
+   * default. A fire pit is a gravel circle in a curved garden and a square in a rectilinear one; a
+   * dining area beside a sweeping lawn is round rather than a rectangle set down in a curve. The
+   * area is kept within a few per cent of the default, so the room the feature needs does not
+   * change with its shape. Read through `specIn`, never directly.
+   */
+  footprintBy?: Partial<Record<GeometryLanguage, FeatureSpec['footprint']>>;
 }
 
 /**
@@ -67,6 +76,8 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     prefer: ['back', 'front'],
     affinity: 'near-house',
     planName: 'Seating patio',
+    /* A second seat beside a sweeping lawn; the terrace itself is sized by the sketch, not by this. */
+    footprintBy: { soft_organic: { kind: 'point', radius: 2.5 } },
   },
   play: {
     category: 'gravel-mulch',
@@ -75,6 +86,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     affinity: 'far-from-house',
     planName: 'Play area',
     material: 'play-bark',
+    footprintBy: { soft_organic: { kind: 'point', radius: 2.3 } },
   },
   vegPatch: {
     category: 'planting-bed',
@@ -90,6 +102,8 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     prefer: ['back', 'front'],
     affinity: 'any',
     planName: 'Water feature',
+    /* A formal pool is a rectangle on the axis; a round bowl is the informal answer. */
+    footprintBy: { formal_symmetric: { kind: 'rect', width: 2, depth: 1.3 } },
   },
   pergola: {
     category: 'structure',
@@ -105,6 +119,11 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     affinity: 'far-from-house',
     planName: 'Fire pit',
     material: 'decorative-gravel',
+    footprintBy: {
+      rectilinear: { kind: 'rect', width: 3.6, depth: 3.6 },
+      formal_symmetric: { kind: 'rect', width: 3.6, depth: 3.6 },
+      asymmetric_geometric: { kind: 'rect', width: 3.6, depth: 3.6 },
+    },
   },
   storage: {
     category: 'structure',
@@ -135,6 +154,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
     prefer: ['back', 'front'],
     affinity: 'near-house',
     planName: 'Dining terrace',
+    footprintBy: { soft_organic: { kind: 'point', radius: 2.4 } },
   },
   hotTub: {
     category: 'structure',
@@ -493,7 +513,11 @@ export function materialFor(
  */
 export function edgingFor(constraints: DesignConstraints): MaterialId | null {
   // One style rule for the generator, the editor and the planner: see `styleEdgeProduct`.
-  return styleEdgeProduct(constraints.style, constraints.budget, constraints.maintenance) as MaterialId | null;
+  return styleEdgeProduct(
+    constraints.style,
+    constraints.budget,
+    constraints.maintenance,
+  ) as MaterialId | null;
 }
 
 /**
@@ -503,6 +527,19 @@ export function edgingFor(constraints: DesignConstraints): MaterialId | null {
  * is 3.6 x 3.6 m", and the scaling happens at the point of use. Doing it the other way round —
  * storing pre-scaled footprints — would make the numbers in that table mean nothing on their own.
  */
+/**
+ * The feature as a plan in `language` draws it. `null` — a hand-drawn sketch, or a plot with no
+ * composition at all — keeps the spec as quoted.
+ */
+export function specIn(
+  feature: DesiredFeature,
+  language: GeometryLanguage | null | undefined,
+): FeatureSpec {
+  const spec = FEATURE_SPECS[feature];
+  const footprint = language ? spec.footprintBy?.[language] : undefined;
+  return footprint ? { ...spec, footprint } : spec;
+}
+
 export function scaledSpec(spec: FeatureSpec, constraints: DesignConstraints): FeatureSpec {
   const factor = constraints.scale.sizeFactor;
   if (Math.abs(factor - 1) < 1e-9) return spec;

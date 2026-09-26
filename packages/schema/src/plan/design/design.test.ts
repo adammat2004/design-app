@@ -107,6 +107,30 @@ describe('a design brief cannot express a position', () => {
   });
 });
 
+describe('a design brief stating a shape language', () => {
+  const brief = {
+    id: 'A',
+    intent: 'mixed',
+    emphasis: 'open',
+    primaryZone: 'lawn',
+    archetypeShortlist: ['terrace_and_lawn'],
+    circulation: 'direct',
+    focal: 'none',
+    privacy: 'none',
+  };
+
+  it('reads a model\'s "none" as no statement, and a stored brief without one as none', () => {
+    expect(DesignBriefSchema.parse({ ...brief, geometryLanguage: 'none' }).geometryLanguage).toBe(
+      null,
+    );
+    expect(DesignBriefSchema.parse(brief).geometryLanguage).toBe(null);
+    expect(
+      DesignBriefSchema.parse({ ...brief, geometryLanguage: 'soft_organic' }).geometryLanguage,
+    ).toBe('soft_organic');
+    expect(DesignBriefSchema.safeParse({ ...brief, geometryLanguage: 'wavy' }).success).toBe(false);
+  });
+});
+
 describe('a design issue', () => {
   const issue = (over: Partial<z.input<typeof DesignIssueSchema>> = {}) =>
     DesignIssueSchema.parse({

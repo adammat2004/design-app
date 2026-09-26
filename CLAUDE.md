@@ -7,10 +7,15 @@ are not obvious from reading the code.
 ## Where things are
 
 ```
-apps/web          Next.js 16 App Router frontend — the plan editor
-apps/api          NestJS backend — persistence + PostGIS constraint validation
-packages/schema   Zod schemas and pure geometry helpers, imported by both apps
+apps/web               Next.js 16 App Router frontend — the plan editor
+apps/api               NestJS backend — persistence + PostGIS constraint validation
+apps/mobile            Expo SDK 57 app — the AR viewer (skeleton; no AR view yet)
+packages/schema        Zod schemas and pure geometry helpers, imported by web and api
+packages/ar-contract   The AR scene format: zod only, imported by apps/mobile (and the future builder)
 ```
+
+A new developer should start with `docs/onboarding.md`; the AR work is planned in
+`docs/ar/ar-architecture.md`. See "Augmented reality" below.
 
 `packages/schema` compiles to `dist/` and both apps consume the built output, so **run
 `pnpm --filter @garden-studio/schema build` after changing shared types** (or leave
@@ -195,11 +200,20 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
   point, gives every tree a role and every element a `purpose`, and hands the result on as an
   ordinary `LayoutSketch`. The twelfth principle, `composition`, detects the object-by-object faults
   it was built to remove. **Measured** (Phase 0 → now): features standing on the open ground 47 →
-  20, leftover-shaped lawns 74 → 26, paths cutting the lawn 33 → 3, every lawn in one piece. Each
+  17, leftover-shaped lawns 74 → 21, paths cutting the lawn 33 → 0, every lawn in one piece. Each
   hand-drawn sketch survives as the fallback a composition declines to. See "Composing a garden
   rather than placing features".
-- **the planting is as deep as its job**: borders vary in depth by side (94% of plans, a mean
-  spread of 2 m, measured by the harness), a screening bed goes against a boundary only where it is
+- **rooms take the plan's shape language, and the room a concept is about is its most generous**:
+  a square fire pit in a straight plan and round rooms beside a sweeping lawn, an asymmetric
+  terrace-and-lawn for a modern brief, the table taking the terrace in a dining-led concept, and the
+  terrace held to a lawn-led concept's lawn. Mixed geometry 48 → 6, mean score 0.891 → 0.899. See
+  "Phase 3: the plan's shape language".
+- **each composition is drawn several ways, and the brief can say which**: every candidate is an
+  archetype in one of the shape languages it speaks, framed or not, and a brief (or a model) can
+  state the recommendation's language. Sets of three cards offering a straight and a curved garden
+  69% → 85% at no cost in score. See "Phase 4: a composition drawn several ways".
+- **the planting is as deep as its job**: borders vary in depth by side (80% of plans, a mean
+  spread of 1.9 m, measured by the harness), a screening bed goes against a boundary only where it is
   too low to screen a seat, and the side-zone band no longer plants over the garden's own paths.
   `pnpm render:plan` writes `00-schematic-sheet.png` — flat colour, routes with arrows, the view line
   and every element's purpose — which is where a composition is judged.
@@ -267,8 +281,8 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
   `ProposeRequest.selection` is ids, never a position, and the chip is a view of the canvas
   selection rather than a second copy of it. See "The selection is what 'this' means" below.
 
-**Not built yet:** printing at true scale, a navigable 3D preview, and the optional AI
-photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
+**Not built yet:** printing at true scale, a navigable 3D preview, the **AR view** (only its scene
+format and an Expo skeleton exist; see "Augmented reality"), and the optional AI photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
 draws the same top-down scene rather than a camera. There is still **no user study**: the feedback
 events below are collected but nobody has yet sat down with the table and asked it anything. The two faults the harness reports most
 are both outside the design agent's reach as it stands: too many materials in one plan is a
@@ -298,6 +312,60 @@ tokens from a characters-over-four heuristic (4,176 chars ≈ 1,044 by that rule
 tokenisation is **1,417** — comfortably over the 1,024-token minimum, and further over it since the
 tone, vocabulary and conversation sections were added. Do not re-derive this from character counts;
 `logAssistantUsage` reports it on every call now.
+
+## Augmented reality (started 26 Sep 2026)
+
+A second developer is building an AR viewer: a React Native app that shows a finished design at
+real size in the real garden. The plan, the technology comparison and the roadmap are in
+`docs/ar/ar-architecture.md`, and that document is the reference. What follows is what an agent
+working anywhere in the repo needs to know.
+
+**The phone reads an `ARScene`, never a `PlanDocument`.** `packages/ar-contract` holds the format
+(draft v0): four node kinds (`surface`, `solid`, `model`, `plants`), materials, reference points for
+alignment, and a frame. It depends on zod and nothing else, deliberately. `packages/schema` is ~60
+modules including the design agent, Metro tree-shakes poorly, and a mobile app coupled to the web
+editor's document would break every time a step's section changed shape. The price is a copy of the
+product symbol ids as `ModelKey`, and `vocabulary.test.ts` checks it against `SymbolIdSchema` through
+a dev-only dependency on the schema.
+
+**Geometry is decided before it reaches the phone.** A builder on the web/API side (not written yet)
+turns the plan into a scene: positions, sizes, yaw, triangulated meshes, disjoint ground surfaces,
+capped plant instances. The renderer draws what it is given. This is the same rule as the
+assistants' coordinate-free intents, applied to a renderer. `size` is authoritative and there is no
+`scale` field, because a scale only means something against one model file. Structures (pergola,
+shed, raised bed…) are `solid`s generated from their rectangle, never stretched models, for the
+reason `symbols/structures.ts` draws them from their outline.
+
+**The coordinate convention is one translation and one sign.** Plan `(x, y)` with +y down maps to
+scene `(X, Z)`, Y up, right-handed and **not mirrored**. Clockwise plan degrees become
+`yaw = −deg·π/180` about +Y. The origin is the ground at the garden door, and models face +Z at yaw 0.
+`packages/ar-contract/src/coordinates.ts` is the only definition, and `coordinates.test.ts` pins it
+against `rectToPolygon` at eight rotations. If a renderer ever draws a rotated patio mirrored, that
+test is where to look first.
+
+**Ground surfaces in a scene never overlap**, unlike the plan, where a base fill is a whole zone and
+everything is drawn over it. That is right for a painter and z-fights in a depth buffer, so the
+builder cuts each surface by what lies above it. Interior holes survive the cut, which the plan's
+fill pass drops.
+
+**`apps/mobile` runs in Expo Go until the AR library arrives, on purpose.** ViroReact is the
+recommended starting point, behind `src/ar/engine/` so it can be replaced. It is native code, so
+adding it moves the app to a development build (EAS; no Mac needed). The skeleton lists and opens a
+hand-written `sample-garden.ts` whose 3 × 3 m pergola is the first milestone's scale check.
+
+**Expo in this pnpm workspace works with the isolated linker; it took four pins.** Expo SDK 54+
+supports isolated installs and Metro bundles the app, including the contract's `dist`. But pnpm
+auto-installs optional peers at their *latest* versions, so the mobile package pins what SDK 57
+expects: `react-dom` 19.2.3 (otherwise `@expo/router-server` takes web's 19.2.8),
+`react-native-reanimated` 4.5.1, `react-native-worklets` 0.10.1 and `@react-native/metro-config`
+0.86.3. Also Jest 29 (not 30) for jest-expo, and ESLint 9 (not 10) for `eslint-plugin-react`.
+`npx expo-doctor` passes. One `pnpm peers check` warning remains, and it is a pnpm artefact of a
+circular peer inside Expo; the app links the pinned versions. Always add native packages with
+`npx expo install`. **Web keeps React 19.2.8 and mobile 19.2.3, and that is fine**: no shared package
+may depend on React.
+
+**`@parcel/watcher` is `false` in `allowBuilds`.** Jest pulls it in, pnpm 11 refuses to finish the
+install until a build script is approved or declined, and it ships prebuilt binaries.
 
 ## Decisions worth knowing
 
@@ -997,8 +1065,12 @@ truncates the answer rather than the reasoning.
 test suite work without a key, which they have to: this gets handed to a marker who will not have
 one.
 
-**There is no auth, so the API must stay on localhost.** A reachable deployment would hand a
-stranger the key's spend. `assistant.service.ts` rate-limits regardless (an in-process token
+**There is no auth, so the API must stay on localhost — and today it does not.** A reachable
+deployment would hand a stranger every plan and the key's spend. `main.ts` calls `app.listen(port)`
+with **no host**, so Node binds every interface and anyone on the same network can reach it, whatever
+the "listening on http://localhost" log line says. Binding to `127.0.0.1` is at the top of TODOS.md,
+and it has to happen before the AR app is allowed to talk to the API (read-only share links, not
+the editing routes). `assistant.service.ts` rate-limits regardless (an in-process token
 bucket, 20/min overall and 6/min per plan → 429); if it ever leaves this machine it needs a shared
 header check first. Never log the key or full prompts.
 
@@ -3321,6 +3393,165 @@ destination 0.887, terrace and lawn 0.882, sequence 0.810.
   in the view, and the view cone is the whole width of a six-metre garden.
 - **The gains here are almost all in circulation and proportion.** Too many materials (81), seating
   in shade (75), sparse canopy (60) and the store's distance from the gate (39) are untouched.
+
+### Phase 3: the plan's shape language, and the room it is about
+
+**`geometry-mixed` is set by the open space and read off designed edges — _this reverses_ "a
+minority language that is a fifth of the ground".** The rule used to take every shape, beds
+included, call it straight only if every edge was, weigh the classes by area and report the smaller.
+That flagged 48 plans, and they were nearly all the scorer's fault. A bed is what the lawn, the paths
+and the fence leave, so its straight side along a straight side path said nothing about the design;
+an L-plot's beds were "angled" because the fence is. Now: the shapes read are the open panels and
+the rooms in the garden room. Buildings are exempt, because a shed is a rectangle in every garden.
+The terrace against the house is exempt, because geometry loosens with distance from the building.
+Edges lying along the boundary or the house wall are not read. The open space decides which
+language the plan is in, and a room in the other language is the contradiction.
+
+**A feature takes the plan's language: `FeatureSpec.footprintBy`, read only through `specIn`.**
+- A fire pit is a 3.6 m square in a rectilinear, formal or asymmetric plan.
+- Dining, seating and play are round beside a sweeping lawn.
+- A formal pool is a rectangle.
+
+Areas are within a few per cent of the default, so the room a feature needs does not move with its
+shape. A hand-drawn fallback sketch has no language and keeps the quoted spec. Round rooms needed
+`fitInside` to seat a rectangular table in a circle, measured against the drawn sixteen-gon and
+turned to the frame's bearing (`FurnishOptions.bearing`). The dining circle is 2.4 m in radius
+because a four-seater has to fit at ordinary plot scales.
+
+**`elementArea` counts a round surface — _this reverses_ "point features report zero" for surfaces.**
+A tree, a shrub or a light is still zero. A gravel fire pit, a round terrace and a water bowl are
+ground, and every fire pit had been missing from the schedule's gravel and invisible to anything
+that weighs a room by size. `geometryArea` is unchanged, because the editor's falsy checks read it.
+
+**The room a concept is organised around is its most generous, and there are three mechanisms.**
+- **`terraceClaim`.** In a dining-led concept the table takes the terrace at the doors and the
+  seating goes to a room of its own. `seating`'s ladder is now `terrace`, `terrace-corner`,
+  `far-room`. Only a composition is handed the primary zone: a hand-drawn sketch reserves no room
+  for the displaced seating, and was measured squeezing it into 1.8 m² and losing three paths.
+- **`roomSpec`.** A room whose zone is the primary one is drawn a quarter larger along each side.
+  Only rooms whose size is a choice grow; a hot tub is a product.
+- **The terrace is held**, and the hold is **measured, not estimated**. `composeGarden` composes once,
+  measures the lawn, or the primary room as the fitter will seat it in its bay, then recomposes
+  with a terrace cap if the terrace still rivals it. The estimate promised half as much lawn again
+  as an L-plot left, and sized a pergola at a footprint its bay could not seat.
+
+  The hold takes at most 30% of the terrace's width. Past that, the freed width only became a planted
+  flank, and it put the L-shape reference fixture over its planting band.
+
+A spare seat is 80% of a seating patio along each side, with a floor of its smallest furniture;
+without the floor, one came out at 0.9 m².
+
+**`asymmetric_geometric` is terrace-and-lawn for a modern brief.** The lawn is never centred and has
+crisp corners, and a planting block is set into its corner on the side it was pushed towards, with a
+specimen tree in it. The block goes only into a lawn of at least 50 m², since on the small reference
+plot it tipped planting over its band.
+
+**Phase 2's shape leftovers.**
+- **Framing.** Where no path or room takes them, the lawn's near corners are notched into
+  planting: both in a rectilinear plan, the deep side's only in an asymmetric one, and never past two
+  inside corners.
+- **Negative space.** No tree stands within 1.6 m of the sightline in front of the focal point, and
+  no room is stacked in front of a non-utility room that ends the view.
+- **Wings down a room's open side were built and removed.** The composition already keeps rooms in
+  the borders, so they reach under a metre into the lawn and a wing almost never had room.
+
+**Placement prefers what a room is for.** Among the options that will hold it, a sun-loving feature
+takes one not mostly in shade (`SketchRequest.shade`, from `localShade`). A feature the rules say
+must be seen from the house takes one in the view cone. The list's order breaks ties, and a room
+with no such place keeps its first choice.
+
+**Two corridor collisions fixed on the way.** The corner seat and the side bays assumed a path at the
+fence, and in a destination garden the path runs inboard beside the lawn, so they stood across it and
+the router could not reach the far room. Flights of steps no longer count as blocking the view: the
+composition principle already exempted them, and the hierarchy principle did not.
+
+**Measured** against the committed baseline re-run the same day from a worktree:
+
+| | Before | After |
+|---|---|---|
+| Mean design score | 0.891 | 0.899 |
+| Minimum design score | 0.781 | 0.768 |
+| Inside composition bands | 74% | 74% |
+| Requested features drawn | 90% | 89% |
+| Hierarchy mean | 0.673 | 0.707 |
+| Relationships mean | 0.799 | 0.833 |
+| Mixed geometry | 48 | 6 |
+| No primary space | 33 | 27 |
+| Relationship unmet | 39 | 33 |
+| Path crossing the lawn | 3 | 0 |
+| Seating in shade | 75 | 81 |
+| Too many materials | 81 | 87 |
+| Planting depth varies by side | 94% | 80% |
+
+**Worse, and recorded rather than hidden.**
+- **The minimum** is the long-narrow sequence, whose store stands in the view.
+- **Seating in shade** rose because moving the sofas off a dining-led terrace can leave two sun-wanting
+  things near the house instead of one.
+- **Materials** rose because spare seats now succeed and bring their own paving.
+- **Planting depth varies** fell because of the asymmetric plan's mowing edge and spare seats set into
+  the border band.
+
+All four are in TODOS.md. Part of the geometry gain is the scorer being corrected rather than the
+plans changing; the per-language footprints and the rephased sweeping lawn account for the rest.
+
+### Phase 4: a composition drawn several ways, and a brief that can say which
+
+**A candidate is a composition *and* a drawing of it.** `CandidateParams` gained `language` and
+`framed`. Each archetype declares `languages(style)`, the shape languages it can be drawn in with its
+default first; that is a required method, so a new archetype is a compile error until it answers.
+`drawings()` in `candidates.ts` builds the field:
+- the composition as designed;
+- the same in each other language;
+- the same with the lawn unframed, only where the language frames at all;
+- then the archetype's own variations.
+
+It is interleaved rather than appended because the list is cut at eight per archetype. `languageOf`
+resolves a candidate's language against the archetype's list in one place, so the preview and the
+realisation cannot read a parameter differently.
+
+**A variation the composition declined is dropped where another composed.** It is the hand-drawn
+template again rather than a drawing of the composition, and its preview flatters: it cannot show the
+features realisation then samples in. Found by measurement: with more drawings in the field, one such
+preview won the overloaded brief's slot and the built plan came out at 0.82 with four unreached
+features. `choose.test.ts` pins the rule.
+
+**`DesignBrief.geometryLanguage` is stated on the recommendation only.** The deterministic brief
+copies it from the style table (`StyleRules.language`): modern asymmetric, formal formal, minimalist
+rectilinear, and **none for cottage**. A traditional cottage garden is straight paths and rectangular
+beds, and the gallery's good family garden said so the moment cottage stated curves. B and C leave it
+open. Stated on all three, every softer alternative to a modern brief was marked as contradicting its
+own brief and geometry-mixed went 6 → 24. The candidate loop tries the stated language first, and
+the geometry principle judges against it rather than against the open space.
+
+A model may state one too, where the style agrees about curves: modern may be drawn rectilinear, but
+never soft (`compatibleLanguage` in `brief-reconcile.ts`). It writes `"none"` for null, which the
+schema's `preprocess` reads, as `focal` does. The brief schema grew one required enum.
+`probe:assistant brief` is new and compiled against the live API (4,982 bytes), with the garden
+schema as the control.
+
+**The diversity signature reads a lawn's curve off its outline** (`curvedRing`: at least four gentle
+turns between facets over half a metre). The vertex count had called a notched rectangle curved.
+Reading the sketch's stated language instead would have called two identical drawings different,
+which the signature exists not to do. A rounded rectangle is not curved: its corner facets are
+centimetres long.
+
+**`focalAnchor` was not added.** The `destination` parameter already decides whether the far room
+stands on the view or in the corner.
+
+**Measured with `DESIGN_DRAWINGS=0`**, which restores the old enumeration on otherwise identical code:
+
+| | Old enumeration | Drawings |
+|---|---|---|
+| Sets offering a straight and a curved garden | 69% | 85% |
+| Sets of three different compositions | 69% | 77% |
+| Mean design score | 0.897 | 0.898 |
+| Minimum design score | 0.768 | 0.771 |
+| No primary space | 27 | 21 |
+| Inside composition bands | 74% | 72% |
+| Mixed geometry | 6 | 9 |
+
+The point of the phase was the first two rows, and quality held while they moved. The two variety
+lines are new to `eval:generator`.
 
 ## Traps Phase 2 paid for
 

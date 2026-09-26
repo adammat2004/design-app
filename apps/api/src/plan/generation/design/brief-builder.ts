@@ -140,6 +140,14 @@ export function buildBrief(
     excludedFeatures: cut,
     style: brief.style,
     /*
+     * The style's own drawing — on the recommendation only. A is the most direct reading of what
+     * they asked for, so it is held to the lines their style chose; B and C are the alternatives a
+     * designer puts beside it, and a softer drawing of a modern brief is one of those. Stated on all
+     * three, every alternative that curved was marked as contradicting its own brief and the three
+     * cards converged on one shape.
+     */
+    geometryLanguage: id === 'A' ? styleRules(brief.style).language : null,
+    /*
      * The **resolved** upkeep, not the raw answer, and only when the user gave one.
      *
      * `resolveConstraints` is the single source for what a concept may ask of its owner — it caps

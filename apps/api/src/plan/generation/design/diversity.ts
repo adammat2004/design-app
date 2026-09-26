@@ -71,11 +71,14 @@ export function signatureOf(preview: LayoutPreview): Signature {
     terraceShare: composed > 0 && terrace ? bucket(polygonArea(terrace.ring) / composed) : 0,
     lawnShare: composed > 0 ? bucket(lawnArea / composed) : 0,
     /*
-     * The panel's shape rather than its outline. A rounded rectangle and the rectangle it came from
-     * are the same decision; a kidney and a rectangle are not.
+     * The panel's material and whether its outline curves, rather than the outline itself. A rounded
+     * rectangle and the rectangle it came from are the same decision; a kidney and a rectangle are
+     * not. Read off the ring's own turns — a curve turns in small steps, a notched rectangle only at
+     * right angles — because counting vertices called a rectilinear lawn notched round two rooms
+     * curved, and reading the sketch's stated language would call two identical drawings different.
      */
     lawnShape: preview.lawn
-      ? `${preview.lawn.category}:${preview.lawn.ring.length > 8 ? 'curved' : 'straight'}`
+      ? `${preview.lawn.category}:${curvedRing(preview.lawn.ring) ? 'curved' : 'straight'}`
       : 'none',
     seated: preview.placed
       .map((item) => item.feature)
@@ -180,6 +183,39 @@ function valueOf(entry: Scored, likeness: number, repeatedArchetype: boolean): n
     (repeatedArchetype ? REPEAT_ARCHETYPE_PENALTY : 0)
   );
 }
+
+/**
+ * Whether a ring curves: at least four of its corners turn by less than `GENTLE_TURN` between edges
+ * at least `CURVE_FACET` long. A notched rectangle's corners are all right angles; a rounded
+ * rectangle's corners turn gently too, but between facets a few centimetres long, and a rounded
+ * rectangle is the same decision as the rectangle it came from. A sampled curve turns gently
+ * between facets a metre or so long.
+ */
+export function curvedRing(ring: Point[]): boolean {
+  let gentle = 0;
+  for (let i = 0; i < ring.length; i += 1) {
+    const a = ring[(i + ring.length - 1) % ring.length]!;
+    const b = ring[i]!;
+    const c = ring[(i + 1) % ring.length]!;
+    const turn = Math.abs(
+      Math.atan2(
+        (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x),
+        (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y),
+      ),
+    );
+    const long =
+      Math.hypot(b.x - a.x, b.y - a.y) >= CURVE_FACET &&
+      Math.hypot(c.x - b.x, c.y - b.y) >= CURVE_FACET;
+    if (long && turn > 1e-3 && turn < GENTLE_TURN) gentle += 1;
+  }
+  return gentle >= 4;
+}
+
+/** Facets shorter than this are a rounded corner's, not a curve's. */
+const CURVE_FACET = 0.5;
+
+/** A turn under this is part of a curve rather than a corner: forty degrees. */
+const GENTLE_TURN = (40 * Math.PI) / 180;
 
 /** Two-metre cells, so a plan is "the same" when its rooms are within a stride of each other. */
 function cell(point: Point): string {

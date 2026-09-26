@@ -9,6 +9,7 @@ import {
   LayoutArchetypeIdSchema,
   PriorityTierSchema,
   PrivacyStrategySchema,
+  GeometryLanguageSchema,
 } from '@garden-studio/schema';
 
 /**
@@ -26,6 +27,8 @@ export const LAYOUT_ARCHETYPES = LayoutArchetypeIdSchema.options;
 export const CIRCULATION_STYLES = CirculationStyleSchema.options;
 export const FOCAL_STRATEGIES = FocalStrategySchema.options;
 export const PRIVACY_STRATEGIES = PrivacyStrategySchema.options;
+/** The shape languages, and `none` for a concept that leaves it to the style and the plot. */
+export const GEOMETRY_LANGUAGES = [...GeometryLanguageSchema.options, 'none'] as const;
 export const BRIEF_EMPHASES = BriefEmphasisSchema.options;
 export const BRIEF_SLOTS = BriefSlotSchema.options;
 export const DESIRED_FEATURES = DesiredFeatureSchema.options;

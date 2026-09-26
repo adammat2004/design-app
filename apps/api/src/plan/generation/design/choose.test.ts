@@ -1,12 +1,18 @@
-import { polygonArea, type DesiredFeature, type PlanDocument } from '@garden-studio/schema';
+import {
+  polygonArea,
+  roundPolygon,
+  type DesiredFeature,
+  type PlanDocument,
+} from '@garden-studio/schema';
 import { describe, expect, it } from 'vitest';
 import { ARCHETYPES as BUDGET_POSITIONS } from '../archetypes.js';
 import { resolveConstraints } from '../constraints.js';
 import { archetypeById } from '../knowledge/archetypes/index.js';
 import { buildBriefs } from './brief-builder.js';
-import { enumerateCandidates } from './candidates.js';
+import { drawings, enumerateCandidates } from './candidates.js';
+import { languageOf } from '../knowledge/archetypes/composed.js';
 import { chooseLayouts } from './choose.js';
-import { pickDistinct, signatureOf, similarity, type Scored } from './diversity.js';
+import { curvedRing, pickDistinct, signatureOf, similarity, type Scored } from './diversity.js';
 import { previewLayout, type PreviewRequest } from './layout-generator.js';
 import { interpretRequirements, withinCapacity } from './requirements.js';
 import { scenario, SCENARIOS } from './scenarios.js';
@@ -107,6 +113,24 @@ describe('a layout preview', () => {
     expect(obstacles.length).toBe(before);
   });
 
+  it('never offers the hand-drawn template for a composition that composed on this plot', () => {
+    for (const entry of SCENARIOS) {
+      const context = contextOf(entry.document);
+      if (!context) continue;
+      const { analysis, briefs } = read(entry.document);
+      const field = enumerateCandidates({ analysis, brief: briefs[0]!, context });
+      const byArchetype = new Map<string, boolean[]>();
+      for (const candidate of field) {
+        const id = candidate.fit.archetype.id;
+        byArchetype.set(id, [...(byArchetype.get(id) ?? []), !!candidate.preview.sketch.composed]);
+      }
+      for (const [id, composed] of byArchetype) {
+        /* All composed, or none did and the template is the only drawing there is. */
+        expect(new Set(composed).size, `${entry.key}/${id}`).toBe(1);
+      }
+    }
+  });
+
   it('keeps every placed feature inside the room and clear of its neighbours', () => {
     for (const entry of SCENARIOS) {
       const context = contextOf(entry.document);
@@ -196,6 +220,38 @@ describe('enumerating candidates', () => {
 /* ---------------------------------------------------------------- diversity */
 
 describe('the diversity signature', () => {
+  it("reads a lawn's curve off its outline, not off its vertex count", () => {
+    const ellipse = Array.from({ length: 28 }, (_, i) => {
+      const t = (i / 28) * Math.PI * 2;
+      return { x: 7 + 4.5 * Math.cos(t), y: 6 + 3.5 * Math.sin(t) };
+    });
+    /* A rectangle notched round two rooms: ten vertices, which the vertex count called curved. */
+    const notched = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 6 },
+      { x: 8, y: 6 },
+      { x: 8, y: 8 },
+      { x: 2, y: 8 },
+      { x: 2, y: 6 },
+      { x: 0.5, y: 6 },
+      { x: 0.5, y: 4 },
+      { x: 0, y: 4 },
+    ];
+    const rounded = roundPolygon(
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 8 },
+        { x: 0, y: 8 },
+      ],
+      1.2,
+    );
+    expect(curvedRing(ellipse)).toBe(true);
+    expect(curvedRing(notched)).toBe(false);
+    expect(curvedRing(rounded)).toBe(false);
+  });
+
   const context = contextOf(scenario('family-play').document)!;
   const { analysis, briefs } = read(scenario('family-play').document);
   const field = enumerateCandidates({ analysis, brief: briefs[0]!, context });
@@ -332,5 +388,40 @@ describe('choosing three layouts', () => {
         }
       }
     }
+  });
+});
+
+describe('drawing one composition several ways', () => {
+  const first = defaultParams('terrace_and_lawn');
+  const deeper = { ...first, terraceDepth: 1.15 as const };
+
+  it('tries the composition as designed first, then its other language and an unframed lawn', () => {
+    const out = drawings([first, deeper], ['asymmetric_geometric', 'rectilinear'], null);
+    expect(out[0]).toEqual({ ...first, language: 'asymmetric_geometric' });
+    expect(out[1]).toEqual({ ...first, language: 'rectilinear' });
+    expect(out[2]).toEqual({ ...first, language: 'asymmetric_geometric', framed: false });
+    expect(out[3]).toEqual({ ...deeper, language: 'asymmetric_geometric' });
+    expect(out.at(-1)).toEqual({ ...deeper, language: 'rectilinear' });
+  });
+
+  it("puts the brief's language first, where the composition can be drawn in it", () => {
+    expect(
+      drawings([first], ['rectilinear', 'asymmetric_geometric'], 'asymmetric_geometric')[0]!
+        .language,
+    ).toBe('asymmetric_geometric');
+    expect(drawings([first], ['soft_organic'], 'rectilinear')[0]!.language).toBe('soft_organic');
+  });
+
+  it('offers no unframed lawn where the language does not frame one', () => {
+    const out = drawings([first], ['soft_organic', 'rectilinear'], null);
+    expect(out.some((params) => params.framed === false)).toBe(false);
+  });
+
+  it('draws a candidate in the language it names, and only in one the composition speaks', () => {
+    expect(languageOf(['rectilinear', 'soft_organic'], { language: 'soft_organic' })).toBe(
+      'soft_organic',
+    );
+    expect(languageOf(['rectilinear'], { language: 'soft_organic' })).toBe('rectilinear');
+    expect(languageOf(['soft_organic', 'rectilinear'], {})).toBe('soft_organic');
   });
 });

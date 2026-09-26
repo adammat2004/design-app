@@ -11,6 +11,10 @@ It applies to the `vis-*` and `skin-*` families in
 plan-camera families (`plant-*`, `tree-*`, `furniture-*`, `face-*`, `tex-*`), which keep their own
 strictly-overhead specification and keep drawing 2D Plan exactly as they do today.
 
+Nothing here is 3D. The AR app's 3D models (GLB) are a separate pipeline, sketched in
+[`docs/ar/ar-architecture.md`](ar/ar-architecture.md) §9; the only image assets it reuses are the
+plan camera's seamless ground textures (`tex-*`, `face-*`).
+
 Renderer QA and rollout status are tracked in [the rendering upgrade acceptance notes](rendering-quality-upgrade.md).
 The manifest's optional `render` fields distinguish **declared** camera/lighting intent from a
 **reviewed** image. The asset audit reports resolved anchors, full-frame pixel density, safe

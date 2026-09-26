@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CandidateParams } from '../types.js';
 import { defaultParams } from '../../knowledge/archetypes/types.js';
+import { FEATURE_LIBRARY } from '../../knowledge/feature-library.js';
 import {
   BED_MIN_DEPTH,
   LAWN_FLOOR,
+  terraceClaim,
+  terraceFloor,
   type LocalPoint,
   type Room,
   type SketchRequest,
@@ -11,7 +14,7 @@ import {
 import { gridOver, inRect, loopsOf, outlineWithout, cellCentre, signedArea } from './cells.js';
 import { composeBeside } from './beside.js';
 import { composeCourt } from './court.js';
-import { composeGarden, CORRIDOR, SERVE } from './compose.js';
+import { composeGarden, CORRIDOR, SERVE, wantFor } from './compose.js';
 import { composeSketch } from './compose-sketch.js';
 import type { GardenComposition, GeometryLanguage } from './types.js';
 
@@ -99,6 +102,7 @@ type Composed =
   | 'side_by_side';
 const LANGUAGES: { archetype: Composed; language: GeometryLanguage }[] = [
   { archetype: 'terrace_and_lawn', language: 'rectilinear' },
+  { archetype: 'terrace_and_lawn', language: 'asymmetric_geometric' },
   { archetype: 'sweeping_lawn', language: 'soft_organic' },
   { archetype: 'formal_axis', language: 'formal_symmetric' },
   { archetype: 'destination_garden', language: 'rectilinear' },
@@ -604,6 +608,98 @@ describe('planting shaped by what it is for', () => {
     const lawn = open.openSpace!.rect;
     const nearer = Math.min(lawn.v0 - room().vMin, room().vMax - lawn.v1);
     expect(nearer).toBeLessThan(BED_MIN_DEPTH);
+  });
+});
+
+describe('the room a concept is organised around', () => {
+  const compose = (over: Partial<SketchRequest>, r: Room = room()) =>
+    composeGarden({
+      archetype: 'terrace_and_lawn',
+      language: 'rectilinear',
+      request: request(over),
+      room: r,
+      params: defaultParams('terrace_and_lawn'),
+    })!;
+  const area = (rect: { u0: number; u1: number; v0: number; v1: number }) =>
+    (rect.u1 - rect.u0) * (rect.v1 - rect.v0);
+
+  it('gives the terrace to the table in a concept about dining, and the seating a room of its own', () => {
+    expect(terraceClaim(['seating', 'dining'], 'dining')).toBe('dining');
+    expect(terraceClaim(['seating', 'dining'], 'lawn')).toBe('seating');
+    expect(terraceClaim(['seating', 'dining'])).toBe('seating');
+    const social = compose({ features: ['seating', 'dining', 'storage'], primaryZone: 'dining' });
+    expect(social.bays.some((bay) => bay.feature === 'seating')).toBe(true);
+    expect(social.bays.some((bay) => bay.feature === 'dining')).toBe(false);
+  });
+
+  it('holds the terrace below a dining pergola the concept is about', () => {
+    const wide = { houseWallLength: 12, features: ['seating', 'pergola', 'storage'] as const };
+    const plain = compose({ ...wide, features: [...wide.features] });
+    const social = compose({ ...wide, features: [...wide.features], primaryZone: 'dining' });
+    expect(area(social.terrace)).toBeLessThan(area(plain.terrace));
+    expect(social.decisions.some((decision) => decision.kind === 'terrace-held')).toBe(true);
+  });
+
+  it("holds a lawn-led concept's terrace to its lawn, by at most 30% of its width", () => {
+    const shallow = room({ uMax: 11, vMin: -8, vMax: 8 });
+    const plain = compose({ houseWallLength: 14 }, shallow);
+    const open = compose({ houseWallLength: 14, primaryZone: 'lawn' }, shallow);
+    const width = (rect: { v0: number; v1: number }) => rect.v1 - rect.v0;
+    const lawn = Math.abs(signedArea((open.openSpace!.shape as { points: LocalPoint[] }).points));
+    expect(width(open.terrace)).toBeLessThan(width(plain.terrace));
+    /* Held until the lawn dominates, or as far as the hold goes: to its floor, or 30% narrower. */
+    const atLimit =
+      width(open.terrace) <= terraceFloor(shallow).width + 1e-6 ||
+      width(open.terrace) >= 0.7 * width(plain.terrace) - 1e-6;
+    expect(lawn >= 1.15 * area(open.terrace) || atLimit).toBe(true);
+    expect(width(open.terrace)).toBeGreaterThanOrEqual(0.7 * width(plain.terrace) - 1e-6);
+  });
+
+  it('draws a spare seat smaller than a seating patio', () => {
+    const spare = wantFor(null, 'far-room', 1);
+    const seat = wantFor('seating', 'far-room', 1);
+    expect(spare.width * spare.depth).toBeLessThan(seat.width * seat.depth);
+  });
+});
+
+describe('the shape language', () => {
+  it('draws a fire pit square in a straight plan and round in a curved one', () => {
+    expect(wantFor('firePit', 'far-room', 1, 'rectilinear').footprint.kind).toBe('rect');
+    expect(wantFor('firePit', 'far-room', 1, 'formal_symmetric').footprint.kind).toBe('rect');
+    expect(wantFor('firePit', 'far-room', 1, 'soft_organic').footprint.kind).toBe('point');
+  });
+
+  it('draws a dining area round beside a sweeping lawn and square beside a rectangular one', () => {
+    expect(wantFor('dining', 'far-room', 1, 'soft_organic').footprint.kind).toBe('point');
+    expect(wantFor('dining', 'far-room', 1, 'rectilinear').footprint.kind).toBe('rect');
+  });
+
+  it('draws the room a concept is about larger than quoted', () => {
+    const plain = wantFor('pergola', 'terrace-end', 1, 'rectilinear');
+    const primary = wantFor('pergola', 'terrace-end', 1, 'rectilinear', 'dining');
+    expect(primary.width).toBeGreaterThan(plain.width);
+    /* A hot tub is a product: it comes in one size whatever the concept is about. */
+    const tub = wantFor('hotTub', 'far-room', 1, 'rectilinear');
+    const about = wantFor('hotTub', 'far-room', 1, 'rectilinear', FEATURE_LIBRARY.hotTub.zone);
+    expect(about.width).toBe(tub.width);
+  });
+
+  it('balances an asymmetric plan with a block of planting set into the lawn, and a tree in it', () => {
+    const asymmetric = composeGarden({
+      archetype: 'terrace_and_lawn',
+      language: 'asymmetric_geometric',
+      request: request(),
+      room: room(),
+      params: defaultParams('terrace_and_lawn'),
+    })!;
+    const block = asymmetric.masses.find((mass) => mass.name === 'Planting block');
+    expect(block).toBeDefined();
+    const ring = (block!.shape as { points: LocalPoint[] }).points;
+    expect(asymmetric.trees.some((tree) => inside(tree.at, ring))).toBe(true);
+    /* Pushed to one side rather than centred on the doors. */
+    const lawn = asymmetric.openSpace!.rect;
+    expect(Math.abs((lawn.v0 + lawn.v1) / 2)).toBeGreaterThan(0.5);
+    expect(asymmetric.decisions.some((decision) => decision.kind === 'lawn-interlocked')).toBe(true);
   });
 });
 

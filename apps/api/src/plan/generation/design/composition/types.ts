@@ -1,4 +1,9 @@
-import type { DesiredFeature, FunctionalZoneType, LayoutArchetypeId } from '@garden-studio/schema';
+import type {
+  DesiredFeature,
+  FunctionalZoneType,
+  GeometryLanguage,
+  LayoutArchetypeId,
+} from '@garden-studio/schema';
 import type {
   LocalPoint,
   LocalRect,
@@ -63,9 +68,10 @@ export type ElementPurpose = (typeof PURPOSES)[number];
 
 /**
  * The shape language a composition speaks. A plan may mix them, but deliberately: a curved lawn in
- * a rectilinear garden is a decision, a gravel circle in one is usually an accident.
+ * a rectilinear garden is a decision, a gravel circle in one is usually an accident. The vocabulary
+ * is the schema's, because a `DesignBrief` may state one.
  */
-export type GeometryLanguage = 'rectilinear' | 'soft_organic' | 'formal_symmetric';
+export type { GeometryLanguage };
 
 /** A room's place in the composition, carved out of the border or a corner rather than the lawn. */
 export interface Bay {

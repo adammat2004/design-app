@@ -223,3 +223,190 @@ SUMMARY over 117 concepts (3 seeds)
     suburban                  405 m²     1149 ms
 
 ```
+
+## Phase 3 (shape language and proportion) and the rest of Phase 2
+
+26 Sep 2026. The geometry-language rule reads edges and is set by the open space; per-language
+footprints; the room a concept is about claims or outweighs the terrace; spare seats sized as
+supporting rooms; round surfaces measured; the asymmetric plan; framing corners; a clear sightline;
+sun and view preferences in placement. Scorer changes and generator changes are both in these
+numbers. The row before is the committed baseline re-run from a worktree the same day, identical to
+the section above. See "Phase 3" in CLAUDE.md.
+
+```
+SUMMARY over 117 concepts (3 seeds)
+
+  generated at all         every case
+  valid geometry           117/117 (100%)
+  inside composition bands 87/117 (74%)
+  deterministic            yes
+  requested features drawn 89% (mean)
+  repairs accepted         6 across 3/117 (3%) of concepts
+
+  design score   mean 0.899   min 0.768
+  weak (< 0.6)    0/117 (0%)
+  with a critical fault    0/117 (0%)
+
+  by principle:
+    circulation      mean 0.967   min 0.750   measured on 117/117
+    grouping         mean 0.997   min 0.941   measured on 117/117
+    proportion       mean 0.965   min 0.692   measured on 117/117
+    composition      mean 0.967   min 0.778   measured on 117/117
+    relationships    mean 0.833   min 0.000   measured on 96/117
+    privacy          mean 1.000   min 1.000   measured on 117/117
+    hierarchy        mean 0.707   min 0.319   measured on 117/117
+    style            mean 0.864   min 0.667   measured on 117/117
+    buildability     mean 0.986   min 0.750   measured on 117/117
+    sun              mean 0.543   min 0.200   measured on 99/117
+    maintenanceFit   mean 0.764   min 0.000   measured on 117/117
+    canopy           mean 0.863   min 0.000   measured on 117/117
+    featureFit       mean 0.960   min 0.737   measured on 117/117
+
+  commonest faults:
+    too-many-materials         87
+    seating-in-shade           81
+    sparse-canopy              63
+    composition-off-brief      39
+    upkeep-heavy               34
+    relationship-unmet         33
+    no-primary-space           27
+    panel-complexity           21
+    route-dead-end             18
+    feature-in-open-space      17
+
+  lawn in one piece       117/117 (100%)
+  orphans per concept      0.10 (mean)
+  planting depth varies   36/45 (80%) of plans planted on two sides or more (mean spread 1.86 m)
+
+  by composition:
+    courtyard                6 concepts   mean 0.986   min 0.985
+    destination_garden      27 concepts   mean 0.895   min 0.771
+    formal_axis              6 concepts   mean 0.902   min 0.884
+    linear_sequence          6 concepts   mean 0.792   min 0.768
+    side_by_side             3 concepts   mean 0.932   min 0.932
+    sweeping_lawn           30 concepts   mean 0.900   min 0.840
+    terrace_and_lawn        39 concepts   mean 0.900   min 0.819
+
+  composition faults:
+    feature-in-open-space      17
+    route-crosses-panel         0
+    hard-island                 0
+    orphan-feature             12
+    one-sided                   0
+    panel-complexity           21
+    geometry-mixed              6
+
+  latency, one set of three concepts:
+    courtyard                  76 m²      188 ms
+    small-entertaining         88 m²     1089 ms
+    overloaded                132 m²      613 ms
+    long-narrow               143 m²      721 ms
+    side-gate-shed            176 m²      494 ms
+    unlocated                 176 m²      469 ms
+    l-shaped                  195 m²      610 ms
+    modern-vs-natural         202 m²      590 ms
+    natural-twin              202 m²      678 ms
+    family-play               235 m²      892 ms
+    wide-shallow              286 m²      555 ms
+    l-shape                   298 m²      854 ms
+    suburban                  405 m²     1085 ms
+```
+
+## Phase 4: compositions as candidates
+
+26 Sep 2026. Each composition drawn in every language it speaks and with its lawn framed or not;
+the brief states a language on the recommendation; the geometry principle reads it. The first
+block is the same code with `DESIGN_DRAWINGS=0`, which enumerates as before, so the difference is
+the enumeration alone. The two variety lines are new to the harness.
+
+```
+DESIGN_DRAWINGS=0
+  inside composition bands 87/117 (74%)
+  requested features drawn 89% (mean)
+  design score   mean 0.897   min 0.768
+    no-primary-space           27
+  sets offering a straight and a curved garden   27/39 (69%)
+  sets of three different compositions          27/39 (69%)
+    geometry-mixed              6
+```
+
+```
+SUMMARY over 117 concepts (3 seeds)
+
+  generated at all         every case
+  valid geometry           117/117 (100%)
+  inside composition bands 84/117 (72%)
+  deterministic            yes
+  requested features drawn 89% (mean)
+  repairs accepted         3 across 3/117 (3%) of concepts
+
+  design score   mean 0.898   min 0.771
+  weak (< 0.6)    0/117 (0%)
+  with a critical fault    0/117 (0%)
+
+  by principle:
+    circulation      mean 0.969   min 0.750   measured on 117/117
+    grouping         mean 0.997   min 0.941   measured on 117/117
+    proportion       mean 0.967   min 0.692   measured on 117/117
+    composition      mean 0.970   min 0.778   measured on 117/117
+    relationships    mean 0.818   min 0.000   measured on 96/117
+    privacy          mean 1.000   min 1.000   measured on 117/117
+    hierarchy        mean 0.711   min 0.319   measured on 117/117
+    style            mean 0.867   min 0.667   measured on 117/117
+    buildability     mean 0.987   min 0.750   measured on 117/117
+    sun              mean 0.540   min 0.200   measured on 99/117
+    maintenanceFit   mean 0.775   min 0.000   measured on 117/117
+    canopy           mean 0.831   min 0.000   measured on 117/117
+    featureFit       mean 0.960   min 0.737   measured on 117/117
+
+  commonest faults:
+    too-many-materials         87
+    seating-in-shade           84
+    sparse-canopy              66
+    composition-off-brief      45
+    relationship-unmet         36
+    upkeep-heavy               34
+    no-primary-space           21
+    route-dead-end             18
+    panel-complexity           18
+    shed-in-view               15
+
+  lawn in one piece       117/117 (100%)
+  orphans per concept      0.10 (mean)
+  sets offering a straight and a curved garden   33/39 (85%)
+  sets of three different compositions          30/39 (77%)
+  planting depth varies   36/45 (80%) of plans planted on two sides or more (mean spread 1.83 m)
+
+  by composition:
+    courtyard                6 concepts   mean 0.986   min 0.985
+    destination_garden      27 concepts   mean 0.898   min 0.771
+    formal_axis              6 concepts   mean 0.887   min 0.875
+    linear_sequence          3 concepts   mean 0.826   min 0.826
+    side_by_side             3 concepts   mean 0.932   min 0.932
+    sweeping_lawn           30 concepts   mean 0.891   min 0.800
+    terrace_and_lawn        42 concepts   mean 0.894   min 0.811
+
+  composition faults:
+    feature-in-open-space      14
+    route-crosses-panel         0
+    hard-island                 0
+    orphan-feature             12
+    one-sided                   0
+    panel-complexity           18
+    geometry-mixed              9
+
+  latency, one set of three concepts:
+    courtyard                  76 m²      213 ms
+    small-entertaining         88 m²     1343 ms
+    overloaded                132 m²      610 ms
+    long-narrow               143 m²      598 ms
+    side-gate-shed            176 m²      527 ms
+    unlocated                 176 m²      531 ms
+    l-shaped                  195 m²      666 ms
+    modern-vs-natural         202 m²      689 ms
+    natural-twin              202 m²      760 ms
+    family-play               235 m²      998 ms
+    wide-shallow              286 m²      607 ms
+    l-shape                   298 m²      755 ms
+    suburban                  405 m²     1258 ms
+```

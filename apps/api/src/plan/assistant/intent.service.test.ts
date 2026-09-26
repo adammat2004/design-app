@@ -17,14 +17,21 @@ import { AssistantIntentEnvelopeSchema, DesignIntentSchema } from '@garden-studi
  * are entirely ours.
  */
 
-type FakeClient = Pick<Anthropic, 'messages'>;
-
-function client(create: () => unknown): FakeClient {
-  return { messages: { create: vi.fn(create) } } as unknown as FakeClient;
+/**
+ * The service is typed against the whole SDK. These tests only ever call `messages.create`, so the
+ * cast is the rest of the client — the same one the design-brief suite uses.
+ */
+function client(create: () => unknown): Anthropic {
+  return { messages: { create: vi.fn(create) } } as unknown as Anthropic;
 }
 
 function config(values: Record<string, string> = {}): ConfigService {
   return { get: (key: string) => values[key] } as unknown as ConfigService;
+}
+
+/** A mock whose call list has one argument, so the request body is `unknown` rather than `undefined`. */
+function spy() {
+  return vi.fn((..._args: unknown[]) => message(JSON.stringify(envelope)));
 }
 
 function message(text: string, stopReason = 'end_turn'): unknown {
@@ -32,7 +39,7 @@ function message(text: string, stopReason = 'end_turn'): unknown {
     id: 'msg_1',
     type: 'message',
     role: 'assistant',
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
     stop_reason: stopReason,
     stop_details: null,
     content: [{ type: 'text', text, citations: null }],
@@ -105,8 +112,8 @@ describe('IntentService', () => {
   });
 
   it('tells the model about the garden it is editing', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make it bigger', plan());
 
@@ -135,8 +142,8 @@ describe('IntentService', () => {
    * description of the plan that is still true.
    */
   it('gives the model the conversation, ahead of the inventory', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('a bit more', plan(), [
       { role: 'user', text: 'make the seating area bigger' },
@@ -157,8 +164,8 @@ describe('IntentService', () => {
 
   /* A heading with nothing under it invites the model to wonder what was withheld. */
   it('says nothing about a conversation that has not happened', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make it bigger', plan());
 
@@ -174,8 +181,8 @@ describe('IntentService', () => {
    * first it would be an id with nothing yet to attach to.
    */
   it('tells the model which element they have selected', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make this bigger', plan(), [], ['e-1']);
 
@@ -193,8 +200,8 @@ describe('IntentService', () => {
 
   /* Nothing selected is the ordinary case, and a heading with nothing under it invites a question. */
   it('says nothing about a selection that was not made', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make the seating area bigger', plan());
 
@@ -209,8 +216,8 @@ describe('IntentService', () => {
    * it is dropped exactly as the planner drops an id that resolves to nothing.
    */
   it('drops a selected id that no longer names an element', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make this bigger', plan(), [], ['e-gone']);
 
@@ -221,8 +228,8 @@ describe('IntentService', () => {
   });
 
   it('does not tell the model any coordinates', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     /* With a selection, so the newest section is held to the rule as well as the inventory. */
     await service.interpret('make it bigger', plan(), [], ['e-1']);
@@ -253,9 +260,9 @@ describe('IntentService', () => {
   });
 
   it('honours ANTHROPIC_MODEL', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
+    const create = spy();
     const service = new IntentService(
-      { messages: { create } } as unknown as FakeClient,
+      { messages: { create } } as unknown as Anthropic,
       config({ ANTHROPIC_MODEL: 'claude-haiku-4-5' }),
     );
 
@@ -270,8 +277,8 @@ describe('IntentService', () => {
    * leak `<thinking>` tags into the output.
    */
   it('does not disable thinking', async () => {
-    const create = vi.fn(() => message(JSON.stringify(envelope)));
-    const service = new IntentService({ messages: { create } } as unknown as FakeClient, config());
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
 
     await service.interpret('make it bigger', plan());
 
@@ -390,7 +397,7 @@ describe('IntentService', () => {
   it('503s when rate limited, so the client knows to wait', async () => {
     const service = new IntentService(
       client(() => {
-        throw new Anthropic.RateLimitError(429, null, 'slow down', new Headers());
+        throw new Anthropic.RateLimitError(429, undefined, 'slow down', new Headers());
       }),
       config(),
     );
@@ -413,7 +420,7 @@ describe('IntentService', () => {
   it('503s on a bad key rather than leaking that it is a credentials problem', async () => {
     const service = new IntentService(
       client(() => {
-        throw new Anthropic.AuthenticationError(401, null, 'bad key', new Headers());
+        throw new Anthropic.AuthenticationError(401, undefined, 'bad key', new Headers());
       }),
       config(),
     );
@@ -424,7 +431,7 @@ describe('IntentService', () => {
   it('502s when the far end has trouble with a request it accepted', async () => {
     const service = new IntentService(
       client(() => {
-        throw new Anthropic.InternalServerError(500, null, 'boom', new Headers());
+        throw new Anthropic.InternalServerError(500, undefined, 'boom', new Headers());
       }),
       config(),
     );
@@ -467,6 +474,19 @@ describe('IntentService', () => {
  */
 describe('the hand-written JSON Schema agrees with the Zod schema', () => {
   const intentBranches = INTENT_JSON_SCHEMA.properties.intents.items.anyOf;
+
+  type IntentBranch = (typeof intentBranches)[number];
+  type BranchKind = IntentBranch['properties']['kind']['const'];
+
+  /** `.find` leaves the union intact, so a field that only one verb has is not known to exist. */
+  function branchOf<K extends BranchKind>(kind: K) {
+    const branch = intentBranches.find(
+      (item): item is Extract<IntentBranch, { properties: { kind: { readonly const: K } } }> =>
+        item.properties.kind.const === kind,
+    );
+    if (!branch) throw new Error(`missing ${kind} branch`);
+    return branch;
+  }
 
   /**
    * The property the whole hybrid rests on, asserted structurally rather than trusted.
@@ -717,10 +737,8 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
   });
 
   it('offers the model only materials and zones that exist', () => {
-    const materialBranch = intentBranches.find(
-      (branch) => branch.properties.kind.const === 'material',
-    )!;
-    const moveBranch = intentBranches.find((branch) => branch.properties.kind.const === 'move')!;
+    const materialBranch = branchOf('material');
+    const moveBranch = branchOf('move');
 
     expect(materialBranch.properties.materialId.enum).toContain('stone-pavers');
     expect(materialBranch.properties.materialId.enum).not.toContain(

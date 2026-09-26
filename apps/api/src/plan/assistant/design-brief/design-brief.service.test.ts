@@ -37,7 +37,7 @@ function message(text: string, stopReason = 'end_turn'): unknown {
     id: 'msg_1',
     type: 'message',
     role: 'assistant',
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
     stop_reason: stopReason,
     stop_details: null,
     content: [{ type: 'text', text, citations: null }],

@@ -210,12 +210,43 @@ describe('the geometry language', () => {
     return { x: 7 + 4.5 * Math.cos(t), y: 6.5 + 3.5 * Math.sin(t) };
   });
 
-  it('is reported when a curved lawn sits among straight beds and paving of the same weight', () => {
+  it('is reported when a rectangular room stands beside a curved lawn', () => {
     const { fill, feature, base } = garden('o');
     const lawn = fill('lawn', { kind: 'polygon', cornerRadius: 0, points: ellipse });
+    const dining = feature('Dining terrace', rect(2.5, 2.5, 4, 3.5));
+    /* A cottage brief states no language, so the open space sets it. */
+    expect(codes([base, lawn, dining], [], 'cottage')).toContain('geometry-mixed');
+  });
+
+  it('is not reported for a straight terrace against the house or straight borders round a curved lawn', () => {
+    /*
+     * The terrace takes the house's lines and the borders are what the lawn and the fence leave, so
+     * neither says anything about the garden's language. Read as shapes, both made every sweeping
+     * lawn "mixed".
+     */
+    const { fill, feature, base } = garden('q');
+    const lawn = fill('lawn', { kind: 'polygon', cornerRadius: 0, points: ellipse });
     const rear = fill('planting-bed', panel(7, 1, 14, 2));
+    const side = fill('planting-bed', panel(1, 6.5, 2, 9));
     const terrace = feature('Seating patio', rect(7, 11.5, 12, 3));
-    expect(codes([base, lawn, rear, terrace])).toContain('geometry-mixed');
+    expect(codes([base, lawn, rear, side, terrace], [], 'cottage')).not.toContain('geometry-mixed');
+  });
+
+  it('judges a plan against the language its brief states rather than its own open space', () => {
+    /*
+     * Curved throughout — a sweeping lawn and a round gravel fire pit beside it — so nothing in the
+     * plan contradicts anything else in it. For a brief that leaves the language open that is one
+     * language; for a modern brief, which chose straight lines, it is the wrong one.
+     */
+    const { fill, feature, base } = garden('r');
+    const lawn = fill('lawn', { kind: 'polygon', cornerRadius: 0, points: ellipse });
+    const pit = feature(
+      'Fire pit',
+      { kind: 'point', at: { x: 2.8, y: 2.8 }, radius: 2 },
+      { category: 'gravel-mulch' },
+    );
+    expect(codes([base, lawn, pit], [], 'cottage')).not.toContain('geometry-mixed');
+    expect(codes([base, lawn, pit], [], 'modern')).toContain('geometry-mixed');
   });
 
   it('is not reported when everything is square to the house', () => {

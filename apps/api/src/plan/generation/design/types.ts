@@ -2,6 +2,7 @@ import type {
   DesignScope,
   DesiredFeature,
   FunctionalZoneType,
+  GeometryLanguage,
   LayoutArchetypeId,
   ZoneImportance,
   GardenIntent,
@@ -269,6 +270,17 @@ export interface CandidateParams {
   destination: 'far-diagonal' | 'far-centre' | 'axis-end';
   /** How many of the lowest-priority features to leave out before laying anything. */
   priorityCut: 0 | 1 | 2;
+  /**
+   * The shape language to draw it in, from the archetype's own `languages`. Absent draws the
+   * archetype's default, which is every parameter set written before languages were enumerated.
+   */
+  language?: GeometryLanguage;
+  /**
+   * Whether the lawn is framed — the borders stepped in at its near corners — or left a clean
+   * panel. Absent is framed where the corners are free. Both are compositions a designer draws, and
+   * which suits a plot is something the scorer can measure and a rule cannot.
+   */
+  framed?: boolean;
 }
 
 /**

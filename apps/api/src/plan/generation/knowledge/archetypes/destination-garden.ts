@@ -9,7 +9,7 @@ import {
   type LocalRect,
   type Slot,
 } from '../../layout/sketch.js';
-import { composed, styleLanguage } from './composed.js';
+import { composed, styleLanguages } from './composed.js';
 import { bed, clampRect, extents, slotIn, withZoneIds } from './shared.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
@@ -113,7 +113,7 @@ export const destinationGarden: LayoutArchetype = {
    * short of it behind a planted screen, with the walk down the side of the lawn and in along the
    * room's front. The hand-drawn plan below is what draws where the composition declines.
    */
-  ...composed('destination_garden', styleLanguage, handDrawn(), {
+  ...composed('destination_garden', styleLanguages, handDrawn(), {
     primary: ['destination', 'lounge'],
   }),
 };

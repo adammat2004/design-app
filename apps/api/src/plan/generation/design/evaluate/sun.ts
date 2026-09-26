@@ -1,4 +1,4 @@
-import { pointInPolygon } from '@garden-studio/schema';
+import { pointInPolygon, type DesiredFeature } from '@garden-studio/schema';
 import { meanOf, NOT_APPLICABLE, type PrincipleResult, type MeasuredIssue } from './result.js';
 import type { DesignSubject } from './subject.js';
 
@@ -18,10 +18,10 @@ import type { DesignSubject } from './subject.js';
  */
 
 /** The features that want the afternoon sun. */
-const WANTS_SUN = ['seating', 'dining', 'vegPatch', 'hotTub'];
+export const WANTS_SUN: DesiredFeature[] = ['seating', 'dining', 'vegPatch', 'hotTub'];
 
 /** How much of a feature may sit in shade before it reads as a shaded spot. */
-const SHADE_LIMIT = 0.5;
+export const SHADE_LIMIT = 0.5;
 
 export function scoreSun(subject: DesignSubject): PrincipleResult {
   const sun = subject.analysis.sun;

@@ -50,6 +50,53 @@ describe('reconciling a strategic brief', () => {
     expect(result.refused.length).toBe(3);
   });
 
+  it('lets the model choose a shape language only where the style agrees about curves', () => {
+    const { analysis, fallback } = read(document);
+    /* A style that chose straight lines: the brief states rectilinear. */
+    const straight = fallback.map((brief) => ({
+      ...brief,
+      geometryLanguage: 'rectilinear' as const,
+    }));
+
+    const offCentre = reconcileBriefs(
+      proposeFrom(straight, { geometryLanguage: 'asymmetric_geometric' }),
+      straight,
+      document.brief,
+      analysis,
+    );
+    expect(offCentre.briefs.map((brief) => brief.geometryLanguage)).toEqual([
+      'asymmetric_geometric',
+      'asymmetric_geometric',
+      'asymmetric_geometric',
+    ]);
+
+    const curved = reconcileBriefs(
+      proposeFrom(straight, { geometryLanguage: 'soft_organic' }),
+      straight,
+      document.brief,
+      analysis,
+    );
+    expect(curved.briefs.every((brief) => brief.geometryLanguage === 'rectilinear')).toBe(true);
+    expect(curved.refused.some((reason) => reason.includes('soft_organic'))).toBe(true);
+
+    /* Where the style leaves it open, any language; "none" keeps the brief's own. */
+    const open = fallback.map((brief) => ({ ...brief, geometryLanguage: null }));
+    const chosen = reconcileBriefs(
+      proposeFrom(open, { geometryLanguage: 'soft_organic' }),
+      open,
+      document.brief,
+      analysis,
+    );
+    expect(chosen.briefs.every((brief) => brief.geometryLanguage === 'soft_organic')).toBe(true);
+    const none = reconcileBriefs(
+      proposeFrom(straight, { geometryLanguage: null }),
+      straight,
+      document.brief,
+      analysis,
+    );
+    expect(none.briefs.every((brief) => brief.geometryLanguage === 'rectilinear')).toBe(true);
+  });
+
   it('takes the model’s reading of what the garden is for', () => {
     const { analysis, fallback } = read(document);
     const proposed = proposeFrom(fallback, { intent: 'gardening', emphasis: 'productive' });

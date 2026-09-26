@@ -1,31 +1,53 @@
-import type { FunctionalZoneType, LayoutArchetypeId } from '@garden-studio/schema';
+import type {
+  FunctionalZoneType,
+  GeometryLanguage,
+  LayoutArchetypeId,
+  StyleDirection,
+} from '@garden-studio/schema';
 import { composeSketch } from '../../design/composition/compose-sketch.js';
 import { composeBeside } from '../../design/composition/beside.js';
 import { composeCourt } from '../../design/composition/court.js';
 import { composeGarden, type ComposeInput } from '../../design/composition/compose.js';
-import type { GardenComposition, GeometryLanguage } from '../../design/composition/types.js';
+import type { GardenComposition } from '../../design/composition/types.js';
 import type { CandidateParams, FunctionalZone } from '../../design/types.js';
 import type { Room, SketchRequest } from '../../layout/sketch.js';
 import { styleRules } from '../style-rules.js';
 import type { LayoutArchetype } from './types.js';
 
 /**
- * The shape language a composition that has none of its own speaks: the style's. A destination
- * garden or a sequence of rooms is a plan, not a shape, and drawn straight-edged for a brief whose
- * style wants curves it contradicted the brief it was chosen for — which is how a cottage garden
- * came to be recommended a rectilinear destination garden once that plan was composed.
+ * The shape languages a composition that has none of its own can be drawn in: the style's first. A
+ * destination garden or a sequence of rooms is a plan, not a shape, and drawn straight-edged for a
+ * brief whose style wants curves it contradicted the brief it was chosen for — which is how a
+ * cottage garden came to be recommended a rectilinear destination garden once that plan was
+ * composed. The other language stays on offer, so the candidate loop can find out whether it is
+ * the better drawing of this plot.
  */
-export function styleLanguage(request: SketchRequest): GeometryLanguage {
-  return styleRules(request.style).curvature === 'strong' ? 'soft_organic' : 'rectilinear';
+export function styleLanguages(style: StyleDirection | null): GeometryLanguage[] {
+  return styleRules(style).curvature === 'strong'
+    ? ['soft_organic', 'rectilinear']
+    : ['rectilinear', 'soft_organic'];
+}
+
+/**
+ * The language a composition is drawn in: the candidate's own, where the archetype speaks it, and
+ * otherwise the archetype's first. Resolved in one place so the preview and the realisation cannot
+ * read a candidate's parameters differently.
+ */
+export function languageOf(
+  languages: GeometryLanguage[],
+  params: Pick<CandidateParams, 'language'>,
+): GeometryLanguage {
+  return params.language && languages.includes(params.language) ? params.language : languages[0]!;
 }
 
 /**
  * An archetype drawn by the composition layer, with its hand-drawn sketch as the fallback.
  *
- * Each archetype says only what is particular to it — which shape language it speaks, and for the
- * destination garden that the far end is the point — and `design/composition/` does the rest. Where
- * the composition declines (a courtyard, or a plot that cannot hold what the brief most wants
- * without giving up the lawn), the archetype's own hand-drawn sketch and zone pattern draw instead.
+ * Each archetype says only what is particular to it — which shape languages it can be drawn in,
+ * first the one it is drawn in by default, and for the destination garden that the far end is the
+ * point — and `design/composition/` does the rest. Where the composition declines (a courtyard, or a
+ * plot that cannot hold what the brief most wants without giving up the lawn), the archetype's own
+ * hand-drawn sketch and zone pattern draw instead.
  *
  * The composition is pure and cheap, so `zonePattern` and `sketch` both compose rather than one
  * caching for the other: the same inputs give the same garden to the last bit, which is what the
@@ -33,10 +55,10 @@ export function styleLanguage(request: SketchRequest): GeometryLanguage {
  */
 export function composed(
   id: LayoutArchetypeId,
-  language: GeometryLanguage | ((request: SketchRequest) => GeometryLanguage),
+  languages: GeometryLanguage[] | ((style: StyleDirection | null) => GeometryLanguage[]),
   fallback: Pick<LayoutArchetype, 'sketch' | 'zonePattern'>,
   options: { primary?: FunctionalZoneType[] } = {},
-): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
+): Pick<LayoutArchetype, 'sketch' | 'zonePattern' | 'languages'> {
   /*
    * Which composer draws it: the front-to-back one for every plan whose rooms lie behind the
    * terrace, and the side-by-side one for the plan whose rooms lie beside it. Both produce the same
@@ -44,16 +66,19 @@ export function composed(
    */
   const composer: (input: ComposeInput) => GardenComposition | null =
     id === 'side_by_side' ? composeBeside : id === 'courtyard' ? composeCourt : composeGarden;
+  const spoken = (style: StyleDirection | null) =>
+    typeof languages === 'function' ? languages(style) : languages;
   const compose = (request: SketchRequest, room: Room, params: CandidateParams) =>
     composer({
       archetype: id,
-      language: typeof language === 'function' ? language(request) : language,
+      language: languageOf(spoken(request.style), params),
       request,
       room,
       params,
     });
 
   return {
+    languages: spoken,
     sketch(request, room, plan, params) {
       const composition = compose(request, room, params);
       return composition

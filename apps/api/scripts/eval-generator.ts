@@ -5,6 +5,7 @@ import {
   computeZones,
   elementOutline,
   pointInPolygon,
+  polygonArea,
   type DesignElement,
   effectiveZoneIds,
   PlanDocumentSchema,
@@ -23,6 +24,7 @@ import {
   scoreHeading,
 } from '../src/plan/generation/design/report.js';
 import { inclusionRate } from '../src/plan/generation/design/adapters.js';
+import { curvedRing } from '../src/plan/generation/design/diversity.js';
 import { SCENARIOS } from '../src/plan/generation/design/scenarios.js';
 import { FillService } from '../src/plan/generation/fill.service.js';
 import { PRINCIPLES, WEAK } from '../src/plan/generation/knowledge/principles.js';
@@ -82,6 +84,8 @@ interface Row {
   repairs: number;
   /** How many separate pieces of accent lawn the plan ends with: one is a lawn, three is leftovers. */
   lawnPieces: number;
+  /** Whether the plan's largest open panel curves, or `null` where it has none. */
+  lawnCurved: boolean | null;
   /** Features and routes the composition gave no reason for, on a plan that gives reasons at all. */
   orphans: number;
   /**
@@ -250,6 +254,7 @@ async function measure(
     lawnPieces: concept.elements.filter(
       (element) => element.category === 'lawn' && element.role === 'fill' && element.fillKind === 'accent',
     ).length,
+    lawnCurved: lawnCurves(concept.elements),
     orphans: concept.elements.some((element) => element.purpose)
       ? concept.elements.filter(
           (element) =>
@@ -274,6 +279,22 @@ async function measure(
  * boundary to one depth has a spread near nought, however deep that depth is; one whose screen is
  * deep, whose flank is a mowing edge and whose backdrop is somewhere between has a spread of metres.
  */
+/** Whether the largest accent lawn or gravel panel curves, read off its outline. */
+function lawnCurves(elements: DesignElement[]): boolean | null {
+  const panels = elements
+    .filter(
+      (element) =>
+        (element.category === 'lawn' || element.category === 'gravel-mulch') &&
+        element.role === 'fill' &&
+        element.fillKind === 'accent' &&
+        element.purpose !== 'passage' &&
+        element.purpose !== 'arrival',
+    )
+    .map((element) => elementOutline(element))
+    .sort((a, b) => polygonArea(b) - polygonArea(a));
+  return panels[0] ? curvedRing(panels[0]) : null;
+}
+
 function borderSpread(
   elements: DesignElement[],
   analysis: ReturnType<typeof analyseSite>,
@@ -399,6 +420,25 @@ function summarise(
       `\n  lawn in one piece       ${rate(rows.filter((row) => row.lawnPieces <= 1).length, rows.length)}`,
     );
     console.log(`  orphans per concept      ${mean(rows.map((row) => row.orphans)).toFixed(2)} (mean)`);
+    /*
+     * Whether three cards are three answers. A set of concepts is one case at one seed; it offers a
+     * choice of drawing when one card's open ground curves and another's is straight, and a choice of
+     * composition when no two cards share one.
+     */
+    const sets = new Map<string, Row[]>();
+    for (const row of rows) {
+      const key = `${row.fixture}/${row.seed}`;
+      sets.set(key, [...(sets.get(key) ?? []), row]);
+    }
+    const both = [...sets.values()].filter((set) => {
+      const shapes = new Set(set.map((row) => row.lawnCurved).filter((curved) => curved !== null));
+      return shapes.size === 2;
+    }).length;
+    const threeCompositions = [...sets.values()].filter(
+      (set) => new Set(set.map((row) => row.archetype)).size === set.length,
+    ).length;
+    console.log(`  sets offering a straight and a curved garden   ${rate(both, sets.size)}`);
+    console.log(`  sets of three different compositions          ${rate(threeCompositions, sets.size)}`);
     const spreads = rows
       .map((row) => row.borderSpread)
       .filter((spread): spread is number => spread !== null);

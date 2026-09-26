@@ -1,5 +1,6 @@
 import {
   DesignBriefSchema,
+  isCurvedLanguage,
   type DesignBrief,
   type DesiredFeature,
   type FunctionalZoneType,
@@ -96,6 +97,11 @@ export function reconcileBriefs(
       circulation: take('circulation', match.circulation),
       focal: take('focal', match.focal),
       privacy: take('privacy', match.privacy),
+
+      geometryLanguage: take(
+        'geometryLanguage',
+        compatibleLanguage(match.geometryLanguage, base, refused),
+      ),
 
       featurePriorities: take(
         'featurePriorities',
@@ -270,4 +276,27 @@ function excludable(
   });
 
   return kept.length === 0 ? null : kept;
+}
+
+/**
+ * The model's shape language, where the user's style allows it.
+ *
+ * Where the style states a language — modern, formal, minimalist all forbid curves — the model may
+ * choose another that agrees with it about curves (modern drawn rectilinear rather than asymmetric)
+ * and never one that does not: a sweeping lawn for a brief that chose straight lines from a picture
+ * is the style being changed, which is not the model's to do. Where the style leaves it open, any.
+ * "None" keeps the brief's own, because a model cannot un-state what the style stated.
+ */
+function compatibleLanguage(
+  proposed: DesignBrief['geometryLanguage'],
+  base: DesignBrief,
+  refused: string[],
+): DesignBrief['geometryLanguage'] {
+  if (proposed === null) return null;
+  if (base.geometryLanguage === null) return proposed;
+  if (isCurvedLanguage(proposed) === isCurvedLanguage(base.geometryLanguage)) return proposed;
+  refused.push(
+    `slot ${base.id}: ${proposed} contradicts the ${base.style ?? 'chosen'} style's ${base.geometryLanguage}`,
+  );
+  return null;
 }

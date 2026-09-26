@@ -89,7 +89,7 @@ import {
   MIN_ROOM_AREA,
 } from './layout/frame.js';
 import { FRONT_PATH_WIDTH, frontGarden } from './layout/front.js';
-import { rectSize, type LayoutSketch, type SketchRequest } from './layout/sketch.js';
+import { rectSize, terraceClaim, type LayoutSketch, type SketchRequest } from './layout/sketch.js';
 import { localShapeRing, MIN_TREES, treeBudget, treeCandidates } from './layout/trees.js';
 import {
   baseFillFor,
@@ -112,12 +112,12 @@ import { buildBriefs } from './design/brief-builder.js';
 import { buildExplanation, decide, placedSentence } from './design/decisions.js';
 import { NO_ADJUSTMENTS, slotBarred } from './design/types.js';
 import { interpretRequirements, withinCapacity } from './design/requirements.js';
-import { analyseSite, localView, lowSides } from './design/site-analysis.js';
+import { analyseSite, localShade, localView, lowSides } from './design/site-analysis.js';
 import { scoreConcept } from './design/index.js';
 import { planZones } from './design/zone-planner.js';
 import type { Decision, ZonePlan } from './design/types.js';
 import { defaultParams } from './knowledge/archetypes/index.js';
-import { FEATURE_LIBRARY, placementLadder } from './knowledge/feature-library.js';
+import { FEATURE_LIBRARY, placementLadder, roomSpec } from './knowledge/feature-library.js';
 
 /**
  * Design generation.
@@ -885,6 +885,8 @@ export class ConceptsService {
           .map((priority) => priority.feature),
         privacy: (slotChoice?.brief ?? design.brief).privacy,
         lowSides: lowSides(design.analysis),
+        primaryZone: (slotChoice?.brief ?? design.brief).primaryZone,
+        shade: localShade(design.analysis),
       };
       const sketchRoom = {
         uMin: Math.max(0, grammar.box.uMin),
@@ -939,11 +941,15 @@ export class ConceptsService {
         });
 
         if (geometry) {
-          const terraceFeature: DesiredFeature | null = requested.includes('seating')
-            ? 'seating'
-            : requested.includes('dining')
-              ? 'dining'
-              : null;
+          /*
+           * From the list the composition was given, so the feature the terrace is furnished for is
+           * the one the composition did not reserve a bay for. A hand-drawn sketch reserves no room
+           * for the seating the table would displace, so it keeps the old claim.
+           */
+          const terraceFeature = terraceClaim(
+            request.features,
+            sketch.composed ? request.primaryZone : undefined,
+          );
           terrace = hostFor(
             terraceFeature ?? 'seating',
             FEATURE_SPECS.seating,
@@ -1006,6 +1012,7 @@ export class ConceptsService {
               houseRing,
               boundary,
               nextId,
+              bearing: frame?.wallBearing,
             });
             settled.add(terraceFeature);
             checks.push({
@@ -1048,7 +1055,14 @@ export class ConceptsService {
         }
 
         const entry = assigned.find((candidate) => candidate.feature === feature);
-        const spec = scaledSpec(FEATURE_SPECS[feature], constraints);
+        const spec = scaledSpec(
+          roomSpec(
+            feature,
+            sketch?.composed?.language,
+            (slotChoice?.brief ?? design.brief).primaryZone,
+          ),
+          constraints,
+        );
         const candidates = [
           ...sketch.slots.filter((candidate) => candidate.id === entry?.slotId),
           ...placementLadder(feature).flatMap((kind) =>
@@ -1082,6 +1096,7 @@ export class ConceptsService {
           houseRing,
           boundary,
           nextId,
+          bearing: frame?.wallBearing,
         });
 
         settled.add(feature);
@@ -1149,6 +1164,7 @@ export class ConceptsService {
         houseRing,
         boundary,
         nextId,
+        bearing: frame?.wallBearing,
       });
 
       if (
@@ -1179,7 +1195,14 @@ export class ConceptsService {
       if (surplus <= 0 || zones.length === 0) break;
       if (!REPEATABLE_FEATURES.includes(feature)) continue;
 
-      const spec = scaledSpec(FEATURE_SPECS[feature], constraints);
+      const spec = scaledSpec(
+        roomSpec(
+          feature,
+          sketch?.composed?.language,
+          (slotChoice?.brief ?? design.brief).primaryZone,
+        ),
+        constraints,
+      );
       /*
        * On a composed plan a second helping goes in a spare room the composition reserved for it —
        * one of the bays whose zone is `lounge` — rather than wherever the sampler finds ground.
@@ -1226,6 +1249,7 @@ export class ConceptsService {
         houseRing,
         boundary,
         nextId,
+        bearing: frame?.wallBearing,
       });
 
       surplus -= 1;
@@ -1289,6 +1313,7 @@ export class ConceptsService {
           houseRing,
           boundary,
           nextId,
+          bearing: frame?.wallBearing,
         });
         destinations.push({ outline, name: host.name!, primary: false });
         break;
@@ -1333,6 +1358,7 @@ export class ConceptsService {
             houseRing,
             boundary,
             nextId,
+            bearing: frame?.wallBearing,
           });
         }
       }

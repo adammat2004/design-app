@@ -8,7 +8,8 @@
   "scripts": {
     "setup": "./script/setup",
     "dev": "pnpm --filter @garden-studio/schema build && concurrently -n schema,api,web -c magenta,blue,green \"pnpm --filter @garden-studio/schema dev\" \"pnpm --filter @garden-studio/api dev\" \"pnpm --filter @garden-studio/web dev\"",
-    "build": "pnpm --filter @garden-studio/schema build && pnpm --filter @garden-studio/api build && pnpm --filter @garden-studio/web build",
+    "mobile": "pnpm --filter @garden-studio/ar-contract build && pnpm --filter @garden-studio/mobile start",
+    "build": "pnpm --filter @garden-studio/schema build && pnpm --filter @garden-studio/ar-contract build && pnpm --filter @garden-studio/api build && pnpm --filter @garden-studio/web build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @garden-studio/web test:e2e",

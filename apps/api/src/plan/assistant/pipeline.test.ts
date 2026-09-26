@@ -34,12 +34,10 @@ const connection = await connectTestDatabase();
  * It is one test rather than a suite because it is one claim. What each link does is tested where
  * it lives; this asserts that the links fit.
  *
- * **No model.** The client is the same `Pick<Anthropic, 'messages'>` fake every assistant test uses,
- * so the sentence half is exercised up to the request and no further. Real PostGIS, because the
- * planner places things with the real placer.
+ * **No model.** The client is the same `messages.create` fake every assistant test uses, cast to the
+ * SDK type the service asks for, so the sentence half is exercised up to the request and no
+ * further. Real PostGIS, because the planner places things with the real placer.
  */
-
-type FakeClient = Pick<Anthropic, 'messages'>;
 
 /** The model id and nothing else: this suite never reaches a network. */
 function config(): ConfigService {
@@ -47,7 +45,7 @@ function config(): ConfigService {
 }
 
 /** A model that answers with exactly these intents, having been asked properly. */
-function client(intents: DesignIntent[]): { fake: FakeClient; asked: () => unknown } {
+function client(intents: DesignIntent[]): { fake: Anthropic; asked: () => unknown } {
   let request: unknown = null;
 
   const fake = {
@@ -70,7 +68,7 @@ function client(intents: DesignIntent[]): { fake: FakeClient; asked: () => unkno
         };
       },
     },
-  } as unknown as FakeClient;
+  } as unknown as Anthropic;
 
   return { fake, asked: () => request };
 }

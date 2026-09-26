@@ -12,6 +12,7 @@ import {
   FocalStrategySchema,
   FunctionalZoneTypeSchema,
   GardenIntentSchema,
+  GeometryLanguageSchema,
   isAtLeast,
   LayoutArchetypeIdSchema,
   PriorityTierSchema,
@@ -80,6 +81,19 @@ export const DesignBriefSchema = z.object({
   featurePriorities: z.array(FeaturePrioritySchema).default([]),
   excludedFeatures: z.array(ExcludedFeatureSchema).default([]),
   style: StyleDirectionSchema.nullable().default(null),
+  /**
+   * The shape language this concept is drawn in, or `null` where the style leaves it open.
+   *
+   * Set from the style for the deterministic brief (`STYLE_RULES[style].language`), and the one field
+   * a model may use to make two concepts differ in their drawing rather than their contents. The
+   * candidate loop tries this language first, and the geometry principle judges the plan against it
+   * rather than against whatever its open space happened to be. Nullable and defaulted, so every
+   * stored brief still parses; a model writes `"none"` for null, as it does for `focal`, because a
+   * structured-output enum is a list of strings.
+   */
+  geometryLanguage: z
+    .preprocess((value) => (value === 'none' ? null : value), GeometryLanguageSchema.nullable())
+    .default(null),
   /**
    * How much upkeep this concept is allowed to ask of its owner, or `null` when nobody said.
    *

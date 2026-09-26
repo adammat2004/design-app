@@ -9,10 +9,46 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## In flight — AR viewer (`docs/ar/ar-architecture.md`, started 26 Sep 2026)
+
+Two developers: A keeps the web app, API and geometry; B owns `apps/mobile`. Built so far: the
+shared scene format `packages/ar-contract` (draft v0, coordinate convention pinned by tests, fixture
+mesh helpers), and an Expo SDK 57 skeleton in `apps/mobile` that lists and opens a hand-written
+sample garden in Expo Go. No AR view, no builder, no endpoint. The roadmap is §13 of the AR doc.
+
+- [ ] **Bind the API to localhost.** `apps/api/src/main.ts` calls `app.listen(port)` with no host,
+      so it accepts connections on every interface while its log line says localhost. There is no
+      auth, so anyone on the same Wi-Fi can read and edit every plan and spend the Anthropic key.
+      `listen(port, process.env.HOST ?? '127.0.0.1')` and a truthful log line. **Do before any phone
+      talks to the API.** Effort: XS.
+- [ ] **(B) AR spike.** ViroReact in a development build; place the sample garden's 3 × 3 m pergola
+      and a 1 m cube on a detected plane; check with a tape measure (within 3%). Measure: custom
+      `Mesh` through Viro geometry with a tiled texture, one GLB loads, 300 nodes at 30 fps, and
+      Viro autolinking under the pnpm workspace. Decide whether Viro stays.
+- [ ] **(A) Move the pure structure and roof geometry into `packages/schema`.**
+      `apps/web/src/lib/materials/symbols/structures.ts` (pergola posts, shed and gazebo roofs,
+      garden-room parts) and the geometry half of `apps/web/src/lib/render/roof.ts` (`roofFor` mixes
+      it with 2D lighting). The scene builder needs both and cannot import the web app.
+- [ ] **(A) The scene builder: `PlanDocument → ARScene`.** Pure, reusing `geometryOutline`,
+      `boundaryRuns`, `levelBands`, `stepFlight`, `resolveEdges`, `heightFor`, `samplePlanting`.
+      Surfaces cut to be disjoint, meshes triangulated with upward-facing winding (`earcut`, which
+      handles holes), plant instances capped. Golden scenes for the eleven fixture plans, checked in
+      CI.
+- [ ] **(A) "Download AR scene" (`.ar.json`) on the web**, and (B) a file source on the phone:
+      real designs on a phone with no network exposure.
+- [ ] **(B) Two-point alignment** on the house wall's reference points, with the measured-against-
+      design length check.
+- [ ] **(A) `GET /plan-projects/:id/ar-scene`, derived on read**, then read-only share links
+      (`/ar/:token`) and a guard so another device can reach nothing else.
+
+---
+
 ## In flight — composing gardens rather than placing features (plan: `~/.claude/plans/i-want-you-to-wondrous-crab.md`)
 
-Phases 0, 1 and 2 are built (24–25 Sep 2026). All seven compositions are composed; the preview and
-the built plan are held to agreeing; planting depth follows its job. See "Composing a garden rather
+Phases 0–4 are built (24–26 Sep 2026). All seven compositions are composed; the preview and the
+built plan are held to agreeing; planting depth follows its job; rooms take the plan's shape
+language and the room a concept is about is its most generous; each composition is drawn in every
+language it speaks and the brief can say which. See "Composing a garden rather
 than placing features" in CLAUDE.md for the rules, and `scripts/eval-generator.baseline.md` for
 the numbers at each step.
 
@@ -32,26 +68,55 @@ the numbers at each step.
       one is reached, and give those plots a composed answer.
 - [ ] **Extract realisation from `concepts.service.ts` into its own service** (plan Phase 5).
 - [ ] **A store on a garden six metres wide is always in the view from the doors**: the cone is the
-      whole width there, and it is why the sequence is the weakest composition (0.810). The answer is
+      whole width there, and it is why the sequence is the weakest composition (0.792). The answer is
       probably a store by the house on the gate side rather than at the far end — a ladder question,
-      and it would also answer "the store belongs by the gate" (`relationship-unmet`, 39).
-- [ ] **Three paths still cross a lawn**, all from a soft-edged destination garden, whose walk runs
-      beside a curved lawn rather than round it.
-- [ ] **Seating in shade: 75.** A north-facing plot wants a second sitting area in the sun, and a
-      composition can now say where one would go: a spare `lounge` bay on the sunny side.
-- [ ] **Too many materials (81) and sparse canopy (60)** are untouched by composition; the first is
+      and it would also answer "the store belongs by the gate" (`relationship-unmet`, 33).
+- [x] **No path crosses a lawn** (`route-crosses-panel` 3 → 0), since the sweeping lawn's curve
+      stopped bulging past its own rectangle.
+- [ ] **Seating in shade: 81** (75 before Phase 3). A room that wants the sun now takes the first
+      place on its list that is not mostly in shade (`request.shade`), but the terrace itself is at
+      the house and a north-facing plot's terrace is in shade whatever happens. Moving the sofas off
+      a dining-led terrace put two things there in shade where there had been one; the answer is a
+      second sitting area composed on the sunny side, not only preferred there.
+- [ ] **Too many materials (87) and sparse canopy (63)** are untouched by composition; the first is
       a `materialFor` question, the second the tree budget against what the bays leave room for.
-- [ ] **Phase 2 leftovers: framing masses at the lawn's near corners, threshold masses at bay
-      mouths, deliberate negative space in front of the focal point.** Depth by role landed as the
-      screening rule and the measured spread; these three are shape rather than depth.
-- [ ] **Phase 3: geometry language and proportion.** Give `asymmetric_geometric` an idiom, add
-      per-language footprints (a square fire pit in a rectilinear plan), and size bays from
-      `ZONE_AREAS` by importance (`no-primary-space`, 33).
-- [ ] **Phase 4: compositions as candidates.** Add `language`, `focalAnchor` and `openShape` to
-      `CandidateParams`, and the optional categorical fields to `DesignBrief`. `geometry-mixed`
-      would then read the brief rather than the plan's majority.
-- [ ] **Diversity still guesses a lawn's shape from vertex count** on hand-drawn plans. Composed
-      sketches carry `composed.language`, and the signature should read it.
+      Materials rose from 81 because spare seats now succeed more often and bring a paving of their own.
+- [x] **Phase 2 leftovers.** Framing: the borders step in at the lawn's near corners where no path
+      or room takes them. Negative space: no tree in the sightline and no room stacked in front of
+      the thing that ends the view.
+- [ ] **Wings at a room's mouth were built and taken out.** Measured on the test plots, the rooms
+      reach under a metre into the lawn — the composition already keeps them in the borders — so a
+      planted wing down a room's open side almost never had anywhere to go. Worth revisiting only if
+      rooms start standing further out.
+- [x] **Phase 3: geometry language and proportion.** Per-language footprints (`footprintBy`,
+      `specIn`), `asymmetric_geometric` for a modern terrace-and-lawn, the main room grown and the
+      terrace held to it (`roomSpec`, `terraceClaim`, the two-pass `composeGarden`).
+- [ ] **`no-primary-space` is 27, down from 33 but not gone.** What is left: plans drawn by the
+      hand-drawn fallback (which takes no primary zone), a planting-led concept whose primary zone
+      resolves to nothing, and plots where the lawn is too small for the hold to reach — the hold
+      takes at most 30% of the terrace's width, because past that the freed width only became a
+      planted flank and put the L-shape reference over its planting band.
+- [ ] **Planting depth varies on 80% of plans, down from 94%.** Partly the asymmetric plan, which
+      leaves its shallow side a mowing edge on purpose; partly the side-by-side lawn-led proportions;
+      partly spare seats set into the border band beside an inboard path. Not investigated further.
+- [ ] **The worst plan is 0.768, down from 0.781** — the sequence of rooms on the long-narrow plot,
+      which the candidate loop now picks for two slots. Its faults are the store-in-view item above.
+- [ ] **A curved lawn beside a straight path is straight along it** (`geometry-mixed`, 6). Paths are
+      laid as dog-legs on the frame's axes; in a soft plan they could follow the curve.
+- [x] **Phase 4: compositions as candidates.** `CandidateParams.language` and `framed`, each
+      archetype's `languages`, `drawings()` enumerating them, `DesignBrief.geometryLanguage` (stated
+      on the recommendation only) read by `geometry-mixed` and reconciled from a model against the
+      style. Sets offering a straight and a curved garden 69% → 85% at no cost in score.
+- [x] **`focalAnchor` was deliberately not added to the candidates.** The `destination` parameter already says
+      whether the far room stands on the view or in the corner, and a second axis for the same
+      decision would enumerate the same drawings twice.
+- [ ] **A seating deck can stand inside the lawn on the entertaining fixture** (`10-entertaining`
+      on the composition sheet, and in Phase 3's schematic before it). A side bay half way down a
+      border whose lawn wraps round it; `feature-in-open-space` is 14 across the harness.
+- [ ] **Inside the composition bands 74% → 72%** with the drawings on. The alternative drawings are
+      chosen for their score, and the score and the bands disagree about a few of them.
+- [x] **Diversity reads a lawn's curve off its outline** (`curvedRing`) rather than its vertex
+      count, which had called a notched rectangle curved.
 
 ## Boundary treatments: what is left open (22 Sep 2026)
 
@@ -845,7 +910,9 @@ grade and the shadows that shipped.
       `BoundaryRun.height`, and every door and window with an offset, a width and a sill. What is
       still missing is a ground model, which is a deliberate refusal — see `levels.ts`.
       Either build it or drop the dependencies — carrying an unused 3D stack is bundle weight
-      and a question a marker will ask.
+      and a question a marker will ask. **Since 26 Sep 2026** the AR work gives it a use: a
+      development-only web page rendering an `ARScene` with R3F would let the scene builder be
+      checked without a phone (see `docs/ar/ar-architecture.md`). Decide once the builder exists.
 
 - [x] **Drag a gate or a door along its side on the plan.** `AttachmentHandle` does it for both,
       projecting the pointer onto the parent segment so the thing cannot leave it; end handles
@@ -889,8 +956,9 @@ grade and the shadows that shipped.
       by something other than its own scorer. **Blocked by:** having any real usage at all.
       **Effort:** S for the script, and the rest is a user study.
 
-- [ ] **Mobile / responsive.** Not mentioned anywhere in the codebase or any review. A garden
-      plan on a phone is a real question (pinch-zoom on Konva, panels that do not fit).
+- [ ] **Mobile / responsive.** A garden plan on a phone is a real question (pinch-zoom on Konva,
+      panels that do not fit). Note this is the *web editor* on a phone, and it is separate from
+      `apps/mobile`, which is an AR viewer and deliberately never an editor.
 
 ---
 
