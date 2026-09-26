@@ -9,6 +9,67 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## In flight — composing gardens rather than placing features (plan: `~/.claude/plans/i-want-you-to-wondrous-crab.md`)
+
+Phases 0, 1 and 2 are built (24–25 Sep 2026). All seven compositions are composed; the preview and
+the built plan are held to agreeing; planting depth follows its job. See "Composing a garden rather
+than placing features" in CLAUDE.md for the rules, and `scripts/eval-generator.baseline.md` for
+the numbers at each step.
+
+- [x] **`destination_garden` composed** — far room first, a planted screen, the walk down the side.
+- [x] **`linear_sequence`, `side_by_side` and `courtyard` composed** — the sequence as the
+      destination mode read along a corridor, `beside.ts` and `court.ts` for the other two.
+- [x] **The schematic judging sheet** — `00-schematic-sheet.png` from `pnpm render:plan`.
+- [x] **The `composed-good` / `composed-poor` gallery pair.**
+- [x] **The preview/realisation parity test** — `parity.test.ts`; it found the two placement budgets
+      disagreeing, which is what took requested features drawn from 82% to 90%.
+- [x] **Phase 2: planting shapes space** — the side-zone band stops at the garden room, screening
+      beds only where a boundary is too low to screen, depth varying by side measured by the harness.
+- [ ] **Delete the hand-drawn sketches once nothing declines to them** (plan Phase 5):
+      `LayoutArchetype.sketch`, each archetype's `handDrawn()`, `designedBeds`, `slotIn`/`edgeBed`,
+      `layout/templates/` and `golden.test.ts`. They are still the fallback where a composition
+      declines — a plot that cannot hold an essential round a lawn — so first measure how often each
+      one is reached, and give those plots a composed answer.
+- [ ] **Extract realisation from `concepts.service.ts` into its own service** (plan Phase 5).
+- [ ] **A store on a garden six metres wide is always in the view from the doors**: the cone is the
+      whole width there, and it is why the sequence is the weakest composition (0.810). The answer is
+      probably a store by the house on the gate side rather than at the far end — a ladder question,
+      and it would also answer "the store belongs by the gate" (`relationship-unmet`, 39).
+- [ ] **Three paths still cross a lawn**, all from a soft-edged destination garden, whose walk runs
+      beside a curved lawn rather than round it.
+- [ ] **Seating in shade: 75.** A north-facing plot wants a second sitting area in the sun, and a
+      composition can now say where one would go: a spare `lounge` bay on the sunny side.
+- [ ] **Too many materials (81) and sparse canopy (60)** are untouched by composition; the first is
+      a `materialFor` question, the second the tree budget against what the bays leave room for.
+- [ ] **Phase 2 leftovers: framing masses at the lawn's near corners, threshold masses at bay
+      mouths, deliberate negative space in front of the focal point.** Depth by role landed as the
+      screening rule and the measured spread; these three are shape rather than depth.
+- [ ] **Phase 3: geometry language and proportion.** Give `asymmetric_geometric` an idiom, add
+      per-language footprints (a square fire pit in a rectilinear plan), and size bays from
+      `ZONE_AREAS` by importance (`no-primary-space`, 33).
+- [ ] **Phase 4: compositions as candidates.** Add `language`, `focalAnchor` and `openShape` to
+      `CandidateParams`, and the optional categorical fields to `DesignBrief`. `geometry-mixed`
+      would then read the brief rather than the plan's majority.
+- [ ] **Diversity still guesses a lawn's shape from vertex count** on hand-drawn plans. Composed
+      sketches carry `composed.language`, and the signature should read it.
+
+## Boundary treatments: what is left open (22 Sep 2026)
+
+- [ ] **A run cannot be dragged whole along its side.** Its ends drag, and a click adds one over the
+      free stretch, but moving a 1.4 m run a metre along means dragging both ends. A body drag has to
+      be gated the way `AttachmentHandle` gates a gate's, or it swallows the handles on a short run.
+- [ ] **A freestanding run — a kerb along a drive with nothing either side — still cannot be said.** A
+      run belongs to a host's boundary; the parking TODO will need one that belongs to nothing.
+- [ ] **The graph samples at 0.1 m and is rebuilt on every scene build.** Measured on 22 Sep 2026 at
+      1.7–3.1 ms per `resolveEdges` across the fixtures (59 elements for the worst). The editor
+      resolves twice per render, four times with the Edges tab open, so ~12 ms at worst — inside a
+      drag's budget but not free. A fingerprint cache on outlines, materials and walls is the step if
+      a larger plan shows it.
+- [ ] **A raised host gets no kerb, only its retaining face.** Right today; a raised bed with a
+      coping course would want both, and the rules would need to know which is which.
+- [ ] **"Custom" per side of a path lists left and right, never "the end".** A path's end caps are not
+      sides; a step at the end of a path is the steps element's job.
+
 ## In flight — professional-render programme (plan: `~/.claude/plans/i-want-to-upgrade-happy-penguin.md`)
 
 Closing the gap between our drawing and `target_design.png`. The gap was traced to five causes,

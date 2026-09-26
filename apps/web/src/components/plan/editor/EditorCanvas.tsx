@@ -2,14 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Circle, Group, Layer, Line, Stage } from 'react-konva';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Trash2 } from 'lucide-react';
 import {
   boundaryRuns,
   computeZones,
+  cutEdgeMasksFor,
+  edgePlanOf,
+  freeSpanAt,
   lightDirection,
+  resolveEdges,
+  sampleChain,
+  sideChains,
+  spanOfRun,
   SYMBOLS,
+  treatmentSpec,
   type Point,
 } from '@garden-studio/schema';
+import { EdgeEditLayer } from './EdgeEditLayer';
+import { useEdgeRules } from '@/lib/edge-rules';
 import { draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
 import {
@@ -151,10 +161,11 @@ export function EditorCanvas() {
    * real view) disagreed with what was on screen. See the note in CLAUDE.md.
    */
   const shadowsVisible = usePlanEditorStore((state) => state.shadowsVisible);
+  const edgeRules = useEdgeRules();
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
-    house: boundaryDraft.house, site: boundaryDraft, elements },
+    house: boundaryDraft.house, site: boundaryDraft, elements, edgeRules },
     { view: 'plan', maturity, shadows: shadowsVisible, rendererVersion: browserRendererVersion() }),
-  [boundaryDraft, elements, maturity, shadowsVisible]);
+  [boundaryDraft, elements, maturity, shadowsVisible, edgeRules]);
 
   /*
    * One sun for the whole drawing. `undefined` means the plan has never said where it is, and
@@ -174,6 +185,21 @@ export function EditorCanvas() {
   const settledElements = gestureSnapshot?.elements ?? elements;
   // Hold neighbouring beds and global shadows still during a gesture; refresh on release.
   const exclusions = useMemo(() => exclusionMap(settledElements), [settledElements]);
+  /*
+   * Which sides of each surface carry the cut edge, decided from the settled plan for the same
+   * reason the exclusions are: a bed dragged across its neighbours must not repaint them per frame.
+   */
+  const edgeContext = useMemo(
+    () => ({
+      boundary: draftPolygon(boundaryDraft),
+      house: boundaryDraft.house ? housePolygon(boundaryDraft.house) : undefined,
+    }),
+    [boundaryDraft],
+  );
+  const cutEdges = useMemo(
+    () => cutEdgeMasksFor(settledElements, resolveEdges(settledElements, edgeContext, edgeRules)),
+    [settledElements, edgeContext, edgeRules],
+  );
 
   /*
    * While the AI has the plan its overlay draws the selection, so the editor's own must not.
@@ -186,6 +212,28 @@ export function EditorCanvas() {
   const storedSelection = usePlanEditorStore(selectedElement);
   const selected = aiActive || comparing ? null : storedSelection;
   const selectedId = usePlanEditorStore((state) => state.selectedId);
+  /*
+   * The selected surface's boundary, open for editing — the Edges tab in the inspector is what opens
+   * it, and `edgeEdit` names the host. Resolved against the live plan rather than the settled one,
+   * because a handle drag *is* the gesture and has to see its own frames.
+   */
+  const edgeEdit = usePlanEditorStore((state) => state.edgeEdit);
+  const edgeHost = selected && edgeEdit?.hostId === selected.id ? selected : null;
+  const edgeView = useMemo(() => {
+    if (!edgeHost) return null;
+    const resolution = resolveEdges(elements, edgeContext, edgeRules);
+    return {
+      resolution,
+      chains: resolution.graph.chainsOf(edgeHost.id),
+      runs: resolution.runs.filter((run) => run.hostId === edgeHost.id),
+      editable: edgePlanOf(edgeHost).mode === 'custom',
+    };
+  }, [edgeHost, elements, edgeContext, edgeRules]);
+  const [bareHover, setBareHover] = useState<{ side: number; from: number; to: number } | null>(null);
+  const selectedEdgeRun =
+    edgeView && edgeEdit?.selectedRunId
+      ? (edgeView.runs.find((run) => run.runId === edgeEdit.selectedRunId) ?? null)
+      : null;
   const mode = usePlanEditorStore((state) => state.mode);
   const gridVisible = usePlanEditorStore((state) => state.gridVisible);
   const labelsVisible = usePlanEditorStore((state) => state.labelsVisible);
@@ -290,6 +338,27 @@ export function EditorCanvas() {
 
     const store = usePlanEditorStore.getState();
     if (!store.selectedId) return;
+
+    /*
+     * While a surface's edges are open, Delete and Escape belong to them. Delete takes away the
+     * selected run and nothing else — deleting the whole patio because a run was not selected would
+     * be the most expensive keystroke in the editor. Escape steps out one level at a time: the run,
+     * then the tab.
+     */
+    if (store.edgeEdit && store.edgeEdit.hostId === store.selectedId) {
+      const { selectedRunId } = store.edgeEdit;
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        if (selectedRunId) store.removeEdgeRun(store.selectedId, selectedRunId);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (selectedRunId) store.selectEdgeRun(null);
+        else store.closeEdgeEdit();
+        return;
+      }
+    }
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
@@ -468,6 +537,7 @@ export function EditorCanvas() {
                   part="ground"
                   rich={richReady}
                   exclusions={exclusions.get(element.id)}
+                  cutEdge={cutEdges.get(element.id)}
                   element={element}
                   transform={transform}
                   selected={element.id === selectedId && element.symbol !== 'pergola'}
@@ -490,6 +560,7 @@ export function EditorCanvas() {
                   key={`object-${element.id}`}
                   part={element.symbol === 'pergola' ? 'object' : 'all'}
                   rich={richReady}
+                  cutEdge={cutEdges.get(element.id)}
                   element={element}
                   transform={transform}
                   selected={element.id === selectedId}
@@ -553,7 +624,7 @@ export function EditorCanvas() {
               />
 
               {/* Resize and rotate, the same handles the house and step 2's features use. */}
-              {selected && selected.shape.kind === 'rect' && !isLocked(selected) ? (
+              {selected && !edgeHost && selected.shape.kind === 'rect' && !isLocked(selected) ? (
                 <ShapeHandles
                   centre={selected.shape.centre}
                   rotation={selected.shape.rotation}
@@ -571,6 +642,50 @@ export function EditorCanvas() {
                   onGestureEnd={() => usePlanEditorStore.getState().endGesture()}
                   testIdPrefix="element"
                 />
+              ) : null}
+
+              {/*
+                The selected surface's edges, while its Edges tab is open.
+
+                Fragments inside this Layer, never a Layer of their own — see the layer budget note.
+                Hover, add and the end handles are live in Custom only; in Auto the runs are drawn so
+                the automatic answer can be inspected, and nothing on them listens.
+              */}
+              {edgeHost && edgeView ? (
+                <Group>
+                  <EdgeEditLayer
+                    chains={edgeView.chains}
+                    runs={edgeView.runs}
+                    editable={edgeView.editable}
+                    selectedRunId={edgeEdit?.selectedRunId ?? null}
+                    hoveredRunId={edgeEdit?.hoveredRunId ?? null}
+                    bareHover={edgeView.editable ? bareHover : null}
+                    transform={transform}
+                    listening={!panActive}
+                    onHoverBare={(side, distance) => {
+                      if (distance === null) return setBareHover(null);
+                      const span = freeSpanAt(
+                        edgeHost,
+                        edgeView.resolution.graph.intervalsOf(edgeHost.id),
+                        side,
+                        distance,
+                      );
+                      setBareHover(span ? { side, ...span } : null);
+                    }}
+                    onAddAt={(side, distance) => {
+                      setBareHover(null);
+                      usePlanEditorStore.getState().addEdgeRunAt(edgeHost.id, side, distance);
+                    }}
+                    onSelectRun={(runId) => usePlanEditorStore.getState().selectEdgeRun(runId)}
+                    onHoverRun={(runId) => usePlanEditorStore.getState().hoverEdgeRun(runId)}
+                    onEndDragStart={() => usePlanEditorStore.getState().beginGesture()}
+                    onEndDrag={(runId, end, distance) =>
+                      usePlanEditorStore.getState().setEdgeRunEndLive(edgeHost.id, runId, end, distance)
+                    }
+                    onEndDragEnd={() => usePlanEditorStore.getState().endGesture()}
+                    readEnd={(runId, end) => runEndPoint(edgeHost.id, runId, end)}
+                  />
+                </Group>
               ) : null}
 
               {/*
@@ -693,6 +808,33 @@ export function EditorCanvas() {
         ) : null}
 
         {/*
+          The selected run's toolbar, beside the run it is about — the reference's floating bar. HTML
+          rather than Konva for the reason the AI chip is: it is text somebody reads and a button
+          somebody presses. Offset out from the surface so it never sits on the handles.
+        */}
+        {edgeHost && edgeView?.editable && selectedEdgeRun ? (
+          <EdgeRunToolbar
+            at={runLabelPoint(selectedEdgeRun.points)}
+            transform={transform}
+            label={`${treatmentSpec(selectedEdgeRun.treatment).label} · ${formatLength(selectedEdgeRun.length, unit)}`}
+            onRemove={() => {
+              if (selectedEdgeRun.runId)
+                usePlanEditorStore.getState().removeEdgeRun(edgeHost.id, selectedEdgeRun.runId);
+            }}
+          />
+        ) : null}
+
+        {edgeHost && edgeView?.editable && bareHover && !selectedEdgeRun ? (
+          <span
+            data-testid="edge-add-hint"
+            className="absolute -translate-x-1/2 -translate-y-[140%] rounded-md border border-garden-line bg-white/95 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-garden-ink shadow-sm"
+            style={hintStyle(edgeView.chains[bareHover.side], bareHover, transform)}
+          >
+            Click to add edging
+          </span>
+        ) : null}
+
+        {/*
           The AI's own label, in HTML for the reason the size badge is: text on a canvas cannot be
           selected, scaled by the user's own font settings, or read by a screen reader.
         */}
@@ -785,6 +927,56 @@ export function EditorCanvas() {
             </button>
           </li>
         ))}
+        {/*
+          Konva lines are not DOM, so every run and every side gets a real button — keyboard access,
+          and the only thing Playwright can aim at. The ± buttons are the keyboard's version of
+          dragging an end, a tenth of a metre at a time.
+        */}
+        {edgeHost && edgeView?.editable
+          ? edgeView.chains.map((chain) => (
+              <li key={`edge-add-${chain.side}`}>
+                <button
+                  type="button"
+                  data-testid={`canvas-edge-add-${chain.side}`}
+                  onClick={() =>
+                    usePlanEditorStore.getState().addEdgeRunAt(edgeHost.id, chain.side, chain.length / 2)
+                  }
+                >
+                  Add edging to side {chain.side + 1}
+                </button>
+              </li>
+            ))
+          : null}
+        {edgeHost && edgeView?.editable
+          ? edgeView.runs.flatMap((run) =>
+              run.runId
+                ? [
+                    <li key={`edge-run-${run.runId}`}>
+                      <button
+                        type="button"
+                        data-testid={`canvas-edge-run-${run.runId}`}
+                        aria-pressed={edgeEdit?.selectedRunId === run.runId}
+                        onClick={() => usePlanEditorStore.getState().selectEdgeRun(run.runId)}
+                      >
+                        {treatmentSpec(run.treatment).label} on side {run.side + 1}
+                      </button>
+                      {(['from', 'to'] as const).flatMap((end) =>
+                        ([-0.1, 0.1] as const).map((step) => (
+                          <button
+                            key={`${end}${step}`}
+                            type="button"
+                            data-testid={`canvas-edge-run-${run.runId}-${end}-${step > 0 ? 'out' : 'in'}`}
+                            onClick={() => nudgeRunEnd(edgeHost.id, run.runId!, end, step)}
+                          >
+                            Move the {end === 'from' ? 'start' : 'end'} {step > 0 ? 'on' : 'back'}
+                          </button>
+                        )),
+                      )}
+                    </li>,
+                  ]
+                : [],
+            )
+          : null}
       </ul>
     </div>
   );
@@ -834,6 +1026,7 @@ function ElementShape({
   light,
   part,
   exclusions,
+  cutEdge,
   rich = false,
 }: {
   element: DesignElement;
@@ -845,6 +1038,7 @@ function ElementShape({
   light?: Point;
   part?: ElementPass;
   exclusions?: Point[][];
+  cutEdge?: boolean[];
   rich?: boolean;
 }) {
   /*
@@ -911,6 +1105,7 @@ function ElementShape({
         interacting={interacting}
         part={part}
         exclusions={exclusions}
+        cutEdge={cutEdge}
       />}
 
       {/*
@@ -935,5 +1130,110 @@ function ElementShape({
         />
       ) : null}
     </Group>
+  );
+}
+
+/* ---------------------------------------------------------------- edge editing */
+
+/** Where a stored run's end actually is, read from the store — so a handle can be put back on it. */
+function runEndPoint(hostId: string, runId: string, end: 'from' | 'to'): Point | null {
+  const host = usePlanEditorStore.getState().present.elements.find((element) => element.id === hostId);
+  if (!host) return null;
+  const run = edgePlanOf(host).runs.find((candidate) => candidate.id === runId);
+  if (!run) return null;
+  const chain = sideChains(host.shape)[run.side];
+  if (!chain) return null;
+  const span = spanOfRun(chain, run);
+  if (!span) return null;
+  return sampleChain(chain.measure, end === 'from' ? span.from : span.to).at;
+}
+
+/**
+ * The keyboard's version of dragging an end: a tenth of a metre, as one undo entry.
+ *
+ * Positive grows the run outward — the start moves back, the end moves on — so "on" and "back" mean
+ * the same thing at either end.
+ */
+function nudgeRunEnd(hostId: string, runId: string, end: 'from' | 'to', step: number): void {
+  const store = usePlanEditorStore.getState();
+  const host = store.present.elements.find((element) => element.id === hostId);
+  if (!host) return;
+  const run = edgePlanOf(host).runs.find((candidate) => candidate.id === runId);
+  const chain = run ? sideChains(host.shape)[run.side] : undefined;
+  const span = run && chain ? spanOfRun(chain, run) : null;
+  if (!span) return;
+
+  store.beginGesture();
+  store.setEdgeRunEndLive(hostId, runId, end, end === 'from' ? span.from - step : span.to + step);
+  store.endGesture();
+}
+
+/** The middle of a run by length, which is where its toolbar belongs. */
+function runLabelPoint(points: Point[]): Point {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) total += edgeLength(points[i - 1]!, points[i]!);
+
+  let walked = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const step = edgeLength(points[i - 1]!, points[i]!);
+    if (walked + step >= total / 2 && step > 0) {
+      const t = (total / 2 - walked) / step;
+      const a = points[i - 1]!;
+      const b = points[i]!;
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    walked += step;
+  }
+  return points[0] ?? { x: 0, y: 0 };
+}
+
+function hintStyle(
+  chain: ReturnType<typeof sideChains>[number] | undefined,
+  span: { from: number; to: number },
+  transform: CanvasTransform,
+): React.CSSProperties {
+  if (!chain) return { display: 'none' };
+  const at = metresToPx(sampleChain(chain.measure, (span.from + span.to) / 2).at, transform);
+  return { left: at.x, top: at.y };
+}
+
+/**
+ * The selected run's floating bar: what it is, how long, and the one destructive action.
+ *
+ * Everything else about the run is in the inspector's Edges tab, which is where a choice between
+ * seven treatments belongs. This is the reference's canvas toolbar, kept to what a person reaches
+ * for while their eyes are on the plan.
+ */
+function EdgeRunToolbar({
+  at,
+  transform,
+  label,
+  onRemove,
+}: {
+  at: Point;
+  transform: CanvasTransform;
+  label: string;
+  onRemove: () => void;
+}) {
+  const px = metresToPx(at, transform);
+
+  return (
+    <div
+      data-testid="edge-run-toolbar"
+      className="pointer-events-auto absolute flex -translate-x-1/2 -translate-y-[150%] items-center gap-1 rounded-md border border-garden-line bg-white py-1 pr-1 pl-2.5 text-[11px] font-medium whitespace-nowrap text-garden-ink shadow-md"
+      style={{ left: px.x, top: px.y }}
+    >
+      <span>{label}</span>
+      <button
+        type="button"
+        data-testid="edge-run-remove"
+        aria-label="Remove edging from this segment"
+        title="Remove edging from this segment"
+        onClick={onRemove}
+        className="rounded p-1 text-garden-muted hover:bg-red-50 hover:text-red-700"
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </div>
   );
 }

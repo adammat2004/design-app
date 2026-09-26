@@ -5,6 +5,16 @@ import { createCanvas, loadImage } from '@napi-rs/canvas';
 import {
   boundaryPolygon,
   boundingBox,
+  elementCentreline,
+  elementOutline,
+  gardenDoors,
+  housePolygon,
+  isCounted,
+  isTreeSymbol,
+  openingCentre,
+  openingNormal,
+  polygonCentroid,
+  resolveSymbol,
   lightDirection,
   nightFraction,
   readPlanDocument,
@@ -24,6 +34,7 @@ import { drawPlan, type PlanContext, type PlanScene } from '../src/lib/materials
 import type { BuildOptions } from '../src/lib/render/build-scene';
 import type { MakeCanvas, PatternCanvas } from '../src/lib/materials/render-surface-pattern';
 import { preparePreviewDir } from './preview-dir';
+import { edgeRulesOf } from '../src/lib/edge-rules';
 
 /**
  * Renders whole plans to PNGs so they can be looked at.
@@ -75,6 +86,8 @@ function sceneOf(document: PlanDocument): PlanScene {
     house: document.site.house,
     elements: document.layout.elements,
     site: document.site,
+    // The fixture's own brief, so the sheet resolves its edging as the editor would.
+    edgeRules: edgeRulesOf(document.brief),
   };
 }
 
@@ -125,6 +138,212 @@ async function compositionSheet(): Promise<Buffer> {
     const y = Math.floor(index / columns) * cellHeight;
     const prefix = String(index + 1).padStart(2, '0');
     const image = await loadImage(join(OUT_DIR, `${prefix}-${name}-close-visualise.png`));
+    const scale = Math.min((cellWidth - 24) / image.width, (cellHeight - 48) / image.height);
+    context.drawImage(image, x + (cellWidth - image.width * scale) / 2,
+      y + 38 + (cellHeight - 48 - image.height * scale) / 2, image.width * scale, image.height * scale);
+    context.fillStyle = '#243d31';
+    context.font = 'bold 16px sans-serif';
+    context.fillText(`${prefix} · ${name}`, x + 18, y + 26);
+  }
+  return canvas.toBuffer('image/png');
+}
+
+/* ---------------------------------------------------------------- the schematic */
+
+/**
+ * The plan drawn as a designer's diagram: what each thing *is* and why it is there, nothing else.
+ *
+ * The photographic render hides exactly what the generator is judged on. A lawn notched round a
+ * room, a path running beside the grass rather than across it, a store standing clear of the view —
+ * all of it reads at a glance in flat colour and all of it is lost under slabs, sprites and shadows.
+ * So: one flat tone per category, routes as dark strips with an arrow at the end they arrive at,
+ * trees as the canopy's outline, the line out of the garden door, and each element's `purpose` written
+ * on it. A plan that looks right here and wrong in the render has a rendering problem; one that looks
+ * wrong here has a composition problem.
+ *
+ * **The view is drawn as the line out of the door, not the scorer's cone.** The cone's angle is the
+ * API's constant, and restating it here would be a second answer to a settled question; the line is
+ * derived from the door alone, and it is what a focal point terminates.
+ */
+const SCHEMATIC_PX = 26;
+
+const FLAT: Partial<Record<DesignElement['category'], string>> = {
+  lawn: '#bcd9a4',
+  'planting-bed': '#6f9a5c',
+  'paved-area': '#cfc6b6',
+  'gravel-mulch': '#e6dcc3',
+  structure: '#8a6b4e',
+  'water-feature': '#7fb3d5',
+  'existing-feature': '#9a9a9a',
+};
+
+function schematicPlan(document: PlanDocument): Buffer {
+  const boundary = boundaryPolygon(document.site);
+  const box = boundingBox(boundary);
+  const px = SCHEMATIC_PX;
+  const width = Math.ceil((box.width + MARGIN_METRES * 2) * px);
+  const height = Math.ceil((box.length + MARGIN_METRES * 2) * px);
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d');
+  const at = (point: Point) => ({
+    x: (point.x - box.minX + MARGIN_METRES) * px,
+    y: (point.y - box.minY + MARGIN_METRES) * px,
+  });
+  const ring = (points: Point[]) => {
+    context.beginPath();
+    points.forEach((point, index) => {
+      const p = at(point);
+      if (index === 0) context.moveTo(p.x, p.y);
+      else context.lineTo(p.x, p.y);
+    });
+    context.closePath();
+  };
+
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, width, height);
+
+  const elements = document.layout.elements.filter(
+    (element) => !element.hidden && !isCounted(element.category),
+  );
+  const isTree = (element: DesignElement) => {
+    const symbol = resolveSymbol(element);
+    return symbol !== null && isTreeSymbol(symbol);
+  };
+  const isShrub = (element: DesignElement) => element.symbol?.startsWith('shrub') ?? false;
+
+  /* Ground first, base fills paler, so the accents read as the designed ground they are. */
+  for (const element of elements) {
+    if (element.shape.kind === 'polyline' || isTree(element) || isShrub(element)) continue;
+    const tone = FLAT[element.category];
+    if (!tone) continue;
+    context.globalAlpha = element.fillKind === 'base' ? 0.45 : 1;
+    context.fillStyle = tone;
+    ring(elementOutline(element));
+    context.fill();
+    if (element.role === 'feature') {
+      context.globalAlpha = 1;
+      context.strokeStyle = '#3b3b3b';
+      context.lineWidth = 1;
+      context.stroke();
+    }
+  }
+  context.globalAlpha = 1;
+
+  /* Routes: a dark strip, and an arrowhead where the route arrives. */
+  for (const element of elements) {
+    if (element.shape.kind !== 'polyline') continue;
+    context.fillStyle = 'rgba(40, 40, 40, 0.78)';
+    ring(elementOutline(element));
+    context.fill();
+    const line = elementCentreline(element);
+    if (!line || line.length < 2) continue;
+    const tip = at(line[line.length - 1]!);
+    const back = at(line[line.length - 2]!);
+    const angle = Math.atan2(tip.y - back.y, tip.x - back.x);
+    context.fillStyle = '#f4f2ed';
+    context.beginPath();
+    context.moveTo(tip.x, tip.y);
+    context.lineTo(tip.x - 9 * Math.cos(angle - 0.45), tip.y - 9 * Math.sin(angle - 0.45));
+    context.lineTo(tip.x - 9 * Math.cos(angle + 0.45), tip.y - 9 * Math.sin(angle + 0.45));
+    context.closePath();
+    context.fill();
+  }
+
+  /* Trees as the canopy's outline, with the trunk as a dot. */
+  for (const element of elements) {
+    if (!isTree(element) || element.shape.kind !== 'point') continue;
+    const centre = at(element.shape.at);
+    context.strokeStyle = '#2f5a2a';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.arc(centre.x, centre.y, element.shape.radius * px, 0, Math.PI * 2);
+    context.stroke();
+    context.fillStyle = '#2f5a2a';
+    context.beginPath();
+    context.arc(centre.x, centre.y, 2.5, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  /* The house, the boundary, and the line out of the garden door. */
+  if (document.site.house) {
+    context.fillStyle = '#4a4f55';
+    ring(housePolygon(document.site.house));
+    context.fill();
+    const door = gardenDoors(document.site.house)[0];
+    const centre = door ? openingCentre(document.site.house, door) : null;
+    const normal = door ? openingNormal(document.site.house, door) : null;
+    const far = centre && normal ? rayToRing(centre, normal, boundary) : null;
+    if (centre && far) {
+      const a = at(centre);
+      const b = at(far);
+      context.strokeStyle = '#b3372f';
+      context.lineWidth = 1.5;
+      context.setLineDash([6, 5]);
+      context.beginPath();
+      context.moveTo(a.x, a.y);
+      context.lineTo(b.x, b.y);
+      context.stroke();
+      context.setLineDash([]);
+    }
+  }
+  context.strokeStyle = '#1f1f1f';
+  context.lineWidth = 2;
+  ring(boundary);
+  context.stroke();
+
+  /* What each thing is for, written on it. */
+  context.font = '11px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  for (const element of elements) {
+    if (!element.purpose || element.fillKind === 'base' || isTree(element) || isShrub(element)) continue;
+    const outline = elementOutline(element);
+    const line = element.shape.kind === 'polyline' ? elementCentreline(element) : null;
+    const anchor = line ? line[Math.floor(line.length / 2)]! : polygonCentroid(outline);
+    const p = at(anchor);
+    const text = element.purpose.replace(/-/g, ' ');
+    const w = context.measureText(text).width + 6;
+    context.fillStyle = 'rgba(255, 255, 255, 0.82)';
+    context.fillRect(p.x - w / 2, p.y - 7, w, 14);
+    context.fillStyle = '#1d2b22';
+    context.fillText(text, p.x, p.y);
+  }
+
+  return canvas.toBuffer('image/png');
+}
+
+/** Where a ray from `from` along `direction` first leaves `ring`, or `null` if it never crosses it. */
+function rayToRing(from: Point, direction: Point, ring: Point[]): Point | null {
+  let best: number | null = null;
+  for (let i = 0; i < ring.length; i += 1) {
+    const a = ring[i]!;
+    const b = ring[(i + 1) % ring.length]!;
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const denom = direction.x * ey - direction.y * ex;
+    if (Math.abs(denom) < 1e-12) continue;
+    const t = ((a.x - from.x) * ey - (a.y - from.y) * ex) / denom;
+    const s = ((a.x - from.x) * direction.y - (a.y - from.y) * direction.x) / denom;
+    if (t > 1e-6 && s >= 0 && s <= 1 && (best === null || t < best)) best = t;
+  }
+  return best === null ? null : { x: from.x + direction.x * best, y: from.y + direction.y * best };
+}
+
+/** Every fixture's schematic, side by side, the way the composition sheet sets out the renders. */
+async function schematicSheet(): Promise<Buffer> {
+  const columns = 6;
+  const cellWidth = 360;
+  const cellHeight = 460;
+  const rows = Math.ceil(FIXTURE_NAMES.length / columns);
+  const canvas = createCanvas(columns * cellWidth, rows * cellHeight);
+  const context = canvas.getContext('2d');
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  for (const [index, name] of FIXTURE_NAMES.entries()) {
+    const x = (index % columns) * cellWidth;
+    const y = Math.floor(index / columns) * cellHeight;
+    const prefix = String(index + 1).padStart(2, '0');
+    const image = await loadImage(join(OUT_DIR, `${prefix}-${name}-schematic.png`));
     const scale = Math.min((cellWidth - 24) / image.width, (cellHeight - 48) / image.height);
     context.drawImage(image, x + (cellWidth - image.width * scale) / 2,
       y + 38 + (cellHeight - 48 - image.height * scale) / 2, image.width * scale, image.height * scale);
@@ -399,12 +618,14 @@ async function main(): Promise<void> {
         renderPlan(scene, pxPerMetre, { view: 'visualise' }),
       );
     }
+    write(`${prefix}-${name}-schematic`, schematicPlan(document));
   });
 
   write('12-levels', levelsSheet(loadFixture('reference')));
   write('04-shadow-hours', shadowHours(loadFixture('suburban')));
   write('04-lighting-hours', lightingHours(loadFixture('suburban')));
   write('00-composition-sheet', await compositionSheet());
+  write('00-schematic-sheet', await schematicSheet());
 
   console.log(`Wrote ${written.length} PNGs to ${OUT_DIR}`);
   if (existsSync(beforeDir)) console.log(`Previous run kept in ${beforeDir} for comparison`);

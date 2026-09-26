@@ -21,15 +21,10 @@ import { assignByPriority } from '../layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from '../layout/fit.js';
 import type { DesignFrame, LocalBox } from '../layout/frame.js';
 import { rectSize, type LayoutSketch, type Slot, type SketchRequest } from '../layout/sketch.js';
-import { BACKDROP_TREE_INSET, BACKDROP_TREE_SPACING, treeBudget } from '../layout/trees.js';
+import { localShapeRing, treeBudget, treeCandidates } from '../layout/trees.js';
 import { circulationFor } from '../room-policy.js';
-import {
-  accessName,
-  closestPointOnRing,
-  routeBetween,
-  terraceStarts,
-  PATH_STANDOFF,
-} from './circulation.js';
+import { layRoutes } from './circulation.js';
+import { lowSides } from './site-analysis.js';
 import { planZones } from './zone-planner.js';
 import {
   NO_ADJUSTMENTS,
@@ -65,21 +60,6 @@ import {
  * candidate that wins is the candidate that gets built.
  */
 
-/** Offsets tried for a sketched tree, in frame metres: where it was drawn, then nearby. */
-const TREE_NUDGES: [number, number][] = [
-  [0, 0],
-  [-0.6, 0],
-  [0.6, 0],
-  [0, -0.6],
-  [0, 0.6],
-  [-1.2, 0],
-  [1.2, 0],
-  [0, -1.2],
-  [0, 1.2],
-  [-1.2, -1.2],
-  [1.2, 1.2],
-];
-
 /** The fallback canopy radius, for a species whose symbol is not a disc. `concepts.service`'s own. */
 const TREE_RADIUS = 1.6;
 
@@ -95,6 +75,8 @@ export interface PreviewTree {
   at: Point;
   radius: number;
   symbol: SymbolId;
+  /** Why it stands there. */
+  purpose?: string;
 }
 
 /** A previewed tree as the geometry everything else in this file speaks. */
@@ -112,12 +94,15 @@ export interface PlacedItem {
   ring: Point[];
   name: string;
   category: ElementCategory;
+  /** Why the composition put it here: the purpose of the slot it filled. */
+  purpose?: string;
 }
 
 export interface PreviewRoute {
   id: string;
   name: string;
   geometry: PlanGeometry;
+  purpose?: string;
 }
 
 export interface LayoutPreview {
@@ -131,7 +116,7 @@ export interface LayoutPreview {
   trees: PreviewTree[];
   /** The open panel in world metres, before the fill pass cuts it. */
   lawn: { ring: Point[]; category: 'lawn' | 'gravel-mulch' } | null;
-  beds: { name: string; ring: Point[] }[];
+  beds: { name: string; ring: Point[]; purpose?: string | undefined }[];
   /** Requested features the composition could not seat. Realisation samples for these. */
   unplaced: DesiredFeature[];
   /** The sketch wanted a terrace and nothing legal fitted: the worst thing a candidate can say. */
@@ -164,6 +149,10 @@ export interface PreviewRequest {
   lawnAllowed: boolean;
   /** What the repair stage changed about this candidate. Absent draws the unrepaired plan. */
   adjustments?: LayoutAdjustments;
+  /** Rooms beyond the brief the plot can carry. The realisation passes the same number. */
+  extraRooms?: number;
+  /** The view from the doors, in the frame, so a composition can keep the store out of it. */
+  view?: SketchRequest['view'];
 }
 
 export function previewLayout(request: PreviewRequest): LayoutPreview {
@@ -187,6 +176,14 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     gateSide: request.gateSide,
     houseWallLength: frame.wallLength,
     doorWidth: frame.doorWidth,
+    extraRooms: request.extraRooms ?? 0,
+    view: request.view ?? null,
+    gate: request.gateCentre ? frame.toLocal(request.gateCentre) : null,
+    essential: request.brief.featurePriorities
+      .filter((priority) => priority.tier === 'essential')
+      .map((priority) => priority.feature),
+    privacy: request.brief.privacy,
+    lowSides: lowSides(analysis),
   };
 
   const zonePlan = planZones({
@@ -285,122 +282,54 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     obstacles.push(item.ring);
   }
 
-  /* ---- the sketch's own paths ---- */
-
-  /** Which placed rooms already have a way to them, so the guarantee below does not double up. */
-  const connected = new Set<string>();
-
-  const widthOf = (metres: number) =>
-    adjustments.routeWidth === null ? metres : Math.max(metres, adjustments.routeWidth);
-
-  for (const sketched of sketch.paths) {
-    const purpose = 'gate' in sketched.to ? 'access' : 'secondary';
-    const route = circulationFor(purpose, constraints);
-
-    let start: Point;
-    let destination: Point[];
-    let reached: string | null = null;
-    const ignore = [...request.thresholds];
-
-    if ('gate' in sketched.to) {
-      if (!request.gateCentre || !terrace) continue;
-      const inward = inwardFrom(request.gateCentre, request.room);
-      start = {
-        x: request.gateCentre.x + inward.x * PATH_STANDOFF,
-        y: request.gateCentre.y + inward.y * PATH_STANDOFF,
-      };
-      destination = terrace.ring;
-      ignore.push(terrace.ring);
-    } else {
-      const target = [sketched.to.slot, ...(sketched.to.or ?? [])]
-        .map((slot) => filled.get(slot))
-        .find((item) => item !== undefined);
-      if (!target) continue;
-      destination = target.ring;
-      reached = target.id;
-      ignore.push(destination);
-      if (terrace) ignore.push(terrace.ring);
-      start =
-        'terrace' in sketched.from
-          ? terrace
-            ? closestPointOnRing(terrace.ring, polygonCentroid(destination), 0)
-            : frame.toWorld(0, 0)
-          : frame.toWorld(sketched.from.u, sketched.from.v);
-    }
-
-    const via = (sketched.via ?? []).map((point) => frame.toWorld(point.u, point.v));
-    const geometry = routeBetween({
-      start,
-      destination,
-      via,
-      obstacles,
-      boundary: request.boundary,
-      ignore,
-      scope: request.scope,
-      width: widthOf(route.width),
-      skip: adjustments.reroute[sketched.name] ?? 0,
-    });
-    if (!geometry) continue;
-
-    obstacles.push(geometryOutline(geometry));
-    routes.push({ id: nextId(), name: sketched.name, geometry });
-    if (reached) connected.add(reached);
-  }
+  /* ---- the routes: the sketch's own, then a way to anything they missed ---- */
 
   /*
-   * ---- and a way to everything the sketch did not connect ----
-   *
-   * **The preview used to stop at the paths the composition listed, and the harness measured what
-   * that cost.** The real pipeline gives every room it placed an access attempt from the terrace
-   * afterwards, so a candidate chosen partly on its circulation would acquire two or three paths
-   * nobody had scored — and those are the paths that cross the planting, because they are the ones
-   * nothing composed. Routes through planting rose from 26 to 44 across the fixture set when the
-   * candidate loop landed, on layouts whose previews had reported clean circulation.
-   *
-   * Several starting points along the terrace edge for the same reason the service uses them: a
-   * table or an intervening room can block the one obvious approach while three others are open.
+   * `layRoutes` is the realisation's own pass, called with the preview's placements. **The preview
+   * used to stop at the paths the composition listed, and the harness measured what that cost**:
+   * the realised plan then gave every room an access attempt nobody had scored, and those were the
+   * paths that crossed the planting. One function, so the two cannot search differently.
    */
-  if (terrace) {
-    for (const room of placed) {
-      if (room.id === terrace.id || connected.has(room.id)) continue;
-      const purpose = FEATURE_LIBRARY[room.feature].zone === 'utility' ? 'utility' : 'secondary';
-      const route = circulationFor(purpose, constraints);
-      const ignore = [terrace.ring, room.ring, ...request.thresholds];
-
-      /*
-       * Lazily, and that is a measured decision rather than a style. Mapping every start point and
-       * then taking the first non-null computes thirteen routes to find one, each of them testing
-       * four polylines against every obstacle on the plot — and the first start succeeds most of
-       * the time, because it is the nearest point on the terrace. Run eagerly this pass alone put
-       * three and a half seconds on the biggest fixture.
-       */
-      let geometry: PlanGeometry | null = null;
-      for (const start of terraceStarts(terrace.ring, room.ring)) {
-        geometry = routeBetween({
-          start,
-          destination: room.ring,
-          obstacles,
-          boundary: request.boundary,
-          ignore,
-          scope: request.scope,
-          width: widthOf(route.width),
-          skip: adjustments.reroute[accessName(room.name)] ?? 0,
-        });
-        if (geometry) break;
-      }
-      if (!geometry) continue;
-
-      obstacles.push(geometryOutline(geometry));
-      routes.push({ id: nextId(), name: accessName(room.name), geometry });
-      connected.add(room.id);
-    }
+  const lawn = lawnRing(sketch, frame);
+  const toTarget = (item: PlacedItem) => ({
+    id: item.id,
+    ring: item.ring,
+    name: item.name,
+    utility: FEATURE_LIBRARY[item.feature].zone === 'utility',
+  });
+  for (const route of layRoutes({
+    paths: sketch.paths,
+    placed: new Map([...filled].map(([slot, item]) => [slot, toTarget(item)])),
+    rooms: placed.filter((item) => item.id !== terrace?.id).map(toTarget),
+    terrace: terrace?.ring ?? null,
+    gate: request.gateCentre
+      ? { centre: request.gateCentre, inward: inwardFrom(request.gateCentre, request.room) }
+      : null,
+    panel: sketch.composed ? lawn : null,
+    frame,
+    obstacles,
+    thresholds: request.thresholds,
+    boundary: request.boundary,
+    scope: request.scope,
+    adjustments,
+    widthOf: (purpose) => circulationFor(purpose, constraints).width,
+  })) {
+    routes.push({
+      id: nextId(),
+      name: route.name,
+      geometry: route.geometry,
+      purpose: route.elementPurpose,
+    });
   }
 
   /* ---- the lawn and the beds, as the sketch drew them ---- */
 
-  const lawn = lawnRing(sketch, frame);
   const beds = sketch.beds
-    .map((bed) => ({ name: bed.name, ring: shapeRing(bed.shape, frame) }))
+    .map((bed, index) => ({
+      name: bed.name,
+      ring: localShapeRing(bed.shape, frame),
+      purpose: sketch.composed?.bedPurposes[index],
+    }))
     .filter((bed) => bed.ring.length >= 3 && polygonArea(bed.ring) > 0.5);
 
   /* ---- the trees ---- */
@@ -437,46 +366,12 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     return { symbol, radius: spec.kind === 'point' ? spec.radius : TREE_RADIUS };
   };
 
-  for (const point of sketch.trees) {
+  /* The same candidates, in the same order, the realisation plants from. See `treeCandidates`. */
+  for (const candidate of treeCandidates(sketch, frame, request.room, adjustments.treeNudge)) {
     if (trees.length >= treeCap) break;
     const { symbol, radius } = nextTree();
-    const ladder = TREE_NUDGES.slice(adjustments.treeNudge % TREE_NUDGES.length);
-    const at = ladder
-      .map(([du, dv]) => frame.toWorld(point.u + du, point.v + dv))
-      .find((candidate) => treeFits(candidate, radius));
-    if (at) trees.push({ at, radius, symbol });
-  }
-
-  /*
-   * The boundary backdrop the realised pipeline walks, previewed the same way. Without it the
-   * preview scores a garden with three trees in it and the built plan has ten, so enclosure and
-   * canopy — the things the extra trees are *for* — are measured on a plan nobody sees.
-   */
-  const ring = request.room;
-  for (let corner = 0; corner < ring.length && trees.length < treeCap; corner += 1) {
-    const from = ring[corner]!;
-    const to = ring[(corner + 1) % ring.length]!;
-    const run = Math.hypot(to.x - from.x, to.y - from.y);
-    if (run < BACKDROP_TREE_SPACING) continue;
-
-    const steps = Math.floor(run / BACKDROP_TREE_SPACING);
-    const inward = { x: -(to.y - from.y) / run, y: (to.x - from.x) / run };
-    for (let step = 1; step <= steps && trees.length < treeCap; step += 1) {
-      const t = step / (steps + 1);
-      const on = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
-      const { symbol, radius } = nextTree();
-      /* Which side of the edge is the garden is not known here, so both are offered. */
-      for (const direction of [1, -1]) {
-        const at = {
-          x: on.x + inward.x * direction * BACKDROP_TREE_INSET,
-          y: on.y + inward.y * direction * BACKDROP_TREE_INSET,
-        };
-        if (treeFits(at, radius)) {
-          trees.push({ at, radius, symbol });
-          break;
-        }
-      }
-    }
+    const at = candidate.points.find((point) => treeFits(point, radius));
+    if (at) trees.push({ at, radius, symbol, purpose: candidate.purpose });
   }
 
   return {
@@ -514,6 +409,7 @@ function record(
     ring,
     name: spec.planName ?? feature,
     category: spec.category,
+    ...(slot.purpose ? { purpose: slot.purpose } : {}),
   };
 }
 
@@ -525,21 +421,8 @@ function footprintOf(spec: (typeof FEATURE_SPECS)[DesiredFeature]): Footprint {
 
 function lawnRing(sketch: LayoutSketch, frame: DesignFrame): Point[] | null {
   if (!sketch.lawn) return null;
-  const ring = shapeRing(sketch.lawn, frame);
+  const ring = localShapeRing(sketch.lawn, frame);
   return ring.length >= 3 ? ring : null;
-}
-
-function shapeRing(shape: LayoutSketch['beds'][number]['shape'], frame: DesignFrame): Point[] {
-  if (shape.kind === 'rect') {
-    const { rect } = shape;
-    return [
-      frame.toWorld(rect.u0, rect.v0),
-      frame.toWorld(rect.u1, rect.v0),
-      frame.toWorld(rect.u1, rect.v1),
-      frame.toWorld(rect.u0, rect.v1),
-    ];
-  }
-  return shape.points.map((point) => frame.toWorld(point.u, point.v));
 }
 
 /**

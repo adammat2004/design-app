@@ -440,8 +440,8 @@ export function drawPrimitive(context: PlanContext, primitive: RenderPrimitive, 
       // directly into the export viewport changes minification and subpixel filtering.
       const raster = surface?.material ? renderSurfacePattern(surface.outline, surface.material,
         surface.anchor, surface.seed, { ...pass, light: scene.light, layers: surface.layers,
-          exclusions: surface.exclusions ?? undefined, centreline: surface.centreline ?? undefined,
-          element: surface.element }) : null;
+          exclusions: surface.exclusions ?? undefined, cutEdge: surface.cutEdge ?? undefined,
+          centreline: surface.centreline ?? undefined, element: surface.element }) : null;
       if (raster) {
         const at = toPx(raster.originMetres);
         context.drawImage(raster.canvas, at.x, at.y,
@@ -1817,6 +1817,7 @@ function drawSurface(
         element: surface.element,
         layers: surface.layers,
         exclusions: pass.exclusions,
+        cutEdge: surface.cutEdge ?? undefined,
       },
       rasterOrigin,
     );

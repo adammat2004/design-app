@@ -8,6 +8,11 @@ import {
   type PlanGeometry,
   type Point,
 } from '@garden-studio/schema';
+import type { DesignFrame } from '../layout/frame.js';
+import type { RouteTier, SketchPath } from '../layout/sketch.js';
+import type { RoutePurpose } from '../room-policy.js';
+import { NO_PATH_NEEDED, ringGap } from './evaluate/circulation.js';
+import type { LayoutAdjustments } from './types.js';
 
 /**
  * How you get round the garden.
@@ -65,6 +70,13 @@ export interface RouteRequest {
    * the preference intact: a candidate that was never repaired draws exactly what it always drew.
    */
   skip?: number;
+  /**
+   * The directions a dog-leg turns along, as unit vectors. Absent is the screen's own axes, which
+   * is every caller before routes were laid square to the house: on a plot drawn at an angle a
+   * world-axis dog-leg runs diagonally across the garden. The design frame's `axis` and `cross` are
+   * what a composed plan passes, so a route that turns, turns square to the terrace it left.
+   */
+  axes?: { along: Point; across: Point };
 }
 
 /**
@@ -122,7 +134,13 @@ export function routeCandidates(request: RouteRequest & { starts?: Point[] }): R
     scope = null,
     width = PATH_WIDTH,
     starts,
+    axes = { along: { x: 1, y: 0 }, across: { x: 0, y: 1 } },
   } = request;
+  /** `origin` moved by the component of `(end − origin)` along `unit`. */
+  const turn = (origin: Point, end: Point, unit: Point): Point => {
+    const t = (end.x - origin.x) * unit.x + (end.y - origin.y) * unit.y;
+    return { x: origin.x + unit.x * t, y: origin.y + unit.y * t };
+  };
 
   const from = starts && starts.length > 0 ? starts : [start];
   const found: RouteCandidate[] = [];
@@ -137,8 +155,8 @@ export function routeCandidates(request: RouteRequest & { starts?: Point[] }): R
     if (via.length > 0) shapes.push({ shape: 'via', points: [origin, ...via, end] });
     shapes.push(
       { shape: 'straight', points: [origin, end] },
-      { shape: 'along-start', points: [origin, { x: origin.x, y: end.y }, end] },
-      { shape: 'along-end', points: [origin, { x: end.x, y: origin.y }, end] },
+      { shape: 'along-start', points: [origin, turn(origin, end, axes.across), end] },
+      { shape: 'along-end', points: [origin, turn(origin, end, axes.along), end] },
     );
 
     for (const { shape, points } of shapes) {
@@ -302,4 +320,220 @@ export function sameRing(a: Point[], b: Point[]): boolean {
   return a.every(
     (point, i) => Math.abs(point.x - b[i]!.x) < 1e-9 && Math.abs(point.y - b[i]!.y) < 1e-9,
   );
+}
+
+/* ---------------------------------------------------------------- the one route pass */
+
+/** Something a route can be laid to: a placed room, by the slot it filled. */
+export interface RouteTarget {
+  id: string;
+  ring: Point[];
+  name: string;
+  /** A store or a working bed: reached with a barrow, so the route is a utility route. */
+  utility: boolean;
+}
+
+export interface LayRoutesInput {
+  paths: SketchPath[];
+  /** What each slot was filled with. */
+  placed: Map<string, RouteTarget>;
+  /** Every placed room that should be reachable, for the guarantee after the sketch's own paths. */
+  rooms: RouteTarget[];
+  terrace: Point[] | null;
+  gate: { centre: Point; inward: Point } | null;
+  /**
+   * The reserved open space, in world metres, on a composed plan — `null` on a hand-drawn one.
+   * A primary or secondary route may not cross it: that is what the corridors were kept for.
+   */
+  panel: Point[] | null;
+  frame: DesignFrame;
+  /** Pushed onto as routes are laid, so a later route misses an earlier one. */
+  obstacles: Point[][];
+  thresholds: Point[][];
+  boundary: Point[];
+  scope: Point[] | null;
+  adjustments: Pick<LayoutAdjustments, 'reroute' | 'routeWidth'>;
+  /** How wide a route of this purpose is laid, before any repair widens it. */
+  widthOf: (purpose: RoutePurpose) => number;
+}
+
+export interface LaidRoute {
+  name: string;
+  geometry: PlanGeometry;
+  purpose: RoutePurpose;
+  /** Why the composition laid it, from `design/composition`'s vocabulary. */
+  elementPurpose: string;
+  /** The room it reaches, where it reaches one. */
+  targetId: string | null;
+}
+
+/**
+ * Every route in the plan, laid once, by the preview and the realisation alike.
+ *
+ * **There were two copies of this and three sources of routes.** The preview and the realised
+ * pipeline each had their own loop over the sketch's paths and their own access guarantee, with a
+ * comment in each saying the other must search exactly as hard; the realisation then added a third
+ * source, a route from the house to anything the sampler had placed. Two copies that must agree by
+ * hand is the defect this codebase keeps writing down, and the third source is where the diagonal
+ * lines of stepping stones across the lawn came from — nothing composed them.
+ *
+ * On a composed plan every route is an edge the composition drew, laid along the corridor it kept,
+ * and the lawn is an obstacle to anything but a decorative route: a path to the shed that cannot run
+ * down its corridor does not get to cut across the grass instead, it is reported as missing. The
+ * guarantee still runs after the composed routes, and on a composed plan it finds nothing to do —
+ * which is the measurement that the composition connected everything it placed.
+ *
+ * Dog-legs turn square to the house, along the design frame's own axes. Pure and query-free.
+ */
+export function layRoutes(input: LayRoutesInput): LaidRoute[] {
+  const { frame, obstacles, adjustments } = input;
+  const laid: LaidRoute[] = [];
+  const connected = new Set<string>();
+  const axes = { along: frame.axis, across: frame.cross };
+  const width = (purpose: RoutePurpose) =>
+    adjustments.routeWidth === null
+      ? input.widthOf(purpose)
+      : Math.max(input.widthOf(purpose), adjustments.routeWidth);
+  /** The obstacles a route of this tier must miss: the lawn as well, for anything that is not decorative. */
+  const blocking = (tier: RouteTier) =>
+    input.panel && tier !== 'decorative' ? [...obstacles, input.panel] : obstacles;
+
+  for (const sketched of input.paths) {
+    const tier: RouteTier = sketched.tier ?? 'secondary';
+    const ignore: Point[][] = [...input.thresholds, ...(input.terrace ? [input.terrace] : [])];
+    if (sketched.branch) {
+      const trunk = laid.find((route) => route.name === sketched.branch);
+      /* A branch off a route that was never laid would start in the middle of a bed. */
+      if (!trunk) continue;
+      ignore.push(geometryOutline(trunk.geometry));
+    }
+    let start: Point;
+    let destination: Point[];
+    let purpose: RoutePurpose;
+    let target: RouteTarget | null = null;
+
+    if ('gate' in sketched.to) {
+      if (!input.gate || !input.terrace) continue;
+      purpose = 'access';
+      start = {
+        x: input.gate.centre.x + input.gate.inward.x * PATH_STANDOFF,
+        y: input.gate.centre.y + input.gate.inward.y * PATH_STANDOFF,
+      };
+      destination = input.terrace;
+    } else {
+      target =
+        [sketched.to.slot, ...(sketched.to.or ?? [])]
+          .map((slot) => input.placed.get(slot))
+          .find((found) => found !== undefined) ?? null;
+      if (!target) continue;
+      purpose = target.utility ? 'utility' : 'secondary';
+      destination = target.ring;
+      ignore.push(destination);
+      start =
+        'terrace' in sketched.from
+          ? input.terrace
+            ? closestPointOnRing(input.terrace, polygonCentroid(destination), 0)
+            : frame.toWorld(0, 0)
+          : frame.toWorld(sketched.from.u, sketched.from.v);
+    }
+
+    const geometry = routeBetween({
+      start,
+      destination,
+      via: (sketched.via ?? []).map((point) => frame.toWorld(point.u, point.v)),
+      obstacles: blocking(tier),
+      boundary: input.boundary,
+      ignore,
+      scope: input.scope,
+      width: width(purpose),
+      skip: adjustments.reroute[sketched.name] ?? 0,
+      axes,
+    });
+    if (!geometry) continue;
+
+    obstacles.push(geometryOutline(geometry));
+    laid.push({
+      name: sketched.name,
+      geometry,
+      purpose,
+      elementPurpose:
+        sketched.purpose ??
+        (purpose === 'access'
+          ? 'access-route'
+          : purpose === 'utility'
+            ? 'utility-route'
+            : 'garden-route'),
+      targetId: target?.id ?? null,
+    });
+    if (target) connected.add(target.id);
+    /* A route that runs past a room's face within reach of it serves it too. */
+    for (const room of input.rooms) {
+      if (!connected.has(room.id) && passesBy(geometry, room.ring)) connected.add(room.id);
+    }
+  }
+
+  /*
+   * ---- a way to anything the sketch's own routes did not reach ----
+   *
+   * From several points along the terrace edge, lazily: the nearest succeeds most of the time, and
+   * each one that does not costs four polylines tested against every obstacle on the plot. Run
+   * eagerly this pass alone once put three and a half seconds on the biggest fixture.
+   */
+  if (input.terrace) {
+    for (const room of input.rooms) {
+      if (connected.has(room.id)) continue;
+      /*
+       * Not to a room a stride from the terrace: you are already standing on it, which is the
+       * scorer's own rule. Asked anyway, the nearest start is under the shortest route there is, so
+       * the guarantee set off from a corner instead and cut diagonally through the planting to a
+       * water feature at the courtyard's edge.
+       */
+      if (input.terrace && ringGap(room.ring, input.terrace) <= NO_PATH_NEEDED) continue;
+      const purpose: RoutePurpose = room.utility ? 'utility' : 'secondary';
+      const name = accessName(room.name);
+      let geometry: PlanGeometry | null = null;
+      for (const start of terraceStarts(input.terrace, room.ring)) {
+        geometry = routeBetween({
+          start,
+          destination: room.ring,
+          obstacles: blocking('secondary'),
+          boundary: input.boundary,
+          ignore: [input.terrace, room.ring, ...input.thresholds],
+          scope: input.scope,
+          width: width(purpose),
+          skip: adjustments.reroute[name] ?? 0,
+          axes,
+        });
+        if (geometry) break;
+      }
+      if (!geometry) continue;
+
+      obstacles.push(geometryOutline(geometry));
+      laid.push({
+        name,
+        geometry,
+        purpose,
+        elementPurpose: purpose === 'utility' ? 'utility-route' : 'garden-route',
+        targetId: room.id,
+      });
+      connected.add(room.id);
+    }
+  }
+
+  return laid;
+}
+
+/** How near a route's centreline comes to a room's outline and still serves it, in metres. */
+const SERVES_WITHIN = 0.6;
+
+/** Whether any vertex of the route's centreline is within reach of the room: the scorer's own test. */
+function passesBy(geometry: PlanGeometry, ring: Point[]): boolean {
+  if (geometry.kind !== 'polyline') return false;
+  return geometry.points.some((point) => {
+    for (let i = 0; i < ring.length; i += 1) {
+      if (distanceToSegment(point, ring[i]!, ring[(i + 1) % ring.length]!) <= SERVES_WITHIN)
+        return true;
+    }
+    return false;
+  });
 }

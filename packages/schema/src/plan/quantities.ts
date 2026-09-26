@@ -1,5 +1,6 @@
 import { elementArea, isCounted, type DesignElement } from './concepts.js';
-import { edgingRuns } from './edging.js';
+import { resolveEdges } from './edges/resolve.js';
+import type { EdgeRuleContext } from './edges/rules.js';
 import type { Point } from '../geometry/primitives.js';
 import type { ElementCategory } from './concepts.js';
 import type { BudgetBand } from './brief.js';
@@ -89,6 +90,8 @@ export function planSchedule(
    * anybody would order against.
    */
   exclude: { boundary?: Point[]; house?: Point[] } = {},
+  /** The brief's style, budget and upkeep, which decide what automatic edging lays. */
+  rules?: EdgeRuleContext,
 ): ScheduleLine[] {
   const lines = new Map<string, ScheduleLine>();
 
@@ -137,13 +140,15 @@ export function planSchedule(
   /*
    * Edging, which is the one thing on the plan measured in metres rather than in square metres.
    *
-   * It has no elements of its own — a run is derived from the outline of the bed it follows, see
-   * `plan/edging.ts` — so it cannot come out of the loop above and gets its own pass. Grouped by
+   * It has no elements of its own — a run is resolved from the outline of the surface it follows, see
+   * `plan/edges/resolve.ts` — so it cannot come out of the loop above and gets its own pass. Only
+   * runs that name a product are counted: a flush transition is built but not bought by the metre. Grouped by
    * material like everything else, and laid `over` rather than on the ground, because an edging
    * course is drawn on top of the surface it edges.
    */
-  for (const run of edgingRuns(elements, exclude)) {
-    const material = findMaterial(run.material);
+  for (const run of resolveEdges(elements, exclude, rules).runs) {
+    if (!run.materialId) continue;
+    const material = findMaterial(run.materialId);
     if (!material) continue;
 
     const line = lines.get(material.id) ?? {

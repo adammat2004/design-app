@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import {
   measureComposition,
   computeZones,
+  elementOutline,
+  pointInPolygon,
+  type DesignElement,
   effectiveZoneIds,
   PlanDocumentSchema,
   readPlanDocument,
@@ -54,6 +57,17 @@ import { connectTestDatabase, DB_UNAVAILABLE_MESSAGE } from '../src/test/db.js';
 
 const SEEDS = [11, 12, 13];
 
+/** The faults the composition principle reports, printed in full whatever their count. */
+const COMPOSITION_CODES = [
+  'feature-in-open-space',
+  'route-crosses-panel',
+  'hard-island',
+  'orphan-feature',
+  'one-sided',
+  'panel-complexity',
+  'geometry-mixed',
+] as const;
+
 interface Row {
   fixture: string;
   concept: string;
@@ -66,7 +80,22 @@ interface Row {
   elements: number;
   /** How many faults the repair stage fixed on this concept, as it reported them. */
   repairs: number;
+  /** How many separate pieces of accent lawn the plan ends with: one is a lawn, three is leftovers. */
+  lawnPieces: number;
+  /** Features and routes the composition gave no reason for, on a plan that gives reasons at all. */
+  orphans: number;
+  /**
+   * How much the planting's depth differs between the garden's sides, in metres: the deepest
+   * planted side less the shallowest. `null` where fewer than two sides are planted at all.
+   */
+  borderSpread: number | null;
 }
+
+/**
+ * A spread of at least this between the deepest and shallowest planted side counts as planting
+ * with a depth per side: half a bed's worth, the difference between a screen and an edging.
+ */
+const BORDER_SPREAD = 0.75;
 
 async function main(): Promise<void> {
   const connection = await connectTestDatabase();
@@ -218,7 +247,67 @@ async function measure(
     inclusion: inclusionRate(item.document.brief, concept.elements),
     elements: concept.elements.length,
     repairs: concept.explanation?.repairs.length ?? 0,
+    lawnPieces: concept.elements.filter(
+      (element) => element.category === 'lawn' && element.role === 'fill' && element.fillKind === 'accent',
+    ).length,
+    orphans: concept.elements.some((element) => element.purpose)
+      ? concept.elements.filter(
+          (element) =>
+            element.role === 'feature' &&
+            !element.purpose &&
+            !element.symbol?.startsWith('tree') &&
+            element.category !== 'furniture' &&
+            element.category !== 'lighting' &&
+            element.category !== 'existing-feature' &&
+            element.category !== 'planting-bed',
+        ).length
+      : 0,
+    borderSpread: borderSpread(concept.elements, analysis),
   };
+}
+
+/**
+ * Whether the planting has a depth per side or one depth all round — the property Phase 2 is about.
+ *
+ * For the garden's left, right and rear sides, sample seven points along the fence and walk in from
+ * each until the ground stops being planting; a side's depth is the median. A plan that plants every
+ * boundary to one depth has a spread near nought, however deep that depth is; one whose screen is
+ * deep, whose flank is a mowing edge and whose backdrop is somewhere between has a spread of metres.
+ */
+function borderSpread(
+  elements: DesignElement[],
+  analysis: ReturnType<typeof analyseSite>,
+): number | null {
+  const frame = analysis.frame;
+  const box = analysis.box;
+  if (!frame || !box) return null;
+  const beds = elements
+    .filter((element) => element.category === 'planting-bed' && element.role === 'fill')
+    .map((element) => elementOutline(element));
+  const planted = (u: number, v: number) => {
+    const point = frame.toWorld(u, v);
+    return beds.some((ring) => pointInPolygon(point, ring));
+  };
+  const depthAlong = (at: (t: number) => { u: number; v: number }, inward: { u: number; v: number }) => {
+    const depths: number[] = [];
+    for (let k = 1; k <= 7; k += 1) {
+      const start = at(0.15 + (0.7 * (k - 1)) / 6);
+      let depth = 0;
+      for (let step = 0.05; step <= 6; step += 0.1) {
+        if (!planted(start.u + inward.u * step, start.v + inward.v * step)) break;
+        depth = step;
+      }
+      depths.push(depth);
+    }
+    depths.sort((a, b) => a - b);
+    return depths[3]!;
+  };
+  const sides = [
+    depthAlong((t) => ({ u: box.uMin + (box.uMax - box.uMin) * t, v: box.vMin }), { u: 0, v: 1 }),
+    depthAlong((t) => ({ u: box.uMin + (box.uMax - box.uMin) * t, v: box.vMax }), { u: 0, v: -1 }),
+    depthAlong((t) => ({ u: box.uMax, v: box.vMin + (box.vMax - box.vMin) * t }), { u: -1, v: 0 }),
+  ].filter((depth) => depth > 0);
+  return sides.length >= 2 ? Math.max(...sides) - Math.min(...sides) : null;
 }
 
 function summarise(
@@ -299,6 +388,38 @@ function summarise(
     }
     for (const [code, count] of [...counts].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
       console.log(`    ${code.padEnd(24)} ${String(count).padStart(4)}`);
+    }
+
+    /*
+     * The composition faults, every one of them, even at nought. They are the numbers the
+     * composition work is judged by, and a code that drops out of the top ten because it fell to
+     * zero is the result being hidden by the table that should be reporting it.
+     */
+    console.log(
+      `\n  lawn in one piece       ${rate(rows.filter((row) => row.lawnPieces <= 1).length, rows.length)}`,
+    );
+    console.log(`  orphans per concept      ${mean(rows.map((row) => row.orphans)).toFixed(2)} (mean)`);
+    const spreads = rows
+      .map((row) => row.borderSpread)
+      .filter((spread): spread is number => spread !== null);
+    console.log(
+      `  planting depth varies   ${rate(spreads.filter((spread) => spread >= BORDER_SPREAD).length, spreads.length)} of plans planted on two sides or more (mean spread ${mean(spreads).toFixed(2)} m)`,
+    );
+
+    console.log('\n  by composition:');
+    const byArchetype = new Map<string, number[]>();
+    for (const row of scored) {
+      byArchetype.set(row.archetype, [...(byArchetype.get(row.archetype) ?? []), row.score.total]);
+    }
+    for (const [archetype, totals] of [...byArchetype].sort((a, b) => a[0].localeCompare(b[0]))) {
+      console.log(
+        `    ${archetype.padEnd(22)} ${String(totals.length).padStart(3)} concepts   mean ${mean(totals).toFixed(3)}   min ${Math.min(...totals).toFixed(3)}`,
+      );
+    }
+
+    console.log('\n  composition faults:');
+    for (const code of COMPOSITION_CODES) {
+      console.log(`    ${code.padEnd(24)} ${String(counts.get(code) ?? 0).padStart(4)}`);
     }
   }
 

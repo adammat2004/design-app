@@ -63,7 +63,7 @@ describe('levelBands', () => {
 
   it('retains a raised terrace against the fence too', () => {
     /*
-     * Deliberately unlike `edgingRuns`, which drops the boundary side. A terrace raised against the
+     * Deliberately unlike edging, which leaves bare the boundary side. A terrace raised against the
      * fence really does need holding up there — the fence is not doing it — so the boundary is not
      * an exclusion here. Getting this wrong would draw a terrace floating at one edge.
      */

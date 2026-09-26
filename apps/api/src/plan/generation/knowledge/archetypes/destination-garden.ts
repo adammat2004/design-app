@@ -9,6 +9,7 @@ import {
   type LocalRect,
   type Slot,
 } from '../../layout/sketch.js';
+import { composed, styleLanguage } from './composed.js';
 import { bed, clampRect, extents, slotIn, withZoneIds } from './shared.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
@@ -89,146 +90,179 @@ export const destinationGarden: LayoutArchetype = {
   },
 
   params() {
-    const first = { ...defaultParams('destination_garden'), terraceDepth: 0.85 as const };
-    return [first, { ...first, lawnBias: 'away' as const }, { ...first, terraceDepth: 1 as const }];
-  },
-
-  zonePattern(zones, room, params, request) {
-    const layout = walk(room, params, request);
-    return zones.map((zone) => {
-      if (zone.type === 'terrace') return { ...zone, rect: layout.terrace };
-      if (zone.type === 'lawn' || zone.type === 'play') return { ...zone, rect: layout.lawn };
-      if (zone.type === 'destination' || zone.type === 'lounge') {
-        /* The destination is the primary room here, so it gets the generous end of the plot. */
-        return { ...zone, rect: layout.destination, importance: 'primary' as const };
-      }
-      if (zone.type === 'utility' || zone.type === 'productive')
-        return { ...zone, rect: layout.utility };
-      return zone;
-    });
-  },
-
-  sketch(request, room, _plan, params) {
-    const s = request.scale;
-    const b = bed(s);
-    const { width } = extents(room);
-    const layout = walk(room, params, request);
-    const gate = request.gateSide ?? 'right';
-    const farSign = gate === 'right' ? -1 : 1;
-
-    const slots: Slot[] = [terraceSlot(layout.terrace, room)];
-    if (layout.besideTerrace) {
-      slots.push(slotIn('beside-terrace', 'beside-terrace', layout.besideTerrace, { turn: true }));
-    }
-    if (layout.destination) {
-      slots.push(slotIn('far-room', 'far-room', layout.destination, { margin: 0.5 }));
-    }
-    if (layout.lawn) slots.push(slotIn('lawn-far', 'lawn-far', layout.lawn, { margin: 1 }));
-    if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
-    if (layout.utility2)
-      slots.push(slotIn('utility-2', 'utility-2', layout.utility2, { turn: true }));
-
-    slots.push({
-      id: 'terrace-end',
-      kind: 'terrace-end',
-      zoneId: 'dining',
-      anchor: {
-        u: layout.terrace.u0 + (layout.terrace.u1 - layout.terrace.u0) / 2,
-        v: layout.terrace.v0 - 1.9 * s,
-      },
-      maxSize: { width: 3.6 * s, depth: Math.max(3, layout.terrace.u1 - layout.terrace.u0) },
-      minSize: { width: 3, depth: 3 },
-    });
-
     /*
-     * The planting deepens towards the far end: a shallow run beside the terrace, a deep bay
-     * two thirds of the way down that the path has to go round, and the rear border behind the
-     * destination. That progression is what makes the walk feel like a journey.
+     * The destination centred at the far end first: it is the end of the view from the doors, which
+     * is what makes it the reason to walk. On the diagonal it is the same plan turned, reached down
+     * the same side, and offered as a variation rather than the answer.
      */
-    const beds: LayoutSketch['beds'] = [];
-    /*
-     * The near border runs the **whole way** from the terrace to the pinch, on the same side as the
-     * lawn's own deep edge. The first version gave it 45% of the lawn's depth, which on a narrow
-     * plot came to about five metres of bed in a 154 m² garden — nine per cent planting, under the
-     * floor the composition bands set and under this composition's own stated proportions.
-     */
-    const near = clampRect(
-      {
-        u0: layout.terrace.u1 + 0.3,
-        u1: Math.max(layout.terrace.u1 + 0.3 + b, layout.pinch - b),
-        v0: farSign < 0 ? room.vMin : room.vMax - b,
-        v1: farSign < 0 ? room.vMin + b : room.vMax,
-      },
-      room,
-    );
-    if (near && near.v1 - near.v0 >= BED_MIN_DEPTH) {
-      beds.push({ name: 'Specimen border', shape: { kind: 'rect', rect: near, cornerRadius: 0 } });
-    }
-
-    const bay = clampRect(
-      {
-        u0: layout.pinch - b,
-        u1: layout.pinch + b,
-        v0: farSign < 0 ? room.vMax - Math.min(width * 0.5, 4.4 * s) : room.vMin,
-        v1: farSign < 0 ? room.vMax : room.vMin + Math.min(width * 0.5, 4.4 * s),
-      },
-      room,
-    );
-    if (bay) {
-      beds.push({
-        name: 'Flowering border',
-        shape: { kind: 'rect', rect: bay, cornerRadius: request.style === 'cottage' ? 1 : 0 },
-      });
-    }
-
-    const rear = clampRect(
-      { u0: room.uMax - b, u1: room.uMax, v0: room.vMin + 0.15, v1: room.vMax - 0.15 },
-      room,
-    );
-    if (rear)
-      beds.push({ name: 'Rear border', shape: { kind: 'rect', rect: rear, cornerRadius: 0 } });
-
-    const trees: LocalPoint[] = [
-      /* One either side of the pinch, so the far end is glimpsed rather than seen. */
-      { u: layout.pinch, v: farSign < 0 ? room.vMax - 1.6 : room.vMin + 1.6 },
-      { u: room.uMax - 1.9, v: room.vMin + 1.9 },
-      { u: room.uMax - 1.9, v: room.vMax - 1.9 },
+    const first = {
+      ...defaultParams('destination_garden'),
+      terraceDepth: 0.85 as const,
+      destination: 'far-centre' as const,
+    };
+    return [
+      first,
+      { ...first, lawnBias: 'away' as const },
+      { ...first, terraceDepth: 1 as const },
+      { ...first, destination: 'far-diagonal' as const },
     ];
-
-    return withZoneIds({
-      template: 'rectilinear',
-      beds,
-      terrace: layout.terrace,
-      /* Gravel where grass is forbidden, never nothing: `lawnCategory` decides what it is made of. */
-      lawn: layout.lawn
-        ? {
-            kind: 'rect',
-            rect: layout.lawn,
-            cornerRadius: request.style === 'cottage' ? 1.2 : 0,
-          }
-        : null,
-      lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',
-      slots,
-      paths: [
-        {
-          from: { terrace: true as const },
-          /* Round the deep bay rather than straight past it: the indirectness is the composition. */
-          via: [{ u: layout.pinch, v: farSign * Math.min(width * 0.22, 2.4 * s) }],
-          to: { slot: 'far-room', or: ['lawn-far'] },
-          name: 'Garden path',
-        },
-        {
-          from: { u: 0, v: (gate === 'right' ? 1 : -1) * width },
-          to: { gate: true as const },
-          name: 'Side path',
-        },
-      ],
-      trees,
-      axisPath: null,
-      courtyard: false,
-    });
   },
+
+  /*
+   * Composed, like the classic three: the room at the far end is decided first and the lawn stops
+   * short of it behind a planted screen, with the walk down the side of the lawn and in along the
+   * room's front. The hand-drawn plan below is what draws where the composition declines.
+   */
+  ...composed('destination_garden', styleLanguage, handDrawn(), {
+    primary: ['destination', 'lounge'],
+  }),
 };
+
+/** The hand-drawn plan: a terrace, a lawn, a pinch two thirds down and the room at the end. */
+function handDrawn(): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
+  return {
+    zonePattern(zones, room, params, request) {
+      const layout = walk(room, params, request);
+      return zones.map((zone) => {
+        if (zone.type === 'terrace') return { ...zone, rect: layout.terrace };
+        if (zone.type === 'lawn' || zone.type === 'play') return { ...zone, rect: layout.lawn };
+        if (zone.type === 'destination' || zone.type === 'lounge') {
+          /* The destination is the primary room here, so it gets the generous end of the plot. */
+          return { ...zone, rect: layout.destination, importance: 'primary' as const };
+        }
+        if (zone.type === 'utility' || zone.type === 'productive')
+          return { ...zone, rect: layout.utility };
+        return zone;
+      });
+    },
+
+    sketch(request, room, _plan, params) {
+      const s = request.scale;
+      const b = bed(s);
+      const { width } = extents(room);
+      const layout = walk(room, params, request);
+      const gate = request.gateSide ?? 'right';
+      const farSign = gate === 'right' ? -1 : 1;
+
+      const slots: Slot[] = [terraceSlot(layout.terrace, room)];
+      if (layout.besideTerrace) {
+        slots.push(
+          slotIn('beside-terrace', 'beside-terrace', layout.besideTerrace, { turn: true }),
+        );
+      }
+      if (layout.destination) {
+        slots.push(slotIn('far-room', 'far-room', layout.destination, { margin: 0.5 }));
+      }
+      if (layout.lawn) slots.push(slotIn('lawn-far', 'lawn-far', layout.lawn, { margin: 1 }));
+      if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
+      if (layout.utility2)
+        slots.push(slotIn('utility-2', 'utility-2', layout.utility2, { turn: true }));
+
+      slots.push({
+        id: 'terrace-end',
+        kind: 'terrace-end',
+        zoneId: 'dining',
+        anchor: {
+          u: layout.terrace.u0 + (layout.terrace.u1 - layout.terrace.u0) / 2,
+          v: layout.terrace.v0 - 1.9 * s,
+        },
+        maxSize: { width: 3.6 * s, depth: Math.max(3, layout.terrace.u1 - layout.terrace.u0) },
+        minSize: { width: 3, depth: 3 },
+      });
+
+      /*
+       * The planting deepens towards the far end: a shallow run beside the terrace, a deep bay
+       * two thirds of the way down that the path has to go round, and the rear border behind the
+       * destination. That progression is what makes the walk feel like a journey.
+       */
+      const beds: LayoutSketch['beds'] = [];
+      /*
+       * The near border runs the **whole way** from the terrace to the pinch, on the same side as the
+       * lawn's own deep edge. The first version gave it 45% of the lawn's depth, which on a narrow
+       * plot came to about five metres of bed in a 154 m² garden — nine per cent planting, under the
+       * floor the composition bands set and under this composition's own stated proportions.
+       */
+      const near = clampRect(
+        {
+          u0: layout.terrace.u1 + 0.3,
+          u1: Math.max(layout.terrace.u1 + 0.3 + b, layout.pinch - b),
+          v0: farSign < 0 ? room.vMin : room.vMax - b,
+          v1: farSign < 0 ? room.vMin + b : room.vMax,
+        },
+        room,
+      );
+      if (near && near.v1 - near.v0 >= BED_MIN_DEPTH) {
+        beds.push({
+          name: 'Specimen border',
+          shape: { kind: 'rect', rect: near, cornerRadius: 0 },
+        });
+      }
+
+      const bay = clampRect(
+        {
+          u0: layout.pinch - b,
+          u1: layout.pinch + b,
+          v0: farSign < 0 ? room.vMax - Math.min(width * 0.5, 4.4 * s) : room.vMin,
+          v1: farSign < 0 ? room.vMax : room.vMin + Math.min(width * 0.5, 4.4 * s),
+        },
+        room,
+      );
+      if (bay) {
+        beds.push({
+          name: 'Flowering border',
+          shape: { kind: 'rect', rect: bay, cornerRadius: request.style === 'cottage' ? 1 : 0 },
+        });
+      }
+
+      const rear = clampRect(
+        { u0: room.uMax - b, u1: room.uMax, v0: room.vMin + 0.15, v1: room.vMax - 0.15 },
+        room,
+      );
+      if (rear)
+        beds.push({ name: 'Rear border', shape: { kind: 'rect', rect: rear, cornerRadius: 0 } });
+
+      const trees: LocalPoint[] = [
+        /* One either side of the pinch, so the far end is glimpsed rather than seen. */
+        { u: layout.pinch, v: farSign < 0 ? room.vMax - 1.6 : room.vMin + 1.6 },
+        { u: room.uMax - 1.9, v: room.vMin + 1.9 },
+        { u: room.uMax - 1.9, v: room.vMax - 1.9 },
+      ];
+
+      return withZoneIds({
+        template: 'rectilinear',
+        beds,
+        terrace: layout.terrace,
+        /* Gravel where grass is forbidden, never nothing: `lawnCategory` decides what it is made of. */
+        lawn: layout.lawn
+          ? {
+              kind: 'rect',
+              rect: layout.lawn,
+              cornerRadius: request.style === 'cottage' ? 1.2 : 0,
+            }
+          : null,
+        lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',
+        slots,
+        paths: [
+          {
+            from: { terrace: true as const },
+            /* Round the deep bay rather than straight past it: the indirectness is the composition. */
+            via: [{ u: layout.pinch, v: farSign * Math.min(width * 0.22, 2.4 * s) }],
+            to: { slot: 'far-room', or: ['lawn-far'] },
+            name: 'Garden path',
+          },
+          {
+            from: { u: 0, v: (gate === 'right' ? 1 : -1) * width },
+            to: { gate: true as const },
+            name: 'Side path',
+          },
+        ],
+        trees,
+        axisPath: null,
+        courtyard: false,
+      });
+    },
+  };
+}
 
 /** The terrace, the lawn between, the pinch two thirds down, and the room at the end. */
 function walk(

@@ -130,7 +130,15 @@ export function pickDistinct(field: Scored[], already: Signature[]): Scored | nu
     })
     .sort((a, b) => b.value - a.value || a.entry.candidate.id.localeCompare(b.entry.candidate.id));
 
-  return ranked[0]?.entry ?? null;
+  /*
+   * An identical drawing is the one likeness that is a filter rather than a penalty. Two parameter
+   * sets that draw the same garden are one candidate — which a composed plan on a small plot does
+   * more often than a hand-drawn one did, because the composition gives way to the plot where the
+   * template drew through it — and three cards showing one garden twice is a promise broken. Still
+   * offered when nothing else is, so a garden with one answer still gets its card.
+   */
+  const distinct = ranked.find((row) => row.likeness < 1 - 1e-9);
+  return (distinct ?? ranked[0])?.entry ?? null;
 }
 
 /**

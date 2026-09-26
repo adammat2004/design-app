@@ -93,12 +93,15 @@ export interface RenderScene {
    */
   lights: RenderLight[];
   /**
-   * Edging courses, derived from the hosts they follow rather than stored anywhere.
+   * Edging courses, resolved from the hosts they follow rather than stored anywhere.
+   *
+   * **Only what resolution produced**: a stretch whose treatment is `none` is not here at all, which
+   * is what stops a surface with nothing to say drawing an outline round itself.
    *
    * Resolved to `RenderSurface` so the existing painter draws them with no new code path — an
    * edging course is a narrow strip of paving and wants exactly the module, joint and tone
    * treatment a patio gets. The `element` on each is **synthetic** and never leaves this layer:
-   * `plan/edging.ts` returns geometry, and giving it an id and a material here is what lets the
+   * `plan/edges/resolve.ts` returns geometry, and giving it an id and a material here is what lets the
    * surface painter take it. Nothing reads it back, and `quantities.ts` cannot see it.
    */
   edging: RenderSurface[];
@@ -330,6 +333,18 @@ export interface RenderSurface {
    * bed's raster cache key.
    */
   exclusions: Point[][] | null;
+  /**
+   * Which segments of `outline` carry the painter's cut edge, decided once for the scene by
+   * `cutEdgeMasks` from what lies on the far side of each. `null` means the painter's own default,
+   * which is every segment — the answer a synthetic surface (a course, a retaining top) gets.
+   */
+  cutEdge: boolean[] | null;
+  /**
+   * How far a course stands proud, in metres, where this surface is an edging run. Carried here
+   * rather than looked up again from the product, because a run may override its product's height
+   * and a flush join has none. Absent on everything that is not a course.
+   */
+  height?: number;
 }
 
 /**

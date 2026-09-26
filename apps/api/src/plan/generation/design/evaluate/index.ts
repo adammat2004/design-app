@@ -12,6 +12,7 @@ import type { SiteAnalysis } from '../types.js';
 import { scoreBuildability } from './buildability.js';
 import { scoreCanopy } from './canopy.js';
 import { scoreCirculation } from './circulation.js';
+import { scoreComposition } from './composition.js';
 import { scoreFeatureFit } from './feature-fit.js';
 import { scoreGrouping } from './grouping.js';
 import { scoreHierarchy } from './hierarchy.js';
@@ -81,6 +82,16 @@ const STRUCTURAL_STEP = 0.5;
  */
 const BRIEF_WEIGHTS = process.env.BRIEF_WEIGHTS !== '0';
 
+/**
+ * Off with `COMPOSITION_PRINCIPLE=0`, for the same reason and the same kind of measurement.
+ *
+ * The composition principle landed *before* the generator started composing, so that the
+ * improvement could be measured against a baseline. Being able to switch it off afterwards is what
+ * lets a gain in the total be attributed to the geometry having changed rather than to the scorer
+ * having learned to notice it.
+ */
+const COMPOSITION_PRINCIPLE = process.env.COMPOSITION_PRINCIPLE !== '0';
+
 export function evaluateDesign(request: EvaluateRequest): DesignScore {
   const subject = buildSubject(
     request.elements,
@@ -112,6 +123,7 @@ export function scoreSubject(subject: DesignSubject, tier: ScoreTier): DesignSco
   run('circulation', scoreCirculation(subject));
   run('grouping', scoreGrouping(subject));
   run('proportion', scoreProportion(subject, composition));
+  if (COMPOSITION_PRINCIPLE) run('composition', scoreComposition(subject));
   run('relationships', scoreRelationships(subject));
   run('privacy', scorePrivacy(subject));
   run('hierarchy', scoreHierarchy(subject));

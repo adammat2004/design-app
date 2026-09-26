@@ -44,15 +44,28 @@ export const PRINCIPLES: Principle[] = [
   },
   {
     id: 'grouping',
-    weight: 0.2,
+    weight: 0.15,
     reason:
       'Things that belong together standing together is the difference between rooms and scattered objects.',
   },
   {
     id: 'proportion',
-    weight: 0.15,
+    weight: 0.1,
     reason:
       'The shares of hard landscaping, lawn and planting, against a hand-traced professional plan.',
+  },
+  /*
+   * A tenth, and it is taken from `grouping` and `proportion` rather than added on top, because the
+   * work moved with the weight: the convex-hull compactness half of grouping is now `one-sided`
+   * here, and what proportion said about the panel's shape is now `panel-complexity`. Deliberately
+   * *not* shifted by any emphasis or intent in `weight-profiles.ts` — `open` already raises
+   * proportion, and raising this too would be the one mistake that file records three times over.
+   */
+  {
+    id: 'composition',
+    weight: 0.1,
+    reason:
+      'Whether the plan reads as one design: features in bays beside the open ground rather than on it, paths round the panel rather than across it, nothing floating, nothing without a reason.',
   },
   {
     id: 'relationships',

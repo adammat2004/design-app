@@ -12,7 +12,8 @@ function raster(element: DesignElement, scale: number) {
   if (element.shape.kind !== 'polyline') throw new Error('Expected a course fixture');
   const surface: RenderSurface = { elementId: element.id, element, outline: elementOutline(element),
     centreline: element.shape.points, material: resolvePattern(element.material),
-    anchor: { origin: { x: 0, y: 0 }, rotation: 0 }, seed: element.id, layers: [], exclusions: null };
+    anchor: { origin: { x: 0, y: 0 }, rotation: 0 }, seed: element.id, layers: [], exclusions: null,
+    cutEdge: null };
   const course = compileLinearCourse(surface)!;
   const canvas = createCanvas(14 * scale, 15 * scale);
   const context = canvas.getContext('2d');

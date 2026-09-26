@@ -13,6 +13,7 @@ import {
 import { drawPlan, type PlanContext, type PlanScene } from './render-plan';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
 import type { BuildOptions } from '../render/build-scene';
+import { edgeRulesOf } from '../edge-rules';
 
 /**
  * The gate: **2D Plan does not change.**
@@ -87,6 +88,8 @@ function sceneOf(document: PlanDocument): PlanScene {
     house: document.site.house,
     elements: document.layout.elements,
     site: document.site,
+    // The fixture's own brief, so the sheet resolves its edging as the editor would.
+    edgeRules: edgeRulesOf(document.brief),
   };
 }
 

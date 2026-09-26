@@ -27,7 +27,7 @@ import type { DesignSubject, SubjectItem } from './subject.js';
 const EXPOSURE_REACH = 6;
 
 /** A boundary this tall screens a seated person by itself. */
-const SCREENING_HEIGHT = 1.7;
+export const SCREENING_HEIGHT = 1.7;
 
 /** How deep a bed has to be between a seat and a fence to read as a screen. */
 const SCREEN_DEPTH = 1.2;
@@ -103,8 +103,15 @@ export function scorePrivacy(subject: DesignSubject): PrincipleResult {
    * screened — so it is scored separately and only when it was asked for.
    */
   if (subject.brief.privacy === 'enclose') {
+    /*
+     * Read by what each bed is *for*, where the plan says. Threshold planting by the terrace frames
+     * the doors, and its centre is nearest whichever side fence the terrace runs towards — so counted
+     * as enclosure it reported a side as planted when the only bed near it was the one by the house.
+     * A plan that carries no purposes is read as before.
+     */
     const plantedSides = new Set(
       subject.beds
+        .filter((bed) => bed.purpose !== 'threshold-planting')
         .map((bed) => nearestEdgeSide(bed.centre, subject))
         .filter((side): side is string => side !== null),
     );

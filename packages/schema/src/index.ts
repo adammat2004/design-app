@@ -14,6 +14,7 @@
 export * from './geometry/primitives.js';
 
 export * from './geometry/shapes.js';
+export * from './geometry/stations.js';
 export * from './geometry/wkt.js';
 
 export * from './plan/units.js';
@@ -34,7 +35,14 @@ export * from './plan/sanity.js';
 export * from './plan/plot-presets.js';
 export * from './plan/zones.js';
 export * from './plan/scope.js';
-export * from './plan/edging.js';
+// Boundary treatments: the vocabulary, the stored run, then the geometry that resolves it.
+export * from './plan/edges/treatments.js';
+export * from './plan/edges/edge-run.js';
+export * from './plan/boundary/side-chains.js';
+export * from './plan/boundary/graph.js';
+export * from './plan/edges/rules.js';
+export * from './plan/edges/resolve.js';
+export * from './plan/edges/edit.js';
 export * from './plan/features.js';
 export * from './plan/levels.js';
 export * from './plan/footprint.js';

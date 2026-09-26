@@ -1,4 +1,3 @@
-import { polygonArea } from '@garden-studio/schema';
 import {
   clamp01,
   meanOf,
@@ -86,53 +85,10 @@ export function scoreGrouping(subject: DesignSubject): PrincipleResult {
   }
 
   /*
-   * Compactness: how much of the garden the built features are spread over. A plan whose features
-   * occupy a quarter of the room in one or two clusters reads as composed; one whose convex hull is
-   * the whole plot reads as scattered, which is exactly the complaint the old sampler earned.
+   * There used to be a compactness half here — the convex hull of every feature against the room,
+   * ideal about half. It was measuring where the built masses sit *in the room*, which is not a
+   * grouping question at all, and it went with its weight to the composition principle, where
+   * `one-sided` asks it as what it is: are the masses all on one side of the garden.
    */
-  const room = subject.analysis.room;
-  if (room && identified.length >= 3) {
-    const hull = convexHull(identified.map((item) => item.centre));
-    const share = hull.length >= 3 ? polygonArea(hull) / Math.max(1, polygonArea(room)) : 0;
-    // Some spread is right — a garden is not one clump — so the ideal is around half the room.
-    parts.push(clamp01(1 - Math.abs(share - 0.45) / 0.55));
-  }
-
   return { score: meanOf(parts), issues };
-}
-
-/**
- * Andrew's monotone chain. Small, deterministic, and the only hull this codebase needs.
- *
- * Written here rather than in `packages/schema/geometry` on purpose: a hull is a *measurement* the
- * scorer takes, not a tessellation anything draws, and the rule that the canvas and the validator
- * must consume the same ring does not apply to something no renderer ever sees.
- */
-export function convexHull(
-  points: readonly { x: number; y: number }[],
-): { x: number; y: number }[] {
-  if (points.length < 3) return [...points];
-  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
-
-  const half = (input: typeof sorted) => {
-    const out: typeof sorted = [];
-    for (const point of input) {
-      while (out.length >= 2 && cross(out[out.length - 2]!, out[out.length - 1]!, point) <= 0) {
-        out.pop();
-      }
-      out.push(point);
-    }
-    out.pop();
-    return out;
-  };
-
-  return [...half(sorted), ...half([...sorted].reverse())];
-}
-
-function cross(
-  o: { x: number; y: number },
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number {
-  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 }

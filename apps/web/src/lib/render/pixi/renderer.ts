@@ -350,6 +350,7 @@ export class LegacySceneRenderer {
         light: scene.light,
         assets: getAssetVariants,
         exclusions: surface.exclusions ?? undefined,
+        cutEdge: surface.cutEdge ?? undefined,
         centreline: surface.centreline ?? undefined,
         element: surface.element,
         layers: surface.layers,

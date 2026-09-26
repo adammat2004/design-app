@@ -68,6 +68,7 @@ export function ElementDrawing({
   interacting = false,
   part = 'all',
   exclusions,
+  cutEdge,
 }: {
   element: DesignElement;
   transform: CanvasTransform;
@@ -90,10 +91,12 @@ export function ElementDrawing({
   interacting?: boolean;
   part?: ElementPass;
   exclusions?: Point[][];
+  /** Which outline segments carry the cut edge, decided by the scene; absent means all. */
+  cutEdge?: boolean[];
 }) {
   const style = CATEGORY_COLOURS[element.category];
   const fill = materialFill(element);
-  const pattern = useSurfacePattern(element, transform.scale, light, interacting, exclusions);
+  const pattern = useSurfacePattern(element, transform.scale, light, interacting, exclusions, cutEdge);
   const { shape } = element;
 
   // Re-renders once, when the sprites arrive; until then a symbol draws its procedural self.

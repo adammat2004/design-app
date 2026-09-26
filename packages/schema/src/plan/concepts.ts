@@ -8,6 +8,7 @@ import {
   type PlanGeometry,
 } from './features.js';
 import { BudgetBandSchema, DesiredFeatureSchema, MaintenanceLevelSchema } from './brief.js';
+import { EdgeTreatmentPlanSchema } from './edges/edge-run.js';
 import { ConceptExplanationSchema, ConceptStrategySchema } from './design/concept-explanation.js';
 import { DesignScoreSchema } from './design/design-score.js';
 import { hashString } from './prng.js';
@@ -94,6 +95,19 @@ export const DesignElementSchema = z.object({
   name: z.string().optional(),
   shape: PlanGeometrySchema,
   zone: ZoneIdSchema,
+  /**
+   * Why this element is here, in one word from the composition's own vocabulary: `focal`,
+   * `screening-planting`, `utility-route`, `destination`.
+   *
+   * The answer to "why is this here", recorded by the pass that put it there, so the explanation
+   * and the editor can still say it after the plan has been stored — a generated concept is a
+   * plan somebody edits a week later. A plain string for the reason `material` is one: the
+   * vocabulary lives with the composition layer in the API and a stored plan must not become
+   * unparseable because a word was added to it. Absent on anything placed by hand, on every plan
+   * drawn before the composition layer existed, and on every fill: the scorer's `orphan-feature`
+   * only asks about it on a plan where at least one element carries one.
+   */
+  purpose: z.string().max(48).optional(),
 
   /* ---- step 5 adds the rest. All optional, so a generated concept is still a valid layout. ---- */
 
@@ -137,19 +151,37 @@ export const DesignElementSchema = z.object({
     })
     .optional(),
   /**
-   * What this surface is edged with, or absent for the spade cut every border has for free.
+   * Which product this surface prefers where it is edged at all.
    *
-   * **A field on the host rather than an element of its own, and that is the whole design.** An
-   * edging run is a function of the outline it follows, so storing the run would mean two things
-   * that can disagree the moment the bed is dragged — and keeping them in step would put a
-   * dependency graph inside the editor's move, resize and rotate actions. `plan/edging.ts` derives
-   * the runs instead, exactly as `computeZones` derives zones and `openingSegment` derives a door.
+   * **Not "this surface has a border round it"** — that is what `edges` decides, side by side and
+   * stretch by stretch. This is the product `mode: 'auto'` lays *where the rules say to lay
+   * something*, and what the generator stamps from the brief's style. Absent means the style picks
+   * one (`styleEdgeProduct`), and where nothing is laid the product is never consulted.
    *
-   * A `MaterialId` from `EDGING_MATERIALS`, which is deliberately not in `MATERIALS`: there is no
-   * category here to key it on. Only the four ground-covering categories may carry one — see
-   * `canBeEdged`.
+   * A `MaterialId` from `EDGING_MATERIALS`, which is deliberately not in `MATERIALS`: an edging run
+   * is derived from the outline of the thing it edges, so there is no element to give a category
+   * to. Only the four ground-covering categories may carry one — see `canBeEdged`.
    */
   edging: z.string().optional(),
+  /**
+   * What is built where this surface meets what is around it.
+   *
+   * **A treatment belongs to a run, not to a surface**, and that is the whole of this field. A
+   * patio may want brick where it meets the lawn, nothing where it meets the path and nothing at
+   * all against the house; one geometric side may need several treatments along its length. The
+   * old model — one product for a whole outline — could say none of that.
+   *
+   * Absent is `mode: 'auto'`, so every plan written before this reads as one the rules decide, and
+   * the field costs a stored document nothing. `none` is a real answer and not an empty one: it is
+   * a surface somebody has said should be left bare.
+   *
+   * `runs` is read in `custom` alone. A run names a side, an end of it to measure from, and the two
+   * distances in metres — never a fraction, for the reason `along-edge.ts` gives about gates — so
+   * a 2.8 m course stays 2.8 m when the patio widens. Nothing here is a coordinate, and nothing
+   * here is a second copy of the geometry: `plan/boundary/side-chains.ts` resolves the run against
+   * the shape's *current* outline on every read, the way a door and a gate already resolve.
+   */
+  edges: EdgeTreatmentPlanSchema.optional(),
   /**
    * What this surface is retained in, where it does not sit on grade.
    *

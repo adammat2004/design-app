@@ -4,6 +4,7 @@ import {
   DESIRED_FEATURE_LABELS,
   MATERIALS,
   STYLE_LABELS,
+  styleEdgeProduct,
   type BudgetBand,
   type DesiredFeature,
   type ElementCategory,
@@ -491,27 +492,8 @@ export function materialFor(
  * ninety metres of granite would be misreporting what it costs to build.
  */
 export function edgingFor(constraints: DesignConstraints): MaterialId | null {
-  if (constraints.budget === 'low') return null;
-
-  const dear = constraints.budget === 'high' || constraints.budget === 'premium';
-  const lowUpkeep = constraints.maintenance === 'low' || constraints.style === 'lowMaintenance';
-
-  if (constraints.style === 'formal') return dear ? 'sett-edging' : 'brick-edging';
-  if (constraints.style === 'cottage') return 'brick-edging';
-  if (constraints.style === 'modern' || lowUpkeep) return 'steel-edging';
-
-  /*
-   * And the default style takes a steel edge where the budget is dear, which _reverses_ the line
-   * above saying everything else gets nothing.
-   *
-   * That was right about municipal planting and wrong about the drawing. `naturalistic` is what
-   * most briefs resolve to, so "everything else" was the commonest answer rather than a rare one —
-   * and the thing a spade cut cannot do on a plan is hold the line between a border and the lawn it
-   * runs into, so a bed read as a stain on the grass rather than as a bed. Steel is the edging that
-   * costs the least visual weight, which is what makes it the one that can be spent here; and only
-   * at a dear budget, so a concept never quietly specifies ninety metres of anything.
-   */
-  return dear ? 'steel-edging' : null;
+  // One style rule for the generator, the editor and the planner: see `styleEdgeProduct`.
+  return styleEdgeProduct(constraints.style, constraints.budget, constraints.maintenance) as MaterialId | null;
 }
 
 /**

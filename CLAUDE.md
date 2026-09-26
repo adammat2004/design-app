@@ -61,12 +61,11 @@ house by `computeZones`, so storing them could only create something stale.
   The generator lifts a terrace only on a formal or modern brief at a high budget, and never
   without a flight down. A raised surface may name a `retaining` wall — coursed stone, brick or
   rendered block, with real faces — or keep the plain upstand in its own paving.
-- **surfaces can be edged**: `DesignElement.edging` names a product from `EDGING_MATERIALS` —
-  steel, brick, sleeper, setts or kerb — and `plan/edging.ts` derives where the course actually
-  goes, leaving out the sides against the fence and the house and refusing a seam two beds share.
-  It is the first thing on the plan measured in **linear metres**, which is what `ScheduleLine
-  .lengthM` exists for. The generator edges beds where the style asks for one; the editor offers it
-  on any of the four ground-covering categories.
+- **surfaces are edged run by run**: `DesignElement.edges` holds Auto, None or Custom runs — brick,
+  stone, steel, timber, kerb or a flush join on part of a side — and a boundary graph says what each
+  stretch meets, so Auto can recommend and the assistant can say "where the patio meets the path".
+  Edited on the plan under the inspector's Edges tab. It is the first thing on the plan measured in
+  **linear metres**, which is what `ScheduleLine.lengthM` exists for. See "Boundary treatments".
 - **the garden can be lit**: `lighting` is the ninth `ElementCategory` — four fittings
   (`light-spike`, `light-bollard`, `light-recessed`, `light-wall`), three finishes, and a scheme the
   generator composes from what it has already placed: an uplight at the foot of each tree and
@@ -184,13 +183,26 @@ simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
 - **there is a designer's reading of every plan, and a benchmark over the generator**: a pure
   TypeScript design agent (`apps/api/src/plan/generation/design/`, `knowledge/`) that analyses the
   site, infers what the garden is *for*, ranks the requested features by tier, writes a strategy per
-  concept slot, and scores the finished elements against eleven landscape-design principles — with the
+  concept slot, and scores the finished elements against twelve landscape-design principles — with the
   faults it found, each a measured sentence. `GeneratedConcept` carries `strategy`, `score` and
   `explanation`; step 4 shows the decisions and why a feature was left out.
   `pnpm --filter @garden-studio/api eval:generator` is the harness: 13 cases × 3 seeds, reporting
   validity, composition bands, score per principle, inclusion, determinism and latency. Today's
-  numbers: **117/117 valid, deterministic, mean score 0.856, no critical faults, 85% of requested
-  features drawn.** Nothing here moves a coordinate.
+  numbers: **117/117 valid, deterministic, mean score 0.891, minimum 0.781, no critical faults, 90%
+  of requested features drawn, 74% inside the composition bands.** Nothing here moves a coordinate.
+- **all seven compositions are composed, not sketched**: `design/composition/` reserves the open
+  space first, puts every room in a bay *outside* it, keeps corridors for the paths, plans the focal
+  point, gives every tree a role and every element a `purpose`, and hands the result on as an
+  ordinary `LayoutSketch`. The twelfth principle, `composition`, detects the object-by-object faults
+  it was built to remove. **Measured** (Phase 0 → now): features standing on the open ground 47 →
+  20, leftover-shaped lawns 74 → 26, paths cutting the lawn 33 → 3, every lawn in one piece. Each
+  hand-drawn sketch survives as the fallback a composition declines to. See "Composing a garden
+  rather than placing features".
+- **the planting is as deep as its job**: borders vary in depth by side (94% of plans, a mean
+  spread of 2 m, measured by the harness), a screening bed goes against a boundary only where it is
+  too low to screen a seat, and the side-zone band no longer plants over the garden's own paths.
+  `pnpm render:plan` writes `00-schematic-sheet.png` — flat colour, routes with arrows, the view line
+  and every element's purpose — which is where a composition is judged.
 - **the scorer judges a garden against its own brief, and there is a benchmark over the scorer
   itself.** The weights follow what the concept is *for* (`knowledge/weight-profiles.ts`), four
   principles read the fields that vary by concept slot, and `maintenanceFit` is the tenth principle.
@@ -1157,7 +1169,8 @@ not know what is underneath. Teaching it would put its neighbours in the cache k
 independence the renderer rests on — moving one bed would invalidate every surface near it. Little
 is lost: a border has a spade-cut edge whether it sits on lawn or gravel, and gravel needs
 containment either way. Widths are millimetres like every other product dimension, and the first
-attempt at 60 mm of near-black read as a picture frame rather than a cut in the ground.
+attempt at 60 mm of near-black read as a picture frame rather than a cut in the ground. *Which
+sides* get the cut is no longer the raster's own decision — see "Boundary treatments".
 
 **Stroking the clipped outline _is_ the cut edge.** The context is already clipped to the outline, so
 a stroke centred on that path renders only its inner half. Computing an inset polygon to fill would
@@ -2795,7 +2808,9 @@ axis whatever its shape — which is why a nine-metre courtyard was offered an a
 test identifies a concept by matching its display name. `knowledge/archetypes/` names them
 (`terrace_and_lawn`, `sweeping_lawn`, `formal_axis`), and `strategy.archetype` puts the name on the
 wire. **The sketch functions themselves did not move**: `golden.test.ts` pins their output to a
-nanometre, structure exactly, and it is deleted when the candidate loop lands.
+nanometre, structure exactly. It was meant to be deleted when the candidate loop landed, and it is
+kept instead: the three templates are now the **fallback** a composition declines to (see "Composing
+a garden rather than placing features"), so they are still drawn, and still worth pinning.
 
 **An archetype is a strategy, not a template, and `suitability` returning zero is a refusal that is
 honoured.** A formal axis on a plot with no axis is not a worse plan, it is the wrong plan. Four
@@ -2827,8 +2842,9 @@ nothing to put in is the same silent fiction as a focal point the garden does no
 **For the three original compositions the zone plan is derived; for the four new ones it is
 primary.** That asymmetry is deliberate and temporary. The originals compute their rectangles inline
 and must go on producing identical numbers, so the plan is read back out of what they drew — it
-cannot disagree with the sketch, because it *is* the sketch. All seven end up the other way round
-once the candidate loop lands and the golden comparison is deleted.
+cannot disagree with the sketch, because it *is* the sketch. Composing the classic three turned
+that round for them — `zonesFromComposition` reads the rooms off the composition's bays — except
+where the composition declines and the template draws instead.
 
 **Every composition draws its open panel; `lawnCategory` decides what it is made of.** All four new
 ones first gated the panel on `lawnAllowed` and drew *nothing* where grass was forbidden — 72% of one
@@ -2990,6 +3006,321 @@ the biggest fixture 1.5 s → 5.1 s. The design loop is not where that went — 
 concept, measured — it is `placement.candidates`, which is the dominant query in the whole generator
 (948 calls and 74 seconds of a full harness run) and whose feasible-region computation gets harder
 when the arrangement changes. Reducing that is its own piece of work and is in TODOS.
+
+## Composing a garden rather than placing features
+
+**Generated plans validated, scored about 0.86, and still read as a set of legal objects dropped
+into free ground**: a fire pit in the middle of the lawn, a diagonal stepping-stone strip cut across
+it, trees spaced evenly round the fence, a lawn whose outline was whatever the rooms left. The
+causes were structural, not a matter of tuning. Slot anchors sat *inside* the lawn's range, the
+router tried a straight line first with the lawn never an obstacle, and anything unseated went to
+a PostGIS sampler that would stand it anywhere legal. `design/composition/` is the answer. It is a
+pure intermediate representation, `GardenComposition`, between the zone plan and the sketch.
+
+```
+SiteAnalysis → DesignBrief → ZonePlan → GardenComposition → LayoutSketch → fit / route / realise → score
+```
+
+**It is said in the vocabulary the rest of the pipeline already speaks.** `composeSketch` turns a
+composition into an ordinary `LayoutSketch`. A bay becomes a slot of the same id, so `fitInSlot`,
+the preview, `LayoutAdjustments.avoidSlots`, repair and the explanations all work unchanged, and a
+composed archetype and a hand-drawn one are enumerated side by side in one candidate field. What the
+sketch gains is `composed`, the facts realisation must honour: the language, why each tree is where
+it is, and what each bed is for. `knowledge/archetypes/composed.ts` wires every archetype to it — see
+"The other three, and what they share".
+
+**The order is the design:**
+
+1. **Terrace.** Trimmed to leave room at its end and beside it, never below its floor and never off
+   the door.
+2. **Open space.** Reserved next, before any room.
+3. **Rooms.** Placed in bays in priority order, stores first, from each feature's own ladder, then
+   far-centre, then side bays. `seats()` checks a bay with the fitter's own arithmetic
+   (`sizeToSlot`, `floorScale`), so a bay that looks big enough and then refuses the feature cannot
+   happen.
+4. **Circulation.** Corridors at the fences for the trunks, with a vertex level with each room they
+   pass.
+5. **Focal point.** A bay on the axis, or a focal tree where nothing can end the view.
+6. **Planting masses.** Cut from cells and named by purpose: rear, away, gate, screen, flank.
+7. **Trees.** Planted by role: focal, framing, screening, then backdrop.
+
+**No bay stands on the lawn, and the one exception is argued.** The lawn is notched with
+`outlineWithout` only where a bay reaches into it, and each cut is snapped to the lawn's edge so it
+never leaves a sliver. `outlineWithout` returns `null` rather than a lawn with a hole or a lawn in
+two pieces. A bay that would take the lawn below `LAWN_KEEPS` (60% of its rectangle) is refused
+rather than the lawn made smaller. An *essential* room may take it down to `LAWN_FLOOR`, and only
+the first `PROTECTED` rooms count as essential when the brief does not say. Play is the one feature
+that may stand on the grass, and that exemption comes from the relationship rule `preferNear lawn`,
+not from a second list.
+
+**A composition that cannot hold an essential declines, and the template draws instead.**
+`composeGarden` returns `null` when an essential room will not fit, or when the lawn would fall
+under its floor. The archetype then falls back to its hand-drawn sketch, which is why
+`layout/templates/`, each archetype's own `handDrawn()` and `golden.test.ts` are still here: they
+are the fallback where a composition declines.
+Dropping the essential instead was the first version, and it put a critical fault on every small
+plot.
+
+**Corridors are the paths' own ground, not undesigned ground.** A route's centreline runs `SERVE`
+(0.58 m) from the face of what it serves. That is under the 0.6 m the circulation principle counts
+as served, and over half the widest composed route (the 1.05 m utility path), so it touches nothing
+and still reaches the room. A corridor is twice that. The beds are cut round the corridors, so the
+paths are laid in gaps the composition left rather than through planting. A gate level with the
+terrace gets an arrival corridor across the flank bed, or its path cuts that bed in two.
+
+**Only the walk down the view may cross the lawn, and it is stepping stones.** `layRoutes`
+(`design/circulation.ts`) is the single route pass for preview and realisation. On a composed plan
+the lawn is an obstacle to every tier but `decorative`, and dog-legs follow the frame's axes
+(`RouteRequest.axes`) rather than the world's. The non-formal "Garden walk" is laid as
+`stepping-stones` whatever the brief's paving, so grass shows between the stones and the lawn stays
+one lawn. The formal axis is still paved, because on a formal plan the paved axis is the point.
+
+**The sampler is off inside a composed plan.** It was the mechanism that stood features on the
+lawn. A feature with no bay is reported instead: "No room for it in this composition without
+standing it on the lawn". That is honest, and it is most of why inclusion fell two points. The
+sampler still runs on the no-house path and when a composition declines to its hand-drawn sketch. The surplus pass uses
+the spare lounge bays instead (`SketchRequest.extraRooms`), and the tree top-up runs only when the
+plan is not composed.
+
+**`DesignElement.purpose` is additive and persisted.** It is an optional string of up to 48
+characters, with no version bump. Hosts, paths, beds, trees and passage strips carry one, and
+`elementsFromPreview` copies it. `orphan-feature` is **conditional** on any element carrying a
+purpose, so a hand-drawn plan is not marked down for never having said.
+
+**`composition` is the twelfth principle.** Weight 0.10, taken from `grouping` (0.20 → 0.15, its
+convex-hull half moved into `one-sided`) and `proportion` (0.15 → 0.10). It is not in any emphasis
+shift, for the reason "do not express an emphasis twice" gives. It has seven detectors, each with a
+fault-and-control pair in `evaluate/composition.test.ts`:
+
+- `feature-in-open-space`
+- `route-crosses-panel`: at least 2 m of centreline inside the lawn, on a chord that leaves at least
+  20% of the lawn's area on each side. Measured by area, not by where the line runs, because a path
+  down the lawn's edge crosses nothing.
+- `hard-island`: the fence is measured as a line, because containment counts as intersecting and the
+  rule could never fire.
+- `orphan-feature`
+- `one-sided`: skipped where the style requires symmetry.
+- `panel-complexity`: counts reflex corners and uses the isoperimetric quotient.
+- `geometry-mixed`
+
+`COMPOSITION_PRINCIPLE=0` turns the principle off, so a later gain can be attributed to the geometry
+rather than to the scorer noticing it.
+
+**Passages and arrivals are not open space.** `subject.panels` excludes the `passage` and `arrival`
+purposes. A gravel side return counted as a panel was reported as a leftover-shaped lawn, with a
+lounge deck in it counted as standing on the open ground.
+
+**`polygonsIntersect`'s centroid backstop was wrong for concave shapes.** The centroid of an
+L-shaped path strip lies outside the strip, often inside the lawn in its crook, so every dog-legged
+route beside the lawn was refused as crossing it. It now uses `interiorPoint`: the centroid when it
+is strictly inside, otherwise a probe just in from an edge midpoint. There are tests either side in
+`shapes.test.ts`.
+
+**`route-through-planting` allows `THROUGH_SLACK` (0.1 m).** A route cuts a bed only when its
+centreline enters the bed or passes nearer than `width / 2 − 0.1`. PostGIS simplifies bed edges by
+5 cm, so a path laid flush against a bed was reported as cutting through it.
+
+**`wantFor` caps `minSize` at the scaled footprint.** `FEATURE_LIBRARY` quotes floors at suburban
+scale and footprints scale by `√scale`. On a small plot the floor was larger than the thing, and the
+fitter refused every bay.
+
+**`pickDistinct` refuses an identical drawing when there is an alternative.** A composition that
+declines on two parameter sets draws the same template twice, and the diversity penalty alone let
+both through.
+
+### The destination garden, composed
+
+**`composed.ts` is how an archetype joins the composition layer**: a shape language, a hand-drawn
+fallback for when the composition declines, and optionally the zone types it is organised round.
+The classic three and `destination_garden` all go through it; `composeGarden` reads
+`input.archetype === 'destination_garden'` for the rules below and nothing else about the id.
+
+**The room at the far end is decided first and pinned there.** It is the first of `DESTINATIONS` —
+fire pit, garden room, hot tub, water, then dining, because a table usually wants the kitchen — that
+the brief asked for, whatever its own ladder says; a spare seat only where the plot is already
+carrying one. **Never an empty bay**: a spare room is filled by the realisation only when
+`wantsLoungeRoom` or the surplus asks, so with neither and no real destination the composition
+declines. It is essential by definition — no alternative bays, and it declines rather than drop it.
+
+**`DESTINATION_SHARE` is 0.32 of the garden beyond the terrace**, the hand-drawn plan's own clamp,
+and the want is scaled down whole to it (never below its floor). Sized from the feature alone a fire
+pit on the suburban plot was a six-metre circle and the lawn was left 2.7 m deep with a play area on
+all of it.
+
+**The lawn stops short: a planted screen, then a path along the room's front.** The screen is
+drawn only where the lawn in front of it is still at least `SHALLOW_LAWN` deep — the rule the
+archetypes already judge a lawn by, reused rather than restated — otherwise the path runs along the
+lawn's end. The planting beyond the lawn is named `Enclosing border` with a screening purpose, a
+glimpse pair of trees stands in the screen either side of the room, and the room is the focal point
+even where a narrow garden stands a store behind it on the same line. The walk across the lawn
+(`Garden walk`) never goes to the destination: the path down the side is its walk.
+
+**The walk to a centred destination runs between the away border and the lawn**, like the formal
+plan's corridors; at the fence behind the border it measured 2.4 times the direct line. To a
+destination on the diagonal it stays at the fence, where it runs straight into the room.
+
+**A garden too narrow for two paths gets one, and a branch.** Below the width a diagonal destination
+already requires, a separate path down the away side took the last of the planting and left the
+lawn at its floor between two strips of paving. So the store's path runs past the destination and a
+short branch (`CirculationEdge.branch` → `SketchPath.branch`) turns along its front. Passing its side
+was the first answer and a fragile one: the corridor puts the path 0.58 m from the bay, inside the
+0.6 m that counts as reaching a room, and a fire pit tessellated inside its bay lands a few
+centimetres outside it. `layRoutes` lays a branch only after its trunk and ignores the trunk's strip,
+because the two overlap at the junction by construction.
+
+**A row of corridor ends half a corridor past the turn** (`past`). Ended exactly level with the
+room's middle, the planting starts at the corner the route turns round and the route's own width
+reads as cutting the bed. True of every trunk's rows, not only the destination's.
+
+**The play bay is held to the lawn's depth only in a destination garden.** There the fitter's nudge
+carried a play area whose bay ran back onto the terrace forward into the path along the far room.
+Applied everywhere it left the play area unplaced on a shallow lawn and took every terrace-and-lawn
+candidate out of the field on the 20 × 9 test plot — three cards of `side_by_side`.
+
+### The other three, and what they share
+
+**`knowledge/archetypes/composed.ts` is how every archetype reaches the composition layer.** It takes
+a shape language (fixed, or `styleLanguage`, which reads the brief's style), a hand-drawn fallback
+for when the composition declines, and optionally the zone types the plan is organised round. It also
+picks the composer: `composeGarden` for the five plans whose rooms lie behind the terrace,
+`composeBeside` (`design/composition/beside.ts`) for `side_by_side`, and `composeCourt`
+(`design/composition/court.ts`) for `courtyard`. All three return a `GardenComposition`, so the
+sketch, the zones and realisation are shared. Each of them declines where it cannot hold what the
+brief most wants, and the archetype's hand-drawn sketch draws instead.
+
+**`linear_sequence` is the destination garden's mode read along a corridor plot.** It has the terrace,
+a lawn entered through a planted threshold with an opening in front of the doors, a divider, and a
+room at the far end. Three things differ from the destination garden:
+
+- the far room may be anything that belongs at the far end, not only a reason to walk there;
+- the divider gives way only to the lawn's floor, not to `SHALLOW_LAWN`;
+- the far room is never on the diagonal.
+
+The threshold band is a step-out's width deeper than a bed. A band only a bed deep was cut by the
+paths' step-outs into scraps under the sliver guard. **The hand-drawn plan's path swung across each
+room, and that swing is gone on purpose**: it was a path across the lawn, which composing refuses.
+
+**`side_by_side` lays the lawn beside the terrace, and the terrace gives it room.** On a wide house
+the terrace ran most of the way across and left the lawn a strip, a patio larger than the garden it
+opens onto. It now narrows on the lawn's side until that side keeps `LAWN_SHARE` (0.4) of the plot's
+width, never off the door and never below its floor. The dining area or fire pit goes in a bay in
+the lawn's far corner, turned if square-on it is wider than the gap, reached along the house and down
+the fence. If nothing lands there, the lawn takes back the path's width it gave up. The store stays
+where the hand-drawn plan put it, clear of the lane along the house, with a short spur from the
+terrace's end where it is more than a stride away. `TERRACE_SHARE` and `ACCESS_LANE` moved into
+`beside.ts`, and the hand-drawn fallback imports them.
+
+**The courtyard carves room rather than finding it.** Its hand-drawn places were a metre-deep
+corner and a strip of rear border that no store or fire pit fitted, so every such feature fell to
+the sampler. The store is tucked in the corner by the house on the gate side, turned if it must be.
+The floor gives up that side's width, and the bed along that side runs on from the store. The thing
+opposite the doors stands in a rear band that deepens to hold it. Neither may take the floor under
+the terrace's own. **Nothing goes on the floor**: the floor is the terrace, which realisation treats
+as an obstacle, and a room placed on it could never be seated. `court()` moved into `court.ts` too.
+
+**A destination garden or a sequence speaks the style's shape language.** Drawn straight-edged for a
+cottage brief, which asks for strong curvature, the composed destination garden out-scored the
+sweeping lawn and was recommended for a brief whose style wanted curves. `styleLanguage` makes both
+soft-edged where the style is.
+
+**A requested feature outranks a spare seat.** A kind held only for a spare is open to a feature
+whose own bay would not take it. A spare that loses its place tries the other spare places and a bay
+set into a side border, which is what a lounge tucked into planting is. On the estate plan a repair
+moves the water feature into view and into the spare's bay. The other two cards still carry their
+second seat, and the concept test states it over the set for that reason.
+
+### The preview and the built plan agree, and a test holds them to it
+
+**`parity.test.ts` wraps `chooseLayouts` and checks every feature the chosen preview placed.** The
+built plan must seat it with the same purpose, which is the slot's, and within 2.5 m (a nudge is
+allowed; another slot is not). **It found a real divergence the first time it ran.** The preview
+places the features `withinCapacity` kept, a ranked cut that never drops an essential. The built plan
+then cut again at `featureAttempts`, so on a shallow plot the preview scored a water feature the plan
+never drew. `withinBudget` in `concepts.service.ts` lets anything the chosen layout placed through.
+That change alone took requested features drawn from 82% to 90%.
+
+### Phase 2: planting as deep as its job
+
+**On a composed plan the side-zone band stops at the garden room.** `borderRegions` grows a band from
+the fence and subtracts what was placed, but not the composition's corridors. So it planted every
+corridor that had no path in it, and the margin either side of every path that did. That was most of
+"path cuts through planting" and "squeezes between two things". Measured with the band restored:
+inside the bands 56%, with 52 through-planting faults and 56 pinches.
+
+**A gap between a room and the fence thinner than a bed is left unplanted.** Planted, it closed a
+ring of planting round the room, a bed with a hole in it. A bed is drawn by its outer ring, so the
+room vanished into the planting for anything measuring the plan, and the path that arrived at the
+store was reported as cutting a border.
+
+**A screening bed only where the boundary is too low to screen, and this was measured three ways.**
+The brief asks for privacy through `privacy`, and `lowSides` names the sides whose boundary is under
+the privacy principle's own `SCREENING_HEIGHT`. Only those sides get `SCREEN_BED` (1.5 m) where they
+would otherwise be a mowing edge, with any path run inside the screen:
+
+- A full border on both sides for every brief that asked cost every lawn two metres, and plans
+  inside the bands fell from 68% to 59%.
+- A screening bed against every side fence reached 62%.
+- Switched off, 73%, with privacy at 1.000 on every plan whatever was done, because a 1.8 m fence
+  already screens.
+
+Planting that screens nothing is width the lawn needed.
+
+**Two scorer rules were corrected, each with a fault-and-control pair.**
+
+- **Pinch.** A route arriving at a structure is not pinched by it. The store's centre is straight
+  ahead of the path's end, and the side test filed it on one side, so every path to a store was
+  reported as squeezing between the store and whatever grew beside its last metre.
+- **Reach.** A room is within a stride of the terrace measured outline to outline (`ringGap`), not
+  from the terrace's corners. The route guarantee reads the same function and lays no path to such
+  a room. Asked anyway, it once cut diagonally through a courtyard's planting to a water feature at
+  the terrace's edge.
+
+**The harness measures whether planting depth varies by side.** It walks in from seven points along
+each of the garden's three fences until the planting stops, takes the median per side, and counts a
+plan as varying when its deepest and shallowest planted sides differ by `BORDER_SPREAD` (0.75 m).
+The result is 94% of plans planted on two sides or more, with a mean spread of 2 m.
+
+### Judging and calibrating
+
+**`00-schematic-sheet.png` is the plan as a diagram**: one flat tone per category, routes as dark
+strips with an arrow where they arrive, trees as the canopy's outline, the line out of the garden
+door, and each element's `purpose` written on it. It draws the view line rather than the scorer's
+cone, because the cone's angle is the API's constant and the web script cannot import it without
+pulling API files into the web type check.
+
+**`composed-good` / `composed-poor` joined the gallery.** They hold five things constant: the
+composed plan against the same things placed one at a time. The pair separates 0.972 to 0.737. It
+also found a defect in the scorer: an off-brief lawn asked for a resize without saying by how much.
+`composition-off-brief` now carries `targetAreaFactor`, the band edge over the share.
+
+**Measured** (`scripts/eval-generator.baseline.md`):
+
+| | Phase 0 | Classic three | + destination | All seven + Phase 2 |
+|---|---|---|---|---|
+| Mean design score | 0.860 | 0.885 | 0.883 | 0.891 |
+| Minimum design score | 0.706 | 0.768 | 0.716 | 0.781 |
+| Inside composition bands | 64% | 69% | 68% | 74% |
+| Requested features drawn | 85% | 83% | 82% | 90% |
+| Feature standing on the open ground | 47 | 24 | 24 | 20 |
+| Leftover-shaped lawn | 74 | 29 | 23 | 26 |
+| Path crossing the lawn | 33 | 18 | 0 | 3 |
+| Path cutting through planting | — | 51 | 65 | out of the top ten |
+| Route pinch | — | 57 | 72 | out of the top ten |
+| Mixed geometry | 77 | 51 | 51 | 48 |
+| Seating in shade | 78 | 93 | 66 | 75 |
+| Suburban latency | ~2.3 s | ~1.2 s | ~1.4 s | ~1.1 s |
+
+Per composition, now: courtyard 0.986, side by side 0.931, formal axis 0.901, sweeping lawn 0.890,
+destination 0.887, terrace and lawn 0.882, sequence 0.810.
+
+**What is still wrong, recorded rather than hidden.**
+
+- **Paths crossing the lawn: 3.** These come from a soft-edged destination garden, whose curved
+  lawn the walk runs beside rather than round.
+- **The sequence is the weakest composition (0.810).** On the long-narrow scenario its store stands
+  in the view, and the view cone is the whole width of a six-metre garden.
+- **The gains here are almost all in circulation and proportion.** Too many materials (81), seating
+  in shade (75), sparse canopy (60) and the store's distance from the gate (39) are untouched.
 
 ## Traps Phase 2 paid for
 
@@ -4148,6 +4479,93 @@ plot, so it is a function of what the garden *contains* as much as of how it is 
 expansion cannot close a composition difference without damage. 0.932 / 1.152 / 0.773 is kept, which
 measures closer than ungraded on all three and worse on none. Look at the sheet: the balance row may
 be closed to zero and the others may not.
+
+## Boundary treatments: edging belongs to a run, not to a surface
+
+**A patio may want brick where it meets the lawn, nothing where it meets the path and nothing along
+the house — and one side may need several treatments along its length.** The old model was one
+product per surface, derived round the whole outline, and the renderer's cut edge was worse: it
+stroked every side of every planting, gravel and water outline, which is what drew a dark line along
+each zone seam of a gravel courtyard. Four layers replace it, each pure and in `packages/schema`:
+
+- **`plan/boundary/side-chains.ts` — the stable reference.** A surface's boundary cut into the sides a
+  person points at: a rect's four in `rectToPolygon` order (rotation- and resize-stable), a polygon's
+  one-per-corner with the half-arcs of a rounded corner at each end, a circle's one closed chain, a
+  path's left and right (the square caps are not sides). Split at the ring point *nearest* each
+  authored corner rather than by index arithmetic over `roundPolygon`'s seven-per-corner output, so a
+  degenerate corner cannot corrupt the mapping. Arc length lives in `geometry/stations.ts`, moved out
+  of the renderer so the API can measure a run.
+- **`plan/boundary/graph.ts` — what lies beyond every stretch.** Each side is cut into ~0.1 m cells,
+  each classified by its midpoint: facing the fence or the house within `WALL_REACH`, else the
+  topmost surface just outside (last in array order), else open ground; equal cells merge, slivers
+  are absorbed. A reusable spatial primitive — kerbs, retaining, steps, drainage and planting
+  interfaces all ask this question — and it answers the assistant's "where it meets the path".
+- **`plan/edges/rules.ts` — recommendations, each with a reason the inspector shows.** Ordered, first
+  match wins, *where* before *what*: house and fence bare, raised hosts left to their retaining face,
+  same material bare, paving to paving `flush`, soft to paving bare, stepping stones never, decking
+  timber, gravel always contained (steel where the style names nothing), planting and paving to lawn
+  the style's product. `styleEdgeProduct` is the generator's old `edgingFor`, moved so all three
+  callers share one style rule.
+- **`plan/edges/resolve.ts` — one answer, four consumers.** The renderer draws only resolved runs (so
+  `none` draws nothing — no default outline), the inspector lists them with their `why`, the schedule
+  counts them by the metre, the planner edits them. `cutEdgeMasks` is built from the same resolution,
+  and a base fill never draws one.
+
+**`WALL_REACH` is 350 mm, measured along the stretch's own outward normal, and both halves were paid
+for.** The generator holds every border 150 mm off the fence, so a floating-point tolerance saw that
+gap as the base lawn and every border in a formal garden grew a brick course facing its own fence. A
+plain distance test fixed that and cut the last 350 mm off every course running end-on into the
+fence; along the normal, the reach catches the gap a side *faces* and ignores a fence it merely ends
+at. Still under a mowing strip, so a bed held off by one is edged on that side.
+
+**One seam, one thing built, and the order is who decides.** A host in `custom` or `none` claims every
+seam it touches, so "None" binds the neighbours too and nobody quietly puts back an edge the user
+removed. Otherwise whichever side's rule actually builds something wins — a patio meeting a bed wants
+a course, the bed meeting the patio does not — and `seamOwner` (by category, then id) breaks a tie,
+so the answer never depends on element order.
+
+**`DesignElement.edges` is `{ mode: auto | none | custom, runs }`; a run is a side index, an anchor
+and two distances in metres from that end.** Metres from the *nearer* end, not a fraction — a gate's
+rule: a 2.8 m brick run stays 2.8 m and stays with its corner when the patio widens. Resolved against
+the current outline every read, so there is no remap step; a run its side has shrunk out from under
+stops resolving, draws nothing, and is listed as "Off this side" rather than moved or dropped. The
+one edit that renumbers sides — a `reshape` that changes a polygon's corner count — sends the host
+back to Auto in `resolveOperation`. `edging` stays as the product Auto prefers. Additive, so
+`PLAN_DOCUMENT_VERSION` 4 is the no-op that dates `edging`'s change of meaning. **User intent
+survives a restyle by construction**: Auto is derived, Custom is stored; nothing rewrites a custom
+host, and entering Custom materialises what Auto was showing — including joins a *neighbour* was
+drawing on a shared seam, which would otherwise vanish the moment the seam was claimed.
+
+**`plan/edges/edit.ts` is the only code that changes a run, for people and the designer alike.** The
+store wraps it in its undo bracket; the planner builds proposals with it. So a dragged end and an
+agent's stretch obey one set of limits: refuse under `MIN_EDGE_RUN_LENGTH` rather than pin, clamp to
+neighbouring runs so two courses never overlap, re-anchor to the nearer end after a drag.
+
+**`sameElements` compares `edges` now, and leaving it out was a real bug a test found.** An edge-handle
+drag moves no outline, so the gesture ended as "nothing changed" and left no undo entry — the
+`sameDraft` trap recorded for step 1, arriving on step 5. Anything a drag can touch belongs in that
+comparison.
+
+**The inspector is four tabs, and Edges is one of them rather than an editor of its own.** Every
+panel stays mounted and inactive ones are `hidden` — the tab pattern, and what keeps every existing
+`data-testid` reachable. The Edges tab's open state is `edgeEdit` in the store (five edit points),
+because it is what tells the canvas to draw the boundary and Escape on the canvas closes it; the other
+tabs are local. `EdgeEditLayer` is fragments in the chrome layer: faint sides, runs in treatment
+colours, the free stretch under the pointer, and handles on the selected run only — always, since a
+run has no body drag for its ends to swallow. Shape handles hide while edges are open, or the side hit
+lines would steal the corner handles' clicks. Delete removes the selected run and never the surface.
+
+**Every scene passes the brief's rules (`lib/edge-rules.ts`).** The editor, Visualise, the concept
+cards, the PNG export, the schedule and the judging sheets each build a scene, and one built without
+the brief resolves a formal garden as if no style had been chosen — the export-disagrees-with-screen
+symptom two earlier bugs shared.
+
+**The assistant's `edge` verb is the twelfth branch, and the grammar was probed before it landed.**
+`adjacent` is a relation (`lawn`, `path`, `paving`, `all`…) plus an optional named neighbour; the
+inventory's `beside=[…]` lists what each surface meets, names and ids only. `probe:assistant`
+compiled the 7,690-byte schema against `claude-opus-5` on 22 Sep 2026; the budget test is re-pinned at
+12 branches, 15 objects, 2 optionals, 10 refs, with every new field required and honestly empty.
+`ChangeKind 'edge'` skips the geometry checks in `applyProposal`, as `material` does.
 
 ## Traps already hit
 

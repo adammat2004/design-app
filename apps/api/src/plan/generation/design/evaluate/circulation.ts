@@ -47,10 +47,13 @@ const DETOUR: Record<CirculationStyle, { limit: number; bad: number }> = {
 };
 
 /** Within this of the terrace, a feature needs no path of its own: you are already standing on it. */
-const NO_PATH_NEEDED = 2.5;
+export const NO_PATH_NEEDED = 2.5;
 
 /** How close two obstacles either side of a route may come before it is a pinch point. */
 const PINCH = 0.9;
+
+/** A route whose end is this near a structure arrives at it: the reach `isServed` counts. */
+const ARRIVES_WITHIN = 0.6;
 
 /**
  * How wide a route a correction should come back with.
@@ -137,7 +140,7 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
        * stones are. A path *through* a shed is not, and a path through a planting bed means the
        * bed was cut in two by something drawn after it.
        */
-      const throughBed = subject.beds.find((bed) => polygonsIntersect(route.ring, bed.ring));
+      const throughBed = subject.beds.find((bed) => cutsThrough(route, bed.ring));
 
       if (throughFeature) {
         issues.push({
@@ -206,23 +209,67 @@ export function scoreCirculation(subject: DesignSubject): PrincipleResult {
   return { score: parts.length > 0 ? mean(parts) : 0.5, issues };
 }
 
+/**
+ * How far a route's strip may overlap a bed's edge before it is running through the bed.
+ *
+ * Twice the `SIMPLIFY_TOLERANCE` the fill pass simplifies every bed at. A bed is cut round the paths
+ * in PostGIS and then simplified, so where a path runs along a bed — which is exactly what a composed
+ * plan's paths do, down the corridor between the lawn and the border — the two share an edge to within
+ * five centimetres either way, and a plain intersection test reports every such edge as a path cut
+ * through the planting. Measured on the generator: every one of the hits the first composed plans
+ * scored was a graze of 0.00 to 0.05 m. The same slack the distance rules carry, for the same reason.
+ */
+const THROUGH_SLACK = 0.1;
+
+/**
+ * Whether a route runs *through* a bed rather than along its edge: its centreline enters the bed, or
+ * passes nearer the bed than half its own width less the slack.
+ */
+function cutsThrough(route: DesignSubject['routes'][number], bed: Point[]): boolean {
+  if (!polygonsIntersect(route.ring, bed)) return false;
+  const reach = route.width / 2 - THROUGH_SLACK;
+  const line = route.centreline;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.25));
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      if (pointInPolygon(point, bed)) return true;
+      if (reach > 0 && nearestOn(bed, point) < reach) return true;
+    }
+  }
+  return false;
+}
+
 /** Whether a feature is reached by a route, or near enough to the house not to need one. */
 function isServed(item: SubjectItem, subject: DesignSubject): boolean {
   const door = subject.analysis.exits.primary?.centre ?? subject.analysis.house?.centre ?? null;
   const terrace = subject.items.find((other) => other.feature === 'seating');
 
-  for (const anchor of [terrace?.ring, door ? [door] : null]) {
-    if (!anchor) continue;
-    for (const point of anchor) {
-      if (nearestOn(item.ring, point) <= NO_PATH_NEEDED) return true;
-    }
-  }
+  /*
+   * Outline to outline. This measured from the terrace's *corners* only, so a water feature a metre
+   * off the middle of the terrace's far edge — which you step onto from the paving — was reported as
+   * reached by nothing, and the route guarantee, which measured to the edge, rightly laid no path to
+   * it. One distance, `ringGap`, read by both.
+   */
+  if (terrace && ringGap(item.ring, terrace.ring) <= NO_PATH_NEEDED) return true;
+  if (door && nearestOn(item.ring, door) <= NO_PATH_NEEDED) return true;
 
   return subject.routes.some(
     (route) =>
       polygonsIntersect(route.ring, item.ring) ||
       route.centreline.some((point) => nearestOn(item.ring, point) <= 0.6),
   );
+}
+
+/** The least distance between two outlines; nought where one reaches into the other. */
+export function ringGap(a: Point[], b: Point[]): number {
+  let best = Infinity;
+  for (const point of a) best = Math.min(best, nearestOn(b, point));
+  for (const point of b) best = Math.min(best, nearestOn(a, point));
+  return best;
 }
 
 function nearestOn(ring: Point[], point: Point): number {
@@ -253,8 +300,21 @@ function pinchAlong(
   centreline: Point[],
   subject: DesignSubject,
 ): { left: string; right: string } | null {
+  /*
+   * Not the structure the route arrives at or leaves from. A path ends a hand's breadth off the face
+   * of the store it serves, and the store's centre is straight ahead of it — which the side test
+   * below files on one side — so every path to a store was reported as squeezing between the store
+   * and whatever grew beside its last metre. Arriving at a thing is not being pinched by it.
+   */
+  const ends = [centreline[0], centreline[centreline.length - 1]].filter(
+    (point): point is Point => point !== undefined,
+  );
   const blockers = [
-    ...subject.items.filter((item) => item.category === 'structure'),
+    ...subject.items.filter(
+      (item) =>
+        item.category === 'structure' &&
+        !ends.some((end) => nearestOn(item.ring, end) <= ARRIVES_WITHIN),
+    ),
     ...subject.beds,
   ];
   if (blockers.length < 2) return null;

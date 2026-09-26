@@ -143,6 +143,7 @@ function propertyChanges(previous: DesignElement, next: DesignElement): Record<s
     'category',
     'material',
     'edging',
+    'edges',
     'retaining',
     'elevation',
     'height',
@@ -154,8 +155,19 @@ function propertyChanges(previous: DesignElement, next: DesignElement): Record<s
   ] as const;
 
   const changes: Record<string, unknown> = {};
-  for (const field of fields) if (previous[field] !== next[field]) changes[field] = next[field];
+  for (const field of fields) if (!sameValue(previous[field], next[field])) changes[field] = next[field];
   return changes;
+}
+
+/**
+ * `edges` is the one property that is a structure rather than a scalar, and compared by identity it
+ * is "changed" on every line of every diff — so every material swap would arrive with a second,
+ * empty `setProperty` claiming the edging moved. Compared by value, as corners already are.
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /** What one line of the diff becomes. Several operations, because a change can do two things. */

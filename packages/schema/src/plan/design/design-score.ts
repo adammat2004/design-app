@@ -34,11 +34,18 @@ import { FunctionalZoneTypeSchema } from './vocabulary.js';
  * marooned in open lawn scored exactly as well as one with a boundary of them — and the candidate
  * loop, which only ever prefers what it can measure, had no reason to choose the fuller garden.
  * It applies only where there is a room big enough for trees to be a question at all.
+ *
+ * `composition` is the twelfth and reads the plan as a *whole* rather than as a set of things in
+ * it: a feature standing on the lawn, a path cut straight across the panel, a shed floating in the
+ * ground with nothing round it. Every other principle can be satisfied by a garden that is a
+ * collection of individually correct objects, and the measurement that this was so is the reason
+ * the principle exists. Always applies, like the eight before it.
  */
 export const PrincipleIdSchema = z.enum([
   'circulation',
   'grouping',
   'proportion',
+  'composition',
   'relationships',
   'privacy',
   'hierarchy',
@@ -90,6 +97,23 @@ export const DesignIssueCodeSchema = z.enum([
    * pass and the brief does not is a difference of intention, not a defect.
    */
   'composition-off-brief',
+  /*
+   * composition — faults about the plan as a whole rather than about one rule.
+   *
+   * `feature-in-open-space` is a thing standing on the panel that should stand beside it;
+   * `route-crosses-panel` a path cut across the open ground instead of round it; `hard-island` a
+   * built thing touching nothing; `orphan-feature` an element the composition never gave a reason;
+   * `one-sided` the built masses all on one side of the room; `panel-complexity` an open space
+   * whose outline is the leftover of everything else; `geometry-mixed` a curve in a straight plan
+   * or a rectangle in a curved one, without a decision behind it.
+   */
+  'feature-in-open-space',
+  'route-crosses-panel',
+  'hard-island',
+  'orphan-feature',
+  'one-sided',
+  'panel-complexity',
+  'geometry-mixed',
   /* circulation */
   'route-missing',
   'route-detour',

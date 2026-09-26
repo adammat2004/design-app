@@ -107,6 +107,7 @@ const PropertyChangesSchema = DesignElementSchema.pick({
   category: true,
   material: true,
   edging: true,
+  edges: true,
   retaining: true,
   elevation: true,
   height: true,
@@ -306,6 +307,12 @@ export function resolveRef(ref: string, bindings: Record<string, string>): strin
   return bindings[ref] ?? null;
 }
 
+/** The element with its per-side edging choice removed — back to the automatic answer. */
+/** The element with its custom edge runs dropped — back to the automatic answer. */
+function withAutomaticEdges(element: DesignElement): DesignElement {
+  return { ...element, edges: { mode: 'auto', runs: [] } };
+}
+
 function find(ref: string, context: ResolveContext): DesignElement | null {
   const id = resolveRef(ref, context.bindings);
   if (!id) return null;
@@ -410,7 +417,18 @@ export function resolveOperation(
       if (!before) return { ok: false, reason: MISSING_REFUSAL };
       if (before.shape.kind !== 'polygon')
         return { ok: false, reason: 'That is not an outline to reshape.' };
-      return geometryChange(before, {
+      /*
+       * A per-side edging choice is keyed on the authored corner index, and a new corner count
+       * renumbers every side after the change. Keeping the list would silently move a course onto a
+       * side the user never pointed at, so it goes back to automatic instead — the same refusal
+       * `pruneBoundaryStyles` makes when a boundary corner disappears.
+       */
+      const host =
+        before.edges?.mode === 'custom' &&
+        operation.to.points.length !== before.shape.points.length
+          ? withAutomaticEdges(before)
+          : before;
+      return geometryChange(host, {
         ...before.shape,
         points: operation.to.points,
         ...(operation.to.cornerRadius === undefined ? {} : { cornerRadius: operation.to.cornerRadius }),

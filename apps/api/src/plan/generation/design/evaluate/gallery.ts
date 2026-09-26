@@ -12,14 +12,14 @@ import {
 import { gardenBuilder, panel, rect } from './test-garden.js';
 
 /**
- * Nine gardens of deliberately different quality, on one plot, for the scorer to be measured by.
+ * Eleven gardens of deliberately different quality, on one plot, for the scorer to be measured by.
  *
  * The scorer has always been tested a rule at a time — build the fault, check it is reported — which
  * proves each principle fires and says nothing about whether the *total* ranks gardens the way a
  * designer would. This is the other half: whole plans, in pairs that differ only in composition, so
  * "is this scorer any good" becomes a question with an answer.
  *
- * Four pairs and a floor:
+ * Five pairs and a floor:
  *
  * ```
  *   entertaining-good   ┐                    a terrace that holds a table, the barbecue by it,
@@ -30,6 +30,8 @@ import { gardenBuilder, panel, rect } from './test-garden.js';
  *   planted-poor        ┘ same six things    slivers, islands, a sofa against a low railing
  *   lowMaintenance-good ┐                    two materials, gravel, nothing to mow
  *   lowMaintenance-poor ┘ same five things   the same plan in grass: four materials, all of it edge
+ *   composed-good       ┐                    the lawn reserved, rooms in corner bays, a path beside it
+ *   composed-poor       ┘ same five things   fire pit on the grass, a path across it, lawn left over
  *   scattered             the floor: every feature in its own corner, nothing connecting them
  * ```
  *
@@ -576,6 +578,163 @@ function lowMaintenance(good: boolean): Built {
   };
 }
 
+/* ---------------------------------------------------------------- composed */
+
+const COMPOSED = brief({
+  purpose: 'A lawn for the children and somewhere to sit round a fire in the evenings.',
+  desiredFeatures: ['seating', 'firePit', 'storage', 'lawn', 'plantingBeds'],
+  style: 'modern',
+});
+
+/**
+ * The pair the composition principle is calibrated by: a garden composed round its open space, and
+ * the same five things placed one at a time wherever each happened to fit.
+ *
+ * The good one is what `design/composition/` draws: the lawn reserved first, the fire pit and the
+ * store in bays at the far corners, one path down the side of the lawn with a branch along its far
+ * edge, and every element carrying the reason it is there. The poor one is the fault list that layer
+ * was built to remove, drawn by hand: the fire pit standing on the grass, a path cut diagonally across
+ * it, the store adrift in the middle of the garden, and the lawn the ground the rest left over.
+ */
+function composed(good: boolean): Built {
+  const { feature, fill, path } = gardenBuilder(good ? 'cg' : 'cp');
+  const featureOf = new Map<string, DesiredFeature>();
+  const name = (element: DesignElement, id: DesiredFeature) => {
+    featureOf.set(element.id, id);
+    return element;
+  };
+
+  const base = fill('lawn', panel(WIDTH / 2, ROOM_DEPTH / 2, WIDTH, ROOM_DEPTH), {
+    fillKind: 'base',
+  });
+  const terrace = name(
+    feature('Seating patio', rect(7, 10.9, 8, 3.8), { purpose: 'terrace' }),
+    'seating',
+  );
+
+  if (good) {
+    const lawn = fill('lawn', panel(6.25, 6.55, 8.5, 4.7));
+    const leftBed = fill('planting-bed', panel(1, 6.55, 2, 4.7), { purpose: 'framing-planting' });
+    const rightBed = fill('planting-bed', panel(13, 6.55, 2, 4.7), { purpose: 'framing-planting' });
+    const rearBed = fill('planting-bed', panel(7.65, 1.5, 6.5, 3), {
+      purpose: 'backdrop-planting',
+    });
+    const leftFlank = fill('planting-bed', panel(1.5, 10.9, 3, 3.8), {
+      purpose: 'threshold-planting',
+    });
+    const rightFlank = fill('planting-bed', panel(13, 10.9, 2, 3.8), {
+      purpose: 'threshold-planting',
+    });
+
+    /* A room of its own in the far corner, off the grass, with the rear border running past it. */
+    const firePit = name(
+      /* Paved in the terrace's stone: a modern plan is allowed three materials and has them. */
+      feature('Fire pit', rect(2.6, 1.6, 3.2, 2.8), { purpose: 'destination' }),
+      'firePit',
+    );
+    const shed = name(
+      feature('Garden store', rect(12.2, 1.5, 2.2, 2), {
+        category: 'structure',
+        material: 'softwood',
+        purpose: 'utility-store',
+      }),
+      'storage',
+    );
+    /*
+     * Down the side of the lawn to the store, and a branch along the lawn's far edge to the fire —
+     * each stopping a little over half a metre off the face it serves, for the reason the
+     * entertaining garden's route does.
+     */
+    const toShed = path(
+      [
+        { x: 11.3, y: 9 },
+        { x: 11.3, y: 3.05 },
+      ],
+      1.2,
+      'Path to the shed',
+      { purpose: 'utility-route' },
+    );
+    const toFire = path(
+      [
+        { x: 11.3, y: 3.55 },
+        { x: 4, y: 3.55 },
+      ],
+      1.2,
+      'Path to the fire pit',
+      { purpose: 'garden-route' },
+    );
+
+    return {
+      elements: [
+        base,
+        lawn,
+        leftBed,
+        rightBed,
+        rearBed,
+        leftFlank,
+        rightFlank,
+        terrace,
+        firePit,
+        shed,
+        toShed,
+        toFire,
+      ],
+      featureOf,
+    };
+  }
+
+  /* The same five things, each put wherever it fitted: the lawn is what they left. */
+  const lawn = fill('lawn', {
+    kind: 'polygon',
+    cornerRadius: 0,
+    points: [
+      { x: 1, y: 1 },
+      { x: 5, y: 1 },
+      { x: 5, y: 3 },
+      { x: 8, y: 3 },
+      { x: 8, y: 1 },
+      { x: 13, y: 1 },
+      { x: 13, y: 5 },
+      { x: 10.5, y: 5 },
+      { x: 10.5, y: 7 },
+      { x: 13, y: 7 },
+      { x: 13, y: 8.8 },
+      { x: 1, y: 8.8 },
+    ],
+  });
+  const rearBed = fill('planting-bed', panel(7, 0.5, 14, 1), { purpose: 'backdrop-planting' });
+  const firePit = name(
+    feature('Fire pit', rect(6.5, 6.2, 3.2, 2.8), {
+      category: 'gravel-mulch',
+      material: 'decorative-gravel',
+      purpose: 'destination',
+    }),
+    'firePit',
+  );
+  const shed = name(
+    feature('Garden store', rect(8.6, 3.6, 2.2, 2), {
+      category: 'structure',
+      material: 'softwood',
+      purpose: 'utility-store',
+    }),
+    'storage',
+  );
+  const route = path(
+    [
+      { x: 3.2, y: 9 },
+      { x: 11.5, y: 2 },
+    ],
+    1.2,
+    'Garden path',
+    { purpose: 'garden-route' },
+  );
+
+  return {
+    elements: [base, lawn, rearBed, terrace, firePit, shed, route],
+    featureOf,
+  };
+}
+
 /* ---------------------------------------------------------------- the floor */
 
 function scattered(): Built {
@@ -740,6 +899,20 @@ export const GALLERY: GalleryGarden[] = [
     'lowMaintenance-good',
   ),
   entry(
+    'composed-good',
+    'The lawn reserved first, the fire and the store in bays at the far corners, one path down its side and a branch along its far edge.',
+    COMPOSED,
+    composed(true),
+    'composed-poor',
+  ),
+  entry(
+    'composed-poor',
+    'The same five things placed one at a time: the fire pit on the grass, a path cut across it, the store adrift, the lawn the ground left over.',
+    COMPOSED,
+    composed(false),
+    'composed-good',
+  ),
+  entry(
     'scattered',
     'The floor: every feature in its own corner, nothing connecting them, no open ground at all.',
     ENTERTAINING,
@@ -754,10 +927,11 @@ export function gallery(key: string): GalleryGarden {
   return found;
 }
 
-/** The four good/poor pairs, as the relational assertions read them. */
+/** The five good/poor pairs, as the relational assertions read them. */
 export const GALLERY_PAIRS: { better: string; worse: string }[] = [
   { better: 'entertaining-good', worse: 'entertaining-poor' },
   { better: 'family-good', worse: 'family-poor' },
   { better: 'planted-good', worse: 'planted-poor' },
   { better: 'lowMaintenance-good', worse: 'lowMaintenance-poor' },
+  { better: 'composed-good', worse: 'composed-poor' },
 ];

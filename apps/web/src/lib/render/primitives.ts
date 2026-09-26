@@ -98,7 +98,7 @@ export function compilePrimitives(scene: SceneContent, site: SiteSection, depthF
     }
   }
   for (const surface of scene.edging) {
-    const height = edgingHeight(surface.element.material);
+    const height = surface.height ?? edgingHeight(surface.element.material);
     const course = compileLinearCourse(surface);
     const rendered = course ? { ...surface, outline: course.outline } : surface;
     add({ ...base(`${surface.elementId}:course`, surface.elementId.split(':edge:')[0]!, 'courses',

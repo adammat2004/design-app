@@ -1,7 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import {
+  canBeEdged,
   canTake,
   cheaperAlternative,
+  edgePlanOf,
+  materialisedRuns,
+  resolveEdges,
+  sameEdgePlan,
+  treatmentSpec,
+  withEdgeMode,
+  withStretch,
+  type BoundaryInterval,
+  type EdgeRelation,
+  type Neighbour,
+  type ResolvedEdgeRun,
   computeZones,
   defaultMaterial,
   describeElement,
@@ -171,7 +183,92 @@ export class PlannerService {
         return this.reroute(intent, context, nextId);
       case 'rotate':
         return this.rotate(intent, context, nextId);
+      case 'edge':
+        return this.edge(intent, context, nextId);
     }
+  }
+
+  /* ---------------------------------------------------------------- edge */
+
+  /**
+   * What is built along a surface where it meets something — by relation, never by position.
+   *
+   * The model says "brick where the patio meets the lawn"; the boundary graph says which sides of
+   * the patio, and how far along each, face the lawn; and the stretches are set with the same
+   * `withStretch` the editor's own Custom mode is built on. So a run the designer lays and a run the
+   * user drags are made by one piece of code under one set of limits, which is what the brief meant
+   * by the designer using the same system as the manual editor.
+   *
+   * A surface still on Auto is first given what Auto was drawing, so the change is the one stretch
+   * that was asked about and not the loss of every other edge the user could see. Nothing moves, so
+   * there is no legality check — the same argument `material` makes.
+   */
+  private edge(
+    intent: Extract<DesignIntent, { kind: 'edge' }>,
+    context: Context,
+    nextId: () => string,
+  ): PlannedChanges {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+    const elements = context.document.layout.elements.map(
+      (element) => context.pending.get(element.id) ?? element,
+    );
+    const byId = new Map(elements.map((element) => [element.id, element]));
+    const brief = context.document.brief;
+    const resolution = resolveEdges(
+      elements,
+      { boundary: context.boundary, ...(context.house ? { house: context.house } : {}) },
+      { style: brief.style ?? null, budget: brief.budget ?? null, maintenance: brief.maintenance ?? null },
+    );
+    const treatment = treatmentSpec(intent.treatment);
+    const phrase = relationPhrase(intent.adjacent, intent.adjacentElementId, byId);
+
+    for (const stored of resolve(intent.target.elementIds, context)) {
+      const element = byId.get(stored.id) ?? stored;
+      const ask = `${treatment.label} edging on ${label(element)}`;
+
+      if (!canBeEdged(element.category)) {
+        result.unplaceable.push({
+          description: ask,
+          reason: `${sentenceCase(label(element))} is not a surface with edges to build along.`,
+        });
+        continue;
+      }
+
+      const stretches = resolution.graph
+        .intervalsOf(element.id)
+        .filter((interval) => meets(interval.neighbour, intent.adjacent, intent.adjacentElementId, byId));
+
+      if (stretches.length === 0) {
+        result.unplaceable.push({
+          description: ask,
+          reason: `${sentenceCase(label(element))} does not meet ${phrase} anywhere.`,
+        });
+        continue;
+      }
+
+      let next =
+        edgePlanOf(element).mode === 'custom'
+          ? element
+          : withEdgeMode(element, 'custom', materialisedRuns(elements, element.id, resolution));
+      for (const stretch of stretches) {
+        next = withStretch(next, stretch.side, stretch, intent.treatment, 'agent') ?? next;
+      }
+
+      if (sameEdgePlan(next.edges, element.edges) && edgePlanOf(element).mode === 'custom') continue;
+
+      result.changes.push({
+        id: nextId(),
+        kind: 'edge',
+        elementId: element.id,
+        label: label(element),
+        before: edgeSummary(resolution.runs, element.id, stretches),
+        after: `${treatment.id === 'none' ? 'No edging' : treatment.label} where it meets ${phrase}`,
+        next,
+        previous: element,
+      });
+    }
+
+    return result;
   }
 
   /* ---------------------------------------------------------------- reroute */
@@ -1412,4 +1509,101 @@ function describeFootprint(
     case 'strip':
       return `${round(footprint.width)} ${unit} wide`;
   }
+}
+
+/* ---------------------------------------------------------------- edge helpers */
+
+/**
+ * Whether a stretch of boundary meets what the request named.
+ *
+ * `all` is every side that meets something *in the garden* — not the house and not the fence, which
+ * the rules never edge and which "brick all round the patio" does not mean either. Asking for the
+ * house or the fence by name is still honoured: the user said so.
+ */
+function meets(
+  neighbour: Neighbour,
+  relation: EdgeRelation,
+  adjacentElementId: string,
+  byId: Map<string, DesignElement>,
+): boolean {
+  if (adjacentElementId) return neighbour.kind === 'element' && neighbour.id === adjacentElementId;
+
+  switch (relation) {
+    case 'all':
+      return neighbour.kind === 'element' || neighbour.kind === 'ground';
+    case 'house':
+      return neighbour.kind === 'house';
+    case 'fence':
+      return neighbour.kind === 'boundary';
+    default:
+      break;
+  }
+  if (neighbour.kind !== 'element') return false;
+
+  const isRoute = byId.get(neighbour.id)?.shape.kind === 'polyline';
+  switch (relation) {
+    case 'lawn':
+      return neighbour.category === 'lawn';
+    case 'planting':
+      return neighbour.category === 'planting-bed';
+    case 'gravel':
+      return neighbour.category === 'gravel-mulch';
+    case 'water':
+      return neighbour.category === 'water-feature';
+    case 'path':
+      return neighbour.category === 'paved-area' && isRoute;
+    case 'paving':
+      return neighbour.category === 'paved-area' && !isRoute;
+  }
+}
+
+function relationPhrase(
+  relation: EdgeRelation,
+  adjacentElementId: string,
+  byId: Map<string, DesignElement>,
+): string {
+  const named = adjacentElementId ? byId.get(adjacentElementId) : undefined;
+  if (named) return `the ${label(named).toLowerCase()}`;
+
+  const phrases: Record<EdgeRelation, string> = {
+    all: 'anything',
+    lawn: 'the lawn',
+    paving: 'paving',
+    path: 'a path',
+    planting: 'planting',
+    gravel: 'gravel',
+    water: 'water',
+    house: 'the house',
+    fence: 'the boundary',
+  };
+  return phrases[relation];
+}
+
+/** What the stretches had before, in the words the diff line shows. */
+function edgeSummary(runs: ResolvedEdgeRun[], hostId: string, stretches: BoundaryInterval[]): string {
+  const found = new Set<string>();
+
+  for (const stretch of stretches) {
+    const middle = (stretch.from + stretch.to) / 2;
+    const own = runs.find(
+      (run) => run.hostId === hostId && run.side === stretch.side && middle >= run.from && middle <= run.to,
+    );
+    const across =
+      stretch.neighbour.kind === 'element'
+        ? runs.find(
+            (run) =>
+              run.hostId === (stretch.neighbour as { id: string }).id &&
+              run.neighbour?.kind === 'element' &&
+              run.neighbour.id === hostId,
+          )
+        : undefined;
+    const run = own ?? across;
+    found.add(run ? treatmentSpec(run.treatment).label : 'No edging');
+  }
+
+  return [...found].join(', ');
+}
+
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -22,7 +22,7 @@ import { UnitSchema } from './units.js';
  * before/after strings in the user's own units.
  */
 
-export const PLAN_DOCUMENT_VERSION = 3;
+export const PLAN_DOCUMENT_VERSION = 4;
 
 export const PlanDocumentSchema = z.object({
   version: z.number().int().positive().default(PLAN_DOCUMENT_VERSION),
@@ -71,6 +71,19 @@ const MIGRATIONS: Record<number, (document: unknown) => unknown> = {
    * rewrite; the version is bumped so the change has a date rather than because a row needs help.
    */
   2: (document) => document,
+
+  /**
+   * 3 → 4: `edging` stops meaning "there is a border round this".
+   *
+   * A no-op on the same grounds as `2`. Nothing about the shape changes — `edges` is an addition
+   * Zod fills, and `edgingSides` never shipped — but `edging`'s **meaning** does: it was the
+   * product for a whole outline, derived wherever a course was legal, and it is now the product
+   * `mode: 'auto'` lays only where the rules say to lay one. A stored v3 plan therefore *draws*
+   * differently: a patio that met a path in the same stone keeps its course under the old reading
+   * and correctly loses it under this one. There is nothing to rewrite, because the field still
+   * holds the product it always held; the bump is what dates the change.
+   */
+  3: (document) => document,
 
   1: (document) => {
     const root = document as { site?: { house?: { outline?: unknown[] } | null } } | null;

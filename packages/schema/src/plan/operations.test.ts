@@ -249,6 +249,26 @@ describe('resolveOperation', () => {
     expect(resolved).toEqual({ ok: false, reason: 'That outline would cross itself.' });
   });
 
+  it('sends custom edging back to Auto when a reshape renumbers the sides, and keeps it otherwise', () => {
+    /*
+     * A run is keyed on a side index, and a new corner count renumbers every side after the change —
+     * so a run kept through that would silently land on a side nobody pointed at.
+     */
+    const square = [{ x: 2, y: 2 }, { x: 8, y: 2 }, { x: 8, y: 8 }, { x: 2, y: 8 }];
+    const edged = bed(square, {
+      edges: { mode: 'custom', runs: [{ id: 'r1', side: 1, anchor: 'start', from: 0, to: 3, treatment: 'brick', source: 'user' }] },
+    });
+    const after = (points: { x: number; y: number }[]) => {
+      const resolved = resolveOperation(op({ kind: 'reshape', elementId: 'e-2', to: { points } }), context([edged]));
+      return resolved.ok && resolved.effect === 'replace' ? resolved.after.edges : undefined;
+    };
+
+    // Same four corners, moved: the sides are still the same sides.
+    expect(after(square.map((point) => ({ x: point.x + 1, y: point.y })))?.mode).toBe('custom');
+    // A fifth corner: back to Auto rather than onto the wrong side.
+    expect(after([...square.slice(0, 2), { x: 9, y: 5 }, ...square.slice(2)])).toEqual({ mode: 'auto', runs: [] });
+  });
+
   it('lets something genuinely small be placed', () => {
     /*
      * The minimum side is a rule about *dragging* a shape smaller than it is usable at, which is

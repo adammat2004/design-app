@@ -77,7 +77,7 @@ import { FillService } from './fill.service.js';
 import { furnishRoom, hostSymbol, type FurnishOptions } from './furnish.js';
 import { lightingScheme } from './lighting.js';
 import { retainingFor, stepsFromTerrace, terraceRise } from './levels.js';
-import { circulationFor, roomSurface, wantsLoungeRoom, type RoutePurpose } from './room-policy.js';
+import { circulationFor, roomSurface, wantsLoungeRoom } from './room-policy.js';
 import { assignByPriority } from './layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from './layout/fit.js';
 import {
@@ -90,12 +90,7 @@ import {
 } from './layout/frame.js';
 import { FRONT_PATH_WIDTH, frontGarden } from './layout/front.js';
 import { rectSize, type LayoutSketch, type SketchRequest } from './layout/sketch.js';
-import {
-  BACKDROP_TREE_INSET,
-  BACKDROP_TREE_SPACING,
-  MIN_TREES,
-  treeBudget,
-} from './layout/trees.js';
+import { localShapeRing, MIN_TREES, treeBudget, treeCandidates } from './layout/trees.js';
 import {
   baseFillFor,
   passageBorderWidth,
@@ -109,23 +104,15 @@ import { PlacementService } from './placement.service.js';
 import { conceptSeed, makeRng, sqlSeed } from './rng.js';
 import { archetypesForSlots } from './design/archetype-selector.js';
 import { chooseLayouts } from './design/choose.js';
-import {
-  accessName,
-  closestPointOnRing,
-  isIgnored,
-  PATH_STANDOFF,
-  routeBetween,
-  routeFromHouse,
-  terraceStarts,
-  withinRing,
-} from './design/circulation.js';
+import { isIgnored, routeFromHouse, layRoutes, withinRing } from './design/circulation.js';
+import { PURPOSE_BY_KIND } from './design/composition/compose.js';
 import type { DesignBrief } from '@garden-studio/schema';
 import { DesignBriefService } from '../assistant/design-brief/design-brief.service.js';
 import { buildBriefs } from './design/brief-builder.js';
 import { buildExplanation, decide, placedSentence } from './design/decisions.js';
-import { NO_ADJUSTMENTS, slotBarred, type LayoutAdjustments } from './design/types.js';
+import { NO_ADJUSTMENTS, slotBarred } from './design/types.js';
 import { interpretRequirements, withinCapacity } from './design/requirements.js';
-import { analyseSite } from './design/site-analysis.js';
+import { analyseSite, localView, lowSides } from './design/site-analysis.js';
 import { scoreConcept } from './design/index.js';
 import { planZones } from './design/zone-planner.js';
 import type { Decision, ZonePlan } from './design/types.js';
@@ -495,7 +482,7 @@ export class ConceptsService {
       return solidRings;
     };
 
-    const plantTree = (at: Point, zoneId?: ZoneId): boolean => {
+    const plantTree = (at: Point, zoneId?: ZoneId, purpose = 'backdrop-tree'): boolean => {
       if (trees.length >= treeCap) return false;
 
       const symbol = treeSpeciesFor(brief.style, trees.length);
@@ -524,6 +511,7 @@ export class ConceptsService {
         name: 'Tree',
         symbol,
         shape: canopy,
+        purpose,
         zone: zoneId ?? zoneOf(crown, allZones.length > 0 ? allZones : zones),
         material: materialFor('planting-bed', constraints, index),
         ...(symbol === 'tree-ornamental'
@@ -678,6 +666,7 @@ export class ConceptsService {
       geometry: PlanGeometry,
       name: string,
       materialIndex: number,
+      purpose?: string,
     ): DesignElement => {
       const symbol = hostSymbol(feature);
       return {
@@ -686,6 +675,7 @@ export class ConceptsService {
         role: 'feature',
         name,
         shape: geometry,
+        ...(purpose ? { purpose } : {}),
         zone: zoneOf(geometryOutline(geometry), allZones.length > 0 ? allZones : zones),
         material: spec.material ?? materialFor(spec.category, constraints, materialIndex),
         ...(spec.edging ? { edging: spec.edging } : {}),
@@ -767,6 +757,19 @@ export class ConceptsService {
      * no room to compose in there is nothing to preview, and the fall-back is the archetype the
      * selector ranked first — which is also the path a plot with no house takes.
      */
+    /*
+     * Rooms beyond the brief the plot can carry: a lounge where the brief and budget want one, and
+     * a second helping where the placement budget exceeds what was asked for. A composed sketch
+     * reserves a bay for each, so the surplus lands in the composition rather than wherever a
+     * sampler found room — and the preview is told the same number, or it would compose a
+     * different garden from the one realised.
+     */
+    const extraRooms =
+      (wantsLoungeRoom(requested, constraints) ? 1 : 0) +
+      (attempts > toPlace.length && toPlace.some((feature) => REPEATABLE_FEATURES.includes(feature))
+        ? 1
+        : 0);
+
     const chosen = grammar
       ? chooseLayouts({
           analysis: design.analysis,
@@ -786,6 +789,8 @@ export class ConceptsService {
             gateSide: gate ? (grammar.frame.toLocal(gate.centre).v >= 0 ? 'right' : 'left') : null,
             gateCentre: gate?.centre ?? null,
             lawnAllowed: !constraints.forbiddenFill.includes('lawn'),
+            extraRooms,
+            view: localView(design.analysis),
           },
         })
       : [];
@@ -805,6 +810,18 @@ export class ConceptsService {
      * drew.
      */
     const adjustments = slotChoice?.adjustments ?? NO_ADJUSTMENTS;
+    /** What the candidate loop composed from: the capacity cut, less anything a repair left out. */
+    const placingNow = design.placing.filter((feature) => !adjustments.dropped.includes(feature));
+    /*
+     * Whether a feature is inside the placement budget. **Anything the chosen layout placed is.**
+     * There were two budgets and they disagreed: the candidate loop previews with `withinCapacity`,
+     * a ranked cut that never drops an essential, and this loop then cut again at `featureAttempts`
+     * — so on a shallow plot the preview scored a water feature the built plan never drew. The
+     * parity test in `parity.test.ts` is what found it. `attempts` still bounds everything the loop
+     * did not place, and the surplus that comes after.
+     */
+    const withinBudget = (order: number, feature: DesiredFeature) =>
+      order < attempts || placingNow.includes(feature);
 
     /*
      * A feature the repair left out is reported as left out, with the reason it was. Settling it
@@ -847,7 +864,12 @@ export class ConceptsService {
 
     if (grammar && house) {
       const request: SketchRequest = {
-        features: requested,
+        /*
+         * The list the preview composed from, not the tick list: a composed sketch reserves a bay
+         * for every feature it is given, so realising from a different list would build a
+         * different garden from the one the candidate loop chose.
+         */
+        features: placingNow,
         scale: constraints.scale.sizeFactor,
         style: constraints.style,
         lawnAllowed: !constraints.forbiddenFill.includes('lawn'),
@@ -855,6 +877,14 @@ export class ConceptsService {
         gateSide: gate ? (grammar.frame.toLocal(gate.centre).v >= 0 ? 'right' : 'left') : null,
         houseWallLength: grammar.frame.wallLength,
         doorWidth: grammar.frame.doorWidth,
+        extraRooms,
+        view: localView(design.analysis),
+        gate: gate ? grammar.frame.toLocal(gate.centre) : null,
+        essential: (slotChoice?.brief ?? design.brief).featurePriorities
+          .filter((priority) => priority.tier === 'essential')
+          .map((priority) => priority.feature),
+        privacy: (slotChoice?.brief ?? design.brief).privacy,
+        lowSides: lowSides(design.analysis),
       };
       const sketchRoom = {
         uMin: Math.max(0, grammar.box.uMin),
@@ -876,9 +906,12 @@ export class ConceptsService {
         params,
         room: sketchRoom,
         request,
-        placing: design.placing,
+        placing: placingNow,
       });
       sketch = composition.sketch(request, sketchRoom, zonePlan, params);
+      /* What the composition decided, recorded as the realisation's own decisions. */
+      for (const decision of sketch.composed?.decisions ?? [])
+        decisions.push(decide(decision.kind, decision.text));
 
       const fitContext: FitContext = {
         frame: grammar.frame,
@@ -917,6 +950,7 @@ export class ConceptsService {
             geometry,
             terraceFeature ? FEATURE_SPECS[terraceFeature].planName! : 'Terrace',
             index,
+            'terrace',
           );
           obstacles.push(geometryOutline(geometry));
           featureLayer.push(terrace);
@@ -956,6 +990,7 @@ export class ConceptsService {
              */
             if (flight && (!scopePolygon || geometryFitsInside(flight.shape, scopePolygon))) {
               terrace.elevation = rise;
+              flight.purpose = 'transition';
               const walling = retainingFor(constraints);
               if (walling) terrace.retaining = walling;
               obstacles.push(geometryOutline(flight.shape));
@@ -1006,7 +1041,7 @@ export class ConceptsService {
         if (settled.has(feature)) continue;
         const label = featureLabel(feature, brief);
 
-        if (order >= attempts) {
+        if (!withinBudget(order, feature)) {
           checks.push({ feature, label, included: false });
           settled.add(feature);
           continue;
@@ -1029,7 +1064,14 @@ export class ConceptsService {
         if (!fitted?.geometry) continue;
         const { slot, geometry } = fitted;
 
-        const host = hostFor(feature, spec, geometry, spec.planName ?? label, index);
+        const host = hostFor(
+          feature,
+          spec,
+          geometry,
+          spec.planName ?? label,
+          index,
+          slot.purpose ?? PURPOSE_BY_KIND[slot.kind],
+        );
         obstacles.push(geometryOutline(geometry));
         featureLayer.push(host);
         placedBySlot.set(slot.id, host);
@@ -1065,8 +1107,26 @@ export class ConceptsService {
       if (settled.has(feature)) continue;
       const label = featureLabel(feature, brief);
 
-      if (order >= attempts || zones.length === 0) {
+      if (!withinBudget(order, feature) || zones.length === 0) {
         checks.push({ feature, label, included: false });
+        continue;
+      }
+
+      /*
+       * **No sampler inside a composed garden.** The sampler is what put a fire pit in the middle of
+       * the lawn: it finds room wherever room is, and on a composed plan the only room left is the
+       * open ground the composition reserved and the corridors it kept. A feature the composition
+       * found no bay for is reported as not included, with the reason, which is the honest answer
+       * and the one the card can say. The sampler remains the whole placer where there is nothing
+       * to compose round — a plot with no house or no garden door.
+       */
+      if (sketch?.composed) {
+        checks.push({
+          feature,
+          label,
+          included: false,
+          reason: 'No room for it in this composition without standing it on the lawn.',
+        });
         continue;
       }
 
@@ -1120,7 +1180,31 @@ export class ConceptsService {
       if (!REPEATABLE_FEATURES.includes(feature)) continue;
 
       const spec = scaledSpec(FEATURE_SPECS[feature], constraints);
-      const placed = await place(spec);
+      /*
+       * On a composed plan a second helping goes in a spare room the composition reserved for it —
+       * one of the bays whose zone is `lounge` — rather than wherever the sampler finds ground.
+       */
+      const spare = sketch?.composed
+        ? sketch.slots.find((slot) => slot.zoneId === 'lounge' && !placedBySlot.has(slot.id))
+        : undefined;
+      const fitted =
+        spare && grammar
+          ? fitInSlot(footprintOf(spec), spare, {
+              frame: grammar.frame,
+              room: grammar.room,
+              houseRing,
+              boundary,
+              obstacles,
+            })
+          : null;
+      const placed = sketch?.composed
+        ? fitted
+          ? {
+              geometry: fitted,
+              zone: zoneOf(geometryOutline(fitted), allZones.length > 0 ? allZones : zones),
+            }
+          : null
+        : await place(spec);
       if (!placed) continue;
 
       obstacles.push(geometryOutline(placed.geometry));
@@ -1130,8 +1214,10 @@ export class ConceptsService {
         placed.geometry,
         `Second ${(spec.planName ?? featureLabel(feature, brief)).toLowerCase()}`,
         index + 1,
+        spare ? (spare.purpose ?? 'lounge') : undefined,
       );
       featureLayer.push(host);
+      if (spare) placedBySlot.set(spare.id, host);
       // The second helping gets the *next* choice, so two patios do not carry the same set.
       this.furnishHost(host, feature, featureLayer, obstacles, {
         index: index + 1,
@@ -1185,7 +1271,14 @@ export class ConceptsService {
         )
           continue;
 
-        const host = hostFor('seating', FEATURE_SPECS.seating, shape, 'Side lounge', index + 1);
+        const host = hostFor(
+          'seating',
+          FEATURE_SPECS.seating,
+          shape,
+          'Side lounge',
+          index + 1,
+          'lounge',
+        );
         Object.assign(host, roomSurface('lounge', constraints, index));
         featureLayer.push(host);
         obstacles.push(outline);
@@ -1211,8 +1304,11 @@ export class ConceptsService {
       wantsLoungeRoom(requested, constraints) &&
       !featureLayer.some((element) => element.name === 'Side garden retreat')
     ) {
+      /* A composed plan reserved a spare room for it; a hand-drawn one offers its far room. */
       const slot = sketch.slots.find(
-        (candidate) => candidate.kind === 'far-room' && !placedBySlot.has(candidate.id),
+        (candidate) =>
+          !placedBySlot.has(candidate.id) &&
+          (sketch!.composed ? candidate.zoneId === 'lounge' : candidate.kind === 'far-room'),
       );
       if (slot) {
         const shape = fitInSlot({ kind: 'rect', width: 3.8, depth: 3.4 }, slot, {
@@ -1224,7 +1320,7 @@ export class ConceptsService {
         });
         if (shape?.kind === 'rect' && shape.width >= 3 && shape.depth >= 2.8) {
           const host = {
-            ...hostFor('seating', FEATURE_SPECS.seating, shape, 'Garden lounge', index),
+            ...hostFor('seating', FEATURE_SPECS.seating, shape, 'Garden lounge', index, 'lounge'),
             ...roomSurface('lounge', constraints, index),
           };
           featureLayer.push(host);
@@ -1247,12 +1343,14 @@ export class ConceptsService {
       name: string,
       material: MaterialId,
       category: DesignElement['category'] = 'paved-area',
+      purpose?: string,
     ): DesignElement => ({
       id: nextId(),
       category,
       role: 'feature',
       name,
       shape: geometry,
+      ...(purpose ? { purpose } : {}),
       zone: zoneOf(geometryOutline(geometry), allZones.length > 0 ? allZones : zones),
       material,
     });
@@ -1264,7 +1362,14 @@ export class ConceptsService {
         const axis = sketch.axisPath;
         const geometry: PlanGeometry = {
           kind: 'polyline',
-          points: [grammar.frame.toWorld(axis.u0, 0), grammar.frame.toWorld(axis.u1, 0)],
+          points: [
+            grammar.frame.toWorld(axis.u0, 0),
+            ...(sketch.axisStops ?? [])
+              .filter((u) => u > axis.u0 + 0.5 && u < axis.u1 - 0.5)
+              .sort((a, b) => a - b)
+              .map((u) => grammar.frame.toWorld(u, 0)),
+            grammar.frame.toWorld(axis.u1, 0),
+          ],
           width: axis.v1 - axis.v0,
         };
         const strip = geometryOutline(geometry);
@@ -1278,108 +1383,71 @@ export class ConceptsService {
         ) {
           obstacles.push(strip);
           featureLayer.push(
-            pathElement(geometry, 'Axis path', materialFor('paved-area', constraints, index)),
+            pathElement(
+              geometry,
+              'Axis path',
+              materialFor('paved-area', constraints, index),
+              'paved-area',
+              'axis',
+            ),
           );
         }
       }
 
-      const connected = new Set<string>();
-
-      for (const sketched of sketch.paths) {
-        let start: Point;
-        let destination: Point[];
-        const ignore: Point[][] = [houseRing, terraceOutline, ...thresholds];
-        let purpose: RoutePurpose = 'secondary';
-        let targetId: string | null = null;
-
-        if ('gate' in sketched.to) {
-          if (!gate) continue;
-          purpose = 'access';
-          start = {
-            x: gate.centre.x + gate.inward.x * PATH_STANDOFF,
-            y: gate.centre.y + gate.inward.y * PATH_STANDOFF,
-          };
-          destination = terraceOutline;
-        } else {
-          const target = [sketched.to.slot, ...(sketched.to.or ?? [])]
-            .map((slot) => placedBySlot.get(slot))
-            .find((placed) => placed !== undefined);
-          if (!target) continue;
-          targetId = target.id;
-          purpose =
-            target.symbol === 'shed' || target.symbol === 'raised-bed' ? 'utility' : 'secondary';
-          destination = geometryOutline(target.shape);
-          ignore.push(destination);
-          start =
-            'terrace' in sketched.from
-              ? closestPointOnRing(terraceOutline, polygonCentroid(destination), 0)
-              : grammar.frame.toWorld(sketched.from.u, sketched.from.v);
-        }
-
-        const via = (sketched.via ?? []).map((point) => grammar.frame.toWorld(point.u, point.v));
-        const route = circulationFor(purpose, constraints);
-        const path = routeBetween({
-          start,
-          destination,
-          via,
-          obstacles,
-          boundary,
-          ignore,
-          scope: scopePolygon,
-          width: routeWidth(adjustments, route.width),
-          skip: adjustments.reroute[sketched.name] ?? 0,
-        });
-        if (!path) continue;
-
-        obstacles.push(geometryOutline(path));
-        /*
-         * Stepping stones rather than the terrace's own paving: a path across a lawn reads as a
-         * route where a slab ribbon reads as a second patio, and the pattern renderer draws the
-         * grass between the stones for free.
-         */
-        featureLayer.push(pathElement(path, sketched.name, route.material, route.category));
-        if (targetId) connected.add(targetId);
-      }
-
-      // Every fitted room gets an access attempt, including destinations placed by the fallback.
-      // Starting on several terrace edges avoids a table or an intervening room blocking all access.
+      /*
+       * Every route in the plan, laid once by the function the preview lays them with. On a
+       * composed plan each is an edge the composition drew, down the corridor it kept, and the
+       * lawn is an obstacle to anything but the walk down the view. See `layRoutes`.
+       */
+      const target = (element: DesignElement) => ({
+        id: element.id,
+        ring: geometryOutline(element.shape),
+        name: element.name ?? 'garden room',
+        utility: element.symbol === 'shed' || element.symbol === 'raised-bed',
+      });
       const rooms = featureLayer.filter(
         (element) =>
           element.role === 'feature' &&
           element.id !== terrace.id &&
           element.category !== 'furniture' &&
           element.category !== 'existing-feature' &&
+          element.symbol !== 'steps' &&
           element.shape.kind !== 'polyline',
       );
-      for (const target of rooms) {
-        if (connected.has(target.id)) continue;
-        const destination = geometryOutline(target.shape);
-        const purpose =
-          target.symbol === 'shed' || target.symbol === 'raised-bed' ? 'utility' : 'secondary';
-        const route = circulationFor(purpose, constraints);
-        const starts = terraceStarts(terraceOutline, destination);
-        const ignore = [terraceOutline, destination, ...thresholds];
-        /* The same name the preview gave this route, so a `reroute` repair reaches the same path. */
-        const name = accessName(target.name ?? 'garden room');
-        /* Lazily: the nearest start succeeds most of the time, and each one it does not costs
-         * four polylines tested against every obstacle on the plot. See the preview's own copy. */
-        let path: PlanGeometry | null = null;
-        for (const start of starts) {
-          path = routeBetween({
-            start,
-            destination,
-            obstacles,
-            boundary,
-            ignore,
-            scope: scopePolygon,
-            width: routeWidth(adjustments, route.width),
-            skip: adjustments.reroute[name] ?? 0,
-          });
-          if (path) break;
-        }
-        if (!path) continue;
-        obstacles.push(geometryOutline(path));
-        featureLayer.push(pathElement(path, name, route.material, route.category));
+      const laid = layRoutes({
+        paths: sketch.paths,
+        placed: new Map([...placedBySlot].map(([slot, element]) => [slot, target(element)])),
+        rooms: rooms.map(target),
+        terrace: terraceOutline,
+        gate: gate ? { centre: gate.centre, inward: gate.inward } : null,
+        panel: sketch.composed && sketch.lawn ? localShapeRing(sketch.lawn, grammar.frame) : null,
+        frame: grammar.frame,
+        obstacles,
+        thresholds,
+        boundary,
+        scope: scopePolygon,
+        adjustments,
+        widthOf: (purpose) => circulationFor(purpose, constraints).width,
+      });
+      for (const route of laid) {
+        /*
+         * A walk across the lawn is stepping stones whatever the brief's paving: the grass shows
+         * between them, so the lawn stays one lawn rather than being cut in two by a strip of
+         * gravel or setts. Only the formal axis is paved, and that is not laid here.
+         */
+        const policy =
+          route.elementPurpose === 'axis'
+            ? { category: 'paved-area' as const, material: 'stepping-stones' as MaterialId }
+            : circulationFor(route.purpose, constraints);
+        featureLayer.push(
+          pathElement(
+            route.geometry,
+            route.name,
+            policy.material,
+            policy.category,
+            route.elementPurpose,
+          ),
+        );
       }
     }
 
@@ -1398,6 +1466,8 @@ export class ConceptsService {
             path,
             destination.primary ? 'Service path' : `Path to ${destination.name.toLowerCase()}`,
             'stepping-stones',
+            'paved-area',
+            'garden-route',
           ),
         );
       }
@@ -1431,7 +1501,7 @@ export class ConceptsService {
           // Paved, not stepping stones: the front path is walked with shopping and in the rain.
           featureLayer.push(
             // Setts, like every other route: a front path walked with shopping, not a small patio.
-            pathElement(geometry, 'Front path', 'stone-setts'),
+            pathElement(geometry, 'Front path', 'stone-setts', 'paved-area', 'arrival'),
           );
         }
 
@@ -1504,57 +1574,34 @@ export class ConceptsService {
      * every fill. Trees do not go on `checks`: nobody asked for these.
      */
     if (sketch && grammar) {
-      for (const point of sketch.trees) {
-        if (trees.length >= treeCap) break;
-        // The sketched point, then a little way along each axis of the frame: a tree a metre
-        // from where it was drawn is the same design, where a tree the sampler put in the side
-        // return is not.
-        for (const [du, dv] of TREE_NUDGES.slice(adjustments.treeNudge % TREE_NUDGES.length)) {
-          const at = grammar.frame.toWorld(point.u + du, point.v + dv);
-          if (!withinRing(geometryOutline(trunkFootprint({ kind: 'point', at, radius: 1 })), grammar.room)) continue;
-          if (plantTree(at)) break;
-        }
-      }
-
       /*
-       * The backdrop, which is what the templates never had.
-       *
-       * Every composition places its trees as *framing* — a pair at the far corners, one by the
-       * gate — which is three or four specimens standing in open ground. What a designed garden
-       * has instead, and what the reference has most conspicuously, is a **line of trees along the
-       * boundary**: the thing that encloses the garden, screens what is behind it and gives
-       * everything else a scale to be read against.
-       *
-       * Walked here rather than added to each of the seven templates, because it is the same move
-       * in all of them and a template is about what makes its composition *different*. The
-       * sketch's own points are tried first, so a composition that has an opinion about where a
-       * specimen goes keeps it; this fills the boundary behind them until the plot has had enough.
+       * The same candidates, in the same order, the preview plants from — on a composed plan each
+       * one a tree the composition placed for a reason (focal, framing, screening, backdrop), on a
+       * hand-drawn one the sketch's points and then the walk round the boundary. See
+       * `treeCandidates`: two lists that had to agree by hand are now one.
        */
-      const room = grammar.room;
-      for (const [index, corner] of room.entries()) {
+      for (const candidate of treeCandidates(
+        sketch,
+        grammar.frame,
+        grammar.room,
+        adjustments.treeNudge,
+      )) {
         if (trees.length >= treeCap) break;
-        const next = room[(index + 1) % room.length]!;
-        const run = Math.hypot(next.x - corner.x, next.y - corner.y);
-        if (run < BACKDROP_TREE_SPACING) continue;
-
-        const steps = Math.floor(run / BACKDROP_TREE_SPACING);
-        for (let step = 1; step <= steps; step += 1) {
-          if (trees.length >= treeCap) break;
-          const t = step / (steps + 1);
-          /* Inset from the edge by a trunk's own standoff: the crown may overhang, the stem may not. */
-          const on = { x: corner.x + (next.x - corner.x) * t, y: corner.y + (next.y - corner.y) * t };
-          const inward = { x: -(next.y - corner.y) / run, y: (next.x - corner.x) / run };
-          for (const direction of [1, -1]) {
-            const at = { x: on.x + inward.x * direction * BACKDROP_TREE_INSET,
-              y: on.y + inward.y * direction * BACKDROP_TREE_INSET };
-            if (!withinRing([at], room)) continue;
-            if (plantTree(at)) break;
-          }
+        for (const at of candidate.points) {
+          const stem = geometryOutline(trunkFootprint({ kind: 'point', at, radius: 1 }));
+          if (!withinRing(stem, grammar.room)) continue;
+          if (plantTree(at, undefined, candidate.purpose)) break;
         }
       }
     }
 
-    if (trees.length < MIN_TREES) {
+    /*
+     * The top-up: a sampler, so only where nothing was composed. On a composed plan a garden with
+     * fewer trees than the budget allows is one whose beds had no more room for one with a reason,
+     * and a tree dropped wherever there is ground is the specimen marooned in the lawn the
+     * composition exists to prevent.
+     */
+    if (trees.length < MIN_TREES && !sketch?.composed) {
       for (const zone of zones) {
         if (trees.length >= treeCap) break;
 
@@ -1639,6 +1686,7 @@ export class ConceptsService {
           role: 'fill',
           fillKind: 'accent',
           name: 'Side return',
+          purpose: 'passage',
           shape,
           zone: zone.id,
         });
@@ -1732,6 +1780,11 @@ export class ConceptsService {
             ...featureLayer
               .filter((e) => e.category !== 'planting-bed' && e.category !== 'furniture')
               .map((e) => geometryOutline(e.shape)),
+            /*
+             * On a composed plan the open space was reserved first, so the beds give way to it —
+             * never the other way round, which is how a lawn used to become whatever the beds left.
+             */
+            ...(sketch.composed && lawn ? [geometryOutline(lawn.shape)] : []),
           ],
           cuts: [],
           limit: 6,
@@ -1749,11 +1802,19 @@ export class ConceptsService {
             zone: roomZone?.id ?? 'back',
             material: materialFor('planting-bed', constraints, index + order),
             plantingStyle: constraints.plantingStyle,
+            ...(sketch.composed?.bedPurposes[order]
+              ? { purpose: sketch.composed.bedPurposes[order] }
+              : {}),
           });
         }
       }
-      // A bay changes the actual lawn outline, so the drawing and its measured area agree.
+      /*
+       * A bay changes the actual lawn outline, so the drawing and its measured area agree — on a
+       * hand-drawn plan. On a composed one the beds were cut round the lawn above, so there is
+       * nothing for this to do, and it does not run: the lawn is the shape the composition drew.
+       */
       if (
+        !sketch.composed &&
         lawn &&
         designed.some((bed) =>
           polygonsIntersect(geometryOutline(lawn!.shape), geometryOutline(bed.shape)),
@@ -1787,6 +1848,15 @@ export class ConceptsService {
         rooms.push(geometryOutline(element.shape));
       }
       for (const element of frontFills) rooms.push(geometryOutline(element.shape));
+      /*
+       * **On a composed plan the band stops at the garden room.** Everything inside the room was
+       * composed — every cell is lawn, a room, a corridor or a planting mass named for what it does —
+       * so a band grown from the fence there could only land on what the composition kept clear: a
+       * corridor, and the margin either side of the path laid down it. That is where most of the
+       * plan's "path cuts through planting" and "squeezes between two things" came from. The side
+       * returns beside the house and whatever lies outside the room are still banded, as before.
+       */
+      if (sketch?.composed) rooms.push(grammar.room);
 
       /*
        * Fence borders in every zone but two, by role — see `layout/zone-roles.ts`.
@@ -2332,34 +2402,6 @@ export class ConceptsService {
     return pool[Math.floor(rng() * pool.length)] ?? null;
   }
 }
-
-/**
- * How wide a route is drawn, after the repair stage has had its say.
- *
- * A floor rather than an override: `circulationFor` decides what *kind* of route this is and a
- * repair only ever asks for more room, so an access lane that is already 1.2 m stays 1.2 m when a
- * repair widened the secondary paths to 1.2 m. Raising a route the policy made deliberately narrow
- * — the 0.85 m stepping-stone path — is exactly what the repair is for, which is why this is a
- * maximum rather than a refusal.
- */
-function routeWidth(adjustments: LayoutAdjustments, wanted: number): number {
-  return adjustments.routeWidth === null ? wanted : Math.max(wanted, adjustments.routeWidth);
-}
-
-/** Offsets tried for a sketched tree, in frame metres: where it was drawn, then nearby. */
-const TREE_NUDGES: [number, number][] = [
-  [0, 0],
-  [-0.6, 0],
-  [0.6, 0],
-  [0, -0.6],
-  [0, 0.6],
-  [-1.2, 0],
-  [1.2, 0],
-  [0, -1.2],
-  [0, 1.2],
-  [-1.2, -1.2],
-  [1.2, 1.2],
-];
 
 /**
  * The generator's own placement rule: legal to save, clear of the house, **and** inside the

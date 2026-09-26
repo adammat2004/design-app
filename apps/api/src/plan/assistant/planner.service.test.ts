@@ -1184,6 +1184,95 @@ describe.skipIf(connection === null)('PlannerService', () => {
       expect(stated.changes).toHaveLength(omitted.changes.length);
     });
   });
+
+  /* ---------------------------------------------------------------- edge */
+
+  describe('edge', () => {
+    /*
+     * The patio sits on the lawn with a sett path leaving its bottom side — so its boundary meets the
+     * lawn on most of three sides and the path for a metre in the middle of the fourth.
+     */
+    const path = element({
+      id: 'e-path',
+      name: 'Path to the gate',
+      category: 'paved-area',
+      material: 'stone-setts',
+      shape: { kind: 'polyline', width: 1, points: [{ x: 10, y: 14 }, { x: 10, y: 15.5 }] },
+    });
+    const garden = () => plan([baseFill, patio, path]);
+    const runsOf = (element: DesignElement) => element.edges?.runs ?? [];
+
+    it('removes the edging where the patio meets the path, and only there', async () => {
+      const intent: DesignIntent = {
+        kind: 'edge',
+        target: { elementIds: ['e-1'] },
+        adjacent: 'path',
+        adjacentElementId: '',
+        treatment: 'none',
+      };
+      const { changes, unplaceable } = await planner.plan(garden(), [intent]);
+
+      expect(unplaceable).toEqual([]);
+      expect(changes).toHaveLength(1);
+      expect(changes[0]!.kind).toBe('edge');
+      expect(changes[0]!.before).toBe('Flush');
+      expect(changes[0]!.after).toBe('No edging where it meets a path');
+      expect(changes[0]!.next.edges?.mode).toBe('custom');
+      // No run is left on the stretch the path meets — around x = 10 on the bottom side.
+      expect(runsOf(changes[0]!.next).some((run) => run.side === 2 && run.treatment === 'flush')).toBe(false);
+    });
+
+    it('lays brick only along the lawn, as runs the designer owns', async () => {
+      const intent: DesignIntent = {
+        kind: 'edge',
+        target: { elementIds: ['e-1'] },
+        adjacent: 'lawn',
+        adjacentElementId: '',
+        treatment: 'brick',
+      };
+      const { changes } = await planner.plan(garden(), [intent]);
+      const runs = runsOf(changes[0]!.next);
+
+      expect(runs.filter((run) => run.treatment === 'brick').every((run) => run.source === 'agent')).toBe(true);
+      // Every side meets the lawn somewhere, and the bottom side is broken where the path leaves it.
+      expect(new Set(runs.filter((run) => run.treatment === 'brick').map((run) => run.side))).toEqual(
+        new Set([0, 1, 2, 3]),
+      );
+      expect(runs.filter((run) => run.side === 2 && run.treatment === 'brick')).toHaveLength(2);
+      // What the path meets is left exactly as it was drawn.
+      expect(runs.some((run) => run.side === 2 && run.treatment === 'flush')).toBe(true);
+    });
+
+    it('says so when the surface does not meet that thing anywhere', async () => {
+      const intent: DesignIntent = {
+        kind: 'edge',
+        target: { elementIds: ['e-1'] },
+        adjacent: 'water',
+        adjacentElementId: '',
+        treatment: 'stone',
+      };
+      const { changes, unplaceable } = await planner.plan(garden(), [intent]);
+
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toBe('Seating patio does not meet water anywhere.');
+    });
+
+    it('narrows to one named neighbour', async () => {
+      const intent: DesignIntent = {
+        kind: 'edge',
+        target: { elementIds: ['e-1'] },
+        adjacent: 'all',
+        adjacentElementId: 'e-path',
+        treatment: 'kerb',
+      };
+      const { changes } = await planner.plan(garden(), [intent]);
+      const kerbs = runsOf(changes[0]!.next).filter((run) => run.treatment === 'kerb');
+
+      expect(kerbs).toHaveLength(1);
+      expect(kerbs[0]!.to - kerbs[0]!.from).toBeCloseTo(1, 0);
+      expect(changes[0]!.after).toBe('Kerb where it meets the path to the gate');
+    });
+  });
 });
 
 if (connection === null) {

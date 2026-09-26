@@ -80,6 +80,12 @@ export interface PatternRequest {
   /** A resolved scene stack must never collide with the editor's full planting texture. */
   layers?: import('./layers').SurfaceLayer[];
   exclusions?: Point[][];
+  /**
+   * Which outline segments carry the cut edge — see `DrawPass.cutEdge`. In the key for the reason
+   * `exclusions` is: it is decided from the neighbours, and a raster drawn before a neighbour
+   * arrived and after are different pixels.
+   */
+  cutEdge?: boolean[];
   /** The surface's own id, which is also what makes its tones differ from its neighbour's. */
   elementId: string;
   material: MaterialManifestEntry;
@@ -207,6 +213,7 @@ export function patternKey(request: PatternRequest): string {
     light,
     request.assetVersion ?? 'none',
     hashString(JSON.stringify(request.exclusions ?? [])).toString(36),
+    request.cutEdge ? hashString(request.cutEdge.map(Number).join('')).toString(36) : 'all',
     request.layers ? hashString(JSON.stringify(request.layers)).toString(36) : 'resolved-by-material',
     zoomBucket(request.pxPerMetre),
     request.pixelRatio ?? 1,
@@ -259,6 +266,7 @@ export function getSurfacePattern(
       centreline: request.centreline,
       element: request.element,
       exclusions: request.exclusions,
+      cutEdge: request.cutEdge,
       layers: request.layers,
     },
   );

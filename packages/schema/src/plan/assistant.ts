@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DesignElementSchema, ElementCategorySchema } from './concepts.js';
 import { MaterialIdSchema } from './materials.js';
+import { EdgeTreatmentSchema } from './edges/treatments.js';
 import { ZoneIdSchema } from './zone-id.js';
 
 /**
@@ -18,6 +19,26 @@ import { ZoneIdSchema } from './zone-id.js';
  */
 
 /* ---------------------------------------------------------------- structured intent */
+
+/**
+ * What an edge meets, in words a person uses — the vocabulary of the `edge` intent.
+ *
+ * `all` is every side the surface has. `paving` is any hard surface, `path` a paved *route* — a
+ * surface drawn as a line — so "where the patio meets the path" and "where it meets the terrace" can
+ * be told apart. `fence` is the boundary, `house` the building.
+ */
+export const EdgeRelationSchema = z.enum([
+  'all',
+  'lawn',
+  'paving',
+  'path',
+  'planting',
+  'gravel',
+  'water',
+  'house',
+  'fence',
+]);
+export type EdgeRelation = z.infer<typeof EdgeRelationSchema>;
 
 export const IntentTargetSchema = z.object({
   /** Ids taken from the inventory in the prompt. The planner drops anything it cannot find. */
@@ -153,6 +174,24 @@ export const DesignIntentSchema = z.discriminatedUnion('kind', [
     elementId: z.string().optional(),
   }),
   z.object({ kind: z.literal('remove'), target: IntentTargetSchema }),
+  /**
+   * What is built along some of a surface's boundary — "brick only along the lawn side", "remove
+   * the edging where the patio meets the path", "steel round the curved bed".
+   *
+   * **A relation, never a stretch of coordinates.** `adjacent` names what the edge meets, and the
+   * planner asks the boundary graph where that is: which sides of the host, and how far along each,
+   * face the lawn or the path. So "where the patio meets the path" is resolved against the real
+   * outline by the same code the editor's own Custom mode uses, and a patio that does not meet a
+   * path anywhere is a sentence back to the user rather than a guess. `adjacentElementId` narrows it
+   * to one neighbour when the user named one ("where it meets the shed path"); empty otherwise.
+   */
+  z.object({
+    kind: z.literal('edge'),
+    target: IntentTargetSchema,
+    adjacent: EdgeRelationSchema,
+    adjacentElementId: z.string().default(''),
+    treatment: EdgeTreatmentSchema,
+  }),
   z.object({
     kind: z.literal('reduce-cost'),
     maxChanges: z.number().int().min(1).max(6).default(5),
@@ -200,6 +239,8 @@ export const ChangeKindSchema = z.enum([
   'rotate',
   'reroute',
   'material',
+  /** What is built along a surface's boundary. Nothing moves, so it is checked like a material. */
+  'edge',
   'add',
   'remove',
 ]);

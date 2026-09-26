@@ -81,6 +81,8 @@ export function useSurfacePattern(
    */
   interacting = false,
   exclusions?: Point[][],
+  /** Which outline segments carry the cut edge; absent means all. See `DrawPass.cutEdge`. */
+  cutEdge?: boolean[],
 ): SurfacePattern | null {
   const material = resolvePattern(element.material);
   const kind = element.shape.kind;
@@ -129,6 +131,7 @@ export function useSurfacePattern(
         plantingStyle: element.plantingStyle,
         element,
         exclusions,
+        cutEdge,
       },
       makeBrowserCanvas,
     );
@@ -155,5 +158,6 @@ export function useSurfacePattern(
     pixelRatio,
     interacting,
     exclusions,
+    cutEdge,
   ]);
 }

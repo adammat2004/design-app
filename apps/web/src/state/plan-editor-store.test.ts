@@ -337,6 +337,109 @@ describe('properties', () => {
 
     expect(selectedElement(store())?.id).toBe('p1');
   });
+
+  describe('boundary treatments', () => {
+    /*
+     * p1 is a 3 x 2 patio standing clear of the fence and the house with nothing round it, so every
+     * one of its four sides meets open ground — and a steel preference edges all four in Auto.
+     */
+    const patio = () => store().present.elements.find((element) => element.id === 'p1')!;
+
+    function customPatio() {
+      seed();
+      store().setEdging('p1', 'steel-edging');
+      store().select('p1');
+      store().openEdgeEdit('p1');
+      store().setEdgeMode('p1', 'custom');
+    }
+
+    it('starts Custom from what Auto was drawing, so the picture does not change', () => {
+      customPatio();
+      const { mode, runs } = patio().edges!;
+      expect(mode).toBe('custom');
+      expect(runs.map((run) => run.side)).toEqual([0, 1, 2, 3]);
+      expect(runs.every((run) => run.treatment === 'steel' && run.source === 'auto')).toBe(true);
+    });
+
+    it('adds a run over the free stretch at a click, and selects it', () => {
+      customPatio();
+      const top = patio().edges!.runs.find((run) => run.side === 0)!;
+      store().removeEdgeRun('p1', top.id);
+
+      const runId = store().addEdgeRunAt('p1', 0, 1.5);
+      const added = patio().edges!.runs.find((run) => run.id === runId)!;
+      expect(added).toMatchObject({ side: 0, source: 'user', treatment: 'steel' });
+      expect(added.to - added.from).toBeCloseTo(3, 6);
+      expect(store().edgeEdit?.selectedRunId).toBe(runId);
+      // A click on a stretch already edged adds nothing: it is a run to select, not a gap to fill.
+      expect(store().addEdgeRunAt('p1', 1, 1)).toBeNull();
+    });
+
+    it('drags an end along its side as one undo entry, and refuses a run too short to lay', () => {
+      customPatio();
+      const top = patio().edges!.runs.find((run) => run.side === 0)!;
+
+      store().beginGesture();
+      store().setEdgeRunEndLive('p1', top.id, 'to', 1.2);
+      store().setEdgeRunEndLive('p1', top.id, 'to', 1.0);
+      store().endGesture();
+
+      const dragged = patio().edges!.runs.find((run) => run.id === top.id)!;
+      expect(dragged.to - dragged.from).toBeCloseTo(1, 6);
+      expect(dragged.source).toBe('user');
+
+      // Under the 150 mm floor the frame is refused and the last legal one stays.
+      store().beginGesture();
+      store().setEdgeRunEndLive('p1', top.id, 'to', 0.05);
+      store().endGesture();
+      expect(patio().edges!.runs.find((run) => run.id === top.id)!.to).toBeCloseTo(dragged.to, 6);
+
+      store().undo();
+      const restored = patio().edges!.runs.find((run) => run.id === top.id)!;
+      expect(restored.to - restored.from).toBeCloseTo(3, 6);
+    });
+
+    it('changes a treatment and a dimension, and drops dimensions the new treatment lacks', () => {
+      customPatio();
+      const top = patio().edges!.runs[0]!;
+
+      store().setEdgeRunTreatment('p1', top.id, 'kerb');
+      store().setEdgeRunDimension('p1', top.id, 'height', 150);
+      expect(patio().edges!.runs[0]).toMatchObject({ treatment: 'kerb', heightMm: 150, source: 'user' });
+
+      store().setEdgeRunTreatment('p1', top.id, 'flush');
+      expect(patio().edges!.runs[0]).not.toHaveProperty('heightMm');
+      // A flush join has no height to set.
+      store().setEdgeRunDimension('p1', top.id, 'height', 90);
+      expect(patio().edges!.runs[0]).not.toHaveProperty('heightMm');
+    });
+
+    it('keeps the runs through None so Custom gets them back, and Auto forgets them', () => {
+      customPatio();
+      store().setEdgeRunTreatment('p1', patio().edges!.runs[0]!.id, 'brick');
+
+      store().setEdgeMode('p1', 'none');
+      expect(patio().edges!.mode).toBe('none');
+      store().setEdgeMode('p1', 'custom');
+      expect(patio().edges!.runs[0]!.treatment).toBe('brick');
+
+      store().setEdgeMode('p1', 'auto');
+      expect(patio().edges).toEqual({ mode: 'auto', runs: [] });
+    });
+
+    it('closes edge editing when another element is selected', () => {
+      customPatio();
+      expect(store().edgeEdit?.hostId).toBe('p1');
+      store().select('g1');
+      expect(store().edgeEdit).toBeNull();
+    });
+
+    it('accepts a treatment on a locked ground layer, which cannot move', () => {
+      seed();
+      store().setEdgeMode('g1', 'none');
+      expect(store().present.elements.find((element) => element.id === 'g1')!.edges?.mode).toBe('none');
+    });
+  });
 });
 
 /*

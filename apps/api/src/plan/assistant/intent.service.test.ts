@@ -312,9 +312,10 @@ describe('IntentService', () => {
 
   /*
    * The bounds the JSON Schema cannot express. Structured outputs supports neither numeric nor
-   * string limits, so a factor of 50 is shape-valid and has to be caught here.
+   * string limits, so a factor of 50 is shape-valid. It is clamped into range rather than
+   * rejecting the reply: one illegal number used to discard every other intent with it.
    */
-  it('502s on an out-of-range value the JSON Schema could not constrain', async () => {
+  it('clamps an out-of-range resize factor the JSON Schema could not constrain', async () => {
     const service = new IntentService(
       client(() =>
         message(
@@ -327,8 +328,64 @@ describe('IntentService', () => {
       config(),
     );
 
-    await expect(service.interpret('hello', plan())).rejects.toMatchObject({ status: 502 });
+    const result = await service.interpret('hello', plan());
+    expect(result.intents[0]).toMatchObject({ kind: 'resize', factor: 4 });
   });
+
+  /*
+   * A point smaller than 0.2 m — a light, or the wire's 0 sentinel used on a point by mistake —
+   * is the same failure. The floor stays in the schema; only the model boundary lifts it.
+   */
+  it.each([0.05, 0])(
+    'lifts a point radius of %s to 0.2 and keeps the earlier intents',
+    async (radius) => {
+      const resize = { kind: 'resize', target: { elementIds: ['e-1'] }, factor: 1.25 };
+      const service = new IntentService(
+        client(() =>
+          message(
+            JSON.stringify({
+              ...envelope,
+              intents: [
+                resize,
+                resize,
+                resize,
+                resize,
+                resize,
+                {
+                  kind: 'add',
+                  category: 'lighting',
+                  name: 'Spike light',
+                  footprint: { kind: 'point', width: 0, depth: 0, radius },
+                  affinity: 'any',
+                },
+              ],
+            }),
+          ),
+        ),
+        config(),
+      );
+
+      const result = await service.interpret('hello', plan());
+
+      expect(result.intents).toHaveLength(6);
+      for (const intent of result.intents.slice(0, 5)) {
+        expect(intent).toMatchObject(resize);
+      }
+      expect(result.intents[5]).toMatchObject({
+        kind: 'add',
+        footprint: { kind: 'point', radius: 0.2 },
+      });
+      expect(
+        DesignIntentSchema.safeParse({
+          kind: 'add',
+          category: 'lighting',
+          name: 'Spike light',
+          footprint: { kind: 'point', radius: 0.05 },
+          affinity: 'any',
+        }).success,
+      ).toBe(false);
+    },
+  );
 
   it('503s when rate limited, so the client knows to wait', async () => {
     const service = new IntentService(
@@ -510,11 +567,17 @@ describe('the hand-written JSON Schema agrees with the Zod schema', () => {
     };
     walk(INTENT_JSON_SCHEMA);
 
-    expect(tally.branches).toBeLessThanOrEqual(11);
-    expect(tally.objects).toBeLessThanOrEqual(14);
+    /*
+     * Raised by exactly one branch for the `edge` verb, after `probe:assistant` compiled the grown
+     * schema against the live API on 22 Sep 2026 (claude-opus-5, 7,690 bytes, 200). Every field on
+     * the new branch is required with an honest empty value, so it added no optional property —
+     * which is the expensive kind, and the one number that did not move.
+     */
+    expect(tally.branches).toBeLessThanOrEqual(12);
+    expect(tally.objects).toBeLessThanOrEqual(15);
     expect(tally.optionals).toBeLessThanOrEqual(2);
-    /* Nine inlined copies of `target` became nine references. Losing them undoes half the fix. */
-    expect(tally.refs).toBe(9);
+    /* One `target` reference per branch that has one. Inlined copies undo half the original fix. */
+    expect(tally.refs).toBe(10);
   });
 
   /**

@@ -13,6 +13,7 @@ const SHORT: Record<PrincipleId, string> = {
   circulation: 'circ',
   grouping: 'group',
   proportion: 'prop',
+  composition: 'comp',
   relationships: 'relat',
   privacy: 'priv',
   hierarchy: 'hier',

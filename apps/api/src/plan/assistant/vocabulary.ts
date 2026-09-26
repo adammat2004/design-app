@@ -1,4 +1,10 @@
-import { ElementCategorySchema, MaterialIdSchema, ZoneIdSchema } from '@garden-studio/schema';
+import {
+  EdgeRelationSchema,
+  EdgeTreatmentSchema,
+  ElementCategorySchema,
+  MaterialIdSchema,
+  ZoneIdSchema,
+} from '@garden-studio/schema';
 
 /**
  * The closed sets the model is allowed to name, read off the Zod enums rather than retyped.
@@ -10,3 +16,5 @@ import { ElementCategorySchema, MaterialIdSchema, ZoneIdSchema } from '@garden-s
 export const ZONE_IDS = ZoneIdSchema.options;
 export const MATERIAL_IDS = MaterialIdSchema.options;
 export const ELEMENT_CATEGORIES = ElementCategorySchema.options;
+export const EDGE_RELATIONS = EdgeRelationSchema.options;
+export const EDGE_TREATMENT_IDS = EdgeTreatmentSchema.options;

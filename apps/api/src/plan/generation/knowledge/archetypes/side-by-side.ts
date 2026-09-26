@@ -22,6 +22,8 @@ import {
   slotIn,
   withZoneIds,
 } from './shared.js';
+import { ACCESS_LANE, TERRACE_SHARE } from '../../design/composition/beside.js';
+import { composed } from './composed.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
 /**
@@ -41,26 +43,12 @@ import { defaultParams, type LayoutArchetype } from './types.js';
 /** Below this width there is nothing to lay side by side, and the ordinary plan is better. */
 const MIN_WIDTH = 12;
 
-/**
- * How much of a shallow room's depth the terrace may take.
- *
- * More than the third the other compositions allow, because here the lawn is beside it rather than
- * behind it and the depth is not being shared. Less than all of it, because paving the whole depth
- * of a garden makes a yard rather than a room.
+/*
+ * `TERRACE_SHARE` and `ACCESS_LANE` live with the composer (`design/composition/beside.ts`), which is
+ * what draws this plan now; the hand-drawn plan below is its fallback and reads the same two numbers.
+ * `ACCESS_LANE` is wider than `PASSAGE_ACCESS_WIDTH` on purpose: the route drawn through it is the
+ * 1.2 m access circulation, and a one-metre lane cannot hold it.
  */
-const TERRACE_SHARE = 0.6;
-
-/**
- * How much room the way in from the gate needs, in metres.
- *
- * **Wider than `PASSAGE_ACCESS_WIDTH`, and the difference is the whole point.** That constant is
- * one metre, which is what a person needs to walk past a house; the route drawn here is the
- * `access` circulation, which `circulationFor` makes **1.2 m** wide — so a one-metre lane cannot
- * hold it and `routeBetween` refused the side path outright, leaving a gate nobody could walk
- * through. 1.6 m is the route plus a little either side, which is what it takes for a strip
- * centred by the router to stay inside the fence.
- */
-const ACCESS_LANE = 1.6;
 
 /** Past this depth-to-width ratio the plot is not shallow and the long-axis plans win. */
 const MAX_RATIO = 0.75;
@@ -170,155 +158,167 @@ export const sideBySide: LayoutArchetype = {
     return variants;
   },
 
-  zonePattern(zones, room, params, request) {
-    const layout = bands(room, params, request);
-    return zones.map((zone) => {
-      if (zone.type === 'terrace') return { ...zone, rect: layout.terrace };
-      if (zone.type === 'lawn') return { ...zone, rect: layout.lawn };
-      if (zone.type === 'utility' || zone.type === 'productive') {
-        return { ...zone, rect: layout.utility };
-      }
-      if (zone.type === 'destination' || zone.type === 'play') {
-        return { ...zone, rect: layout.destination };
-      }
-      return zone;
-    });
-  },
+  /*
+   * Composed: the lawn reserved beside the terrace, the rooms in bays round it — the far corner is
+   * a bay the lawn is notched round rather than grass with a fire pit on it — and a path along the
+   * house and down the fence to reach it. The hand-drawn plan below draws where that declines.
+   */
+  ...composed('side_by_side', 'rectilinear', handDrawn()),
+};
 
-  sketch(request, room, _plan, params) {
-    const { depth, width, uMin } = extents(room);
-    const s = request.scale;
-    const b = bed(s);
-    const layout = bands(room, params, request);
-    const gate = request.gateSide ?? 'right';
+/** The hand-drawn plan: bands across the garden — terrace, lawn, utility — with planting round them. */
+function handDrawn(): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
+  return {
+    zonePattern(zones, room, params, request) {
+      const layout = bands(room, params, request);
+      return zones.map((zone) => {
+        if (zone.type === 'terrace') return { ...zone, rect: layout.terrace };
+        if (zone.type === 'lawn') return { ...zone, rect: layout.lawn };
+        if (zone.type === 'utility' || zone.type === 'productive') {
+          return { ...zone, rect: layout.utility };
+        }
+        if (zone.type === 'destination' || zone.type === 'play') {
+          return { ...zone, rect: layout.destination };
+        }
+        return zone;
+      });
+    },
 
-    const terrace = layout.terrace;
-    const slots: Slot[] = [terraceSlot(terrace, room)];
+    sketch(request, room, _plan, params) {
+      const { depth, width, uMin } = extents(room);
+      const s = request.scale;
+      const b = bed(s);
+      const layout = bands(room, params, request);
+      const gate = request.gateSide ?? 'right';
 
-    /*
-     * Beside the terrace on the house wall, on the far side from the lawn: the outdoor kitchen,
-     * which wants to be within reach of the door and out of the route onto the grass.
-     */
-    const besideRect = clampRect(
-      {
-        u0: uMin,
-        u1: uMin + Math.min(1.8 * s, depth * 0.3),
-        v0: layout.utilityOnMin ? room.vMin + 0.3 : terrace.v1 + 0.3,
-        v1: layout.utilityOnMin ? terrace.v0 - 0.3 : room.vMax - 0.3,
-      },
-      room,
-    );
-    if (besideRect)
-      slots.push(slotIn('beside-terrace', 'beside-terrace', besideRect, { turn: true }));
+      const terrace = layout.terrace;
+      const slots: Slot[] = [terraceSlot(terrace, room)];
 
-    /* The dining room at the terrace's far end, still on the wall and still off the grass. */
-    const endRect = clampRect(
-      {
-        u0: uMin,
-        u1: uMin + Math.min(3.6 * s, depth - b - 0.4),
-        v0: layout.utilityOnMin ? terrace.v1 + 0.3 : room.vMin + 0.3,
-        v1: layout.utilityOnMin ? room.vMax - 0.3 : terrace.v0 - 0.3,
-      },
-      room,
-    );
-    if (endRect) slots.push(slotIn('terrace-end', 'terrace-end', endRect));
-
-    if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
-    if (layout.destination) slots.push(slotIn('far-room', 'far-room', layout.destination));
-    if (layout.lawn) {
-      const far = clampRect(
-        { u0: layout.lawn.u0, u1: layout.lawn.u1, v0: layout.lawn.v0, v1: layout.lawn.v1 },
+      /*
+       * Beside the terrace on the house wall, on the far side from the lawn: the outdoor kitchen,
+       * which wants to be within reach of the door and out of the route onto the grass.
+       */
+      const besideRect = clampRect(
+        {
+          u0: uMin,
+          u1: uMin + Math.min(1.8 * s, depth * 0.3),
+          v0: layout.utilityOnMin ? room.vMin + 0.3 : terrace.v1 + 0.3,
+          v1: layout.utilityOnMin ? terrace.v0 - 0.3 : room.vMax - 0.3,
+        },
         room,
       );
-      if (far) slots.push(slotIn('lawn-far', 'lawn-far', far, { margin: 0.8 }));
-    }
+      if (besideRect)
+        slots.push(slotIn('beside-terrace', 'beside-terrace', besideRect, { turn: true }));
 
-    /* The corner of the terrace furthest from the door: a tub, or a small water feature. */
-    slots.push({
-      id: 'terrace-corner',
-      kind: 'terrace-corner',
-      zoneId: 'terrace',
-      anchor: {
-        u: terrace.u1 - 0.9 * s,
-        v: layout.utilityOnMin ? terrace.v1 - 0.9 * s : terrace.v0 + 0.9 * s,
-      },
-      maxSize: { width: 1.9 * s, depth: 1.9 * s },
-    });
-
-    /*
-     * Planting along the back and both ends, and never behind the terrace — the terrace runs to
-     * within a border of the fence, and a bed squeezed in behind it would be a strip nobody plants.
-     */
-    const beds: LayoutSketch['beds'] = [];
-    const rear = clampRect(
-      { u0: room.uMax - b, u1: room.uMax, v0: room.vMin + 0.15, v1: room.vMax - 0.15 },
-      room,
-    );
-    if (rear && rear.u1 - rear.u0 >= BED_MIN_DEPTH) {
-      beds.push({ name: 'Rear border', shape: { kind: 'rect', rect: rear, cornerRadius: 0 } });
-    }
-    for (const [name, v0, v1] of [
-      ['Left border', room.vMin, room.vMin + b],
-      ['Right border', room.vMax - b, room.vMax],
-    ] as const) {
-      const end = clampRect({ u0: uMin + 0.15, u1: room.uMax - b - 0.15, v0, v1 }, room);
-      if (end && end.v1 - end.v0 >= BED_MIN_DEPTH && end.u1 - end.u0 >= BED_MIN_DEPTH) {
-        beds.push({ name, shape: { kind: 'rect', rect: end, cornerRadius: 0 } });
-      }
-    }
-
-    const trees: LocalPoint[] = [
-      { u: room.uMax - 1.9, v: room.vMin + 1.9 },
-      { u: room.uMax - 1.9, v: room.vMax - 1.9 },
-      { u: room.uMax - 1.9, v: (room.vMin + room.vMax) / 2 },
-    ];
-
-    return withZoneIds({
-      /*
-       * `template` is the geometry family the painters and the fitter know about, and there are
-       * still three of those. A new *composition* is not a new kind of shape — this is rectilinear
-       * geometry arranged differently — so it reports the family it draws in rather than growing
-       * the union for a name.
-       */
-      template: 'rectilinear',
-      beds: beds.length > 0 ? beds : designedBeds(request, room, terrace, 'rectilinear'),
-      terrace,
-      lawn: layout.lawn ? { kind: 'rect', rect: layout.lawn, cornerRadius: 0 } : null,
-      lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',
-      slots,
-      /*
-       * The side path is about the gate, not about the lawn, so it is drawn either way. The first
-       * version gated both paths on there being a lawn and a plan without one lost its route in
-       * from the street — which the path test noticed.
-       */
-      paths: [
-        ...(layout.lawn
-          ? [
-              {
-                from: { terrace: true as const },
-                to: { slot: 'far-room', or: ['lawn-far', 'utility'] },
-                name: 'Garden path',
-              },
-            ]
-          : []),
+      /* The dining room at the terrace's far end, still on the wall and still off the grass. */
+      const endRect = clampRect(
         {
-          from: { u: 0, v: (gate === 'right' ? 1 : -1) * width },
-          /*
-           * No `via`. The band against the house wall is clear, so the straight run from the gate
-           * to the terrace is both the shortest route and the only one whose strip stays inside the
-           * fence — steering it round would be adding a corner to avoid something that is no longer
-           * there.
-           */
-          to: { gate: true as const },
-          name: 'Side path',
+          u0: uMin,
+          u1: uMin + Math.min(3.6 * s, depth - b - 0.4),
+          v0: layout.utilityOnMin ? terrace.v1 + 0.3 : room.vMin + 0.3,
+          v1: layout.utilityOnMin ? room.vMax - 0.3 : terrace.v0 - 0.3,
         },
-      ],
-      trees,
-      axisPath: null,
-      courtyard: layout.lawn === null,
-    });
-  },
-};
+        room,
+      );
+      if (endRect) slots.push(slotIn('terrace-end', 'terrace-end', endRect));
+
+      if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
+      if (layout.destination) slots.push(slotIn('far-room', 'far-room', layout.destination));
+      if (layout.lawn) {
+        const far = clampRect(
+          { u0: layout.lawn.u0, u1: layout.lawn.u1, v0: layout.lawn.v0, v1: layout.lawn.v1 },
+          room,
+        );
+        if (far) slots.push(slotIn('lawn-far', 'lawn-far', far, { margin: 0.8 }));
+      }
+
+      /* The corner of the terrace furthest from the door: a tub, or a small water feature. */
+      slots.push({
+        id: 'terrace-corner',
+        kind: 'terrace-corner',
+        zoneId: 'terrace',
+        anchor: {
+          u: terrace.u1 - 0.9 * s,
+          v: layout.utilityOnMin ? terrace.v1 - 0.9 * s : terrace.v0 + 0.9 * s,
+        },
+        maxSize: { width: 1.9 * s, depth: 1.9 * s },
+      });
+
+      /*
+       * Planting along the back and both ends, and never behind the terrace — the terrace runs to
+       * within a border of the fence, and a bed squeezed in behind it would be a strip nobody plants.
+       */
+      const beds: LayoutSketch['beds'] = [];
+      const rear = clampRect(
+        { u0: room.uMax - b, u1: room.uMax, v0: room.vMin + 0.15, v1: room.vMax - 0.15 },
+        room,
+      );
+      if (rear && rear.u1 - rear.u0 >= BED_MIN_DEPTH) {
+        beds.push({ name: 'Rear border', shape: { kind: 'rect', rect: rear, cornerRadius: 0 } });
+      }
+      for (const [name, v0, v1] of [
+        ['Left border', room.vMin, room.vMin + b],
+        ['Right border', room.vMax - b, room.vMax],
+      ] as const) {
+        const end = clampRect({ u0: uMin + 0.15, u1: room.uMax - b - 0.15, v0, v1 }, room);
+        if (end && end.v1 - end.v0 >= BED_MIN_DEPTH && end.u1 - end.u0 >= BED_MIN_DEPTH) {
+          beds.push({ name, shape: { kind: 'rect', rect: end, cornerRadius: 0 } });
+        }
+      }
+
+      const trees: LocalPoint[] = [
+        { u: room.uMax - 1.9, v: room.vMin + 1.9 },
+        { u: room.uMax - 1.9, v: room.vMax - 1.9 },
+        { u: room.uMax - 1.9, v: (room.vMin + room.vMax) / 2 },
+      ];
+
+      return withZoneIds({
+        /*
+         * `template` is the geometry family the painters and the fitter know about, and there are
+         * still three of those. A new *composition* is not a new kind of shape — this is rectilinear
+         * geometry arranged differently — so it reports the family it draws in rather than growing
+         * the union for a name.
+         */
+        template: 'rectilinear',
+        beds: beds.length > 0 ? beds : designedBeds(request, room, terrace, 'rectilinear'),
+        terrace,
+        lawn: layout.lawn ? { kind: 'rect', rect: layout.lawn, cornerRadius: 0 } : null,
+        lawnCategory: request.lawnAllowed ? 'lawn' : 'gravel-mulch',
+        slots,
+        /*
+         * The side path is about the gate, not about the lawn, so it is drawn either way. The first
+         * version gated both paths on there being a lawn and a plan without one lost its route in
+         * from the street — which the path test noticed.
+         */
+        paths: [
+          ...(layout.lawn
+            ? [
+                {
+                  from: { terrace: true as const },
+                  to: { slot: 'far-room', or: ['lawn-far', 'utility'] },
+                  name: 'Garden path',
+                },
+              ]
+            : []),
+          {
+            from: { u: 0, v: (gate === 'right' ? 1 : -1) * width },
+            /*
+             * No `via`. The band against the house wall is clear, so the straight run from the gate
+             * to the terrace is both the shortest route and the only one whose strip stays inside the
+             * fence — steering it round would be adding a corner to avoid something that is no longer
+             * there.
+             */
+            to: { gate: true as const },
+            name: 'Side path',
+          },
+        ],
+        trees,
+        axisPath: null,
+        courtyard: layout.lawn === null,
+      });
+    },
+  };
+}
 
 /**
  * The bands across the garden: terrace, lawn, utility, with the planting round them.

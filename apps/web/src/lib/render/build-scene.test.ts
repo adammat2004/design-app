@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cutEdgeMasks,
   housePolygon,
   polygonArea,
   rectangleHouse,
@@ -92,6 +93,27 @@ function spike(id: string, x: number, y: number): DesignElement {
     shape: { kind: 'point', at: { x, y }, radius: 0.06 },
   } as DesignElement;
 }
+
+describe('the cut edge', () => {
+  /*
+   * The property, with a control. A base fill's outline is the zone — fence, house and the seams
+   * between zones — none of which is a cut in the ground, so its mask is empty; a bed laid on it is
+   * cut wherever it meets the lawn. Asserting the bed as well is what stops this passing on a
+   * build that had quietly stopped masking anything.
+   */
+  it('gives a base fill no cut edge and a bed on it the scene’s own answer', () => {
+    const rendered = buildRenderScene(scene([lawn(), bed('bed-1', 4)]));
+    const surfaces = new Map(rendered.ground.map((item) => [item.element.id, item.surface]));
+
+    const base = surfaces.get('lawn-1')!;
+    expect(base.cutEdge).toEqual(base.outline.map(() => false));
+
+    const border = surfaces.get('bed-1')!;
+    expect(border.cutEdge).toHaveLength(border.outline.length);
+    expect(border.cutEdge!.some(Boolean)).toBe(true);
+    expect(border.cutEdge).toEqual(cutEdgeMasks([lawn(), bed('bed-1', 4)], { boundary: BOUNDARY }).get('bed-1'));
+  });
+});
 
 describe('level changes', () => {
   const raised = (elevation: number): DesignElement =>

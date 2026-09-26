@@ -5,7 +5,8 @@ import {
   canTake,
   distanceToSegment,
   elementArea,
-  edgingRuns,
+  cutEdgeMasks,
+  resolveEdges,
   geometryOutline,
   isCanopy,
   isCounted,
@@ -405,10 +406,16 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
      * composition was chosen. Comparing the terrace-and-lawn plan in each set holds both constant
      * and leaves only the thing under test.
      */
+    /*
+     * A straight-edged composition both sets offer. Which ones the candidate loop picks depends on
+     * how well each scores, so naming one outright tested the selection as well as the corners.
+     */
+    const shared = (['terrace_and_lawn', 'destination_garden'] as const).find((id) =>
+      [cottage, modern].every((set) => set.some((c) => c.strategy!.archetype === id)),
+    );
+    expect(shared).toBeDefined();
     const panel = (concepts: GeneratedConcept[]) => {
-      const concept = concepts.find(
-        (candidate) => candidate.strategy!.archetype === 'terrace_and_lawn',
-      )!;
+      const concept = concepts.find((candidate) => candidate.strategy!.archetype === shared)!;
       const open = concept.elements.find(
         (element) =>
           element.fillKind === 'accent' &&
@@ -1051,7 +1058,7 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
     /*
      * The one rule that matters here, and it fails silently if broken. A base fill is the *whole
      * zone polygon*, so its outline carries the zone's internal cross-fences as well as its
-     * perimeter — and `edgingRuns` only drops the sides against the boundary and the house. Edging
+     * perimeter — and edging leaves bare only the sides that face the boundary and the house. Edging
      * one would therefore draw a brick course straight across the middle of the garden, where the
      * side return meets the back, and nothing downstream would object.
      */
@@ -1069,11 +1076,36 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
         expect(element.fillKind, `${element.id} is a base fill`).not.toBe('base');
         expect(['planting-bed', 'gravel-mulch']).toContain(element.category);
         expect(element.shape.kind).not.toBe('point');
+        // The generator never lays runs by hand: the rules over the boundary graph are its answer.
+        expect(element.edges?.mode ?? 'auto').toBe('auto');
       }
     }
 
     // A formal brief on a high budget is exactly the case that asks for edging.
     expect(edged).toBeGreaterThan(0);
+  });
+
+  it('draws no cut edge on any base fill of a generated plan', async () => {
+    /*
+     * The fault the screenshot showed: a gravel base fill is one polygon per zone, and its outline
+     * runs along the house's wall planes out to the fence. Stroked, those are lines across the
+     * middle of the garden. The mask the renderer is handed has to be empty for every one of them,
+     * on the plan where every base is gravel.
+     */
+    const document = plan({ brief: { ...brief, style: 'lowMaintenance', maintenance: 'low' } });
+    const concepts = await service.generate(document, 11);
+
+    for (const concept of concepts) {
+      const masks = cutEdgeMasks(concept.elements, {
+        boundary: document.site.vertices,
+        house: housePolygon(document.site.house!),
+      });
+      const bases = concept.elements.filter((element) => element.fillKind === 'base');
+      expect(bases.length).toBeGreaterThan(0);
+      for (const base of bases) {
+        expect(masks.get(base.id)?.some(Boolean), `${base.id} draws a cut edge`).toBe(false);
+      }
+    }
   });
 
   it('leaves the fence side of a border out of the schedule', async () => {
@@ -1085,8 +1117,9 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
     const document = plan({ brief: { ...brief, style: 'formal', budget: 'high' } });
     const [concept] = await service.generate(document, 11);
 
-    const withFence = edgingRuns(concept!.elements, { boundary: document.site.vertices });
-    const withoutFence = edgingRuns(concept!.elements);
+    const rules = { style: 'formal' as const, budget: 'high' as const, maintenance: brief.maintenance };
+    const withFence = resolveEdges(concept!.elements, { boundary: document.site.vertices }, rules).runs;
+    const withoutFence = resolveEdges(concept!.elements, {}, rules).runs;
 
     const total = (runs: { length: number }[]) => runs.reduce((sum, run) => sum + run.length, 0);
 
@@ -1523,8 +1556,19 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
       concepts[0]!.elements.filter((element) => element.role === 'feature').length;
 
     expect(features(estate)).toBeGreaterThan(features(suburban));
-    // The surplus lands as a repeat of something that repeats sensibly, named so on the plan.
-    expect(estate[0]!.elements.some((element) => element.name?.startsWith('Second '))).toBe(true);
+    /*
+     * The surplus lands as a repeat of something that repeats sensibly, named so on the plan — in
+     * the set, not necessarily on the first card. The composition reserves a spare room for it, and
+     * a requested feature outranks a spare: on the recommended estate plan a repair moves the water
+     * feature out of the terrace corner, where nobody could see it from the doors, into that spare
+     * room. A seen water feature the brief asked for is the better trade than a second patio it did
+     * not, and the other two cards still carry theirs.
+     */
+    expect(
+      estate.some((concept) =>
+        concept.elements.some((element) => element.name?.startsWith('Second ')),
+      ),
+    ).toBe(true);
   });
 
   it('still generates a legal plan at estate scale', async () => {

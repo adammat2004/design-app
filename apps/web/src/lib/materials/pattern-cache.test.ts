@@ -48,6 +48,18 @@ beforeEach(() => {
   clearPatternCache();
 });
 
+describe('the cut-edge mask', () => {
+  it('is in the key, so a side gained or lost redraws the raster', () => {
+    const all = patternKey(request());
+    const top = patternKey(request({ cutEdge: [false, true, true, true] }));
+    const left = patternKey(request({ cutEdge: [true, true, true, false] }));
+
+    expect(top).not.toBe(all);
+    expect(top).not.toBe(left);
+    expect(patternKey(request({ cutEdge: [false, true, true, true] }))).toBe(top);
+  });
+});
+
 describe('zoom bucketing', () => {
   it('holds one bucket across a √2 span of scales', () => {
     // The eased zoom in `use-canvas-viewport` changes the scale every frame; without bucketing

@@ -9,6 +9,9 @@ import {
   type Room,
   type SketchRequest,
 } from '../../layout/sketch.js';
+import type { GeometryLanguage } from '../../design/composition/types.js';
+import { composed } from './composed.js';
+import type { LayoutSketch } from '../../layout/sketch.js';
 import { curved } from '../../layout/templates/curved.js';
 import { formal } from '../../layout/templates/formal.js';
 import { rectilinear } from '../../layout/templates/rectilinear.js';
@@ -23,11 +26,27 @@ import { defaultParams, type LayoutArchetype } from './types.js';
  * Here each answers for itself when it suits a plot and when it does not, which is the whole point:
  * a formal axis on a nine-metre-wide courtyard was never a worse plan, it was the wrong one.
  *
- * The sketches are the existing template functions, unchanged. **Nothing about their geometry moved
- * in this phase** — `golden.test.ts` pins that to a nanometre — and the zone plan is read back out
- * of what they draw rather than driving them. See `planFromSketch` for why that asymmetry exists
- * and when it goes away.
+ * **They are composed now, not drawn.** Each says only what is particular to it — which shape
+ * language it speaks — and `design/composition/` does the rest in the order a designer would: the
+ * lawn is reserved first, the rooms go in bays round it, one route runs down a corridor past them,
+ * something terminates the view. The hand-drawn templates survive for one case, the courtyard, which
+ * has no lawn to compose round; `golden.test.ts` still pins them for exactly that reason.
  */
+
+/**
+ * A composed sketch, or the hand-drawn template where the composition declines — a courtyard, or a
+ * plot that cannot hold what the brief most wants round a lawn. See `composed.ts`.
+ */
+function classic(
+  id: LayoutArchetype['id'],
+  language: GeometryLanguage,
+  template: (request: SketchRequest, room: Room, params: CandidateParams) => LayoutSketch,
+): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
+  return composed(id, language, {
+    sketch: (request, room, _plan, params) => withZoneIds(template(request, room, params)),
+    zonePattern: lawnPlanZones,
+  });
+}
 
 /** A plot must be at least this deep behind the doors for an axis to be a view rather than a step. */
 const AXIS_MIN_DEPTH = 8;
@@ -179,11 +198,7 @@ export const terraceAndLawn: LayoutArchetype = {
     return variants.filter((entry) => brief.style !== 'formal' || entry.lawnBias !== 'away');
   },
 
-  zonePattern: lawnPlanZones,
-
-  sketch(request, room, _plan, params) {
-    return withZoneIds(rectilinear(request, room, params));
-  },
+  ...classic('terrace_and_lawn', 'rectilinear', rectilinear),
 };
 
 export const sweepingLawn: LayoutArchetype = {
@@ -232,11 +247,7 @@ export const sweepingLawn: LayoutArchetype = {
     return variants;
   },
 
-  zonePattern: lawnPlanZones,
-
-  sketch(request, room, _plan, params) {
-    return withZoneIds(curved(request, room, params));
-  },
+  ...classic('sweeping_lawn', 'soft_organic', curved),
 };
 
 export const formalAxis: LayoutArchetype = {
@@ -324,11 +335,7 @@ export const formalAxis: LayoutArchetype = {
     return variants;
   },
 
-  zonePattern: lawnPlanZones,
-
-  sketch(request, room, _plan, params) {
-    return withZoneIds(formal(request, room, params));
-  },
+  ...classic('formal_axis', 'formal_symmetric', formal),
 };
 
 function refuseSmall(site: SiteAnalysis): { score: number; reasons: string[] } {

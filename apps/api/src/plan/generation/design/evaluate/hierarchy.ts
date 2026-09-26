@@ -196,6 +196,8 @@ function asSpace(region: DesignSubject['panels'][number]): DesignSubject['items'
     area: region.area,
     rotation: null,
     material: null,
+    purpose: null,
+    symbol: null,
   };
 }
 

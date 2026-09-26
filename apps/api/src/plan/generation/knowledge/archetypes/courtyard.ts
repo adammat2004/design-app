@@ -1,14 +1,13 @@
 import {
-  BED_MIN_DEPTH,
   isCourtyard,
-  terraceFloor,
   terraceSlot,
   type LayoutSketch,
   type LocalPoint,
-  type LocalRect,
   type Slot,
 } from '../../layout/sketch.js';
-import { bed, clampRect, extents, slotIn, withZoneIds } from './shared.js';
+import { court } from '../../design/composition/court.js';
+import { composed } from './composed.js';
+import { clampRect, slotIn, withZoneIds } from './shared.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
 /**
@@ -34,8 +33,11 @@ import { defaultParams, type LayoutArchetype } from './types.js';
  * paved corner to corner because ninety square metres happened to be under the number chosen here.
  */
 
-/** The deepest a wall bed goes: past this the room stops being a room. */
-const MAX_BED_SHARE = 0.28;
+/*
+ * The floor, the beds and the focal place — `court` — live in the composition layer
+ * (`design/composition/court.ts`), which is what draws this plan now; the hand-drawn plan below is
+ * its fallback and reads the same geometry, so the two cannot disagree about where the beds are.
+ */
 
 export const courtyard: LayoutArchetype = {
   id: 'courtyard',
@@ -90,186 +92,96 @@ export const courtyard: LayoutArchetype = {
     return [defaultParams('courtyard')];
   },
 
-  zonePattern(zones, room, _params, request) {
-    const layout = court(room, request);
-    return zones.map((zone) => {
-      if (zone.type === 'terrace' || zone.type === 'dining') return { ...zone, rect: layout.floor };
-      if (zone.type === 'destination' || zone.type === 'water') {
-        return { ...zone, rect: layout.focal };
-      }
-      if (zone.type === 'planting') return { ...zone, rect: layout.beds[0]?.rect ?? null };
-      if (zone.type === 'utility' || zone.type === 'productive') {
-        return { ...zone, rect: layout.utility };
-      }
-      return zone;
-    });
-  },
-
-  sketch(request, room, _plan, _params) {
-    const s = request.scale;
-    const layout = court(room, request);
-
-    const slots: Slot[] = [terraceSlot(layout.floor, room)];
-
-    /*
-     * The focal slot on the wall opposite the doors. `axis-end` rather than `far-room`: it is a
-     * thing to look at from where you are standing, not a place to walk to, and a courtyard is too
-     * small to walk anywhere in.
-     */
-    if (layout.focal) slots.push(slotIn('axis-end', 'axis-end', layout.focal, { margin: 0.2 }));
-    if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
-
-    /* A dining set goes on the floor itself; there is no second room to put it in. */
-    const end = clampRect(
-      {
-        u0: layout.floor.u0,
-        u1: layout.floor.u1,
-        v0: layout.floor.v0,
-        v1: layout.floor.v0 + (layout.floor.v1 - layout.floor.v0) / 2,
-      },
-      room,
-    );
-    if (end) slots.push(slotIn('terrace-end', 'terrace-end', end, { margin: 0.15 }));
-
-    slots.push({
-      id: 'terrace-corner',
-      kind: 'terrace-corner',
-      zoneId: 'terrace',
-      anchor: {
-        u: layout.floor.u1 - 0.8 * s,
-        v: request.gateSide === 'left' ? layout.floor.v1 - 0.8 * s : layout.floor.v0 + 0.8 * s,
-      },
-      maxSize: { width: 1.7 * s, depth: 1.7 * s },
-    });
-
-    const beds: LayoutSketch['beds'] = layout.beds.map(({ name, rect }) => ({
-      name,
-      shape: {
-        kind: 'rect' as const,
-        rect,
-        cornerRadius: request.style === 'cottage' ? 0.6 : 0,
-      },
-    }));
-
-    /* One tree, in a corner, never in the middle. A courtyard with a specimen in the centre is a
-     * courtyard you walk round the edge of. */
-    const trees: LocalPoint[] = [{ u: room.uMax - 1.5, v: room.vMin + 1.5 }];
-
-    return withZoneIds({
-      template: 'rectilinear',
-      beds,
-      terrace: layout.floor,
-      /* No lawn, by definition. `courtyard: true` is what tells the fill pass so. */
-      lawn: null,
-      lawnCategory: 'gravel-mulch',
-      slots,
-      paths: [],
-      trees,
-      axisPath: null,
-      courtyard: true,
-    });
-  },
+  /*
+   * Composed: every room in a place the fitter will seat it, a purpose on every element, and a
+   * feature the courtyard has no room for reported rather than stood on the floor. The hand-drawn
+   * plan below draws where that declines — an essential feature with nowhere off the floor to go.
+   */
+  ...composed('courtyard', 'rectilinear', handDrawn()),
 };
 
-/**
- * The floor, the beds round it and the one thing worth looking at.
- *
- * The beds come first and the floor is what is left, which is the inversion that makes this a
- * composition rather than a fallback: in the other plans the terrace takes its size and the
- * planting gets the remainder, and that is how a courtyard ends up as paving with a strip round it.
- */
-function court(
-  room: Parameters<LayoutArchetype['zonePattern']>[1],
-  request: Parameters<LayoutArchetype['zonePattern']>[3],
-): {
-  floor: LocalRect;
-  beds: { name: string; rect: LocalRect }[];
-  focal: LocalRect | null;
-  utility: LocalRect | null;
-} {
-  const { depth, width, uMin } = extents(room);
-  const s = request.scale;
-
-  /* Deep enough to plant in layers, capped so the room keeps a floor. */
-  const rearDepth = Math.min(Math.max(bed(s), depth * 0.18), depth * MAX_BED_SHARE);
-  const sideDepth = Math.min(Math.max(BED_MIN_DEPTH, width * 0.12), width * MAX_BED_SHARE);
-
-  /*
-   * **Each bed is resolved by name and the floor is derived from which ones survived.**
-   *
-   * The first version collected them into a list and then both named them by index and sized the
-   * floor by counting them. On a room too shallow for a rear border — a 7 × 2.5 m courtyard, which
-   * is exactly what this composition is for — the rear bed dropped out, the two side beds shuffled
-   * up, and the plan came out with a side bed labelled "Rear border" and a floor that overlapped
-   * the right-hand one. Positional coupling between three independent decisions.
-   */
-  const rear = keep(
-    clampRect({ u0: room.uMax - rearDepth, u1: room.uMax, v0: room.vMin, v1: room.vMax }, room),
-    (rect) => rect.u1 - rect.u0 >= BED_MIN_DEPTH,
-  );
-  const floorFar = rear ? rear.u0 : room.uMax;
-
-  const left = keep(
-    clampRect({ u0: uMin, u1: floorFar, v0: room.vMin, v1: room.vMin + sideDepth }, room),
-    (rect) => rect.v1 - rect.v0 >= BED_MIN_DEPTH,
-  );
-  const right = keep(
-    clampRect({ u0: uMin, u1: floorFar, v0: room.vMax - sideDepth, v1: room.vMax }, room),
-    (rect) => rect.v1 - rect.v0 >= BED_MIN_DEPTH,
-  );
-
-  const beds = [
-    rear ? { name: 'Rear border', rect: rear } : null,
-    left ? { name: 'Left border', rect: left } : null,
-    right ? { name: 'Right border', rect: right } : null,
-  ].filter((entry): entry is { name: string; rect: LocalRect } => entry !== null);
-
-  /* The floor is what the beds leave, so it can never overlap one. */
-  const floorRect = clampRect(
-    {
-      u0: uMin,
-      u1: floorFar,
-      v0: left ? left.v1 : room.vMin,
-      v1: right ? right.v0 : room.vMax,
+/** The hand-drawn courtyard: the same floor and beds, with its slots on the floor as well. */
+function handDrawn(): Pick<LayoutArchetype, 'sketch' | 'zonePattern'> {
+  return {
+    zonePattern(zones, room, _params, request) {
+      const layout = court(room, request);
+      return zones.map((zone) => {
+        if (zone.type === 'terrace' || zone.type === 'dining')
+          return { ...zone, rect: layout.floor };
+        if (zone.type === 'destination' || zone.type === 'water') {
+          return { ...zone, rect: layout.focal };
+        }
+        if (zone.type === 'planting') return { ...zone, rect: layout.beds[0]?.rect ?? null };
+        if (zone.type === 'utility' || zone.type === 'productive') {
+          return { ...zone, rect: layout.utility };
+        }
+        return zone;
+      });
     },
-    room,
-  );
-  /* The floor never shrinks below the terrace's own floor: a room too small to hold a table is not
-   * improved by planting the space a table would have used. */
-  const minimum = terraceFloor(room);
-  const floor: LocalRect = floorRect ?? {
-    u0: uMin,
-    u1: uMin + Math.min(depth, minimum.depth),
-    v0: -Math.min(width, minimum.width) / 2,
-    v1: Math.min(width, minimum.width) / 2,
-  };
 
-  const focal = rear
-    ? clampRect(
+    sketch(request, room, _plan, _params) {
+      const s = request.scale;
+      const layout = court(room, request);
+
+      const slots: Slot[] = [terraceSlot(layout.floor, room)];
+
+      /*
+       * The focal slot on the wall opposite the doors. `axis-end` rather than `far-room`: it is a
+       * thing to look at from where you are standing, not a place to walk to, and a courtyard is too
+       * small to walk anywhere in.
+       */
+      if (layout.focal) slots.push(slotIn('axis-end', 'axis-end', layout.focal, { margin: 0.2 }));
+      if (layout.utility) slots.push(slotIn('utility', 'utility', layout.utility, { turn: true }));
+
+      /* A dining set goes on the floor itself; there is no second room to put it in. */
+      const end = clampRect(
         {
-          u0: rear.u0 - 0.2,
-          u1: rear.u1,
-          v0: -Math.min(1.8 * s, width * 0.25),
-          v1: Math.min(1.8 * s, width * 0.25),
+          u0: layout.floor.u0,
+          u1: layout.floor.u1,
+          v0: layout.floor.v0,
+          v1: layout.floor.v0 + (layout.floor.v1 - layout.floor.v0) / 2,
         },
         room,
-      )
-    : null;
+      );
+      if (end) slots.push(slotIn('terrace-end', 'terrace-end', end, { margin: 0.15 }));
 
-  const utility = clampRect(
-    {
-      u0: uMin,
-      u1: uMin + Math.min(1.6 * s, depth * 0.3),
-      v0: room.vMax - Math.min(2.2 * s, width * 0.3),
-      v1: room.vMax,
+      slots.push({
+        id: 'terrace-corner',
+        kind: 'terrace-corner',
+        zoneId: 'terrace',
+        anchor: {
+          u: layout.floor.u1 - 0.8 * s,
+          v: request.gateSide === 'left' ? layout.floor.v1 - 0.8 * s : layout.floor.v0 + 0.8 * s,
+        },
+        maxSize: { width: 1.7 * s, depth: 1.7 * s },
+      });
+
+      const beds: LayoutSketch['beds'] = layout.beds.map(({ name, rect }) => ({
+        name,
+        shape: {
+          kind: 'rect' as const,
+          rect,
+          cornerRadius: request.style === 'cottage' ? 0.6 : 0,
+        },
+      }));
+
+      /* One tree, in a corner, never in the middle. A courtyard with a specimen in the centre is a
+       * courtyard you walk round the edge of. */
+      const trees: LocalPoint[] = [{ u: room.uMax - 1.5, v: room.vMin + 1.5 }];
+
+      return withZoneIds({
+        template: 'rectilinear',
+        beds,
+        terrace: layout.floor,
+        /* No lawn, by definition. `courtyard: true` is what tells the fill pass so. */
+        lawn: null,
+        lawnCategory: 'gravel-mulch',
+        slots,
+        paths: [],
+        trees,
+        axisPath: null,
+        courtyard: true,
+      });
     },
-    room,
-  );
-
-  return { floor, beds, focal, utility };
-}
-
-/** A rectangle, or nothing when it is too small to be the thing it claims to be. */
-function keep(rect: LocalRect | null, viable: (rect: LocalRect) => boolean): LocalRect | null {
-  return rect && viable(rect) ? rect : null;
+  };
 }

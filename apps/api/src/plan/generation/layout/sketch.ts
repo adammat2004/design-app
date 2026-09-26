@@ -1,4 +1,9 @@
-import { clipToHalfPlane, type DesiredFeature, type GardenBrief } from '@garden-studio/schema';
+import {
+  clipToHalfPlane,
+  type DesiredFeature,
+  type GardenBrief,
+  type PrivacyStrategy,
+} from '@garden-studio/schema';
 import { MIN_FILL_SIDE } from '../fill-limits.js';
 import { hostFloor } from '../furnishings.js';
 
@@ -68,7 +73,22 @@ export interface Slot {
   minSize?: { width: number; depth: number };
   /** Turn the footprint a quarter so its long side runs along `v` rather than `u`. */
   turn?: boolean;
+  /**
+   * Why a thing in this slot is here, from the composition's vocabulary. Set by a composed sketch
+   * and stamped onto whatever lands in the slot; absent on the compositions still drawn by hand.
+   */
+  purpose?: string;
 }
+
+/**
+ * How much a route matters, which decides what it may cross.
+ *
+ * `primary` and `secondary` routes are the ways people actually move — to the shed with the mower,
+ * down to the seat at the end — and a composed plan gives them a corridor round the open ground
+ * rather than across it, so the lawn is an obstacle to them. A `decorative` route is walked for its
+ * own sake and may cross what it likes, which is the difference between a path and a scar.
+ */
+export type RouteTier = 'primary' | 'secondary' | 'decorative';
 
 export interface SketchPath {
   /**
@@ -85,6 +105,33 @@ export interface SketchPath {
   /** Intermediate points for a curved or dog-legged route, in the frame. */
   via?: LocalPoint[];
   name: string;
+  /** Absent on a hand-drawn composition, which reads as `secondary` and may cross the lawn. */
+  tier?: RouteTier;
+  purpose?: string;
+  /**
+   * The route this one branches off, by name. A branch starts on that route's line, so the two
+   * strips overlap at the junction by construction — the way two paved paths join — and the router
+   * is told to allow it. Laid after the route it names, or not at all.
+   */
+  branch?: string;
+}
+
+/**
+ * What a composed sketch knows that a hand-drawn one does not.
+ *
+ * Present only on a sketch produced by `design/composition/`. Its presence is what switches the
+ * realisation to the composed rules: the open space was reserved first, so beds are cut round the
+ * lawn rather than the lawn round the beds; a primary route may not cross the lawn; trees are
+ * planted where the composition put them for the reason it gave, and nowhere else.
+ */
+export interface ComposedFacts {
+  language: 'rectilinear' | 'soft_organic' | 'formal_symmetric';
+  /** Why each of `LayoutSketch.trees` is there, in the same order. */
+  treeRoles: { role: 'focal' | 'framing' | 'screening' | 'backdrop'; purpose: string }[];
+  /** Why each of `LayoutSketch.beds` is there, in the same order. */
+  bedPurposes: string[];
+  /** The decisions the composition took, each a sentence a person could disagree with. */
+  decisions: { kind: string; text: string }[];
 }
 
 export interface LayoutSketch {
@@ -100,8 +147,15 @@ export interface LayoutSketch {
   trees: LocalPoint[];
   /** The formal template's paved line down the middle, as a strip. */
   axisPath: LocalRect | null;
+  /**
+   * Distances out from the door at which the axis path has a vertex of its own: where it passes
+   * something it serves, so it is seen to reach it rather than run past it from end to end.
+   */
+  axisStops?: number[];
   /** True when the room is too shallow for a lawn: terrace only. */
   courtyard: boolean;
+  /** Set by a composed sketch. See `ComposedFacts`. */
+  composed?: ComposedFacts;
 }
 
 export type TemplateId = 'rectilinear' | 'curved' | 'formal';
@@ -117,6 +171,34 @@ export interface SketchRequest {
   houseWallLength: number;
   /** The door's width, so the terrace always covers it. */
   doorWidth: number | null;
+  /**
+   * Rooms beyond what was asked for that the plot can carry: a second seating area on a big plot,
+   * a lounge where the brief and budget want one. A composed sketch reserves a bay for each, so the
+   * surplus lands in the composition rather than wherever a sampler found room. Both the preview
+   * and the realisation pass the same number, or the two would compose different gardens.
+   */
+  extraRooms?: number;
+  /** The view from the doors, in the frame. A composed sketch keeps the utility bays out of it. */
+  view?: { cone: LocalPoint[]; axisEnd: LocalPoint } | null;
+  /** Where the side gate is, in the frame, so the way in from it can be kept clear of planting. */
+  gate?: LocalPoint | null;
+  /**
+   * The features this concept's brief calls essential. A composition gives the lawn up to these
+   * rather than refuse them: the lawn is the thing the rooms stand round, but not at the price of
+   * the room the garden is for.
+   */
+  essential?: DesiredFeature[];
+  /**
+   * What the concept's brief asks the planting to screen. Where it asks to screen the neighbours or
+   * to enclose the garden, a composition plants both sides deep against the fence and runs any path
+   * inside them — the planting's depth follows its role rather than one band all round.
+   */
+  privacy?: PrivacyStrategy;
+  /**
+   * The sides whose boundary is too low to screen a seat (`lowSides`). A screening bed goes only
+   * against these: a tall fence already screens, and planting in front of it only costs the lawn.
+   */
+  lowSides?: ('left' | 'right')[];
 }
 
 export interface Room {

@@ -15,6 +15,7 @@ import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
 import { gradeCss } from '@/lib/materials/grade';
 import { GradeFilter } from './GradeFilter';
+import { useEdgeRules } from '@/lib/edge-rules';
 
 /**
  * Visualise, drawn by WebGL and driven live.
@@ -60,9 +61,10 @@ export function VisualiseView() {
 
   const previewMinutes = usePlanEditorStore((state) => state.previewMinutes);
   const boundary = useMemo(() => draftPolygon(boundaryDraft), [boundaryDraft]);
-  const planScene = useMemo(() => ({ boundary, house: boundaryDraft.house, elements,
+  const edgeRules = useEdgeRules();
+  const planScene = useMemo(() => ({ boundary, house: boundaryDraft.house, elements, edgeRules,
     site: previewMinutes === null ? boundaryDraft : { ...boundaryDraft, sun: { ...boundaryDraft.sun, minutes: previewMinutes } } }),
-    [boundary, boundaryDraft, elements, previewMinutes]);
+    [boundary, boundaryDraft, elements, previewMinutes, edgeRules]);
   const scene = useMemo(() => buildRenderScene(planScene, { view: 'visualise', maturity, rendererVersion: browserRendererVersion() }),
     [planScene, maturity]);
 

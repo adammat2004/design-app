@@ -22,10 +22,11 @@ export function courseFixtureElements(): DesignElement[] {
     id: `prototype-${id}`, role: 'feature', category: 'paved-area', zone: 'back', material,
     shape: { kind: 'polyline', points: structuredClone(points), width },
   }));
-  // The x=3 seam must be emitted once by edgingRuns, not once per neighbouring host.
+  // The x=3 seam must be emitted once by edgingRuns, not once per neighbouring host. Two beds of
+  // different planting, because a seam between two of the same material is not an edge at all.
   return [...runs, ...[2, 4].map((x): DesignElement => ({
-    id: `prototype-shared-${x}`, role: 'feature', category: 'paved-area', zone: 'back',
-    material: 'stone-pavers', edging: 'brick-edging',
+    id: `prototype-shared-${x}`, role: 'fill', fillKind: 'accent', category: 'planting-bed', zone: 'back',
+    material: x === 2 ? 'mixed-border' : 'shrubs', edging: 'brick-edging',
     shape: { kind: 'rect', centre: { x, y: 13 }, width: 2, depth: 2, rotation: 0 },
   }))];
 }

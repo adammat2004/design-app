@@ -68,30 +68,8 @@ export function edgeFor(category: ElementCategory): EdgeSpec | null {
 }
 
 /**
- * How wide an edging course is drawn, in millimetres.
- *
- * **Presentation only.** The schedule measures an edging run by its *length* — see
- * `plan/edging.ts` and `planSchedule` — so nothing here reaches a quantity, and this table is free
- * to be a drawing convention where the product is not one. That matters for exactly one entry:
- * steel edging is a 3 mm blade, which is a fifth of a pixel at any zoom the plan supports, so it is
- * drawn at the width it *reads* at rather than the width it is. The same licence
- * `MODULE_BEVEL_RATIO` takes, and for the same reason.
- *
- * The other four are real product widths, quoted in millimetres like every other product dimension
- * in the manifest.
+ * How wide an edging course is drawn. Presentation only — see `EDGING_WIDTHS_MM` in the schema,
+ * which is where the table lives now so the API can quote a run without importing the renderer.
  */
-export const EDGING_WIDTH_MM: Record<string, number> = {
-  /** A brick on end: the course is one brick width across. */
-  'brick-edging': 102,
-  /** A garden kerb, the small one — a road kerb is 250 and would eat the border. */
-  'concrete-kerb': 150,
-  'sett-edging': 100,
-  'timber-sleeper': 200,
-  /** A drawing width, not a product one. The blade is 3 mm. */
-  'steel-edging': 45,
-};
-
-/** Metres, resolved for the renderer. Falls back to a brick course for an unknown product. */
-export function edgingWidth(material: string): number {
-  return (EDGING_WIDTH_MM[material] ?? EDGING_WIDTH_MM['brick-edging']!) / 1000;
-}
+export { EDGING_WIDTHS_MM as EDGING_WIDTH_MM } from '@garden-studio/schema';
+export { edgingWidthMetres as edgingWidth } from '@garden-studio/schema';

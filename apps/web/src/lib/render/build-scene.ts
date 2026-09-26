@@ -1,7 +1,10 @@
 import {
   boundaryRuns,
   boundingBox,
-  edgingRuns,
+  cutEdgeMasksFor,
+  resolveEdges,
+  type EdgeRuleContext,
+  type ResolvedEdgeRun,
   elementAnchor,
   edgingHeight,
   heightFor,
@@ -30,7 +33,7 @@ import { resolveLayers } from '../materials/layers';
 import { LIGHT_DIRECTION, presentationCast } from '../materials/light';
 import { materialFill } from '../material-colours';
 import { cssToRgb, rgbToCss, shiftBrightness } from '../materials/light';
-import { edgingWidth, resolvePattern } from '../materials/palette';
+import { resolvePattern } from '../materials/palette';
 import { plantingExclusions, scenePasses } from '../materials/scene-passes';
 import { boundaryBand, inwardNormal, ringIsClockwise } from '../materials/symbols/boundary';
 import { drawnLift } from '../materials/symbols/elevated';
@@ -62,6 +65,13 @@ export interface PlanScene {
   elements: DesignElement[];
   /** Read for its sun and its boundary styling. `location: null` means no solar claim is made. */
   site: SiteSection;
+  /**
+   * The brief's style, budget and upkeep, which decide what automatic edging lays.
+   *
+   * Optional, because a scene with none still has an honest answer: the rules fall back to what
+   * each surface's own `edging` product says, and to nothing where it says nothing.
+   */
+  edgeRules?: EdgeRuleContext;
 }
 
 export interface BuildOptions extends Partial<SceneOptions> {
@@ -102,6 +112,19 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
 
   const plants: RenderPlant[] = [];
 
+  /*
+   * Which sides of each surface are a cut edge, decided once here from the whole element list —
+   * the one place that can see what lies on the far side of a seam — and handed to the raster the
+   * way the planting exclusions are. A base fill's answer is "none", which is what stops the zone
+   * seams drawing across the middle of a gravel garden.
+   */
+  const edgeResolution = resolveEdges(
+    elements,
+    { boundary: scene.boundary, house: scene.house ? housePolygon(scene.house) : undefined },
+    scene.edgeRules,
+  );
+  const cutEdges = cutEdgeMasksFor(elements, edgeResolution);
+
   const ground = passes.ground.map((element): RenderItem => {
     /*
      * Only ground-pass beds compute exclusions, exactly as `drawPlan` has always done. The object
@@ -109,7 +132,7 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
      * speak for exclusions", so the pass's own value stands and a caller that set one keeps it.
      */
     const exclusions = plantingExclusions(element, elements);
-    const surface = resolveSurface(element, exclusions, true);
+    const surface = resolveSurface(element, exclusions, true, cutEdges.get(element.id) ?? null);
 
     /*
      * Planting is instanced in **both** views — _this reverses_ "instanced mode" being the Visualise
@@ -142,14 +165,14 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     element,
     /* A pergola is drawn in both passes: its deck below the shadows, its beams above them. */
     part: element.symbol === 'pergola' ? 'object' : 'all',
-    surface: resolveSurface(element, null, instanced),
+    surface: resolveSurface(element, null, instanced, cutEdges.get(element.id) ?? null),
     visualLayer: layerForElement(element),
   }));
 
   const house = resolveHouse(scene.house, instanced ? light : null, light);
   const runs = boundaryRuns(scene.site);
   const levels = buildLevels(elements, scene);
-  const edging = buildEdging(elements, scene);
+  const edging = buildEdging(edgeResolution.runs);
   const casters = [
     ...shadowOccluders([], scene.house).map((occluder) => ({ sourceId: 'house', occluder })),
     ...runs.flatMap((run) => shadowOccluders([], null, [run]).map((occluder) => ({ sourceId: `boundary:${run.edgeVertexId}`, occluder }))),
@@ -415,7 +438,9 @@ function buildStack(scene: {
   }
 
   for (const surface of scene.edging) {
-    const height = edgingHeight(surface.element.material);
+    const height = surface.height ?? edgingHeight(surface.element.material);
+    // A flush join stands proud of nothing, so it has no face to lift into the elevated stack.
+    if (height <= 0) continue;
     nodes.push({
       kind: 'extrusion',
       id: surface.elementId,
@@ -542,6 +567,7 @@ function buildLevels(elements: DesignElement[], scene: PlanScene): RenderLevel[]
               anchor: patternAnchor(element),
               seed: element.id,
               exclusions: null,
+              cutEdge: null,
             }
           : null,
         colour: rgbToCss(shiftBrightness(cssToRgb(materialFill(host)), RETAINING_SHADE)),
@@ -553,45 +579,37 @@ function buildLevels(elements: DesignElement[], scene: PlanScene): RenderLevel[]
 /**
  * The edging courses, resolved to surfaces the existing painter can draw.
  *
- * The runs themselves come from `plan/edging.ts`, which is pure geometry and knows nothing about
- * painting; this wraps each one in the smallest `DesignElement` the surface painter needs. That
- * element is **synthetic and stays here** — it is never pushed onto the document, never counted,
- * and `quantities.ts` reaches edging through `edgingRuns` directly rather than through anything on
- * this scene.
+ * The runs themselves come from `plan/edges/resolve.ts`, which is pure geometry and knows nothing
+ * about painting; this wraps each one in the smallest `DesignElement` the surface painter needs.
+ * That element is **synthetic and stays here** — it is never pushed onto the document, never
+ * counted, and `quantities.ts` reaches edging through `resolveEdges` directly rather than through
+ * anything on this scene.
  *
- * The id is `${hostId}:edge:${n}`, which is stable across renders by construction: the runs come
- * out of the host's own outline in a fixed order, so a course keeps its identity — and therefore
- * its raster cache entry and its seeded tones — as long as the bed is not reshaped.
+ * **Only what resolved is drawn.** A stretch whose treatment is `none` never arrives here, so a
+ * surface with nothing to say draws no outline — the default the old whole-outline course could not
+ * have. A flush join arrives with no product: it falls through to the painter's flat strip at the
+ * width of a joint, with no height, which is what "these meet level" looks like from above.
  *
- * The exclusions are passed in full. A run against the fence or against the house is not drawn for
- * the same reason it is not ordered: it is not there.
+ * The id is the resolved run's own, which is stable across renders by construction: the host, the
+ * side and either the stored run's id or where the automatic stretch starts. A course keeps its
+ * raster cache entry and its seeded tones while the bed it follows is merely selected or renamed.
  */
-function buildEdging(elements: DesignElement[], scene: PlanScene): RenderSurface[] {
-  const runs = edgingRuns(elements, {
-    boundary: scene.boundary,
-    house: scene.house ? housePolygon(scene.house) : undefined,
-  });
-
-  const perHost = new Map<string, number>();
-
+function buildEdging(runs: ResolvedEdgeRun[]): RenderSurface[] {
   return runs.flatMap((run): RenderSurface[] => {
-    const index = perHost.get(run.hostId) ?? 0;
-    perHost.set(run.hostId, index + 1);
-
     const element: DesignElement = {
-      id: `${run.hostId}:edge:${index}`,
+      id: run.id,
       category: 'paved-area',
       role: 'fill',
       fillKind: 'accent',
-      material: run.material,
+      ...(run.materialId ? { material: run.materialId } : {}),
       zone: 'back',
-      shape: { kind: 'polyline', points: run.points, width: edgingWidth(run.material) },
+      shape: { kind: 'polyline', points: run.points, width: run.widthM },
     };
 
     const outline = elementOutline(element);
     if (outline.length < 3) return [];
 
-    const material = resolvePattern(run.material);
+    const material = run.materialId ? resolvePattern(run.materialId) : null;
 
     return [
       {
@@ -609,6 +627,9 @@ function buildEdging(elements: DesignElement[], scene: PlanScene): RenderSurface
         anchor: patternAnchor(element),
         seed: element.id,
         exclusions: null,
+        cutEdge: null,
+        // The run's own height, which may override the product's — a flush join has none.
+        height: run.heightM,
       },
     ];
   });
@@ -683,6 +704,7 @@ function resolveSurface(
   element: DesignElement,
   exclusions: Point[][] | null,
   instanced: boolean,
+  cutEdge: boolean[] | null,
 ): RenderSurface | null {
   const outline = elementOutline(element);
   if (outline.length < 3) return null;
@@ -708,6 +730,7 @@ function resolveSurface(
     anchor: patternAnchor(element),
     seed: element.id,
     exclusions,
+    cutEdge,
   };
 }
 

@@ -1,4 +1,10 @@
-import { ELEMENT_CATEGORIES, MATERIAL_IDS, ZONE_IDS } from './vocabulary.js';
+import {
+  EDGE_RELATIONS,
+  EDGE_TREATMENT_IDS,
+  ELEMENT_CATEGORIES,
+  MATERIAL_IDS,
+  ZONE_IDS,
+} from './vocabulary.js';
 
 /**
  * The JSON Schema handed to the model, mirroring `AssistantIntentEnvelopeSchema`.
@@ -11,9 +17,10 @@ import { ELEMENT_CATEGORIES, MATERIAL_IDS, ZONE_IDS } from './vocabulary.js';
  * Two constraints of the structured-outputs feature shape this:
  *
  *  - every object needs `additionalProperties: false` and an explicit `required`;
- *  - numeric and string *bounds* are not supported, so the ranges live only in the Zod schema and
- *    are enforced when the response is parsed. The planner clamps anyway, so a model that asks to
- *    make something ten times bigger gets told what it actually got.
+ *  - numeric and string *bounds* are not supported, so the ranges live only in the Zod schema.
+ *    `IntentService` clamps a model-emitted number into that range before parsing — a point
+ *    radius of 0.05 becomes 0.2 — because rejecting the whole reply over one field throws away
+ *    every other intent with it. The schema itself stays strict for intents built by hand.
  */
 
 /**
@@ -60,9 +67,19 @@ const footprint = {
   required: ['kind', 'width', 'depth', 'radius'],
   properties: {
     kind: { type: 'string', enum: ['rect', 'point', 'strip'] },
-    width: { type: 'number', description: 'Metres, for rect and strip. 0 for a point.' },
-    depth: { type: 'number', description: 'Metres, for rect. 0 for a point or a strip.' },
-    radius: { type: 'number', description: 'Metres, for point. 0 for a rect or a strip.' },
+    width: {
+      type: 'number',
+      description:
+        'Metres. For a rect, at least 0.3 and at most 20; for a strip, at least 0.2 and at most 3. 0 for a point.',
+    },
+    depth: {
+      type: 'number',
+      description: 'Metres, for a rect, at least 0.3 and at most 20. 0 for a point or a strip.',
+    },
+    radius: {
+      type: 'number',
+      description: 'Metres, for a point, at least 0.2 and at most 5. 0 for a rect or a strip.',
+    },
   },
 } as const;
 
@@ -236,6 +253,28 @@ export const INTENT_JSON_SCHEMA = {
             properties: {
               kind: { type: 'string', const: 'remove' },
               target,
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'target', 'adjacent', 'adjacentElementId', 'treatment'],
+            description:
+              'What is built along the surface where it meets something: brick, stone, steel, timber, kerb, flush (level, no upstand) or none (remove it). Never a position — say what the edge meets.',
+            properties: {
+              kind: { type: 'string', const: 'edge' },
+              target,
+              adjacent: {
+                type: 'string',
+                enum: EDGE_RELATIONS,
+                description:
+                  'What the edge meets. "all" for every side; "path" for a paved route; "paving" for any other hard surface.',
+              },
+              adjacentElementId: {
+                type: 'string',
+                description: 'One named neighbour from the inventory, or an empty string.',
+              },
+              treatment: { type: 'string', enum: EDGE_TREATMENT_IDS },
             },
           },
           {

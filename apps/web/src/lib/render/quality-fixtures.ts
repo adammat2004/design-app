@@ -7,6 +7,7 @@ import narrow from '../../../scripts/fixtures/narrow.plan.json';
 import reference from '../../../scripts/fixtures/reference.plan.json';
 import type { PlanScene } from './build-scene';
 import { courseFixtureElements } from './course-fixtures';
+import { edgeRulesOf } from '../edge-rules';
 
 /** Fixed inputs for the dev lab, image regressions and performance measurements. Never saved. */
 export const QUALITY_FIXTURES = ['target', 'naturalistic', 'formal', 'courtyard', 'narrow', 'levels', 'dense', 'reference', 'courses'] as const;
@@ -35,5 +36,5 @@ export function qualityDocument(name: QualityFixture): PlanDocument {
 export function qualityScene(name: QualityFixture): PlanScene {
   const document = qualityDocument(name);
   return { boundary: boundaryPolygon(document.site), house: document.site.house,
-    elements: document.layout.elements, site: document.site };
+    elements: document.layout.elements, site: document.site, edgeRules: edgeRulesOf(document.brief) };
 }

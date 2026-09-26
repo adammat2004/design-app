@@ -92,7 +92,9 @@
         "x": 4.5,
         "y": 12
       },
-      "rotation": 0
+      "rotation": 0,
+      "storeys": 2,
+      "roofMaterial": "slate"
     },
     "selectedZoneIds": [
       "back",
@@ -113,11 +115,13 @@
         "id": "g1",
         "edgeVertexId": "v1",
         "offsetAlongEdge": 9,
-        "width": 0.9
+        "width": 0.9,
+        "kind": "pedestrian"
       }
     ],
     "streetEdgeVertexId": "v2",
-    "boundaryStyles": []
+    "boundaryStyles": [],
+    "scopePolygon": null
   },
   "features": {
     "features": [],
@@ -144,7 +148,7 @@
   "layout": {
     "elements": [
       {
-        "id": "c11-0-e9",
+        "id": "c11-0-e7",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -174,7 +178,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c11-0-e10",
+        "id": "c11-0-e8",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -204,7 +208,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c11-0-e11",
+        "id": "c11-0-e9",
         "category": "lawn",
         "role": "fill",
         "shape": {
@@ -234,7 +238,7 @@
         "material": "standard-turf"
       },
       {
-        "id": "c11-0-e12",
+        "id": "c11-0-e10",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -261,11 +265,13 @@
           "cornerRadius": 0
         },
         "zone": "right",
+        "purpose": "passage",
         "fillKind": "accent",
-        "material": "decorative-gravel"
+        "material": "decorative-gravel",
+        "edging": "steel-edging"
       },
       {
-        "id": "c11-0-e13",
+        "id": "c11-0-e11",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -292,11 +298,13 @@
           "cornerRadius": 0
         },
         "zone": "left",
+        "purpose": "passage",
         "fillKind": "accent",
-        "material": "decorative-gravel"
+        "material": "decorative-gravel",
+        "edging": "steel-edging"
       },
       {
-        "id": "c11-0-e15",
+        "id": "c11-0-e12",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -304,190 +312,80 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 0.15,
-              "y": 2.584749
+              "x": 0,
+              "y": 1.895483
             },
             {
-              "x": 5.944488,
-              "y": 2.584749
+              "x": 9,
+              "y": 1.895483
             },
             {
-              "x": 5.944488,
-              "y": 1.058475
+              "x": 9,
+              "y": 0
             },
             {
-              "x": 8.098446,
-              "y": 1.058475
-            },
-            {
-              "x": 8.098446,
-              "y": 2.584749
-            },
-            {
-              "x": 8.85,
-              "y": 2.584749
-            },
-            {
-              "x": 8.85,
-              "y": 0.15
-            },
-            {
-              "x": 0.15,
-              "y": 0.15
+              "x": 0,
+              "y": 0
             }
           ],
           "cornerRadius": 0
         },
         "zone": "back",
+        "purpose": "backdrop-planting",
         "fillKind": "accent",
         "material": "shrubs",
+        "edging": "steel-edging",
         "plantingStyle": "contemporary"
       },
       {
-        "id": "c11-0-e16",
+        "id": "c11-0-e13",
         "category": "planting-bed",
         "role": "fill",
-        "name": "Specimen border",
+        "name": "Right border",
         "shape": {
           "kind": "polygon",
           "points": [
             {
-              "x": 0.15,
-              "y": 6.508426
+              "x": 6.346042,
+              "y": 7.376834
             },
             {
-              "x": 1.35,
-              "y": 6.508426
+              "x": 6.596042,
+              "y": 7.376834
             },
             {
-              "x": 1.35,
-              "y": 5.527507
+              "x": 6.596042,
+              "y": 6.776834
             },
             {
-              "x": 2.863987,
-              "y": 5.037047
+              "x": 8.75,
+              "y": 6.776834
             },
             {
-              "x": 2.863987,
-              "y": 4.056128
+              "x": 8.75,
+              "y": 7.376834
             },
             {
-              "x": 1.35,
-              "y": 3.565669
+              "x": 9,
+              "y": 7.376834
             },
             {
-              "x": 1.35,
-              "y": 2.584749
+              "x": 9,
+              "y": 1.895483
             },
             {
-              "x": 0.15,
-              "y": 2.584749
+              "x": 6.346042,
+              "y": 1.895483
             }
           ],
           "cornerRadius": 0
         },
         "zone": "back",
+        "purpose": "framing-planting",
         "fillKind": "accent",
-        "material": "shrubs",
+        "material": "hedging",
+        "edging": "steel-edging",
         "plantingStyle": "contemporary"
-      },
-      {
-        "id": "c11-0-e17",
-        "category": "planting-bed",
-        "role": "fill",
-        "name": "Terrace planting bay",
-        "shape": {
-          "kind": "polygon",
-          "points": [
-            {
-              "x": 1.35,
-              "y": 6.508426
-            },
-            {
-              "x": 2.993224,
-              "y": 6.508426
-            },
-            {
-              "x": 2.993224,
-              "y": 5.308426
-            },
-            {
-              "x": 2.026274897,
-              "y": 5.308426
-            },
-            {
-              "x": 1.35,
-              "y": 5.527507
-            }
-          ],
-          "cornerRadius": 0
-        },
-        "zone": "back",
-        "fillKind": "accent",
-        "material": "shrubs",
-        "plantingStyle": "contemporary"
-      },
-      {
-        "id": "c11-0-e14",
-        "category": "lawn",
-        "role": "fill",
-        "shape": {
-          "kind": "polygon",
-          "points": [
-            {
-              "x": 1.35,
-              "y": 3.565669
-            },
-            {
-              "x": 2.863987,
-              "y": 4.056128
-            },
-            {
-              "x": 2.863987,
-              "y": 5.037047
-            },
-            {
-              "x": 1.35,
-              "y": 5.527507
-            },
-            {
-              "x": 2.026275,
-              "y": 5.308426
-            },
-            {
-              "x": 2.993224,
-              "y": 5.308426
-            },
-            {
-              "x": 2.993224,
-              "y": 6.141476
-            },
-            {
-              "x": 8.65,
-              "y": 6.141476
-            },
-            {
-              "x": 8.65,
-              "y": 3.240116
-            },
-            {
-              "x": 5.242934,
-              "y": 3.240116
-            },
-            {
-              "x": 5.242934,
-              "y": 2.584749
-            },
-            {
-              "x": 1.35,
-              "y": 2.584749
-            }
-          ],
-          "cornerRadius": 0
-        },
-        "zone": "back",
-        "fillKind": "accent",
-        "material": "standard-turf"
       },
       {
         "id": "c11-0-e1",
@@ -497,14 +395,15 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 4.5,
-            "y": 8.329212959406783
+            "x": 3.573021089886482,
+            "y": 5.947741440899896
           },
-          "width": 7,
-          "depth": 3.341574081186433,
+          "width": 4.746042179772964,
+          "depth": 8.104517118200208,
           "rotation": 0
         },
         "zone": "back",
+        "purpose": "terrace",
         "material": "concrete"
       },
       {
@@ -515,8 +414,8 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 4.5,
-            "y": 8.329212959406783
+            "x": 3.573021089886482,
+            "y": 5.947741440899896
           },
           "width": 3,
           "depth": 2.4,
@@ -535,7 +434,7 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 1.65,
+            "x": 1.85,
             "y": 9.35
           },
           "width": 0.6,
@@ -555,7 +454,7 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 7.35,
+            "x": 5.296042179772964,
             "y": 9.35
           },
           "width": 0.6,
@@ -575,117 +474,60 @@
         "shape": {
           "kind": "rect",
           "centre": {
-            "x": 7.021466995054697,
-            "y": 1.9200580665180578
+            "x": 7.673021089886483,
+            "y": 7.638416871909186
           },
           "width": 2.1539578202270357,
           "depth": 1.7231662561816288,
           "rotation": 0
         },
         "zone": "back",
-        "material": "softwood",
+        "purpose": "utility-store",
+        "material": "dark-stained-timber",
         "symbol": "shed"
       },
       {
         "id": "c11-0-e6",
-        "category": "gravel-mulch",
-        "role": "feature",
-        "name": "Path to the shed",
-        "shape": {
-          "kind": "polyline",
-          "points": [
-            {
-              "x": 7.0214669950547,
-              "y": 6.658425918813567
-            },
-            {
-              "x": 7.0214669950547,
-              "y": 2.831641194608872
-            }
-          ],
-          "width": 1.05
-        },
-        "zone": "back",
-        "material": "decorative-gravel"
-      },
-      {
-        "id": "c11-0-e7",
         "category": "planting-bed",
         "role": "feature",
         "name": "Tree",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 1.9,
-            "y": 1.9000000000000004
+            "x": 1.5,
+            "y": 1.5
           },
-          "radius": 1.6
+          "radius": 2.5
         },
         "zone": "back",
+        "purpose": "backdrop-tree",
         "material": "shrubs",
         "symbol": "tree-deciduous",
         "plantingStyle": "contemporary"
       },
       {
-        "id": "c11-0-e8",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Tree",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 4.753212513283154,
-            "y": 3.8472844910975037
-          },
-          "radius": 1.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "symbol": "tree-multistem",
-        "plantingStyle": "contemporary"
-      },
-      {
-        "id": "c11-0-e18",
+        "id": "c11-0-e14",
         "category": "planting-bed",
         "role": "feature",
         "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.1777925036277095,
-            "y": 1.3608531812656441
+            "x": 4.380596409089702,
+            "y": 0.944386591834815
           },
-          "radius": 0.6
+          "radius": 0.85
         },
         "zone": "back",
         "material": "shrubs",
-        "height": 1.3,
+        "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c11-0-e15",
-        "plantingStyle": "contemporary"
-      },
-      {
-        "id": "c11-0-e19",
-        "category": "planting-bed",
-        "role": "feature",
-        "name": "Evergreen shrub",
-        "shape": {
-          "kind": "point",
-          "at": {
-            "x": 1.3034857704067246,
-            "y": 4.550623819281128
-          },
-          "radius": 0.6
-        },
-        "zone": "back",
-        "material": "shrubs",
-        "height": 1.3,
-        "symbol": "shrub-evergreen",
-        "bedId": "c11-0-e16",
+        "bedId": "c11-0-e12",
         "plantingStyle": "contemporary"
       }
     ],
     "seededFrom": null,
-    "pristine": null
+    "pristine": null,
+    "revision": null
   }
 }

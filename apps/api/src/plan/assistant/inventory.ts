@@ -1,10 +1,15 @@
 import {
+  buildBoundaryGraph,
+  canBeEdged,
   describeElement,
+  edgePlanOf,
   elementArea,
+  housePolygon,
   findMaterial,
   formatArea,
   isLocked,
   materialsFor,
+  type BoundaryGraph,
   type DesignElement,
   type GardenZone,
   type PlanDocument,
@@ -43,6 +48,16 @@ export function renderInventory(document: PlanDocument, zones: GardenZone[]): st
     }
   }
 
+  /*
+   * What each surface meets, from the boundary graph — so "where the patio meets the path" names
+   * something the model can see. Names and ids only: the graph knows where every stretch is, and
+   * none of that reaches the prompt.
+   */
+  const graph = buildBoundaryGraph(elements, {
+    boundary: document.site.vertices,
+    ...(document.site.house ? { house: housePolygon(document.site.house) } : {}),
+  });
+
   lines.push('', 'Elements on the plan:');
   if (elements.length === 0) {
     lines.push('  (none)');
@@ -61,6 +76,11 @@ export function renderInventory(document: PlanDocument, zones: GardenZone[]): st
 
     if (material) parts.push(`material=${material.id}`);
     if (element.role === 'fill') parts.push(element.fillKind === 'base' ? 'ground' : 'bed');
+    if (canBeEdged(element.category)) {
+      const beside = besideOf(graph, element.id, elements);
+      if (beside) parts.push(`beside=[${beside}]`);
+      parts.push(`edges=${edgePlanOf(element).mode}`);
+    }
     if (isLocked(element)) parts.push('SHAPE LOCKED — material may change, outline may not');
     if (element.hidden) parts.push('hidden');
 
@@ -134,4 +154,24 @@ function identify(element: DesignElement): string[] {
     element.name ? `"${element.name}"` : `(unnamed ${element.category})`,
     element.category,
   ];
+}
+
+/**
+ * The distinct things a surface meets, in the order its boundary meets them. Never a distance.
+ */
+function besideOf(graph: BoundaryGraph, hostId: string, elements: DesignElement[]): string {
+  const seen: string[] = [];
+  for (const interval of graph.intervalsOf(hostId)) {
+    const { neighbour } = interval;
+    let word: string | null = null;
+    if (neighbour.kind === 'house') word = 'the house';
+    else if (neighbour.kind === 'boundary') word = 'the boundary';
+    else if (neighbour.kind === 'element') {
+      const other = elements.find((element) => element.id === neighbour.id);
+      const name = other?.name ?? neighbour.category;
+      word = `${name} (id=${neighbour.id})`;
+    }
+    if (word && !seen.includes(word)) seen.push(word);
+  }
+  return seen.join(', ');
 }

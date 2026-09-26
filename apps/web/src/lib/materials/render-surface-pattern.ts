@@ -4,6 +4,7 @@ import {
   boundingBox,
   MM_PER_METRE,
   scatterForm,
+  segmentChains,
   waterSurface,
   type DesignElement,
   type MaterialPattern,
@@ -246,6 +247,15 @@ export interface DrawPass {
   layers?: import('./layers').SurfaceLayer[];
   /** World-space crowns and objects that leave gaps in a bed. */
   exclusions?: Point[][];
+  /**
+   * Which segments of the outline carry the cut edge, one flag per segment of `outline` in order.
+   *
+   * Decided by `cutEdgeMasks` in the schema, once per scene, from what is on the far side of each
+   * segment — which the raster cannot know on its own, for the reason the paving kerb was reverted.
+   * Absent means every segment, which is what the painter drew before the mask existed; a caller
+   * with no scene (a thumbnail, a test) still gets that. In the cache key beside `exclusions`.
+   */
+  cutEdge?: boolean[];
   /** Pixels per metre this pass draws at. */
   pxPerMetre: number;
   /**
@@ -511,7 +521,7 @@ export function drawSurfacePattern(
    */
   context.restore();
 
-  drawCutEdge(context, material, outline, pxPerMetre, toPx);
+  drawCutEdge(context, material, outline, pxPerMetre, toPx, pass.cutEdge);
 
   context.restore();
 }
@@ -915,9 +925,19 @@ function drawCutEdge(
   outline: Point[],
   pxPerMetre: number,
   toPx: (point: Point) => Point,
+  cutEdge?: boolean[],
 ): void {
   const edge = edgeFor(material.category);
   if (!edge) return;
+
+  /*
+   * Which sides. A mask that is absent or all true is the closed ring the painter always stroked;
+   * anything else is stroked as the open chains `segmentChains` makes of it — the same chains a
+   * product course would follow, so the cut and the course agree about where a side ends. A mask
+   * with nothing kept returns before touching the context, which is what a base fill hands in.
+   */
+  const masked = cutEdge && cutEdge.length === outline.length && cutEdge.some((keep) => !keep);
+  if (masked && cutEdge.every((keep) => !keep)) return;
 
   /*
    * A real width, floored at a legible one.
@@ -935,18 +955,31 @@ function drawCutEdge(
    */
   const widthPx = Math.max((edge.widthMm / MM_PER_METRE) * pxPerMetre, MIN_CUT_EDGE_PX);
 
-  context.beginPath();
-  outline.forEach((point, index) => {
-    const at = toPx(point);
-    if (index === 0) context.moveTo(at.x, at.y);
-    else context.lineTo(at.x, at.y);
-  });
-  context.closePath();
-
   // Doubled, because the clip throws the outer half away.
   context.lineWidth = widthPx * 2;
   context.strokeStyle = edge.colour;
-  context.stroke();
+
+  if (!masked) {
+    context.beginPath();
+    outline.forEach((point, index) => {
+      const at = toPx(point);
+      if (index === 0) context.moveTo(at.x, at.y);
+      else context.lineTo(at.x, at.y);
+    });
+    context.closePath();
+    context.stroke();
+    return;
+  }
+
+  for (const chain of segmentChains(outline, cutEdge!)) {
+    context.beginPath();
+    chain.forEach((point, index) => {
+      const at = toPx(point);
+      if (index === 0) context.moveTo(at.x, at.y);
+      else context.lineTo(at.x, at.y);
+    });
+    context.stroke();
+  }
 }
 
 /* ---------------------------------------------------------------- water */

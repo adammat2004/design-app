@@ -3,9 +3,17 @@ import {
   computeZones,
   rectangleHouse,
   SiteSectionSchema,
+  type DesignElement,
   type SiteSection,
 } from '@garden-studio/schema';
-import { describeSide, describeWall, sideLabel, wallLabel } from './side-labels';
+import {
+  describeElementSide,
+  describeSide,
+  describeWall,
+  elementSideLabel,
+  sideLabel,
+  wallLabel,
+} from './side-labels';
 
 /** A 20 x 16 m plot with the house in the middle, drawn clockwise from the origin. */
 function site(overrides: Partial<SiteSection> = {}): SiteSection {
@@ -21,6 +29,43 @@ function site(overrides: Partial<SiteSection> = {}): SiteSection {
     ...overrides,
   });
 }
+
+describe('describeElementSide', () => {
+  const bed = (centre: { x: number; y: number }, width: number, depth: number): DesignElement =>
+    ({
+      id: 'bed',
+      category: 'planting-bed',
+      role: 'fill',
+      fillKind: 'accent',
+      material: 'mixed-border',
+      zone: 'back',
+      shape: { kind: 'rect', centre, width, depth, rotation: 0 },
+    }) as DesignElement;
+
+  it('names the side towards the house the house side, and the rest from there', () => {
+    // Across the top of the plot: the house's top wall (y = 5) is the nearest wall.
+    const across = bed({ x: 10, y: 3 }, 4, 2);
+    expect(describeElementSide(across, site(), 0)).toBe('back');
+    expect(describeElementSide(across, site(), 1)).toBe('right');
+    expect(describeElementSide(across, site(), 2)).toBe('front');
+    expect(describeElementSide(across, site(), 3)).toBe('left');
+  });
+
+  it('judges against the nearest wall, so a bed in a side return has the house on its flank', () => {
+    // Down the left return: the house's left wall (x = 6) is nearest, and the bed's right side faces it.
+    const flank = bed({ x: 3, y: 8 }, 2, 4);
+    expect(describeElementSide(flank, site(), 1)).toBe('front');
+    expect(describeElementSide(flank, site(), 3)).toBe('back');
+  });
+
+  it('answers null without a house, and for a shape with no authored sides', () => {
+    const across = bed({ x: 10, y: 3 }, 4, 2);
+    expect(describeElementSide(across, site({ house: null }), 0)).toBeNull();
+    const circle = { ...across, shape: { kind: 'point', at: { x: 10, y: 3 }, radius: 1 } } as DesignElement;
+    expect(describeElementSide(circle, site(), 0)).toBeNull();
+    expect(elementSideLabel(null, 2)).toBe('Side 3');
+  });
+});
 
 describe('describeSide', () => {
   it('names the top side the back, as the zone label on the canvas does', () => {

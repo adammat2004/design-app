@@ -177,7 +177,8 @@ export class SceneRenderer {
             const raster = getSurfacePattern({ elementId: surface.elementId, material: surface.material!,
               outline: surface.outline, origin: surface.anchor.origin, rotation: surface.anchor.rotation,
               pxPerMetre: scale, pixelRatio: ratio, light: scene.light, assets: getAssetVariants,
-              exclusions: surface.exclusions ?? undefined, centreline: surface.centreline ?? undefined,
+              exclusions: surface.exclusions ?? undefined, cutEdge: surface.cutEdge ?? undefined,
+              centreline: surface.centreline ?? undefined,
               element: surface.element, layers: surface.layers, assetVersion: assetVersion() }, makeCanvas);
             if (patternCacheStats().misses > misses) this.rasterTime.surfaceRasterMs += clockNow() - started;
             if (raster) this.addRaster({ canvas: raster.canvas, origin: raster.originMetres, pxPerMetre: raster.pxPerMetre }, name, primitive.bounds);

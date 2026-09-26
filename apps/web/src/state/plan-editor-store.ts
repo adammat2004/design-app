@@ -8,6 +8,20 @@ import {
   PLANT_CATALOGUE,
   associatePlants,
   isPlantSymbol,
+  materialisedRuns,
+  resolveEdges,
+  styleEdgeProduct,
+  treatmentForMaterial,
+  withEdgeMode,
+  withoutRun,
+  withRunAdded,
+  withRunDimension,
+  withRunEnd,
+  withRunTreatment,
+  freeSpanAt,
+  edgePlanOf,
+  type EdgeDimension,
+  type EdgeTreatment,
   type SymbolId,
 } from '@garden-studio/schema';
 import type { Maturity } from '@/lib/render/scene';
@@ -48,6 +62,7 @@ import { housePolygon } from '@/lib/house';
 import { defaultMaterial } from '@/lib/materials';
 import { zoneAt, type ZoneId } from '@/lib/zones';
 import { selectZones, useBoundaryStore } from './boundary-store';
+import { edgeRulesNow } from '@/lib/edge-rules';
 import { emitDesignEvent } from './design-events';
 
 /**
@@ -120,6 +135,12 @@ export function allocateElementId(): string {
 
 function emptyDraft(): PlanEditorDraft {
   return { elements: [] };
+}
+
+export interface EdgeEditState {
+  hostId: string;
+  selectedRunId: string | null;
+  hoveredRunId: string | null;
 }
 
 interface PlanEditorState {
@@ -204,6 +225,15 @@ interface PlanEditorState {
   measurement: { from: Point; to: Point | null } | null;
   clash: string | null;
   gestureSnapshot: PlanEditorDraft | null;
+  /**
+   * The Edges tab's working state, or null when it is closed.
+   *
+   * Which surface's boundary is open, which run is selected (the only one that shows handles) and
+   * which run is under the pointer — shared by the canvas and the inspector's segment list, which is
+   * what lets hovering one light the other. Ephemeral, with the **five edit points** every view
+   * preference has; the one that bites is `ephemeralState()`, or the tab survives a reload.
+   */
+  edgeEdit: EdgeEditState | null;
   lastSavedAt: number;
 
   seedFrom: (concept: GeneratedConcept) => void;
@@ -221,8 +251,23 @@ interface PlanEditorState {
 
   renameElement: (id: string, name: string) => void;
   setMaterial: (id: string, materialId: string) => void;
-  /** `''` clears it back to the spade cut every border has for free. */
+  /** The product automatic edging prefers. `''` clears it back to whatever the style picks. */
   setEdging: (id: string, materialId: string) => void;
+
+  openEdgeEdit: (hostId: string) => void;
+  closeEdgeEdit: () => void;
+  selectEdgeRun: (runId: string | null) => void;
+  hoverEdgeRun: (runId: string | null) => void;
+  /** Auto, None or Custom. Entering Custom materialises what Auto was drawing. */
+  setEdgeMode: (id: string, mode: 'auto' | 'none' | 'custom') => void;
+  /** A run over the free stretch at a point on a side; returns its id, or null where there is none. */
+  addEdgeRunAt: (id: string, side: number, distance: number) => string | null;
+  /** One frame of an end-handle drag. No history entry: the gesture bracket supplies it. */
+  setEdgeRunEndLive: (id: string, runId: string, end: 'from' | 'to', distance: number) => void;
+  setEdgeRunTreatment: (id: string, runId: string, treatment: EdgeTreatment) => void;
+  /** `null` clears the dimension back to the product's own. */
+  setEdgeRunDimension: (id: string, runId: string, dimension: EdgeDimension, millimetres: number | null) => void;
+  removeEdgeRun: (id: string, runId: string) => void;
   /** `''` clears it back to a plain upstand in the element's own paving. */
   setRetaining: (id: string, materialId: string) => void;
   setZone: (id: string, zone: ZoneId) => void;
@@ -287,6 +332,26 @@ function housePolygonNow(): Point[] | null {
 
 function boundaryNow(): Point[] {
   return draftPolygon(useBoundaryStore.getState().present);
+}
+
+/** What a boundary run may lie along, read live — the same two rings the renderer resolves against. */
+export function edgeContextNow(): { boundary: Point[]; house?: Point[] } {
+  const house = housePolygonNow();
+  return { boundary: boundaryNow(), ...(house ? { house } : {}) };
+}
+
+
+/**
+ * What a run added by hand is made of, before the user picks.
+ *
+ * The surface's own product if it names one, else the style's, else brick — never `none`, because
+ * a run somebody just asked for that draws nothing would look like the click did nothing.
+ */
+function defaultTreatmentFor(element: DesignElement): EdgeTreatment {
+  const rules = edgeRulesNow();
+  const product = element.edging ?? styleEdgeProduct(rules.style, rules.budget, rules.maintenance);
+  const treatment = treatmentForMaterial(product ?? undefined);
+  return treatment === 'none' ? 'brick' : treatment;
 }
 
 /**
@@ -423,6 +488,27 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     });
   }
 
+  /**
+   * A frame of an edge-handle drag. Like `applyLive` it writes `present` with no history entry —
+   * the gesture bracket supplies one — but with neither of its checks: a locked base fill may still
+   * be edged, and nothing about the outline changes. A refused frame (too short, past the next run)
+   * leaves the last legal one on screen, which is what makes the handle stop dead at a limit.
+   */
+  function applyEdgeLive(id: string, mutate: (element: DesignElement) => DesignElement | null) {
+    set((state) => {
+      const element = state.present.elements.find((candidate) => candidate.id === id);
+      if (!element) return state;
+      const next = mutate(element);
+      if (!next || next === element) return state;
+      return {
+        present: {
+          ...state.present,
+          elements: state.present.elements.map((candidate) => (candidate.id === id ? next : candidate)),
+        },
+      };
+    });
+  }
+
   function snapped(point: Point): Point {
     if (!get().snapEnabled) return point;
     return snapPoint(point, useBoundaryStore.getState().unit);
@@ -488,6 +574,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     measurement: null,
     clash: null,
     gestureSnapshot: null,
+    edgeEdit: null,
     lastSavedAt: Date.now(),
 
     /**
@@ -525,7 +612,16 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       });
     },
 
-    select: (id) => set({ selectedId: id, clash: null }),
+    /*
+     * Selecting something else leaves edge editing without a mode to exit: the Edges tab belongs to
+     * the surface it was opened on, so clicking another element simply closes it.
+     */
+    select: (id) =>
+      set((state) => ({
+        selectedId: id,
+        clash: null,
+        edgeEdit: state.edgeEdit && state.edgeEdit.hostId === id ? state.edgeEdit : null,
+      })),
 
     addElement: (category, at) => {
       const centre = snapped(at);
@@ -694,6 +790,101 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         },
         { checkGeometry: false },
       ),
+
+    /* ---- the Edges tab ---- */
+
+    openEdgeEdit: (hostId) =>
+      set((state) =>
+        state.edgeEdit?.hostId === hostId
+          ? state
+          : { edgeEdit: { hostId, selectedRunId: null, hoveredRunId: null } },
+      ),
+
+    closeEdgeEdit: () => set({ edgeEdit: null }),
+
+    selectEdgeRun: (runId) =>
+      set((state) => (state.edgeEdit ? { edgeEdit: { ...state.edgeEdit, selectedRunId: runId } } : state)),
+
+    hoverEdgeRun: (runId) =>
+      set((state) =>
+        state.edgeEdit && state.edgeEdit.hoveredRunId !== runId
+          ? { edgeEdit: { ...state.edgeEdit, hoveredRunId: runId } }
+          : state,
+      ),
+
+    /*
+     * Every edit below is accepted on a locked base fill, as `setMaterial` is: a treatment cannot
+     * move anything, so it cannot open a gap in the ground. And every one stamps `source: 'user'`,
+     * which is what the next restyle reads to leave it alone.
+     */
+    setEdgeMode: (id, mode) => {
+      commitElement(
+        id,
+        (element) => {
+          const elements = get().present.elements;
+          const materialised =
+            mode === 'custom'
+              ? materialisedRuns(elements, id, resolveEdges(elements, edgeContextNow(), edgeRulesNow()))
+              : [];
+          return withEdgeMode(element, mode, materialised);
+        },
+        { checkGeometry: false },
+      );
+      set((state) =>
+        state.edgeEdit?.hostId === id ? { edgeEdit: { ...state.edgeEdit, selectedRunId: null } } : state,
+      );
+    },
+
+    addEdgeRunAt: (id, side, distance) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element) return null;
+
+      const elements = get().present.elements;
+      const resolution = resolveEdges(elements, edgeContextNow(), edgeRulesNow());
+      // Adding to a surface still on Auto starts from what Auto was drawing, never from nothing.
+      const host =
+        edgePlanOf(element).mode === 'custom'
+          ? element
+          : withEdgeMode(element, 'custom', materialisedRuns(elements, id, resolution));
+
+      const span = freeSpanAt(host, resolution.graph.intervalsOf(id), side, distance);
+      if (!span) return null;
+
+      const added = withRunAdded(host, side, span, defaultTreatmentFor(element), 'user');
+      if (!added) return null;
+
+      commitElement(id, () => added.element, { checkGeometry: false });
+      set((state) =>
+        state.edgeEdit?.hostId === id
+          ? { edgeEdit: { ...state.edgeEdit, selectedRunId: added.runId } }
+          : state,
+      );
+      return added.runId;
+    },
+
+    setEdgeRunEndLive: (id, runId, end, distance) =>
+      applyEdgeLive(id, (element) => withRunEnd(element, runId, end, distance)),
+
+    setEdgeRunTreatment: (id, runId, treatment) =>
+      commitElement(id, (element) => withRunTreatment(element, runId, treatment, 'user') ?? element, {
+        checkGeometry: false,
+      }),
+
+    setEdgeRunDimension: (id, runId, dimension, millimetres) =>
+      commitElement(
+        id,
+        (element) => withRunDimension(element, runId, dimension, millimetres, 'user') ?? element,
+        { checkGeometry: false },
+      ),
+
+    removeEdgeRun: (id, runId) => {
+      commitElement(id, (element) => withoutRun(element, runId) ?? element, { checkGeometry: false });
+      set((state) =>
+        state.edgeEdit?.selectedRunId === runId
+          ? { edgeEdit: { ...state.edgeEdit, selectedRunId: null } }
+          : state,
+      );
+    },
 
     /**
      * The wall a raised surface is held back by. `''` clears it to the plain upstand, which is the
@@ -1008,7 +1199,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           continue;
         }
 
-        const movesGeometry = change.kind !== 'material';
+        // A material or an edge treatment cannot move anything, so neither answers to the geometry.
+        const movesGeometry = change.kind !== 'material' && change.kind !== 'edge';
 
         if (movesGeometry && isLocked(existing)) {
           outcome.refused.push({ changeId: change.id, reason: LOCKED_CLASH });
@@ -1128,7 +1320,14 @@ function sameElements(a: PlanEditorDraft, b: PlanEditorDraft): boolean {
       element.zone === other.zone &&
       element.elevation === other.elevation &&
       element.hidden === other.hidden &&
-      JSON.stringify(element.shape) === JSON.stringify(other.shape)
+      element.edging === other.edging &&
+      JSON.stringify(element.shape) === JSON.stringify(other.shape) &&
+      /*
+       * Anything a drag can touch has to be in this comparison. An edge handle drags a run without
+       * moving the outline, so without this a whole drag ended as "nothing changed" and left no undo
+       * entry — the trap CLAUDE.md records for `sameDraft` on step 1, arriving on step 5.
+       */
+      JSON.stringify(element.edges ?? null) === JSON.stringify(other.edges ?? null)
     );
   });
 }
@@ -1183,6 +1382,7 @@ function ephemeralState() {
     measurement: null,
     clash: null as string | null,
     gestureSnapshot: null as PlanEditorDraft | null,
+    edgeEdit: null as EdgeEditState | null,
   };
 }
 

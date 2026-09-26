@@ -205,7 +205,7 @@ describe('planSchedule', () => {
 describe('edging in the schedule', () => {
   /*
    * The one product on the plan sold by the metre. It has no elements of its own — a run is derived
-   * from the outline of the bed it follows — so the schedule reaches it through `edgingRuns` rather
+   * from the outline of the bed it follows — so the schedule reaches it through `resolveEdges` rather
    * than through the element loop, and these pin that it arrives with the right unit.
    */
   const PLOT = [

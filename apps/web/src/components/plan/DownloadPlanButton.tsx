@@ -10,6 +10,7 @@ import { emitDesignEvent } from '@/state/design-events';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { ToolbarButton } from './ToolbarButton';
+import { edgeRulesNow } from '@/lib/edge-rules';
 
 /**
  * Downloads the plan as a PNG, drawn by the same composer the concept cards use.
@@ -48,6 +49,8 @@ export function DownloadPlanButton({
           boundary: draftPolygon(boundaryDraft),
           house: boundaryDraft.house,
           elements: editor.present.elements,
+          // The same brief the screen resolves its edging against, or the download would differ.
+          edgeRules: edgeRulesNow(),
           site: view === 'visualise' && editor.previewMinutes !== null
             ? { ...boundaryDraft, sun: { ...boundaryDraft.sun, minutes: editor.previewMinutes } } : boundaryDraft,
         },

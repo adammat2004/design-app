@@ -10,7 +10,7 @@ function surface(points: Point[], width = 0.102, material = 'brick-edging'): Ren
     shape: { kind: 'polyline', points, width } } as DesignElement;
   return { elementId: element.id, element, outline: elementOutline(element), centreline: points,
     material: resolvePattern(material), anchor: { origin: { x: 0, y: 0 }, rotation: 0 },
-    seed: element.id, layers: [], exclusions: null };
+    seed: element.id, layers: [], exclusions: null, cutEdge: null };
 }
 
 describe('world-space linear courses', () => {

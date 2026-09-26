@@ -156,9 +156,14 @@ export class IntentService {
 
     /*
      * Validated with the shared Zod schema rather than trusted. The JSON Schema constrains shape
-     * and vocabulary; the bounds — a resize factor between 0.25 and 4, a name under 60 characters —
-     * live here, because structured outputs does not support numeric or string limits.
+     * and vocabulary; the bounds — a resize factor between 0.25 and 4, a point no smaller than
+     * 0.2 m — live here, because structured outputs does not support numeric or string limits.
+     *
+     * A number outside its range is clamped before that check. One undersized radius used to
+     * reject the whole reply, so five legal intents died with the sixth. The schema itself stays
+     * strict: repair and tests build intents by hand and must still be refused an illegal size.
      */
+    coerceModelBounds(raw, (line) => this.logger.warn(line));
     const parsed = AssistantIntentEnvelopeSchema.safeParse(raw);
     if (!parsed.success) {
       this.logger.warn(`Assistant output failed validation: ${parsed.error.message}`);
@@ -175,6 +180,78 @@ export class IntentService {
  * Empty string for an empty history, so the caller can drop the section entirely — a heading with
  * nothing under it invites the model to wonder what was withheld.
  */
+/**
+ * Pull each model-emitted number into the range Zod will accept.
+ *
+ * Only the fields the schema bounds, and only on the footprint kind the intent actually is — a
+ * point's unused width of 0 is the wire's "not this kind" sentinel, and lifting it would be a
+ * change the parser then throws away. A value that is not a finite number is left for Zod.
+ */
+function coerceModelBounds(raw: unknown, warn: (line: string) => void): void {
+  if (!raw || typeof raw !== 'object') return;
+  const intents = (raw as { intents?: unknown }).intents;
+  if (!Array.isArray(intents)) return;
+
+  intents.forEach((intent, index) => coerceIntent(intent, index, warn));
+}
+
+function coerceIntent(intent: unknown, index: number, warn: (line: string) => void): void {
+  if (!intent || typeof intent !== 'object') return;
+  const record = intent as Record<string, unknown>;
+
+  switch (record.kind) {
+    case 'resize':
+      record.factor = clampBound(record.factor, 0.25, 4, index, 'factor', warn);
+      return;
+    case 'reshape':
+      record.metres = clampBound(record.metres, -5, 5, index, 'metres', warn);
+      return;
+    case 'reduce-cost':
+      record.maxChanges = clampBound(record.maxChanges, 1, 6, index, 'maxChanges', warn, true);
+      return;
+    case 'add':
+      coerceFootprint(record.footprint, index, warn);
+      return;
+    default:
+      return;
+  }
+}
+
+function coerceFootprint(footprint: unknown, index: number, warn: (line: string) => void): void {
+  if (!footprint || typeof footprint !== 'object') return;
+  const record = footprint as Record<string, unknown>;
+
+  switch (record.kind) {
+    case 'point':
+      record.radius = clampBound(record.radius, 0.2, 5, index, 'footprint.radius', warn);
+      return;
+    case 'rect':
+      record.width = clampBound(record.width, 0.3, 20, index, 'footprint.width', warn);
+      record.depth = clampBound(record.depth, 0.3, 20, index, 'footprint.depth', warn);
+      return;
+    case 'strip':
+      record.width = clampBound(record.width, 0.2, 3, index, 'footprint.width', warn);
+      return;
+    default:
+      return;
+  }
+}
+
+function clampBound(
+  value: unknown,
+  min: number,
+  max: number,
+  index: number,
+  field: string,
+  warn: (line: string) => void,
+  integer = false,
+): unknown {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return value;
+  const next = Math.min(max, Math.max(min, integer ? Math.round(value) : value));
+  if (next !== value) warn(`Assistant intent ${index} ${field} ${value} clamped to ${next}`);
+  return next;
+}
+
 function renderHistory(history: AssistantTurn[]): string {
   if (history.length === 0) return '';
 

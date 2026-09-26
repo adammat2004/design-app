@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "unit": "m",
   "site": {
     "vertices": [
@@ -174,12 +174,12 @@
           {
             "feature": "water",
             "label": "Water feature",
-            "included": false
+            "included": true
           }
         ],
         "elements": [
           {
-            "id": "c2-0-e4",
+            "id": "c2-0-e5",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -209,7 +209,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e5",
+            "id": "c2-0-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -239,7 +239,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e6",
+            "id": "c2-0-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -269,7 +269,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e7",
+            "id": "c2-0-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -299,7 +299,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e8",
+            "id": "c2-0-e9",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -326,11 +326,12 @@
               "cornerRadius": 0
             },
             "zone": "right",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e9",
+            "id": "c2-0-e10",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -357,11 +358,12 @@
               "cornerRadius": 0
             },
             "zone": "left",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-0-e10",
+            "id": "c2-0-e11",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -378,16 +380,17 @@
                 },
                 {
                   "x": 9,
-                  "y": 10.265895
+                  "y": 9.581186
                 },
                 {
                   "x": 0,
-                  "y": 10.265895
+                  "y": 9.581186
                 }
               ],
               "cornerRadius": 0
             },
             "zone": "back",
+            "purpose": "backdrop-planting",
             "fillKind": "accent",
             "material": "shrubs",
             "plantingStyle": "low-maintenance"
@@ -401,13 +404,14 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 7.382947286382059
+                "y": 7.040593234312594
               },
               "width": 6.6,
-              "depth": 5.765894572764118,
+              "depth": 5.081186468625188,
               "rotation": 180
             },
             "zone": "back",
+            "purpose": "terrace",
             "material": "concrete"
           },
           {
@@ -419,7 +423,7 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 7.382947286382059
+                "y": 7.040593234312594
               },
               "width": 3,
               "depth": 2.4,
@@ -432,6 +436,23 @@
           },
           {
             "id": "c2-0-e3",
+            "category": "water-feature",
+            "role": "feature",
+            "name": "Water feature",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 4.5,
+                "y": 10.640593234312593
+              },
+              "radius": 0.709406765687406
+            },
+            "zone": "back",
+            "purpose": "water",
+            "material": "naturalistic-pond"
+          },
+          {
+            "id": "c2-0-e4",
             "category": "planting-bed",
             "role": "feature",
             "name": "Tree",
@@ -444,20 +465,21 @@
               "radius": 1.6
             },
             "zone": "back",
+            "purpose": "backdrop-tree",
             "material": "shrubs",
             "symbol": "tree-evergreen",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-0-e11",
+            "id": "c2-0-e12",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 4.169006853336396,
-                "y": 11.131874256573061
+                "x": 1.8402117046220225,
+                "y": 10.496142742941622
               },
               "radius": 0.85
             },
@@ -465,7 +487,7 @@
             "material": "shrubs",
             "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-0-e10",
+            "bedId": "c2-0-e11",
             "plantingStyle": "low-maintenance"
           }
         ],
@@ -475,66 +497,46 @@
           "candidateId": "c2-0"
         },
         "score": {
-          "total": 0.8839044875146125,
+          "total": 0.9848745346722659,
           "categories": {
             "style": 1,
             "canopy": 0.7901234567901235,
             "privacy": 1,
             "grouping": 1,
             "hierarchy": 1,
-            "featureFit": 0.8,
-            "proportion": 0.9272368421052632,
-            "circulation": 0.5,
+            "featureFit": 1,
+            "proportion": 0.97,
+            "circulation": 1,
+            "composition": 1,
             "buildability": 1,
+            "relationships": 1,
             "maintenanceFit": 1
           },
           "issues": [
-            {
-              "code": "composition-off-brief",
-              "principle": "proportion",
-              "severity": "minor",
-              "message": "21% of the garden is planting, where a concept of this kind wants at least 25%.",
-              "subjects": [
-                "c2-0-e10"
-              ],
-              "source": "geometry"
-            },
-            {
-              "code": "terrace-oversized",
-              "principle": "proportion",
-              "severity": "minor",
-              "message": "The terrace is 50% of the garden.",
-              "subjects": [
-                "c2-0-e1"
-              ],
-              "repair": "shrink-terrace",
-              "guidance": {
-                "targetAreaFactor": 0.9985572377220259
-              },
-              "source": "geometry"
-            },
             {
               "code": "sparse-canopy",
               "principle": "canopy",
               "severity": "minor",
               "message": "Only 12% of the garden is under canopy, against about a third in a designed plan.",
               "subjects": [
-                "c2-0-e3"
+                "c2-0-e4"
               ],
               "source": "geometry"
             }
           ],
           "tier": "realised",
           "weights": {
-            "style": 0.05873821282210002,
-            "canopy": 0.06619796585050673,
-            "privacy": 0.16446699590188005,
-            "grouping": 0.18073296252953852,
-            "hierarchy": 0.09036648126476926,
-            "proportion": 0.16265966627658465,
-            "circulation": 0.18073296252953852,
-            "buildability": 0.04518324063238463,
-            "maintenanceFit": 0.05092151219269749
+            "style": 0.05218976197453943,
+            "canopy": 0.05829596412556054,
+            "privacy": 0.1461313335287104,
+            "grouping": 0.12043791224893713,
+            "hierarchy": 0.08029194149929143,
+            "proportion": 0.0963503297991497,
+            "circulation": 0.16058388299858287,
+            "composition": 0.08029194149929143,
+            "buildability": 0.04014597074964572,
+            "relationships": 0.12043791224893713,
+            "maintenanceFit": 0.044843049327354265
           }
         },
         "explanation": {
@@ -555,10 +557,22 @@
               "subjects": []
             },
             {
+              "kind": "courtyard",
+              "text": "Designed the garden as a courtyard: a paved floor corner to corner, planting deep against the walls, and the water feature on the wall opposite the doors. Nothing stands in the middle, because the middle is where you stand.",
+              "subjects": []
+            },
+            {
               "kind": "terrace-at-doors",
-              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.8 m.",
+              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.1 m.",
               "subjects": [
                 "c2-0-e1"
+              ]
+            },
+            {
+              "kind": "feature-in-zone",
+              "text": "Water feature at the end of the axis, terminating the view from the doors.",
+              "subjects": [
+                "c2-0-e3"
               ]
             }
           ],
@@ -584,12 +598,12 @@
           {
             "feature": "water",
             "label": "Water feature",
-            "included": false
+            "included": true
           }
         ],
         "elements": [
           {
-            "id": "c2-1-e5",
+            "id": "c2-1-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -619,7 +633,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e6",
+            "id": "c2-1-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -649,7 +663,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e7",
+            "id": "c2-1-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -679,7 +693,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e8",
+            "id": "c2-1-e9",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -709,7 +723,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e9",
+            "id": "c2-1-e10",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -736,11 +750,12 @@
               "cornerRadius": 0
             },
             "zone": "right",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-1-e10",
+            "id": "c2-1-e11",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -767,11 +782,12 @@
               "cornerRadius": 0
             },
             "zone": "left",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-1-e11",
+            "id": "c2-1-e12",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -803,7 +819,7 @@
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-1-e12",
+            "id": "c2-1-e13",
             "category": "planting-bed",
             "role": "fill",
             "name": "Flowering border",
@@ -874,6 +890,7 @@
               "rotation": 180
             },
             "zone": "back",
+            "purpose": "terrace",
             "material": "stone-pavers"
           },
           {
@@ -898,6 +915,23 @@
           },
           {
             "id": "c2-1-e3",
+            "category": "water-feature",
+            "role": "feature",
+            "name": "Water feature",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 4.5,
+                "y": 9.75
+              },
+              "radius": 0.709406765687406
+            },
+            "zone": "back",
+            "purpose": "destination",
+            "material": "naturalistic-pond"
+          },
+          {
+            "id": "c2-1-e4",
             "category": "planting-bed",
             "role": "feature",
             "name": "Tree",
@@ -910,12 +944,13 @@
               "radius": 1.6
             },
             "zone": "back",
+            "purpose": "framing-tree",
             "material": "ground-cover",
             "symbol": "tree-evergreen",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-1-e4",
+            "id": "c2-1-e5",
             "category": "planting-bed",
             "role": "feature",
             "name": "Tree",
@@ -928,6 +963,7 @@
               "radius": 2.5
             },
             "zone": "back",
+            "purpose": "framing-tree",
             "material": "ground-cover",
             "symbol": "tree-deciduous",
             "plantingStyle": "low-maintenance"
@@ -939,17 +975,19 @@
           "candidateId": "c2-1"
         },
         "score": {
-          "total": 0.8320558003374315,
+          "total": 0.9487148266600816,
           "categories": {
             "style": 0.8333333333333334,
             "canopy": 0.9928774928774928,
             "privacy": 1,
             "grouping": 1,
             "hierarchy": 1,
-            "featureFit": 0.8,
-            "proportion": 0.6723684210526316,
-            "circulation": 0.5,
+            "featureFit": 1,
+            "proportion": 0.6921052631578947,
+            "circulation": 1,
+            "composition": 0.9229786508096517,
             "buildability": 1,
+            "relationships": 1,
             "maintenanceFit": 1
           },
           "issues": [
@@ -957,11 +995,11 @@
               "code": "leftover-pocket",
               "principle": "proportion",
               "severity": "major",
-              "message": "43% of the ground has nothing designed onto it.",
+              "message": "41% of the ground has nothing designed onto it.",
               "subjects": [],
               "repair": "enlarge-lawn",
               "guidance": {
-                "targetAreaFactor": 1.1276315789473683
+                "targetAreaFactor": 1.1078947368421053
               },
               "source": "geometry"
             },
@@ -971,22 +1009,25 @@
               "severity": "minor",
               "message": "3 different materials, where a minimalist plan wants at most 2.",
               "subjects": [
-                "c2-1-e1"
+                "c2-1-e1",
+                "c2-1-e3"
               ],
               "source": "geometry"
             }
           ],
           "tier": "realised",
           "weights": {
-            "style": 0.047303689687795636,
-            "canopy": 0.050614947965941334,
-            "privacy": 0.13245033112582777,
-            "grouping": 0.17029328287606432,
-            "hierarchy": 0.11352885525070952,
-            "proportion": 0.19867549668874168,
-            "circulation": 0.18921475875118254,
-            "buildability": 0.047303689687795636,
-            "maintenanceFit": 0.050614947965941334
+            "style": 0.04308487720809995,
+            "canopy": 0.04545454545454544,
+            "privacy": 0.12063765618267983,
+            "grouping": 0.11632916846186987,
+            "hierarchy": 0.10340370529943987,
+            "proportion": 0.12063765618267983,
+            "circulation": 0.1723395088323998,
+            "composition": 0.0861697544161999,
+            "buildability": 0.04308487720809995,
+            "relationships": 0.10340370529943987,
+            "maintenanceFit": 0.04545454545454544
           }
         },
         "explanation": {
@@ -1012,6 +1053,13 @@
               "subjects": [
                 "c2-1-e1"
               ]
+            },
+            {
+              "kind": "feature-in-zone",
+              "text": "Water feature at the far end, on the diagonal from the doors.",
+              "subjects": [
+                "c2-1-e3"
+              ]
             }
           ],
           "excludedFeatures": [],
@@ -1036,12 +1084,12 @@
           {
             "feature": "water",
             "label": "Water feature",
-            "included": false
+            "included": true
           }
         ],
         "elements": [
           {
-            "id": "c2-2-e5",
+            "id": "c2-2-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1071,7 +1119,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e6",
+            "id": "c2-2-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1101,7 +1149,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e7",
+            "id": "c2-2-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1131,7 +1179,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e8",
+            "id": "c2-2-e9",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -1161,7 +1209,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e9",
+            "id": "c2-2-e10",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -1188,11 +1236,12 @@
               "cornerRadius": 0
             },
             "zone": "right",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e10",
+            "id": "c2-2-e11",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -1219,11 +1268,12 @@
               "cornerRadius": 0
             },
             "zone": "left",
+            "purpose": "passage",
             "fillKind": "accent",
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-2-e11",
+            "id": "c2-2-e12",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -1240,16 +1290,17 @@
                 },
                 {
                   "x": 9,
-                  "y": 10.265895
+                  "y": 9.581186
                 },
                 {
                   "x": 0,
-                  "y": 10.265895
+                  "y": 9.581186
                 }
               ],
               "cornerRadius": 0
             },
             "zone": "back",
+            "purpose": "backdrop-planting",
             "fillKind": "accent",
             "material": "ornamental-grasses",
             "plantingStyle": "low-maintenance"
@@ -1263,13 +1314,14 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 7.382947286382059
+                "y": 7.040593234312594
               },
               "width": 6.6,
-              "depth": 5.765894572764118,
+              "depth": 5.081186468625188,
               "rotation": 180
             },
             "zone": "back",
+            "purpose": "terrace",
             "material": "concrete"
           },
           {
@@ -1281,7 +1333,7 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 7.382947286382059
+                "y": 7.040593234312594
               },
               "width": 0.7,
               "depth": 1.9,
@@ -1301,7 +1353,7 @@
               "kind": "rect",
               "centre": {
                 "x": 3.45,
-                "y": 7.382947286382059
+                "y": 7.040593234312594
               },
               "width": 0.7,
               "depth": 1.9,
@@ -1314,6 +1366,23 @@
           },
           {
             "id": "c2-2-e4",
+            "category": "water-feature",
+            "role": "feature",
+            "name": "Water feature",
+            "shape": {
+              "kind": "point",
+              "at": {
+                "x": 4.5,
+                "y": 10.640593234312593
+              },
+              "radius": 0.709406765687406
+            },
+            "zone": "back",
+            "purpose": "water",
+            "material": "naturalistic-pond"
+          },
+          {
+            "id": "c2-2-e5",
             "category": "planting-bed",
             "role": "feature",
             "name": "Tree",
@@ -1326,20 +1395,21 @@
               "radius": 1.6
             },
             "zone": "back",
+            "purpose": "backdrop-tree",
             "material": "ornamental-grasses",
             "symbol": "tree-evergreen",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-2-e12",
+            "id": "c2-2-e13",
             "category": "planting-bed",
             "role": "feature",
             "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 3.6211397899073274,
-                "y": 11.133421649522669
+                "x": 0.9214036898764315,
+                "y": 10.46352809503139
               },
               "radius": 0.85
             },
@@ -1347,7 +1417,7 @@
             "material": "shrubs",
             "height": 1.5,
             "symbol": "shrub-evergreen",
-            "bedId": "c2-2-e11",
+            "bedId": "c2-2-e12",
             "plantingStyle": "low-maintenance"
           }
         ],
@@ -1357,56 +1427,46 @@
           "candidateId": "c2-2"
         },
         "score": {
-          "total": 0.8892981443956621,
+          "total": 0.9880844840194433,
           "categories": {
             "style": 1,
             "canopy": 0.7901234567901235,
             "privacy": 1,
             "grouping": 1,
             "hierarchy": 1,
-            "featureFit": 0.8,
+            "featureFit": 1,
             "proportion": 0.97,
-            "circulation": 0.5,
+            "circulation": 1,
+            "composition": 1,
             "buildability": 1,
+            "relationships": 1,
             "maintenanceFit": 1
           },
           "issues": [
-            {
-              "code": "terrace-oversized",
-              "principle": "proportion",
-              "severity": "minor",
-              "message": "The terrace is 50% of the garden.",
-              "subjects": [
-                "c2-2-e1"
-              ],
-              "repair": "shrink-terrace",
-              "guidance": {
-                "targetAreaFactor": 0.9985572377220259
-              },
-              "source": "geometry"
-            },
             {
               "code": "sparse-canopy",
               "principle": "canopy",
               "severity": "minor",
               "message": "Only 12% of the garden is under canopy, against about a third in a designed plan.",
               "subjects": [
-                "c2-2-e4"
+                "c2-2-e5"
               ],
               "source": "geometry"
             }
           ],
           "tier": "realised",
           "weights": {
-            "style": 0.04749240121580547,
-            "canopy": 0.05452127659574469,
-            "privacy": 0.15957446808510636,
-            "grouping": 0.18996960486322187,
-            "hierarchy": 0.11398176291793313,
-            "proportion": 0.1424772036474164,
-            "circulation": 0.18996960486322187,
-            "buildability": 0.04749240121580547,
-            "maintenanceFit": 0.05452127659574469
+            "style": 0.03959455178967374,
+            "canopy": 0.04545454545454546,
+            "privacy": 0.13303769401330376,
+            "grouping": 0.11878365536902122,
+            "hierarchy": 0.09502692429521697,
+            "proportion": 0.07918910357934748,
+            "circulation": 0.15837820715869497,
+            "composition": 0.07918910357934748,
+            "buildability": 0.03959455178967374,
+            "relationships": 0.1662971175166297,
+            "maintenanceFit": 0.04545454545454546
           }
         },
         "explanation": {
@@ -1427,10 +1487,22 @@
               "subjects": []
             },
             {
+              "kind": "courtyard",
+              "text": "Designed the garden as a courtyard: a paved floor corner to corner, planting deep against the walls, and the water feature on the wall opposite the doors. Nothing stands in the middle, because the middle is where you stand.",
+              "subjects": []
+            },
+            {
               "kind": "terrace-at-doors",
-              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.8 m.",
+              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.1 m.",
               "subjects": [
                 "c2-2-e1"
+              ]
+            },
+            {
+              "kind": "feature-in-zone",
+              "text": "Water feature at the end of the axis, terminating the view from the doors.",
+              "subjects": [
+                "c2-2-e4"
               ]
             }
           ],
@@ -1446,7 +1518,7 @@
   "layout": {
     "elements": [
       {
-        "id": "c2-0-e4",
+        "id": "c2-0-e5",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1476,7 +1548,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e5",
+        "id": "c2-0-e6",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1506,7 +1578,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e6",
+        "id": "c2-0-e7",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1536,7 +1608,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e7",
+        "id": "c2-0-e8",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1566,7 +1638,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e8",
+        "id": "c2-0-e9",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1593,11 +1665,12 @@
           "cornerRadius": 0
         },
         "zone": "right",
+        "purpose": "passage",
         "fillKind": "accent",
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e9",
+        "id": "c2-0-e10",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1624,11 +1697,12 @@
           "cornerRadius": 0
         },
         "zone": "left",
+        "purpose": "passage",
         "fillKind": "accent",
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e10",
+        "id": "c2-0-e11",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -1645,16 +1719,17 @@
             },
             {
               "x": 9,
-              "y": 10.265895
+              "y": 9.581186
             },
             {
               "x": 0,
-              "y": 10.265895
+              "y": 9.581186
             }
           ],
           "cornerRadius": 0
         },
         "zone": "back",
+        "purpose": "backdrop-planting",
         "fillKind": "accent",
         "material": "shrubs",
         "plantingStyle": "low-maintenance"
@@ -1668,13 +1743,14 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 7.382947286382059
+            "y": 7.040593234312594
           },
           "width": 6.6,
-          "depth": 5.765894572764118,
+          "depth": 5.081186468625188,
           "rotation": 180
         },
         "zone": "back",
+        "purpose": "terrace",
         "material": "concrete"
       },
       {
@@ -1686,7 +1762,7 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 7.382947286382059
+            "y": 7.040593234312594
           },
           "width": 3,
           "depth": 2.4,
@@ -1699,6 +1775,23 @@
       },
       {
         "id": "c2-0-e3",
+        "category": "water-feature",
+        "role": "feature",
+        "name": "Water feature",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 4.5,
+            "y": 10.640593234312593
+          },
+          "radius": 0.709406765687406
+        },
+        "zone": "back",
+        "purpose": "water",
+        "material": "naturalistic-pond"
+      },
+      {
+        "id": "c2-0-e4",
         "category": "planting-bed",
         "role": "feature",
         "name": "Tree",
@@ -1711,20 +1804,21 @@
           "radius": 1.6
         },
         "zone": "back",
+        "purpose": "backdrop-tree",
         "material": "shrubs",
         "symbol": "tree-evergreen",
         "plantingStyle": "low-maintenance"
       },
       {
-        "id": "c2-0-e11",
+        "id": "c2-0-e12",
         "category": "planting-bed",
         "role": "feature",
         "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.169006853336396,
-            "y": 11.131874256573061
+            "x": 1.8402117046220225,
+            "y": 10.496142742941622
           },
           "radius": 0.85
         },
@@ -1732,14 +1826,14 @@
         "material": "shrubs",
         "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e10",
+        "bedId": "c2-0-e11",
         "plantingStyle": "low-maintenance"
       }
     ],
     "seededFrom": "c2-0",
     "pristine": [
       {
-        "id": "c2-0-e4",
+        "id": "c2-0-e5",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1769,7 +1863,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e5",
+        "id": "c2-0-e6",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1799,7 +1893,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e6",
+        "id": "c2-0-e7",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1829,7 +1923,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e7",
+        "id": "c2-0-e8",
         "category": "gravel-mulch",
         "role": "fill",
         "shape": {
@@ -1859,7 +1953,7 @@
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e8",
+        "id": "c2-0-e9",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1886,11 +1980,12 @@
           "cornerRadius": 0
         },
         "zone": "right",
+        "purpose": "passage",
         "fillKind": "accent",
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e9",
+        "id": "c2-0-e10",
         "category": "gravel-mulch",
         "role": "fill",
         "name": "Side return",
@@ -1917,11 +2012,12 @@
           "cornerRadius": 0
         },
         "zone": "left",
+        "purpose": "passage",
         "fillKind": "accent",
         "material": "decorative-gravel"
       },
       {
-        "id": "c2-0-e10",
+        "id": "c2-0-e11",
         "category": "planting-bed",
         "role": "fill",
         "name": "Rear border",
@@ -1938,16 +2034,17 @@
             },
             {
               "x": 9,
-              "y": 10.265895
+              "y": 9.581186
             },
             {
               "x": 0,
-              "y": 10.265895
+              "y": 9.581186
             }
           ],
           "cornerRadius": 0
         },
         "zone": "back",
+        "purpose": "backdrop-planting",
         "fillKind": "accent",
         "material": "shrubs",
         "plantingStyle": "low-maintenance"
@@ -1961,13 +2058,14 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 7.382947286382059
+            "y": 7.040593234312594
           },
           "width": 6.6,
-          "depth": 5.765894572764118,
+          "depth": 5.081186468625188,
           "rotation": 180
         },
         "zone": "back",
+        "purpose": "terrace",
         "material": "concrete"
       },
       {
@@ -1979,7 +2077,7 @@
           "kind": "rect",
           "centre": {
             "x": 4.5,
-            "y": 7.382947286382059
+            "y": 7.040593234312594
           },
           "width": 3,
           "depth": 2.4,
@@ -1992,6 +2090,23 @@
       },
       {
         "id": "c2-0-e3",
+        "category": "water-feature",
+        "role": "feature",
+        "name": "Water feature",
+        "shape": {
+          "kind": "point",
+          "at": {
+            "x": 4.5,
+            "y": 10.640593234312593
+          },
+          "radius": 0.709406765687406
+        },
+        "zone": "back",
+        "purpose": "water",
+        "material": "naturalistic-pond"
+      },
+      {
+        "id": "c2-0-e4",
         "category": "planting-bed",
         "role": "feature",
         "name": "Tree",
@@ -2004,20 +2119,21 @@
           "radius": 1.6
         },
         "zone": "back",
+        "purpose": "backdrop-tree",
         "material": "shrubs",
         "symbol": "tree-evergreen",
         "plantingStyle": "low-maintenance"
       },
       {
-        "id": "c2-0-e11",
+        "id": "c2-0-e12",
         "category": "planting-bed",
         "role": "feature",
         "name": "Evergreen shrub",
         "shape": {
           "kind": "point",
           "at": {
-            "x": 4.169006853336396,
-            "y": 11.131874256573061
+            "x": 1.8402117046220225,
+            "y": 10.496142742941622
           },
           "radius": 0.85
         },
@@ -2025,7 +2141,7 @@
         "material": "shrubs",
         "height": 1.5,
         "symbol": "shrub-evergreen",
-        "bedId": "c2-0-e10",
+        "bedId": "c2-0-e11",
         "plantingStyle": "low-maintenance"
       }
     ],

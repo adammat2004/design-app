@@ -35,4 +35,31 @@ export const COLOUR = {
    */
   ai: '#4338ca',
   aiWash: 'rgba(67, 56, 202, 0.08)',
+  /**
+   * A side of the selected surface that carries its edging course, and the toggle for it.
+   *
+   * A warm brick rather than the selection green or the AI indigo: green already means "this is
+   * what you have selected" and both colours are on screen at once round the same shape, so the
+   * side toggles have to read as a property of the thing rather than a second selection of it.
+   */
+  edging: '#b5623a',
+  edgingOff: 'rgba(181, 98, 58, 0.35)',
+};
+
+/**
+ * How each treatment is drawn *as a control* on the plan, while its surface's edges are open.
+ *
+ * Not the material — the rendered course is underneath and already shows that. These are the
+ * editing overlay's colours, chosen to be told apart from one another at a glance and from the
+ * selection green and the AI indigo, since all three can be on screen round one shape. `none` has
+ * no entry: a bare stretch is drawn as the faint dashed boundary, which is what "nothing here"
+ * looks like.
+ */
+export const EDGE_TREATMENT_COLOUR: Record<string, string> = {
+  flush: '#6b7280',
+  brick: '#b5623a',
+  stone: '#7c8795',
+  steel: '#334155',
+  timber: '#8b6a43',
+  kerb: '#9ca3af',
 };

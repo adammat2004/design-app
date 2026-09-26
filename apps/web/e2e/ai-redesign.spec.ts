@@ -464,6 +464,74 @@ test('keeps Stop reachable on a narrow window', async ({ page }) => {
  * the document unreachable, and "a misread request is recoverable after a reload" — half of what
  * makes performing-on-send defensible — was not true. This is the test that says it is.
  */
+test('edging is edited run by run on the plan, and it persists', async ({ page }) => {
+  const errors = await openEditor(page);
+  const terrace = terraceOf(originalLayout);
+  await terraceArea(page, terrace.id);
+
+  // Edges is a tab of the selected surface, and Auto says what it chose.
+  await page.getByTestId('element-tab-edges').click();
+  await expect(page.getByTestId('edges-mode-auto')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('edges-auto')).toBeVisible();
+
+  await page.getByTestId('edges-mode-custom').click();
+  const segments = page.locator('[data-testid^="edge-segment-"]');
+  await expect(segments.first()).toBeVisible();
+  // The edge editor is a Group in the chrome layer, never a layer of its own.
+  await expect(konvaLayers(page)).toHaveCount(3);
+
+  // Select a run; its toolbar sits over its middle on the plan.
+  const count = await segments.count();
+  await segments.first().click();
+  const toolbar = page.getByTestId('edge-run-toolbar');
+  await expect(toolbar).toBeVisible();
+  const box = (await toolbar.boundingBox())!;
+  // The toolbar is lifted 150% of its own height off the run's midpoint.
+  const onRun = { x: box.x + box.width / 2, y: box.y + box.height * 1.5 };
+
+  // Remove it from the toolbar, then put it back with a real click on the bare boundary — the
+  // one thing only a browser can check, because Konva's hit-testing decides it.
+  await page.getByTestId('edge-run-remove').click();
+  await expect(segments).toHaveCount(count - 1);
+  await page.mouse.move(onRun.x, onRun.y);
+  await expect(page.getByTestId('edge-add-hint')).toBeVisible();
+  await page.mouse.click(onRun.x, onRun.y);
+  await expect(segments).toHaveCount(count);
+  await expect(toolbar).toBeVisible();
+
+  // Brick, then shorten it from its far end a tenth of a metre at a time.
+  await page.getByTestId('edge-treatment-brick').click();
+  const selected = page.locator('[data-testid^="edge-segment-"][aria-pressed="true"]');
+  const runId = ((await selected.getAttribute('data-testid')) ?? '').replace('edge-segment-', '');
+  const before = await page.getByTestId('edges-selected-length').textContent();
+  const saved = page.waitForResponse(
+    (response) => response.url().includes('/layout') && response.request().method() === 'PATCH',
+  );
+  await page.getByTestId(`canvas-edge-run-${runId}-to-in`).press('Enter');
+  await page.getByTestId(`canvas-edge-run-${runId}-to-in`).press('Enter');
+  await expect(page.getByTestId('edges-selected-length')).not.toHaveText(before ?? '');
+  const after = await page.getByTestId('edges-selected-length').textContent();
+  await saved;
+
+  await page.reload();
+  await expect(page.getByTestId('editor-concept-name')).toBeVisible();
+  await terraceArea(page, terrace.id);
+  await page.getByTestId('element-tab-edges').click();
+  await expect(page.getByTestId('edges-mode-custom')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId(`edge-segment-${runId}`).click();
+  await expect(page.getByTestId('edge-treatment-brick')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('edges-selected-length')).toHaveText(after ?? '');
+
+  // Escape steps out one level at a time: the run, then the tab.
+  await page.getByRole('application').focus();
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('element-tab-style')).toHaveAttribute('aria-selected', 'true');
+
+  expect(errors).toEqual([]);
+});
+
 test('a redesign can still be undone after a reload', async ({ page }) => {
   test.setTimeout(180_000);
   const errors = await openEditor(page);

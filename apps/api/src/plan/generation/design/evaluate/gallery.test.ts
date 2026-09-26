@@ -95,7 +95,7 @@ describe('the gallery', () => {
     }
   });
 
-  it('finds nothing to complain about in the four well-composed gardens', () => {
+  it('finds nothing to complain about in the well-composed gardens', () => {
     for (const { better } of GALLERY_PAIRS) {
       expect(ownScore(better).issues).toEqual([]);
     }

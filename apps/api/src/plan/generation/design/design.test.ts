@@ -158,9 +158,10 @@ describe('the style rules', () => {
 });
 
 describe('the principle weights', () => {
-  it('puts circulation and grouping first, and style and buildability last', () => {
+  it('puts circulation first, grouping and relationships next, and style and buildability last', () => {
     const ordered = [...PRINCIPLES].sort((a, b) => b.weight - a.weight).map((p) => p.id);
-    expect(ordered.slice(0, 2).sort()).toEqual(['circulation', 'grouping']);
+    expect(ordered[0]).toBe('circulation');
+    expect(ordered.slice(1, 3).sort()).toEqual(['grouping', 'relationships']);
     expect(ordered.slice(-5).sort()).toEqual([
       'buildability',
       'canopy',

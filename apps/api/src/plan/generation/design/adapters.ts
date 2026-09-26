@@ -173,6 +173,7 @@ export function elementsFromPreview(
       shape: { kind: 'polygon', points: bed.ring, cornerRadius: 0 },
       zone: zoneAt(bed.ring),
       material: 'mixed-border',
+      ...(bed.purpose ? { purpose: bed.purpose } : {}),
     });
   }
 
@@ -185,6 +186,7 @@ export function elementsFromPreview(
       shape: route.geometry,
       zone: zoneAt(preview.lawn?.ring ?? []),
       material: 'stone-setts',
+      ...(route.purpose ? { purpose: route.purpose } : {}),
     });
   }
 
@@ -197,6 +199,7 @@ export function elementsFromPreview(
       shape: item.geometry,
       zone: zoneAt(item.ring),
       material: FEATURE_SPECS[item.feature].material,
+      ...(item.purpose ? { purpose: item.purpose } : {}),
     });
     featureOf.set(item.id, item.feature);
   }
@@ -210,6 +213,7 @@ export function elementsFromPreview(
       shape: { kind: 'point', at: tree.at, radius: tree.radius },
       zone: zoneAt([tree.at]),
       symbol: tree.symbol,
+      ...(tree.purpose ? { purpose: tree.purpose } : {}),
     });
   }
 

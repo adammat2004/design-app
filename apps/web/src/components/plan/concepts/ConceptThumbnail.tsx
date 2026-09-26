@@ -12,6 +12,7 @@ import { useAssetVersion } from '@/lib/materials/assets/use-assets';
 import { drawPlan, type PlanContext } from '@/lib/materials/render-plan';
 import type { MakeCanvas, PatternCanvas } from '@/lib/materials/render-surface-pattern';
 import { useBoundaryStore } from '@/state/boundary-store';
+import { edgeRulesNow } from '@/lib/edge-rules';
 
 /**
  * A concept at card size.
@@ -97,7 +98,7 @@ function drawConceptRaster(
 
   drawPlan(
     context as unknown as PlanContext,
-    { boundary, house, elements: concept.elements, site },
+    { boundary, house, elements: concept.elements, site, edgeRules: edgeRulesNow() },
     {
       pxPerMetre,
       light: lightDirection(site) ?? undefined,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { polygonArea } from './primitives.js';
+import { polygonArea, polygonsIntersect } from './primitives.js';
 import { circleRing, insetPolygon, polylineStrip, rectToPolygon, roundPolygon } from './shapes.js';
 
 describe('rectToPolygon', () => {
@@ -164,5 +164,31 @@ describe('insetPolygon', () => {
     // A 4 m square inset by 2.5 m a side would cross itself.
     expect(insetPolygon(square, 2.5)).toBeNull();
     expect(insetPolygon(square, 0)).toBeNull();
+  });
+});
+
+describe('polygonsIntersect with a shape that is not convex', () => {
+  /* An L-shaped path strip whose centroid falls in the crook of the L. */
+  const strip = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 9 },
+    { x: 10, y: 9 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+
+  it('does not report an overlap with a lawn that stands in the crook of the L', () => {
+    const lawn = [
+      { x: 2, y: 1 },
+      { x: 9, y: 1 },
+      { x: 9, y: 8 },
+      { x: 2, y: 8 },
+    ];
+    expect(polygonsIntersect(strip, lawn)).toBe(false);
+  });
+
+  it('still reports two identical outlines as overlapping', () => {
+    expect(polygonsIntersect(strip, [...strip])).toBe(true);
   });
 });

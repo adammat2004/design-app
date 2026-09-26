@@ -1,3 +1,7 @@
+import { pointInPolygon, type Point } from '@garden-studio/schema';
+import type { DesignFrame } from './frame.js';
+import type { LayoutSketch, LocalShape } from './sketch.js';
+
 /**
  * How many trees a garden this size should carry, and where the boundary ones stand.
  *
@@ -36,4 +40,100 @@ export const BACKDROP_TREE_INSET = 1.1;
 
 export function treeBudget(designedArea: number): number {
   return Math.max(MIN_TREES, Math.min(MAX_TREES_CAP, Math.round(designedArea / METRES_PER_TREE)));
+}
+
+/** Offsets tried for a sketched tree, in frame metres: where it was drawn, then nearby. */
+export const TREE_NUDGES: [number, number][] = [
+  [0, 0],
+  [-0.6, 0],
+  [0.6, 0],
+  [0, -0.6],
+  [0, 0.6],
+  [-1.2, 0],
+  [1.2, 0],
+  [0, -1.2],
+  [0, 1.2],
+  [-1.2, -1.2],
+  [1.2, 1.2],
+];
+
+/** One tree the plan wants, as the points it may stand at in order, and why it is there. */
+export interface TreeCandidate {
+  points: Point[];
+  purpose: string;
+}
+
+/**
+ * Every tree the plan wants, in the order it wants them, each with the points it may stand at.
+ *
+ * **One list, read by the preview and the realisation alike.** Each had its own nudge ladder and its
+ * own walk round the boundary, with a comment in each saying the other must plant exactly as many:
+ * a preview that plants five where the built plan plants eleven scores a garden nobody sees. The
+ * caller decides only whether a point *fits*, which is the one thing the two genuinely ask
+ * differently — the realisation knows about the shed's roof, the preview only about its outline.
+ *
+ * On a composed sketch every tree is one the composition placed for a reason, and a point that has
+ * drifted onto the lawn is not offered: a nudge that carries a framing tree out of its bed and into
+ * the grass has made it a specimen marooned in open ground, which is the thing it was placed to
+ * avoid. On a hand-drawn sketch the sketch's own points come first and then the backdrop walk round
+ * the room, as before.
+ */
+export function treeCandidates(
+  sketch: LayoutSketch,
+  frame: DesignFrame,
+  room: Point[],
+  nudgeStart: number,
+): TreeCandidate[] {
+  const ladder = TREE_NUDGES.slice(nudgeStart % TREE_NUDGES.length);
+  const lawn = sketch.composed && sketch.lawn ? localShapeRing(sketch.lawn, frame) : null;
+  const offLawn = (at: Point) => !lawn || !pointInPolygon(at, lawn);
+
+  const planned: TreeCandidate[] = sketch.trees.map((point, index) => ({
+    points: ladder.map(([du, dv]) => frame.toWorld(point.u + du, point.v + dv)).filter(offLawn),
+    purpose: sketch.composed?.treeRoles[index]?.purpose ?? 'framing-tree',
+  }));
+  if (sketch.composed) return planned;
+
+  /*
+   * The backdrop the hand-drawn compositions never had: a line of trees along the boundary, the
+   * thing that encloses the garden and gives everything else a scale. Walked here rather than
+   * written into each template, because it is the same move in all of them.
+   */
+  const walk: TreeCandidate[] = [];
+  for (let corner = 0; corner < room.length; corner += 1) {
+    const from = room[corner]!;
+    const to = room[(corner + 1) % room.length]!;
+    const run = Math.hypot(to.x - from.x, to.y - from.y);
+    if (run < BACKDROP_TREE_SPACING) continue;
+
+    const steps = Math.floor(run / BACKDROP_TREE_SPACING);
+    const inward = { x: -(to.y - from.y) / run, y: (to.x - from.x) / run };
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / (steps + 1);
+      const on = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+      /* Which side of the edge is the garden is not known here, so both are offered. */
+      walk.push({
+        points: [1, -1].map((direction) => ({
+          x: on.x + inward.x * direction * BACKDROP_TREE_INSET,
+          y: on.y + inward.y * direction * BACKDROP_TREE_INSET,
+        })),
+        purpose: 'backdrop-tree',
+      });
+    }
+  }
+  return [...planned, ...walk];
+}
+
+/** A sketch shape as a ring in world metres. */
+export function localShapeRing(shape: LocalShape, frame: DesignFrame): Point[] {
+  if (shape.kind === 'rect') {
+    const { rect } = shape;
+    return [
+      frame.toWorld(rect.u0, rect.v0),
+      frame.toWorld(rect.u1, rect.v0),
+      frame.toWorld(rect.u1, rect.v1),
+      frame.toWorld(rect.u0, rect.v1),
+    ];
+  }
+  return shape.points.map((point) => frame.toWorld(point.u, point.v));
 }

@@ -48,6 +48,10 @@ export interface SubjectItem {
   /** Degrees clockwise, for the alignment check. `null` for anything that is not a rectangle. */
   rotation: number | null;
   material: string | null;
+  /** Why the composition put it here, or `null` on a plan that never said. */
+  purpose: string | null;
+  /** The drawn symbol, where the element has one: what tells a flight of steps from a shed. */
+  symbol: string | null;
 }
 
 /** A path: the strip it occupies and the line down the middle of it. */
@@ -60,6 +64,7 @@ export interface SubjectRoute {
   length: number;
   /** Straight-line distance between its ends: the denominator of the detour ratio. */
   span: number;
+  purpose: string | null;
 }
 
 /** A region of ground cover: a lawn panel, a planting bed, a gravel area. */
@@ -70,6 +75,7 @@ export interface SubjectRegion {
   centre: Point;
   area: number;
   isBase: boolean;
+  purpose: string | null;
 }
 
 export interface DesignSubject {
@@ -160,6 +166,7 @@ export function buildSubject(
           width: element.shape.width,
           length: polylineLength(centreline),
           span: Math.hypot(ends[1]!.x - ends[0]!.x, ends[1]!.y - ends[0]!.y),
+          purpose: element.purpose ?? null,
         });
         continue;
       }
@@ -174,12 +181,22 @@ export function buildSubject(
       centre: polygonCentroid(ring),
       area: elementArea(element),
       isBase: element.fillKind === 'base',
+      purpose: element.purpose ?? null,
     });
   }
 
+  /*
+   * The open ground of the garden, which is not every patch of gravel: a side return is the way
+   * past the house and the front is the way in. Counted as panels they were judged as the garden's
+   * open space — a strip down the side reported as a lawn that was the leftover of everything round
+   * it, and a lounge deck in the side return reported as standing on the open ground.
+   */
   const panels = regions.filter(
     (region) =>
-      !region.isBase && (region.category === 'lawn' || region.category === 'gravel-mulch'),
+      !region.isBase &&
+      (region.category === 'lawn' || region.category === 'gravel-mulch') &&
+      region.purpose !== 'passage' &&
+      region.purpose !== 'arrival',
   );
   const beds = regions.filter((region) => !region.isBase && region.category === 'planting-bed');
 
@@ -215,6 +232,8 @@ function toItem(
     area: elementArea(element),
     rotation: element.shape.kind === 'rect' ? element.shape.rotation : null,
     material: element.material ?? null,
+    purpose: element.purpose ?? null,
+    symbol: element.symbol ?? null,
   };
 }
 

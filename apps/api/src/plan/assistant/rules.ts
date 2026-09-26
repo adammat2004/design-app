@@ -43,6 +43,10 @@ CHOOSING THE RIGHT ONE
   grass. Put it after the move or the resize it belongs to; it reads the result of them.
 - "Nearer the seating", "further from the shed": that is move with towards "element" and the other
   thing's id. Do not approximate it with a zone.
+- Edging, kerbs and borders round a surface are edge, never material: name what the edge meets in
+  adjacent ("lawn", "path", "planting", "all"), using each element's beside list, and the planner
+  finds where that is. "Remove the edging where it meets the path" is edge with treatment "none".
+  "flush" means the two surfaces meet level with no upstand.
 
 WORKING ORDER
 Order your intents the way a designer works, because that is the order they are performed in and

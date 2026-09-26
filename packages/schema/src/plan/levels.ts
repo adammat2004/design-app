@@ -25,7 +25,7 @@ import type { DesignElement } from './concepts.js';
  * Every side except the ones against the house, and the reason is physical rather than tidy. The
  * ground drops away from a raised terrace on every free edge, so every free edge needs holding —
  * but where a terrace meets the building there is no drop and no upstand, only floor meeting wall.
- * The boundary is deliberately **not** excluded, unlike in `edgingRuns`: a terrace raised against
+ * The boundary is deliberately **not** excluded, unlike in the boundary graph's edging rules: a terrace raised against
  * the fence really does need retaining there, and the fence is not holding it up.
  */
 
@@ -172,7 +172,7 @@ export function stepFlight(rise: number): StepFlight | null {
  * The same four helpers `edging.ts` uses, and deliberately copied rather than shared.
  *
  * They are twenty lines of segment arithmetic, and the two callers want them to mean subtly
- * different things — `edgingRuns` drops the sides against the boundary, this one keeps them. A
+ * different things — edging (`edges/rules.ts`) leaves the sides against the boundary bare, this one keeps them. A
  * shared helper taking a flag for that would make one file's rule readable only by going and
  * reading the other's, which is the coupling both modules exist to avoid.
  */

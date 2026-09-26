@@ -36,6 +36,7 @@ import {
 import { resolvePlotScale } from '../constraints.js';
 import { backFrame, frontFrame, gardenRoom, localBox, type DesignFrame } from '../layout/frame.js';
 import { PASSAGE_MAX_WIDTH, usableWidth, zoneRoles, type ZoneRole } from '../layout/zone-roles.js';
+import { SCREENING_HEIGHT } from './evaluate/privacy.js';
 import type { AwkwardArea, ResolvedExit, SiteAnalysis, SiteEdge } from './types.js';
 
 /**
@@ -396,4 +397,39 @@ function afternoonShade(document: PlanDocument): SiteAnalysis['sun'] {
   }
 
   return { towards, shade };
+}
+
+/**
+ * The view from the doors, in the design frame: the cone and where the primary axis ends.
+ *
+ * What a composition needs to keep the store out of the view and put something at the end of it.
+ * Converted once, here, from the analysis's own world-space cone rather than re-derived in frame
+ * space, so the scorer that checks the view and the composition that plans for it read one cone.
+ */
+/**
+ * The sides of the garden a boundary too low to screen a seat runs along, and somebody is behind.
+ *
+ * What a composition screens with planting where the brief asks for privacy: a 1.8 m fence already
+ * does the job, and a border planted in front of one costs the lawn width and screens nothing more.
+ * The height is the privacy principle's own `SCREENING_HEIGHT`, so the planting is placed where the
+ * scorer would find the seat exposed and nowhere else. An undescribed side has nobody behind it.
+ */
+export function lowSides(analysis: SiteAnalysis): ('left' | 'right')[] {
+  const sides = new Set<'left' | 'right'>();
+  for (const edge of analysis.edges) {
+    if (edge.exposure === 'unknown' || edge.height >= SCREENING_HEIGHT) continue;
+    if (edge.side === 'left' || edge.side === 'right') sides.add(edge.side);
+  }
+  return [...sides].sort();
+}
+
+export function localView(
+  analysis: SiteAnalysis,
+): { cone: { u: number; v: number }[]; axisEnd: { u: number; v: number } } | null {
+  const { frame, viewCone, primaryAxis } = analysis;
+  if (!frame || !viewCone || !primaryAxis) return null;
+  return {
+    cone: viewCone.map((point) => frame.toLocal(point)),
+    axisEnd: frame.toLocal(primaryAxis.to),
+  };
 }

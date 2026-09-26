@@ -10,6 +10,7 @@ import {
   type ScheduleLine,
 } from '@garden-studio/schema';
 import { formatArea, type Unit } from '@/lib/units';
+import { useEdgeRules } from '@/lib/edge-rules';
 
 /**
  * What the garden is made of, counted.
@@ -40,10 +41,12 @@ export function ScheduleTable({
   boundary?: Point[];
   house?: HouseFootprint | null;
 }) {
-  const lines = planSchedule(elements, {
-    boundary,
-    house: house ? housePolygon(house) : undefined,
-  });
+  const edgeRules = useEdgeRules();
+  const lines = planSchedule(
+    elements,
+    { boundary, house: house ? housePolygon(house) : undefined },
+    edgeRules,
+  );
 
   if (lines.length === 0) {
     return (

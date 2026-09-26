@@ -107,6 +107,8 @@ interface RenderOptions {
   maxTier?: 'mass' | 'units' | 'detail';
   /** The line a pad run marches along. Only a polyline element has one. */
   centreline?: Point[];
+  /** Which outline segments carry the cut edge; absent means all. */
+  cutEdge?: boolean[];
 }
 
 /** Draws one or more surfaces into a single frame, at their true relative positions. */
@@ -134,6 +136,7 @@ function renderAll(
         light: options.light,
         maxTier: options.maxTier,
         centreline: options.centreline,
+        cutEdge: options.cutEdge,
       },
       rasterOrigin,
     );
@@ -868,6 +871,33 @@ describe('the cut edge', () => {
 
     // The bed's edge tone is browner and darker than the planting behind it.
     expect(onBedEdge[0]).not.toBe(onLawnEdge[0]);
+  });
+
+  /*
+   * The mask. `rectangle` runs (1,1) → (7,1) → (7,5) → (1,5), so segment 3 is the left side at
+   * x = 1 and segment 0 is the top at y = 1. A side masked off draws exactly what a bed with no
+   * edge at all draws there; a side kept draws exactly what the unmasked bed draws.
+   */
+  it('strokes only the sides the mask keeps', () => {
+    const shrubs = resolvePattern('shrubs')!;
+    const full = render(rectangle, { material: shrubs });
+    const none = render(rectangle, { material: shrubs, cutEdge: [false, false, false, false] });
+    const noLeft = render(rectangle, { material: shrubs, cutEdge: [true, true, true, false] });
+
+    const leftEdge = (r: Rendered) => pixelAt(r, Math.round(1 * 40) + 1, Math.round(3 * 40));
+    const topEdge = (r: Rendered) => pixelAt(r, Math.round(4 * 40), Math.round(1 * 40) + 1);
+
+    expect(leftEdge(full)).not.toEqual(leftEdge(none));
+    expect(leftEdge(noLeft)).toEqual(leftEdge(none));
+    expect(topEdge(noLeft)).toEqual(topEdge(full));
+  });
+
+  it('draws the closed ring it always drew for an absent or an all-true mask', () => {
+    const shrubs = resolvePattern('shrubs')!;
+    const absent = render(rectangle, { material: shrubs });
+    const all = render(rectangle, { material: shrubs, cutEdge: [true, true, true, true] });
+
+    expect(all.buffer.equals(absent.buffer)).toBe(true);
   });
 
   it('drops the edge rather than smearing it when it falls under a pixel', () => {

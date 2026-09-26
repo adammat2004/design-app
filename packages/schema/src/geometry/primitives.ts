@@ -250,7 +250,43 @@ export function polygonsIntersect(a: Point[], b: Point[]): boolean {
   if (a.some((point) => strictlyInside(point, b))) return true;
   if (b.some((point) => strictlyInside(point, a))) return true;
 
-  return strictlyInside(polygonCentroid(a), b) || strictlyInside(polygonCentroid(b), a);
+  const aInside = interiorPoint(a);
+  const bInside = interiorPoint(b);
+  return (
+    (aInside !== null && strictlyInside(aInside, b)) ||
+    (bInside !== null && strictlyInside(bInside, a))
+  );
+}
+
+/**
+ * A point strictly inside the polygon: its centroid where that is inside, else a point just in from
+ * the middle of one of its edges.
+ *
+ * The backstop above used the centroid alone, which is only inside a polygon that is convex. An L —
+ * a path with one dog-leg, a lawn notched at a corner — has its centroid in the crook of the L,
+ * outside itself, so a path running round the lawn's edge "overlapped" the lawn wherever its own
+ * centroid fell on the grass. That refused every dog-legged route laid beside a lawn, which is
+ * exactly the route a composed plan lays. The backstop exists for two identical outlines, where no
+ * vertex is strictly inside the other; any interior point answers that as well as the centroid did.
+ */
+function interiorPoint(polygon: Point[]): Point | null {
+  const centroid = polygonCentroid(polygon);
+  if (strictlyInside(centroid, polygon)) return centroid;
+
+  for (const { start, end } of polygonEdges(polygon)) {
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (length < 1e-6) continue;
+    const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const step = Math.min(1e-3, length / 4);
+    for (const side of [1, -1]) {
+      const probe = {
+        x: mid.x - ((end.y - start.y) / length) * step * side,
+        y: mid.y + ((end.x - start.x) / length) * step * side,
+      };
+      if (strictlyInside(probe, polygon)) return probe;
+    }
+  }
+  return null;
 }
 
 /**

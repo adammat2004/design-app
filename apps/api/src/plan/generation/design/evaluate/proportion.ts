@@ -272,8 +272,20 @@ function offBrief(
       message: `${pct(shares[off.kind])} of the garden is ${words(off.kind)}, where a concept ${subject.brief.rationale ? 'of this kind' : 'like this'} wants ${under ? `at least ${pct(band.min)}` : `at most ${pct(band.max)}`}.`,
       subjects: subjectsFor(subject, off.kind),
       ...(repairFor(off.kind, under) ? { repair: repairFor(off.kind, under)! } : {}),
+      /*
+       * A resize says by how much, as every other proportion fault does: the band's edge over the
+       * share the plan has. It was missing here, so a correction to an off-brief lawn had a
+       * direction and no size — found by a gallery garden whose lawn sat just under the band.
+       */
+      ...(isResize(repairFor(off.kind, under)) && shares[off.kind] > 0
+        ? { guidance: { targetAreaFactor: (under ? band.min : band.max) / shares[off.kind] } }
+        : {}),
     },
   ];
+}
+
+function isResize(repair: string | null | undefined): boolean {
+  return repair === 'enlarge-lawn' || repair === 'shrink-terrace';
 }
 
 /** How far outside a band a share is; nought when it is inside. */
