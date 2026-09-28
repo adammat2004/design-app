@@ -223,8 +223,12 @@ describe('shadowOccluders', () => {
   it('casts pergola slats and posts instead of an opaque roof', () => {
     const pergola = element({ category: 'structure', symbol: 'pergola', height: 2.4 });
     const occluders = shadowOccluders([pergola], null);
+    // Four posts on the ground, a beam front and rear on top of them, and the rafters above those.
     expect(occluders.filter((o) => !o.baseHeight)).toHaveLength(4);
-    expect(occluders.filter((o) => o.baseHeight && o.baseHeight > 2)).toHaveLength(7);
+    expect(occluders.filter((o) => o.baseHeight && o.baseHeight > 2 && o.baseHeight < 2.2)).toHaveLength(2);
+    expect(occluders.filter((o) => o.baseHeight && o.baseHeight >= 2.2)).toHaveLength(7);
+    // Nothing reaches higher than the structure's own height.
+    expect(Math.max(...occluders.map((o) => o.height))).toBeCloseTo(2.4, 9);
   });
 
   it('skips hidden elements', () => {

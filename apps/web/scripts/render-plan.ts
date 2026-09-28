@@ -137,7 +137,7 @@ async function compositionSheet(): Promise<Buffer> {
     const x = (index % columns) * cellWidth;
     const y = Math.floor(index / columns) * cellHeight;
     const prefix = String(index + 1).padStart(2, '0');
-    const image = await loadImage(join(OUT_DIR, `${prefix}-${name}-close-visualise.png`));
+    const image = await loadImage(join(OUT_DIR, `${prefix}-${name}-close.png`));
     const scale = Math.min((cellWidth - 24) / image.width, (cellHeight - 48) / image.height);
     context.drawImage(image, x + (cellWidth - image.width * scale) / 2,
       y + 38 + (cellHeight - 48 - image.height * scale) / 2, image.width * scale, image.height * scale);
@@ -422,9 +422,7 @@ function levelsSheet(document: PlanDocument): Buffer {
       : element,
   );
 
-  return renderPlan({ ...sceneOf(document), elements: [...elements, steps] }, 64, {
-    view: 'visualise',
-  });
+  return renderPlan({ ...sceneOf(document), elements: [...elements, steps] }, 64);
 }
 
 /**
@@ -607,16 +605,6 @@ async function main(): Promise<void> {
 
     for (const [pxPerMetre, label] of ZOOMS) {
       write(`${prefix}-${name}-${label}`, renderPlan(scene, pxPerMetre));
-      /*
-       * The same garden with its planting lifted out of the beds' rasters and drawn as sprites
-       * above them. Written beside the plan drawing on purpose: the two are only judgeable
-       * against each other, and the question this sheet answers is whether the beds have stopped
-       * reading as cut-outs.
-       */
-      write(
-        `${prefix}-${name}-${label}-visualise`,
-        renderPlan(scene, pxPerMetre, { view: 'visualise' }),
-      );
     }
     write(`${prefix}-${name}-schematic`, schematicPlan(document));
   });

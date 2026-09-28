@@ -1,3 +1,4 @@
+import { structureDefinitionFor } from '@garden-studio/schema';
 import type { DesignElement, ElementCategory, MaterialId } from '@garden-studio/schema';
 import { elementLabel } from './concept-colours';
 
@@ -54,8 +55,9 @@ export interface SuggestionContext {
 const hasLighting = (elements: DesignElement[]) =>
   elements.some((element) => element.category === 'lighting');
 
+/** Any covered structure — a far-end gazebo answers "somewhere covered to sit" as a pergola does. */
 const hasPergola = (elements: DesignElement[]) =>
-  elements.some((element) => element.symbol === 'pergola');
+  elements.some((element) => structureDefinitionFor(element) !== null);
 
 const hasPavedFeature = (elements: DesignElement[]) =>
   elements.some((element) => element.category === 'paved-area' && element.role === 'feature');

@@ -77,8 +77,9 @@ import type {
  * notched round it with a collar of planting — never left underneath it. The one exception is a play
  * area, which belongs on the grass by the relationship rules' own reasoning.
  *
- * `null` means this plot is a courtyard — no viable lawn behind the terrace — and the caller keeps
- * the hand-drawn composition for it, which already knows how to pave a small room.
+ * `null` means this composition cannot hold the brief round a lawn on this plot. The candidate loop
+ * then offers another composition, and where none composes, the last-resort courtyard
+ * (`knowledge/archetypes/composed.ts`), which paves a small room and carves the rest off it.
  */
 
 /**
@@ -152,10 +153,19 @@ export const PROTECTED = 2;
  * a seating patio along each side. It is a supporting room, and at full size it outgrew the room
  * a concept was organised around: a second patio larger than the dining pergola of a social plan.
  */
+/**
+ * How much of the drawn terrace in shade reserves a seat for the sun: two of the five probes. The
+ * sun principle calls a seat shaded at more than half, but the terrace drawn here is nudged by the
+ * fitter before it is built and the probes land either side of the shadow's edge, so a terrace two
+ * fifths in shade as drawn was repeatedly reported shaded once built.
+ */
+const TERRACE_SHADED = 0.4;
+
 const SPARE_SCALE = 0.8;
 
 /** The least a spare seat holds: the smallest thing `FURNISHINGS.seating` furnishes one with. */
-const SPARE_FLOOR: Footprint = { kind: 'rect', ...hostFloor('seating', 'smallest') };
+const SPARE_FLOOR_SIZE = hostFloor('seating', 'smallest');
+const SPARE_FLOOR: Footprint = { kind: 'rect', ...SPARE_FLOOR_SIZE };
 
 /**
  * A screening bed where the brief asks for one on a side that would otherwise be a mowing edge: a
@@ -287,6 +297,10 @@ export interface Want {
   width: number;
   depth: number;
   minSize?: { width: number; depth: number };
+  /** A seat reserved for the sun: placed only somewhere out of the afternoon shade, or not at all. */
+  sun?: boolean;
+  /** A seat at the far end of a destination garden with nothing else worth walking to. */
+  endSeat?: boolean;
 }
 
 /**
@@ -379,7 +393,7 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
    * first and pinned there, whatever its own ladder says. It has to be a room the realisation will
    * actually fill: one of the features that can be the reason to walk, or — where the plot is
    * already carrying a second seat — that seat. With neither there is nothing to walk to, and the
-   * composition declines to the hand-drawn plan rather than draw a destination that is an empty bay.
+   * composition declines rather than draw a destination that is an empty bay.
    */
   /*
    * A sequence of rooms is the same composition read along a long narrow plot: the terrace, a lawn
@@ -411,6 +425,17 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
     else if ((request.extraRooms ?? 0) > 0) {
       destination = wantFor(null, 'far-room', s, language, request.primaryZone);
       sparesUsed = 1;
+    } else if (request.features.includes('seating')) {
+      /*
+       * Nothing asked for is worth walking to, so the far end is a seat: the oldest destination a
+       * garden has. Reserved for it and nothing else (`END_SEAT`), and furnished by realisation as a
+       * garden seat. The composition used to decline here, and the plot got the hand-drawn template
+       * of the day — which drew exactly this, and was the better answer.
+       */
+      destination = {
+        ...wantFor(null, 'far-room', s, language, request.primaryZone),
+        endSeat: true,
+      };
     } else return null;
     destination = withinShare(destination, DESTINATION_SHARE * (D - T));
     taken.add('far-room');
@@ -657,6 +682,31 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
     }
   }
 
+  /*
+   * A seat for the sun, where the terrace is in the shade. The terrace goes across the doors because
+   * that is what a terrace is, and on a north-facing plot it is in the afternoon shade whatever the
+   * plan does: the designer's answer is somewhere else to sit, not a terrace moved off the house.
+   * Decided here, against the terrace this composition actually drew and the sun principle's own
+   * probes, rather than guessed before composing — the guess disagreed with the drawn terrace on the
+   * L-plot. Placed only where the sun is, or not at all: a second seat in the shade answers nothing.
+   */
+  if (
+    request.sunSeat &&
+    request.features.includes('seating') &&
+    request.shade &&
+    shadeShare(terrace, request.shade) >= TERRACE_SHADED
+  ) {
+    /*
+     * A spare seat the plot was already carrying becomes the one for the sun; only where there was
+     * none is another room reserved. Two spare seats — one in the sun and a second patio in the
+     * shade beside the terrace it was meant to answer — is paving that competes for one lawn.
+     */
+    const spare = wants.findIndex((want) => want.feature === null && want !== destination);
+    const seat = sunWant(spare >= 0 ? wants[spare]!.kind : SPARE[language][0]!, s);
+    if (spare >= 0) wants[spare] = seat;
+    else wants.push(seat);
+  }
+
   /* ---- 5. the rooms, in bays at the corners and down the axis ---- */
 
   const bays: Bay[] = [];
@@ -780,11 +830,17 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
   const place = (want: Want): LocalRect | null => {
     const raw = rectFor(want);
     let rect = raw ? intersectRects(raw, band) : null;
+    /*
+     * Two rooms by the terrace are laid out together by `nearBays` and are not checked against each
+     * other; anything else is checked against every room, the ones by the terrace included. Exempting
+     * those outright let a seat at the lawn's near corner be reserved on top of a dining area stepped
+     * down off the terrace's corner, and realisation — which cannot put two things in one place —
+     * dropped the seat.
+     */
     const clashing = (candidate: LocalRect) =>
       bays.filter(
         (bay) =>
-          !isNear(want.kind) &&
-          !isNear(bay.kind) &&
+          !(isNear(want.kind) && isNear(bay.kind)) &&
           rectsOverlap(bay.rect, candidate, BAY_GAP - 1e-9),
       );
     if (rect && REAR.includes(want.kind) && clashing(rect).length > 0) {
@@ -886,7 +942,7 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
         const ok =
           rect !== null &&
           seats(want, rect) &&
-          !bays.some((bay) => !isNear(bay.kind) && rectsOverlap(bay.rect, rect, BAY_GAP - 1e-9)) &&
+          !bays.some((bay) => rectsOverlap(bay.rect, rect, BAY_GAP - 1e-9)) &&
           !rectsOverlap(rect, terrace, -1e-9);
         out.push({
           want: { ...want, kind: 'far-room' },
@@ -919,9 +975,17 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
       { want, rect: place(want) },
     ];
     if (want.feature === null && want !== destination) {
-      for (const kind of SPARE[language]) {
+      /*
+       * A seat for the sun may also go at the lawn's far end, which on a north-facing plot is very
+       * often the one place the afternoon sun reaches: the side bays sit in the fences' own shadow.
+       */
+      const kinds: SlotKind[] =
+        want.sun && !formal ? [...SPARE[language], 'lawn-far'] : SPARE[language];
+      for (const kind of kinds) {
         if (kind === want.kind) continue;
-        const next = wantFor(null, kind, s, language, request.primaryZone);
+        const next = want.sun
+          ? sunWant(kind, s)
+          : wantFor(null, kind, s, language, request.primaryZone);
         options.push({ want: next, rect: place(next) });
       }
     }
@@ -950,7 +1014,8 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
       (option) =>
         option.rect !== null &&
         !usedIds.has(option.id ?? option.want.kind) &&
-        lawnKeeps(option.rect, essential),
+        lawnKeeps(option.rect, essential || want.sun === true) &&
+        (!want.sun || shadeShare(option.rect, request.shade ?? []) <= SHADE_LIMIT),
     );
     /*
      * Among the places that will hold it, the one that gives the room what it is for: the sun, for a
@@ -961,7 +1026,8 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
      * seat.
      */
     const merit = (rect: LocalRect) =>
-      (want.feature && WANTS_SUN.includes(want.feature) && request.shade
+      /* A spare is a seat, and a seat wants the sun: it is often why the spare is there at all. */
+      (WANTS_SUN.includes(want.feature ?? 'seating') && request.shade
         ? Number(shadeShare(rect, request.shade) <= SHADE_LIMIT)
         : 0) +
       (want.feature && SEEN_FROM_HOUSE.has(want.feature) && request.view
@@ -974,11 +1040,12 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
     if (!chosen) {
       /*
        * Never refuse what the brief calls essential. A composition that cannot seat the room the
-       * garden is for declines the plot, and the hand-drawn template — which will put it somewhere
-       * — draws it instead: a composed plan missing its dining table is worse than an uncomposed
-       * one that has it.
+       * garden is for declines the plot, and another composition — or the courtyard, where none
+       * composes — draws it instead: a plan missing its dining table is the wrong plan, not a worse
+       * one.
        */
       if (essential && (want.feature || want === destination)) return null;
+      if (want.sun) continue;
       dropped.push(want.feature ?? 'a second seating area');
       continue;
     }
@@ -1300,7 +1367,8 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
    */
   const essential = request.essential;
   const rank = (bay: Bay) => {
-    if (bay === destinationBay) return 0;
+    /* The seat for the sun may take the lawn to its floor, as it was allowed to when it was placed. */
+    if (bay === destinationBay || bay.purpose === 'sun-seat') return 0;
     if (essential) return bay.feature !== null && essential.includes(bay.feature) ? 0 : PROTECTED;
     const at = wants.findIndex((want) => want.feature === bay.feature);
     return at === -1 ? wants.length : at;
@@ -1315,12 +1383,20 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
   for (;;) {
     const lesser = bays.some((bay) => intruding(bay) && rank(bay) >= PROTECTED);
     if (keeps(outline, lesser)) break;
-    const intruder = [...bays].reverse().find((bay) => intruding(bay) && rank(bay) >= PROTECTED);
+    /*
+     * Where the lawn cannot hold everything, the seat for the sun goes first: it is the plan's own
+     * addition, and what the user asked for outranks it. Ranked with the protected rooms so that its
+     * presence alone does not hold the lawn to `LAWN_KEEPS`, it was keeping its place and evicting a
+     * requested water feature instead.
+     */
+    const intruder =
+      bays.find((bay) => bay.purpose === 'sun-seat' && intruding(bay)) ??
+      [...bays].reverse().find((bay) => intruding(bay) && rank(bay) >= PROTECTED);
     /*
      * Only a room the brief most wants is left in the way, and the lawn still cannot stay at its
      * floor: on this plot, for this brief, there is no lawn worth composing round. The composition
-     * declines rather than refusing the dining table, and the hand-drawn template — which knows how
-     * to lay a small room out as a courtyard — draws it instead.
+     * declines rather than refusing the dining table, and another composition — or the courtyard,
+     * which lays a small room out round its floor — draws it instead.
      */
     if (!intruder) {
       if (bays.some(intruding)) return null;
@@ -1479,7 +1555,8 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
     (destinationBay && spansView(destinationBay) ? destinationBay : undefined) ??
     bays.find(spansView);
   if (onAxis) {
-    onAxis.purpose = 'focal';
+    /* A seat set for the sun keeps that purpose: it is what realisation fills the bay by. */
+    if (onAxis.purpose !== 'sun-seat' && onAxis.purpose !== 'end-seat') onAxis.purpose = 'focal';
     decisions.push({
       kind: 'focal',
       text: `Put the ${describeBay(onAxis)} at the end of the view from the doors, so the eye has somewhere to land.`,
@@ -1569,6 +1646,21 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
       ? { kind: 'tree', at: trees.find((tree) => tree.role === 'focal')!.at }
       : null;
 
+  /* Said once, from what survived, so the decision cannot claim a seat the lawn then refused. */
+  if (wants.some((want) => want.sun)) {
+    decisions.push(
+      bays.some((bay) => bay.purpose === 'sun-seat')
+        ? {
+            kind: 'sun-seat',
+            text: 'The terrace at the doors is in the afternoon shade, so a second seat is set where the sun is.',
+          }
+        : {
+            kind: 'no-sun-seat',
+            text: 'The terrace is in the afternoon shade, and nowhere else in the garden had room for a seat in the sun.',
+          },
+    );
+  }
+
   if (dropped.length > 0) {
     decisions.push({
       kind: 'no-room',
@@ -1594,6 +1686,33 @@ function composeOnce(input: ComposeInput, terraceCap: number): GardenComposition
 }
 
 /* ---------------------------------------------------------------- the rooms */
+
+/**
+ * A seat for the sun: a paved nook for a bench or a pair of loungers, not a second patio. Sized as a
+ * spare seat it was four metres by three with its margins, and on the plots whose terrace is in the
+ * shade — small, north-facing, already full — there was nowhere that size that did not take the lawn
+ * past what a room may take. Never smaller than the least a seat is furnished with.
+ */
+function sunWant(kind: SlotKind, s: number): Want {
+  const k = Math.max(0.85, Math.sqrt(s));
+  const width = Math.max(SUN_SEAT.width * k, SPARE_FLOOR_SIZE.width);
+  const depth = Math.max(SUN_SEAT.depth * k, SPARE_FLOOR_SIZE.depth);
+  return {
+    feature: null,
+    kind,
+    footprint: { kind: 'rect', width, depth },
+    width: width + 2 * BAY_MARGIN,
+    depth: depth + 2 * BAY_MARGIN,
+    minSize: {
+      width: Math.min(SPARE_FLOOR_SIZE.width, SPARE_FLOOR_SIZE.depth),
+      depth: Math.max(SPARE_FLOOR_SIZE.width, SPARE_FLOOR_SIZE.depth),
+    },
+    sun: true,
+  };
+}
+
+/** A sun seat's nook at suburban scale, along the wall and out from it. */
+const SUN_SEAT = { width: 2.6, depth: 2.2 };
 
 export function wantFor(
   feature: DesiredFeature | null,
@@ -1693,9 +1812,13 @@ export function bayOf(want: Want, rect: LocalRect): Bay {
     purpose:
       want.feature === 'water'
         ? 'water'
-        : want.feature === null
-          ? 'lounge'
-          : PURPOSE_BY_KIND[want.kind],
+        : want.sun
+          ? 'sun-seat'
+          : want.endSeat
+            ? 'end-seat'
+            : want.feature === null
+              ? 'lounge'
+              : PURPOSE_BY_KIND[want.kind],
     ...(want.kind === 'utility' || want.kind === 'utility-2' || want.kind === 'beside-terrace'
       ? { turn: true }
       : {}),
@@ -1790,6 +1913,7 @@ function distanceFrom(fence: number, rect: LocalRect): number {
 }
 
 export function describeBay(bay: Bay): string {
+  if (bay.purpose === 'end-seat') return 'garden seat';
   if (!bay.feature) return 'second seating area';
   return (FEATURE_SPECS[bay.feature].planName ?? bay.feature).toLowerCase();
 }
@@ -1948,10 +2072,7 @@ function inView(rect: LocalRect, cone: LocalPoint[]): boolean {
 
 /** The share of a rectangle's corners and centre that fall in the shade — the sun principle's own probes. */
 function shadeShare(rect: LocalRect, shade: LocalPoint[][]): number {
-  const probes = [
-    ...rectPoints(rect),
-    { u: (rect.u0 + rect.u1) / 2, v: (rect.v0 + rect.v1) / 2 },
-  ];
+  const probes = [...rectPoints(rect), { u: (rect.u0 + rect.u1) / 2, v: (rect.v0 + rect.v1) / 2 }];
   const shaded = probes.filter((point) =>
     shade.some((ring) => ring.length >= 3 && insideLocal(point, ring)),
   ).length;
@@ -2215,7 +2336,10 @@ export function planTrees(input: TreeInput): TreePlan[] {
     plans.every((plan) => Math.hypot(plan.at.u - at.u, plan.at.v - at.v) >= by);
   const sight = input.sightline;
   const inSightline = (at: LocalPoint) =>
-    sight !== null && sight !== undefined && at.u < sight.u1 && Math.abs(at.v - sight.v) < SIGHTLINE;
+    sight !== null &&
+    sight !== undefined &&
+    at.u < sight.u1 &&
+    Math.abs(at.v - sight.v) < SIGHTLINE;
   const add = (at: LocalPoint, role: TreePlan['role'], purpose: ElementPurpose, gap = 3) => {
     if (role !== 'focal' && inSightline(at)) return false;
     if (inBed(at) && clearOfBays(at, 1) && clearOfTrees(at, gap)) {

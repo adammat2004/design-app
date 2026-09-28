@@ -1,22 +1,13 @@
-import type { FunctionalZoneType, LayoutArchetypeId } from '@garden-studio/schema';
-import type {
-  CandidateParams,
-  FunctionalZone,
-  SiteAnalysis,
-  ZonePlan,
-} from '../../design/types.js';
-import type { LayoutSketch, LocalRect, Room, Slot } from '../../layout/sketch.js';
+import type { FunctionalZone, SiteAnalysis } from '../../design/types.js';
+import type { LocalRect, Room } from '../../layout/sketch.js';
 import {
   BED_MIN_DEPTH,
   LAWN_FLOOR,
   borderDepth,
   lawnEnd,
   lawnStart,
-  rectCentre,
-  rectSize,
   terraceDepth,
 } from '../../layout/sketch.js';
-import { zoneOfSlot } from './types.js';
 
 /**
  * The small amount of arithmetic the four new compositions share.
@@ -28,37 +19,6 @@ import { zoneOfSlot } from './types.js';
  * the two clamps everything needs.
  */
 
-/** Every slot gets the zone it belongs to, derived from its kind. */
-export function withZoneIds(sketch: LayoutSketch): LayoutSketch {
-  return {
-    ...sketch,
-    slots: sketch.slots.map((slot) => ({ ...slot, zoneId: slot.zoneId ?? zoneOfSlot(slot.kind) })),
-  };
-}
-
-/** A slot filling a rectangle, with a margin so what lands in it is not flush to the edges. */
-export function slotIn(
-  id: string,
-  kind: Slot['kind'],
-  rect: LocalRect,
-  options: { margin?: number; turn?: boolean; minSize?: { width: number; depth: number } } = {},
-): Slot {
-  const margin = options.margin ?? 0.3;
-  const size = rectSize(rect);
-  return {
-    id,
-    kind,
-    zoneId: zoneOfSlot(kind),
-    anchor: rectCentre(rect),
-    maxSize: {
-      width: Math.max(0.6, size.width - 2 * margin),
-      depth: Math.max(0.6, size.depth - 2 * margin),
-    },
-    ...(options.turn ? { turn: true } : {}),
-    ...(options.minSize ? { minSize: options.minSize } : {}),
-  };
-}
-
 /** A rectangle held inside the room, never inverted. `null` when there is nothing left of it. */
 export function clampRect(rect: LocalRect, room: Room, inset = 0): LocalRect | null {
   const u0 = Math.max(rect.u0, Math.max(room.uMin, 0) + inset);
@@ -67,31 +27,6 @@ export function clampRect(rect: LocalRect, room: Room, inset = 0): LocalRect | n
   const v1 = Math.min(rect.v1, room.vMax - inset);
   return u1 - u0 > 0.4 && v1 - v0 > 0.4 ? { u0, u1, v0, v1 } : null;
 }
-
-/** A band of planting along one edge of the room, or nothing where it would be a sliver. */
-export function edgeBed(
-  name: string,
-  room: Room,
-  edge: 'far' | 'near' | 'min' | 'max',
-  depth: number,
-  span: { from: number; to: number },
-): { name: string; shape: LocalShapeRect } | null {
-  if (depth < BED_MIN_DEPTH) return null;
-  const uMin = Math.max(room.uMin, 0);
-  const rect: LocalRect =
-    edge === 'far'
-      ? { u0: room.uMax - depth, u1: room.uMax, v0: span.from, v1: span.to }
-      : edge === 'near'
-        ? { u0: uMin, u1: uMin + depth, v0: span.from, v1: span.to }
-        : edge === 'min'
-          ? { u0: span.from, u1: span.to, v0: room.vMin, v1: room.vMin + depth }
-          : { u0: span.from, u1: span.to, v0: room.vMax - depth, v1: room.vMax };
-
-  const clamped = clampRect(rect, room);
-  return clamped ? { name, shape: { kind: 'rect', rect: clamped, cornerRadius: 0 } } : null;
-}
-
-type LocalShapeRect = { kind: 'rect'; rect: LocalRect; cornerRadius: number };
 
 /**
  * The border depth this composition plants at, never under the sliver guard.
@@ -111,45 +46,6 @@ export function bed(scale: number, across?: number): number {
   const wanted = Math.max(BED_MIN_DEPTH, borderDepth(scale));
   if (across === undefined) return wanted;
   return Math.max(BED_MIN_DEPTH, Math.min(wanted, across - LAWN_FLOOR.minDimension));
-}
-
-/**
- * A zone plan derived from a sketch's own slots and rectangles.
- *
- * **For the three original compositions the zone plan is derived; for the four new ones it is
- * primary.** That asymmetry is deliberate and temporary. The originals compute their rectangles
- * inline and must go on producing the identical numbers, so the plan is read back out of what they
- * drew — which cannot disagree with the sketch, because it *is* the sketch. The new compositions
- * are built the other way round, from the zone plan outwards, which is where all seven end up once
- * the candidate loop lands and the golden comparison is deleted.
- */
-export function planFromSketch(
-  sketch: LayoutSketch,
-  zones: FunctionalZone[],
-  primaryId: string,
-): ZonePlan {
-  const bySlotZone = new Map<FunctionalZoneType, LocalRect>();
-
-  if (sketch.terrace) bySlotZone.set('terrace', sketch.terrace);
-  if (sketch.lawn?.kind === 'rect') bySlotZone.set('lawn', sketch.lawn.rect);
-
-  for (const slot of sketch.slots) {
-    const type = zoneOfSlot(slot.kind);
-    if (bySlotZone.has(type)) continue;
-    const half = { width: slot.maxSize.width / 2, depth: slot.maxSize.depth / 2 };
-    bySlotZone.set(type, {
-      u0: slot.anchor.u - half.depth,
-      u1: slot.anchor.u + half.depth,
-      v0: slot.anchor.v - half.width,
-      v1: slot.anchor.v + half.width,
-    });
-  }
-
-  return {
-    zones: zones.map((zone) => ({ ...zone, rect: zone.rect ?? bySlotZone.get(zone.type) ?? null })),
-    adjacency: adjacencyOf(zones, primaryId),
-    primaryId,
-  };
 }
 
 /**
@@ -181,14 +77,6 @@ export function adjacencyOf(zones: FunctionalZone[], primaryId: string): [string
   }
 
   return pairs;
-}
-
-/** `params` with only the archetype's own defaults, for a composition that varies on nothing. */
-export function onlyDefaults(
-  id: LayoutArchetypeId,
-  base: Omit<CandidateParams, 'archetype'>,
-): CandidateParams[] {
-  return [{ archetype: id, ...base }];
 }
 
 /** Whether the site gives this composition the room it needs, as a plain sentence. */

@@ -1,21 +1,8 @@
-import type { CandidateParams, FunctionalZone, SiteAnalysis } from '../../design/types.js';
+import type { CandidateParams, SiteAnalysis } from '../../design/types.js';
 import { isStronglyLinear } from '../../design/site-analysis.js';
-import {
-  LAWN_FLOOR,
-  lawnEnd,
-  lawnStart,
-  terraceDepth,
-  terraceRect,
-  type Room,
-  type SketchRequest,
-} from '../../layout/sketch.js';
-import type { GeometryLanguage, StyleDirection } from '@garden-studio/schema';
+import { LAWN_FLOOR, lawnEnd, lawnStart, terraceDepth } from '../../layout/sketch.js';
 import { composed } from './composed.js';
-import type { LayoutSketch } from '../../layout/sketch.js';
-import { curved } from '../../layout/templates/curved.js';
-import { formal } from '../../layout/templates/formal.js';
-import { rectilinear } from '../../layout/templates/rectilinear.js';
-import { clampRect, lawnDepthBehindTerrace, SHALLOW_LAWN, withZoneIds } from './shared.js';
+import { lawnDepthBehindTerrace, SHALLOW_LAWN } from './shared.js';
 import { defaultParams, type LayoutArchetype } from './types.js';
 
 /**
@@ -26,27 +13,11 @@ import { defaultParams, type LayoutArchetype } from './types.js';
  * Here each answers for itself when it suits a plot and when it does not, which is the whole point:
  * a formal axis on a nine-metre-wide courtyard was never a worse plan, it was the wrong one.
  *
- * **They are composed now, not drawn.** Each says only what is particular to it — which shape
- * language it speaks — and `design/composition/` does the rest in the order a designer would: the
- * lawn is reserved first, the rooms go in bays round it, one route runs down a corridor past them,
- * something terminates the view. The hand-drawn templates survive for one case, the courtyard, which
- * has no lawn to compose round; `golden.test.ts` still pins them for exactly that reason.
+ * **They are composed, not drawn.** Each says only what is particular to it — which shape language
+ * it speaks — and `design/composition/` does the rest in the order a designer would: the lawn is
+ * reserved first, the rooms go in bays round it, one route runs down a corridor past them,
+ * something terminates the view. Where that declines, the courtyard draws (`composed.ts`).
  */
-
-/**
- * A composed sketch, or the hand-drawn template where the composition declines — a courtyard, or a
- * plot that cannot hold what the brief most wants round a lawn. See `composed.ts`.
- */
-function classic(
-  id: LayoutArchetype['id'],
-  languages: GeometryLanguage[] | ((style: StyleDirection | null) => GeometryLanguage[]),
-  template: (request: SketchRequest, room: Room, params: CandidateParams) => LayoutSketch,
-): Pick<LayoutArchetype, 'sketch' | 'zonePattern' | 'languages'> {
-  return composed(id, languages, {
-    sketch: (request, room, _plan, params) => withZoneIds(template(request, room, params)),
-    zonePattern: lawnPlanZones,
-  });
-}
 
 /** A plot must be at least this deep behind the doors for an axis to be a view rather than a step. */
 const AXIS_MIN_DEPTH = 8;
@@ -79,32 +50,6 @@ function base(
   tone: string,
 ): Pick<LayoutArchetype, 'id' | 'name' | 'summary' | 'tone'> {
   return { id, name, summary, tone };
-}
-
-/**
- * The zone rectangles a terrace-and-lawn plan implies, derived from the same helpers the template
- * uses so the plan and the sketch cannot disagree about where the lawn starts.
- */
-function lawnPlanZones(
-  zones: FunctionalZone[],
-  room: Room,
-  params: CandidateParams,
-  request: SketchRequest,
-): FunctionalZone[] {
-  const terrace = terraceRect(request, room, params.terraceDepth);
-  const start = lawnStart(request.scale, room.uMax, terrace.u1);
-  const end = lawnEnd(request.scale, room.uMax, terrace.u1);
-
-  return zones.map((zone) => {
-    if (zone.type === 'terrace') return { ...zone, rect: terrace };
-    if (zone.type === 'lawn') {
-      return {
-        ...zone,
-        rect: clampRect({ u0: start, u1: end, v0: room.vMin, v1: room.vMax }, room),
-      };
-    }
-    return zone;
-  });
 }
 
 export const terraceAndLawn: LayoutArchetype = {
@@ -203,13 +148,10 @@ export const terraceAndLawn: LayoutArchetype = {
    * planting set into its opposite corner, balanced rather than mirrored. Every other style keeps
    * the plain rectilinear plan.
    */
-  ...classic(
-    'terrace_and_lawn',
-    (style) =>
-      style === 'modern'
-        ? ['asymmetric_geometric', 'rectilinear']
-        : ['rectilinear', 'asymmetric_geometric'],
-    rectilinear,
+  ...composed('terrace_and_lawn', (style) =>
+    style === 'modern'
+      ? ['asymmetric_geometric', 'rectilinear']
+      : ['rectilinear', 'asymmetric_geometric'],
   ),
 };
 
@@ -259,7 +201,7 @@ export const sweepingLawn: LayoutArchetype = {
     return variants;
   },
 
-  ...classic('sweeping_lawn', ['soft_organic'], curved),
+  ...composed('sweeping_lawn', ['soft_organic']),
 };
 
 export const formalAxis: LayoutArchetype = {
@@ -347,7 +289,7 @@ export const formalAxis: LayoutArchetype = {
     return variants;
   },
 
-  ...classic('formal_axis', ['formal_symmetric'], formal),
+  ...composed('formal_axis', ['formal_symmetric']),
 };
 
 function refuseSmall(site: SiteAnalysis): { score: number; reasons: string[] } {

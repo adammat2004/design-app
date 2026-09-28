@@ -10,8 +10,6 @@ import { ARCHETYPES } from './archetypes.js';
 import { resolveConstraints } from './constraints.js';
 import { furnishRoom } from './furnish.js';
 import { circulationFor, roomSurface, wantsLoungeRoom } from './room-policy.js';
-import { designedBeds } from './layout/beds.js';
-import type { SketchRequest } from './layout/sketch.js';
 
 const brief = {
   purpose: '',
@@ -118,47 +116,4 @@ describe('furnished rooms', () => {
     ).toEqual(['fire-pit', 'bench', 'bench']);
     expect(make({ kind: 'point', at: { x: 0, y: 0 }, radius: 1.2 }, 'firePit')).toHaveLength(1);
   });
-});
-
-describe('designed planting bays', () => {
-  const request: SketchRequest = {
-    features: ['seating'],
-    scale: 1,
-    style: 'modern',
-    lawnAllowed: true,
-    gateSide: 'right',
-    houseWallLength: 6,
-    doorWidth: 2.4,
-  };
-  for (const width of [4, 6, 12, 22])
-    for (const template of ['rectilinear', 'curved', 'formal'] as const) {
-      it(`keeps a useful centre in a ${width} m ${template} garden`, () => {
-        const room = { uMin: 0, uMax: 18, vMin: -width / 2, vMax: width / 2 };
-        const terrace = { u0: 0, u1: 3, v0: -width / 2 + 0.2, v1: width / 2 - 0.2 };
-        const beds = designedBeds(request, room, terrace, template);
-        expect(designedBeds(request, room, terrace, template)).toEqual(beds);
-        const outlines = beds.map((bed) =>
-          bed.shape.kind === 'polygon'
-            ? bed.shape.points.map((p) => ({ x: p.v, y: p.u }))
-            : geometryOutline({
-                kind: 'polygon',
-                cornerRadius: 0,
-                points: [
-                  { x: bed.shape.rect.v0, y: bed.shape.rect.u0 },
-                  { x: bed.shape.rect.v1, y: bed.shape.rect.u0 },
-                  { x: bed.shape.rect.v1, y: bed.shape.rect.u1 },
-                  { x: bed.shape.rect.v0, y: bed.shape.rect.u1 },
-                ],
-              }),
-        );
-        const centre = geometryOutline({
-          kind: 'rect',
-          centre: { x: 0, y: 8 },
-          width: Math.min(2, width * 0.3),
-          depth: 3,
-          rotation: 0,
-        });
-        for (const ring of outlines) expect(polygonsIntersect(ring, centre)).toBe(false);
-      });
-    }
 });

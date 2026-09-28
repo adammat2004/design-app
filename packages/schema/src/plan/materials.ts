@@ -45,6 +45,8 @@ export const MaterialIdSchema = z.enum([
   'dark-stained-timber',
   'hardwood',
   'powder-coated-steel',
+  'aluminium-dark',
+  'aluminium-light',
   // water-feature
   'naturalistic-pond',
   'formal-pool',
@@ -128,6 +130,13 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'dark-stained-timber', label: 'Dark-stained timber', cost: 2 },
     { id: 'hardwood', label: 'Hardwood', cost: 4 },
     { id: 'powder-coated-steel', label: 'Powder-coated steel', cost: 4 },
+    /*
+     * The two frames a modern pergola or gazebo is actually sold in. Last in the list on purpose:
+     * `materialFor` falls back to the first permitted entry, and the generator's own structure
+     * lists name their materials explicitly, so appending these changes no generated plan.
+     */
+    { id: 'aluminium-dark', label: 'Dark aluminium', cost: 3 },
+    { id: 'aluminium-light', label: 'Light aluminium', cost: 3 },
   ],
   /*
    * What furniture is made of. Never laid by area, so these never reach the schedule's unit counts

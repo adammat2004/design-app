@@ -8,6 +8,12 @@ import {
   PLANT_CATALOGUE,
   associatePlants,
   isPlantSymbol,
+  mergeStructureConfig,
+  structureDefinitionFor,
+  applyStructurePreset,
+  heldToLimits,
+  planStructureResize,
+  structureConflicts,
   materialisedRuns,
   resolveEdges,
   styleEdgeProduct,
@@ -22,9 +28,11 @@ import {
   edgePlanOf,
   type EdgeDimension,
   type EdgeTreatment,
+  type StructureConfigPatch,
+  type StructureResizeRequest,
+  type StructureResizeResult,
   type SymbolId,
 } from '@garden-studio/schema';
-import type { Maturity } from '@/lib/render/scene';
 import type {
   DesignEvent,
   DesignRevisionRecord,
@@ -143,6 +151,11 @@ export interface EdgeEditState {
   hoveredRunId: string | null;
 }
 
+/** Which structure the 3D editor has open. */
+export interface StructureEditState {
+  elementId: string;
+}
+
 interface PlanEditorState {
   past: PlanEditorDraft[];
   present: PlanEditorDraft;
@@ -175,20 +188,7 @@ interface PlanEditorState {
   /** Graph paper on or off. A view preference, so it never enters the undo history. */
   gridVisible: boolean;
   /**
-   * How grown-in Visualise draws the planting.
-   *
-   * A view preference beside `gridVisible`, and deliberately **not** on the document. It changes
-   * how the picture is drawn and nothing about the design: no geometry moves, no area changes, no
-   * quantity is affected, and the schedule on step 6 cannot see it. Nothing that can disagree with
-   * the plan it summarises is worth persisting — the same argument the review screen makes for
-   * storing nothing.
-   *
-   * It lives here rather than in the panel so that Visualise and the PNG export agree about which
-   * garden they are drawing.
-   */
-  maturity: Maturity;
-  /**
-   * Whether the drawing casts shadows. A view preference beside `gridVisible` and `maturity`.
+   * Whether the drawing casts shadows. A view preference beside `gridVisible`.
    *
    * On by default: a garden whose objects are not attached to the ground reads as a diagram, and
    * since the conventional light landed every plan can draw them rather than only the ones that
@@ -199,7 +199,6 @@ interface PlanEditorState {
    * nothing about the geometry, the areas or the schedule can see it.
    */
   shadowsVisible: boolean;
-  previewMinutes: number | null;
   /**
    * Whether the plan is annotated.
    *
@@ -234,6 +233,16 @@ interface PlanEditorState {
    * preference has; the one that bites is `ephemeralState()`, or the tab survives a reload.
    */
   edgeEdit: EdgeEditState | null;
+  /**
+   * The focused 3D structure editor, or null when the plan is showing.
+   *
+   * A workspace state rather than a route, deliberately: the editor keeps its undo history, its
+   * gesture-gated autosave, the canvas's viewport and the assistant's session, because nothing is
+   * unmounted. It edits the same `DesignElement` the plan does — there is no draft copy — so the
+   * plan behind it is always already up to date. Ephemeral, with the five edit points every view
+   * preference has, `ephemeralState()` included.
+   */
+  structureEdit: StructureEditState | null;
   lastSavedAt: number;
 
   seedFrom: (concept: GeneratedConcept) => void;
@@ -246,6 +255,11 @@ interface PlanEditorState {
   replaceSymbol: (id: string, symbol: SymbolId, plantId?: string) => void;
   setStatus: (id: string, status: DesignElement['status']) => void;
   resizeElementLive: (id: string, size: Partial<{ width: number; depth: number }>) => void;
+  /**
+   * A typed width or depth: one resize about the centre, keeping the rotation, with one undo entry.
+   * The 2D inspector and the 3D editor both call this, so there is one way a structure is resized.
+   */
+  setSize: (id: string, size: Partial<{ width: number; depth: number }>) => void;
   rotateElementLive: (id: string, degrees: number) => void;
   nudgeSelection: (dx: number, dy: number) => void;
 
@@ -256,6 +270,27 @@ interface PlanEditorState {
 
   openEdgeEdit: (hostId: string) => void;
   closeEdgeEdit: () => void;
+  /** Opens the 3D editor on a configurable structure, selecting it. Refused for anything else. */
+  openStructureEdit: (id: string) => void;
+  closeStructureEdit: () => void;
+  /** A change to a structure's roof, sides, lighting or preset. Never its footprint. */
+  setStructure: (id: string, patch: StructureConfigPatch) => void;
+  /**
+   * A structure given a preset's whole look — frame, roof, sides, lighting and height — as one undo
+   * entry. Never its size or its place.
+   */
+  setStructurePreset: (id: string, presetId: string) => void;
+  /**
+   * A structure resized as a design decision: it keeps the side it is against, stays inside the
+   * sizes it is made in, and is applied (one undo entry) only when it runs into nothing. The result
+   * is returned rather than stored, so a caller can show what is in the way and what would work.
+   */
+  resizeStructure: (id: string, request: StructureResizeRequest) => StructureResizeResult;
+  /**
+   * One of the alternatives a blocked resize offered, checked again against the plan as it is now
+   * and applied as one undo entry. False when the plan has changed underneath it.
+   */
+  applyStructureCandidate: (id: string, candidate: DesignElement) => boolean;
   selectEdgeRun: (runId: string | null) => void;
   hoverEdgeRun: (runId: string | null) => void;
   /** Auto, None or Custom. Entering Custom materialises what Auto was drawing. */
@@ -290,8 +325,6 @@ interface PlanEditorState {
   toggleSnap: () => void;
   toggleGrid: () => void;
   toggleShadows: () => void;
-  setMaturity: (maturity: Maturity) => void;
-  setPreviewMinutes: (minutes: number | null) => void;
   toggleLabels: () => void;
   toggleZones: () => void;
   toggleDimensions: () => void;
@@ -340,6 +373,11 @@ export function edgeContextNow(): { boundary: Point[]; house?: Point[] } {
   return { boundary: boundaryNow(), ...(house ? { house } : {}) };
 }
 
+
+/** What a structure's resize measures against, read live. */
+export function structureContextNow(elements: DesignElement[]) {
+  return { elements, boundary: boundaryNow(), house: housePolygonNow() };
+}
 
 /**
  * What a run added by hand is made of, before the user picks.
@@ -564,9 +602,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     placingPlantId: null,
     snapEnabled: true,
     gridVisible: false,
-    maturity: 'mature',
     shadowsVisible: true,
-    previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,
@@ -575,6 +611,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     clash: null,
     gestureSnapshot: null,
     edgeEdit: null,
+    structureEdit: null,
     lastSavedAt: Date.now(),
 
     /**
@@ -621,6 +658,8 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         selectedId: id,
         clash: null,
         edgeEdit: state.edgeEdit && state.edgeEdit.hostId === id ? state.edgeEdit : null,
+        structureEdit:
+          state.structureEdit && state.structureEdit.elementId === id ? state.structureEdit : null,
       })),
 
     addElement: (category, at) => {
@@ -732,14 +771,14 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       applyLive(id, (element) => {
         if (element.shape.kind !== 'rect') return element;
 
-        return {
-          ...element,
-          shape: {
-            ...element.shape,
-            width: Math.max(MIN_ELEMENT_SIDE, size.width ?? element.shape.width),
-            depth: Math.max(MIN_ELEMENT_SIDE, size.depth ?? element.shape.depth),
-          },
+        const wanted = {
+          width: Math.max(MIN_ELEMENT_SIDE, size.width ?? element.shape.width),
+          depth: Math.max(MIN_ELEMENT_SIDE, size.depth ?? element.shape.depth),
         };
+        // A pergola dragged by its handles stops at the largest one made, as a typed size does.
+        const definition = structureDefinitionFor(element);
+        const next = definition ? heldToLimits(definition, element.shape, wanted) : wanted;
+        return { ...element, shape: { ...element.shape, ...next } };
       }),
 
     rotateElementLive: (id, degrees) =>
@@ -801,6 +840,61 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       ),
 
     closeEdgeEdit: () => set({ edgeEdit: null }),
+
+    /* ---- the 3D structure editor ---- */
+
+    openStructureEdit: (id) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element || !structureDefinitionFor(element)) return;
+      set({ selectedId: id, edgeEdit: null, clash: null, structureEdit: { elementId: id } });
+    },
+
+    closeStructureEdit: () => set({ structureEdit: null, clash: null }),
+
+    /*
+     * No geometry check, because nothing here can move anything: the configuration has nowhere to
+     * put a position or a size. Width and depth go through `setSize`, height through `setHeight`
+     * and the frame through `setMaterial` — the same actions the plan's inspector uses.
+     */
+    setStructure: (id, patch) =>
+      commitElement(
+        id,
+        (element) =>
+          structureDefinitionFor(element)
+            ? { ...element, structure: mergeStructureConfig(element.structure, patch) }
+            : element,
+        { checkGeometry: false },
+      ),
+
+    // A preset never moves anything, so like `setStructure` it needs no geometry check.
+    setStructurePreset: (id, presetId) =>
+      commitElement(id, (element) => applyStructurePreset(element, presetId), { checkGeometry: false }),
+
+    resizeStructure: (id, request) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element) return { status: 'unsupported' };
+      const result = planStructureResize(element, request, structureContextNow(get().present.elements));
+      if (result.status === 'ok') {
+        get().beginGesture();
+        applyLive(id, () => result.element);
+        get().endGesture();
+      } else if (result.status === 'blocked') {
+        // Nothing was applied, so an older refusal would now describe an edit that did not happen.
+        set({ clash: null });
+      }
+      return result;
+    },
+
+    applyStructureCandidate: (id, candidate) => {
+      const elements = get().present.elements;
+      const element = elements.find((item) => item.id === id);
+      if (!element || candidate.id !== id) return false;
+      if (structureConflicts(element, candidate, structureContextNow(elements)).length) return false;
+      get().beginGesture();
+      applyLive(id, () => candidate);
+      get().endGesture();
+      return true;
+    },
 
     selectEdgeRun: (runId) =>
       set((state) => (state.edgeEdit ? { edgeEdit: { ...state.edgeEdit, selectedRunId: runId } } : state)),
@@ -964,7 +1058,10 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         ...draft,
         elements: draft.elements.filter((candidate) => candidate.id !== id),
       }));
-      set((state) => ({ selectedId: state.selectedId === id ? null : state.selectedId }));
+      set((state) => ({
+        selectedId: state.selectedId === id ? null : state.selectedId,
+        structureEdit: state.structureEdit?.elementId === id ? null : state.structureEdit,
+      }));
       /*
        * The most informative event there is: the generator put something here and a person took it
        * straight back out. Recorded with the category rather than the name, because "people delete
@@ -982,6 +1079,12 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      * The same bracket is what makes an applied AI diff a single undo step.
      */
     beginGesture: () => set((state) => ({ gestureSnapshot: state.present })),
+
+    setSize: (id, size) => {
+      get().beginGesture();
+      get().resizeElementLive(id, size);
+      get().endGesture();
+    },
 
     endGesture: (options = {}) =>
       set((state) => {
@@ -1091,8 +1194,6 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     toggleShadows: () => set((state) => ({ shadowsVisible: !state.shadowsVisible })),
 
-    setMaturity: (maturity) => set({ maturity }),
-    setPreviewMinutes: (minutes) => set({ previewMinutes: minutes === null ? null : Math.max(0, Math.min(1425, minutes)) }),
 
     toggleLabels: () => set((state) => ({ labelsVisible: !state.labelsVisible })),
 
@@ -1321,6 +1422,9 @@ function sameElements(a: PlanEditorDraft, b: PlanEditorDraft): boolean {
       element.elevation === other.elevation &&
       element.hidden === other.hidden &&
       element.edging === other.edging &&
+      element.height === other.height &&
+      element.symbol === other.symbol &&
+      JSON.stringify(element.structure ?? null) === JSON.stringify(other.structure ?? null) &&
       JSON.stringify(element.shape) === JSON.stringify(other.shape) &&
       /*
        * Anything a drag can touch has to be in this comparison. An edge handle drags a run without
@@ -1372,9 +1476,7 @@ function ephemeralState() {
     placingPlantId: null as string | null,
     snapEnabled: true,
     gridVisible: false,
-    maturity: 'mature' as Maturity,
     shadowsVisible: true,
-    previewMinutes: null,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,
@@ -1383,6 +1485,7 @@ function ephemeralState() {
     clash: null as string | null,
     gestureSnapshot: null as PlanEditorDraft | null,
     edgeEdit: null as EdgeEditState | null,
+    structureEdit: null as StructureEditState | null,
   };
 }
 

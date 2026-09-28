@@ -281,6 +281,11 @@ export interface CandidateParams {
    * which suits a plot is something the scorer can measure and a rule cannot.
    */
   framed?: boolean;
+  /**
+   * Drawn as the last resort, where no composition worth trying composed: a courtyard that reports
+   * what it could not seat rather than declining, because there is nothing left to decline to.
+   */
+  lastResort?: boolean;
 }
 
 /**

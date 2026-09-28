@@ -152,6 +152,7 @@ function propertyChanges(previous: DesignElement, next: DesignElement): Record<s
     'plantingStyle',
     'zone',
     'hidden',
+    'structure',
   ] as const;
 
   const changes: Record<string, unknown> = {};
@@ -160,8 +161,8 @@ function propertyChanges(previous: DesignElement, next: DesignElement): Record<s
 }
 
 /**
- * `edges` is the one property that is a structure rather than a scalar, and compared by identity it
- * is "changed" on every line of every diff — so every material swap would arrive with a second,
+ * `edges` and `structure` are the properties that are objects rather than scalars, and compared by
+ * identity either is "changed" on every line of every diff — so every material swap would arrive with a second,
  * empty `setProperty` claiming the edging moved. Compared by value, as corners already are.
  */
 function sameValue(a: unknown, b: unknown): boolean {

@@ -113,7 +113,8 @@ describe('cheaperAlternative', () => {
   it('steps down rather than straight to the cheapest', () => {
     const cheaper = cheaperAlternative(element('structure', 'hardwood'));
 
-    expect(cheaper!.cost).toBe(2);
+    // Hardwood is 4; the aluminium frames at 3 are the dearest of the cheaper, not softwood at 1.
+    expect(cheaper!.cost).toBe(3);
   });
 
   it('has nothing to offer when the material is already the cheapest', () => {

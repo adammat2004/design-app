@@ -13,7 +13,6 @@ import {
   CONTACT_SHADOW_ALPHA,
   CONTACT_SHADOW_OFFSET_RATIO,
   CONTACT_SHADOW_SCALE,
-  CONVENTIONAL_SHADOW_RATIO,
   SHADOW_TONE,
   cssToRgb,
   MODULE_HIGHLIGHT,
@@ -23,12 +22,11 @@ import {
 } from '../light';
 import type { PatternCanvas, PatternContext } from '../render-surface-pattern';
 import { symbolSprite } from './sprites';
+import { structurePlanDrawing } from './structure-plan';
 import {
   facesLight,
   gardenRoomParts,
-  gazeboRoof,
   glazingBars,
-  pergolaPosts,
   raisedBedRails,
   rectNormal,
   shedRoof,
@@ -84,13 +82,13 @@ export function drawSymbol(
 
   switch (symbol) {
     case 'pergola':
-      drawPergola(context, shape, pxPerMetre, light, toPx);
+      drawConfigurableStructure(context, element, pxPerMetre, light, toPx);
       return true;
     case 'shed':
       drawShed(context, element, shape, light, toPx, pxPerMetre);
       return true;
     case 'gazebo':
-      drawGazebo(context, element, shape, light, toPx);
+      drawConfigurableStructure(context, element, pxPerMetre, light, toPx);
       return true;
     case 'garden-room':
       drawGardenRoom(context, element, shape, light, pxPerMetre, toPx);
@@ -158,97 +156,52 @@ function tracePolygon(
 /** The floor for drawing posts and beams individually: below it they merge into a block. */
 export const MIN_STRUCTURE_DETAIL_PX = 40;
 
-/**
- * How high a pergola's rafters are, in metres, for the shadow they throw.
- *
- * A constant rather than `heightFor(element)`, because this function is handed a *shape*: what it
- * draws is the same grid of rafters whatever the element's material, and a pergola is a pergola
- * height. It agrees with `MATERIAL_HEIGHTS`' own answer for one, which is the thing that matters —
- * the beams and the shadow the cast layer throws from them must not disagree about how high up
- * they are.
- */
-const PERGOLA_BEAM_HEIGHT = 2.4;
+/** Timber end-grain, for a raised bed's rails. */
+export const POST_TONE = '#5b4a36';
 
 /** How dark the slat shadows are. A convention, in the contact-shadow class, so always drawn. */
 const SLAT_SHADOW_ALPHA = 0.17;
 
-function drawPergola(
+/**
+ * A pergola or a gazebo, drawn from the same parts the 3D editor renders.
+ *
+ * **The striped shadow is the one thing that says "pergola" from above.** A pergola in plan is a
+ * grid of thin bars on whatever it stands on, and drawn alone that reads as a painted pattern — the
+ * rafters have no thickness on the page and nothing says they are two and a half metres over your
+ * head. The bars of shade beside them do. The shadow *is* the rafters translated, the construction
+ * `projectShadow` uses, so the stripes land under the structure and run out beyond it exactly as
+ * far as the height and the light say.
+ *
+ * Below `MIN_STRUCTURE_DETAIL_PX` only the roof is drawn: posts and rafters that close would merge
+ * into a block, which is the judgement `boundaryRuns` makes about fence posts.
+ */
+function drawConfigurableStructure(
   context: SymbolContext,
-  shape: RectShape,
+  element: DesignElement,
   pxPerMetre: number,
   light: Point,
   toPx: (point: Point) => Point,
 ): void {
-  if (Math.min(shape.width, shape.depth) * pxPerMetre < MIN_STRUCTURE_DETAIL_PX) return;
+  const drawing = structurePlanDrawing(element, light);
+  if (!drawing || element.shape.kind !== 'rect') return;
+  const detailed = Math.min(element.shape.width, element.shape.depth) * pxPerMetre >= MIN_STRUCTURE_DETAIL_PX;
 
-  const radians = (shape.rotation * Math.PI) / 180;
-  const count = Math.max(2, Math.ceil(shape.width / 0.35));
-
-  /*
-   * **The striped shadow, which is the one thing that says "pergola" from above.**
-   *
-   * A pergola in plan is a grid of thin bars on whatever it stands on, and drawn alone that reads
-   * as a painted pattern — the rafters have no thickness on the page and nothing says they are two
-   * and a half metres over your head. The bars of shade beside them do: it is the only cue at this
-   * scale, it is what a photograph of one actually shows, and it is why the reference's pergola
-   * reads instantly and ours did not.
-   *
-   * The shadow *is* the rafters translated, which is the same construction `projectShadow` uses —
-   * so no clipping and no second geometry: the stripes land under the structure and run out beyond
-   * it exactly as far as the height and the light say they should. A drawing convention rather than
-   * a solar claim, in the contact-disc class, so it is drawn whether or not the plan has a
-   * location.
-   */
-  const reach = PERGOLA_BEAM_HEIGHT * CONVENTIONAL_SHADOW_RATIO;
-  const offset = { x: -light.x * reach, y: -light.y * reach };
-
-  context.save();
-  context.globalAlpha = SLAT_SHADOW_ALPHA;
-  context.fillStyle = SHADOW_TONE;
-  for (let i = 0; i <= count; i += 1) {
-    const x = -shape.width / 2 + (shape.width * i) / count;
-    fillRing(
-      context,
-      rectToPolygon({
-        centre: {
-          x: shape.centre.x + x * Math.cos(radians) + offset.x,
-          y: shape.centre.y + x * Math.sin(radians) + offset.y,
-        },
-        width: 0.075,
-        depth: shape.depth,
-        rotation: shape.rotation,
-      }),
-      toPx,
-    );
-  }
-  context.restore();
-
-  for (let i = 0; i <= count; i += 1) {
-    const x = -shape.width / 2 + (shape.width * i) / count;
-    const centre = {
-      x: shape.centre.x + x * Math.cos(radians),
-      y: shape.centre.y + x * Math.sin(radians),
-    };
-    context.fillStyle = '#896542';
-    fillRing(
-      context,
-      rectToPolygon({ centre, width: 0.075, depth: shape.depth, rotation: shape.rotation }),
-      toPx,
-    );
-    context.fillStyle = '#cbaa7b';
-    fillRing(
-      context,
-      rectToPolygon({ centre, width: 0.035, depth: shape.depth, rotation: shape.rotation }),
-      toPx,
-    );
+  if (detailed) {
+    context.save();
+    context.globalAlpha = SLAT_SHADOW_ALPHA;
+    context.fillStyle = SHADOW_TONE;
+    for (const ring of drawing.slatShadows) fillRing(context, ring, toPx);
+    context.restore();
   }
 
-  context.fillStyle = POST_TONE;
-  for (const post of pergolaPosts(shape)) fillRing(context, post, toPx);
+  for (const piece of drawing.pieces) {
+    if (!detailed && piece.group !== 'roof') continue;
+    context.globalAlpha = piece.alpha;
+    context.fillStyle = piece.fill;
+    fillRing(context, piece.ring, toPx);
+  }
+  context.globalAlpha = 1;
 }
-
-/** Posts read as darker timber end-grain; one tone for every pergola. */
-const POST_TONE = '#5b4a36';
 
 function drawShed(
   context: SymbolContext,
@@ -277,19 +230,16 @@ function drawShed(
   context.globalAlpha = 1;
 
   /*
-   * **`skin-roof-felt` is deliberately not drawn here, and that is a finding rather than an
-   * omission.**
+   * **No photograph of felt is drawn here, and that is a finding rather than an omission.**
    *
-   * It was consumed — tiled over the two pitches at `ROOF_ALPHA`, exactly as `skin-roof-slate` is
-   * on the house — and looked at, and it is worse than the procedural courses below. The reason is
-   * scale: the family is quoted at 1.5 m, a shed roof is about 2.5 × 2 m, so a whole building is
-   * two tiles by two and what reads is not felt but a dark grey slab quartered by its own seams.
-   * The house's roof is fifteen times the area and the same tile disappears into it.
+   * One was generated and tiled over the two pitches at `ROOF_ALPHA`, exactly as `skin-roof-slate`
+   * is on the house — and it was worse than the procedural courses below. The reason is scale: the
+   * family was quoted at 1.5 m, a shed roof is about 2.5 × 2 m, so a whole building is two tiles by
+   * two and what reads is not felt but a dark grey slab quartered by its own seams.
    *
    * The courses below are drawn in *metres* and so are right at every size, which is the same
    * argument `drawnJointPx` makes about a joint. A photograph earns its place where it is small
-   * against the thing it covers; where it is not, geometry wins. Left in `OUTBUILDING_ROOF_SKIN`
-   * and in the library, because a re-cut at 0.5 m would change the answer.
+   * against the thing it covers; where it is not, geometry wins.
    */
 
   // Roofing courses and a narrow eave band give the two slopes physical scale.
@@ -329,30 +279,6 @@ function drawShed(
   context.moveTo(a.x, a.y);
   context.lineTo(b.x, b.y);
   context.stroke();
-}
-
-function drawGazebo(
-  context: SymbolContext,
-  element: DesignElement,
-  shape: RectShape,
-  light: Point,
-  toPx: (point: Point) => Point,
-): void {
-  const { lit, unlit } = roofTones(element);
-
-  const normals: Point[] = [
-    { x: 0, y: -1 },
-    { x: 1, y: 0 },
-    { x: 0, y: 1 },
-    { x: -1, y: 0 },
-  ];
-
-  context.globalAlpha = ROOF_ALPHA;
-  gazeboRoof(shape).forEach((facet, index) => {
-    context.fillStyle = facesLight(rectNormal(shape, normals[index]!), light) ? lit : unlit;
-    fillRing(context, facet, toPx);
-  });
-  context.globalAlpha = 1;
 }
 
 /** How much a roof's pitches cover the boards beneath. Under one, so a shed still reads as timber. */

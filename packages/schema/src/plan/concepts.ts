@@ -1,3 +1,4 @@
+import { StructureConfigSchema } from './structure/config.js';
 import { z } from 'zod';
 import { PointSchema, polygonArea, type Point } from '../geometry/primitives.js';
 import {
@@ -243,6 +244,16 @@ export const DesignElementSchema = z.object({
   plantingStyle: z.string().optional(),
   /** Hidden from the plan and from the area summary, without being deleted. */
   hidden: z.boolean().optional(),
+  /**
+   * How a configurable structure — a pergola, a gazebo — is built: its roof, side screens, lighting
+   * and preset. See `plan/structure/config.ts`.
+   *
+   * **Never where it is or how big it is**: that is `shape`, and its height is `height`, so the 3D
+   * editor writes the same rect the 2D handles drag and there is nothing to drift. Optional, so every
+   * stored plan and every generated concept resolves to the definition's defaults through
+   * `resolveStructure` — an addition with a default and no `PLAN_DOCUMENT_VERSION` bump.
+   */
+  structure: StructureConfigSchema.optional(),
 });
 export type DesignElement = z.infer<typeof DesignElementSchema>;
 

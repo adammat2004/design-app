@@ -4,18 +4,19 @@ import {
   type FunctionalZoneType,
   type GeometryLanguage,
   type GardenBrief,
+  type MaintenanceLevel,
   type PrivacyStrategy,
 } from '@garden-studio/schema';
 import { MIN_FILL_SIDE } from '../fill-limits.js';
 import { hostFloor } from '../furnishings.js';
 
 /**
- * What a template hands back: the plan in the frame's own metres, before anything is fitted.
+ * What a composition hands back: the plan in the frame's own metres, before anything is fitted.
  *
  * A sketch is opinion, not geometry of record. It says where the terrace goes, what shape the
  * lawn is, and which *slots* the requested features should be tried in, in order. `fit.ts` turns
  * each slot into a legal rectangle or gives up; the sketch never touches the boundary or the
- * validator, which is what keeps the three templates pure functions a test can run without a
+ * validator, which is what keeps the composition layer pure functions a test can run without a
  * database.
  */
 
@@ -107,7 +108,7 @@ export interface SketchPath {
   /** Intermediate points for a curved or dog-legged route, in the frame. */
   via?: LocalPoint[];
   name: string;
-  /** Absent on a hand-drawn composition, which reads as `secondary` and may cross the lawn. */
+  /** Absent reads as `secondary`. */
   tier?: RouteTier;
   purpose?: string;
   /**
@@ -119,12 +120,12 @@ export interface SketchPath {
 }
 
 /**
- * What a composed sketch knows that a hand-drawn one does not.
+ * What the composition decided that realisation has to honour.
  *
- * Present only on a sketch produced by `design/composition/`. Its presence is what switches the
- * realisation to the composed rules: the open space was reserved first, so beds are cut round the
- * lawn rather than the lawn round the beds; a primary route may not cross the lawn; trees are
- * planted where the composition put them for the reason it gave, and nowhere else.
+ * The open space was reserved first, so beds are cut round the lawn rather than the lawn round the
+ * beds; a primary route may not cross the lawn; trees are planted where the composition put them
+ * for the reason it gave, and nowhere else. The hand-drawn templates, which produced sketches
+ * without any of this, are gone.
  */
 export interface ComposedFacts {
   language: GeometryLanguage;
@@ -134,11 +135,16 @@ export interface ComposedFacts {
   bedPurposes: string[];
   /** The decisions the composition took, each a sentence a person could disagree with. */
   decisions: { kind: string; text: string }[];
+  /**
+   * Drawn by the courtyard because the archetype's own composition declined. Still a composition —
+   * every room in a bay, nothing sampled — but not the one it is named for, so the candidate loop
+   * treats the archetype as having declined.
+   */
+  lastResort?: boolean;
 }
 
 export interface LayoutSketch {
   beds: { name: string; shape: LocalShape }[];
-  template: TemplateId;
   terrace: LocalRect | null;
   lawn: LocalShape | null;
   /** What the lawn panel is made of: grass, or gravel where grass is forbidden. */
@@ -156,11 +162,12 @@ export interface LayoutSketch {
   axisStops?: number[];
   /** True when the room is too shallow for a lawn: terrace only. */
   courtyard: boolean;
-  /** Set by a composed sketch. See `ComposedFacts`. */
-  composed?: ComposedFacts;
+  /**
+   * What the composition decided that realisation must honour. Every sketch is composed now — the
+   * hand-drawn templates that once produced sketches without it are gone — so this is always set.
+   */
+  composed: ComposedFacts;
 }
-
-export type TemplateId = 'rectilinear' | 'curved' | 'formal';
 
 export interface SketchRequest {
   features: DesiredFeature[];
@@ -168,6 +175,12 @@ export interface SketchRequest {
   scale: number;
   style: GardenBrief['style'];
   lawnAllowed: boolean;
+  /**
+   * The upkeep the concept is held to, as `resolveConstraints` settled it. Read where a composition
+   * decides how much to plant rather than merely where: a low-upkeep courtyard keeps its planting to
+   * the wall opposite the doors.
+   */
+  maintenance?: MaintenanceLevel;
   /** Which side of the frame the gate is on, in `v`: negative is left when looking out. */
   gateSide: 'left' | 'right' | null;
   houseWallLength: number;
@@ -213,6 +226,11 @@ export interface SketchRequest {
    * not mostly in shade.
    */
   shade?: LocalPoint[][] | null;
+  /**
+   * Whether the budget allows a second seat for the sun where the terrace is in the shade. The
+   * composition decides whether one is needed, against the terrace it drew; this says whether it may.
+   */
+  sunSeat?: boolean;
 }
 
 /**
@@ -225,6 +243,19 @@ export interface SketchRequest {
  * because the composition, the preview and the realisation must agree about it or they furnish the
  * terrace with one thing and reserve a bay for the other.
  */
+/**
+ * The purpose a composition gives the bay it reserved for a seat in the sun. That bay is for the
+ * seat and nothing else: a requested feature fitted into it first — which is what the fitter's own
+ * ladder did, since the bay is a far room like any other — leaves the seat nowhere to go.
+ */
+export const SUN_SEAT = 'sun-seat';
+
+/** The purpose of the bay a destination garden reserves for a seat at its far end. */
+export const END_SEAT = 'end-seat';
+
+/** Bays reserved for a seat, which no requested feature may take. */
+export const RESERVED_SEATS: readonly string[] = [SUN_SEAT, END_SEAT];
+
 export function terraceClaim(
   features: readonly DesiredFeature[],
   primaryZone?: FunctionalZoneType | null,
@@ -412,25 +443,6 @@ export function lawnEnd(scale: number, roomDepth: number, terraceEnd: number): n
 }
 
 /**
- * Where a slot goes in the strip between the terrace and the far border.
- *
- * A far slot used to be anchored from the back fence alone — "2.3 m in from the border" — which
- * on a nine-metre garden with a four-metre terrace put the play area's anchor *inside* the
- * terrace, where no nudge could rescue it, and every plan that size lost its lawn feature to the
- * sampler. The slot is sized to what is actually free behind the terrace and its centre held in
- * that strip, so a shallow garden gets a smaller thing in the right place rather than nothing.
- */
-export function behindTerrace(
-  uNear: number,
-  uFar: number,
-  wantDepth: number,
-): { u: number; depth: number } {
-  const free = Math.max(0.4, uFar - uNear - 0.4);
-  const depth = Math.min(wantDepth, free);
-  return { u: uFar - depth / 2 - Math.min(0.2, (free - depth) / 2), depth };
-}
-
-/**
  * The terrace's depth out from the door: a room for a table, never most of the garden.
  *
  * Grows with the square root of the scale — a terrace on a big plot is bigger, not proportionally
@@ -533,25 +545,6 @@ export function terraceSlot(terrace: LocalRect, room: Room): Slot {
     anchor: rectCentre(terrace),
     maxSize: rectSize(terrace),
     minSize: terraceFloor(room),
-  };
-}
-
-/**
- * The slot at the end of the terrace, along the wall: the dining pergola. Its depth is never less
- * than the pergola's own floor, so a shallow terrace does not starve the pergola beside it — which
- * is how a one-metre terrace used to come with a one-and-a-half-metre pergola.
- */
-export function terraceEndSlot(terrace: LocalRect, side: 'left' | 'right', scale: number): Slot {
-  const T = terrace.u1 - terrace.u0;
-  return {
-    id: 'terrace-end',
-    kind: 'terrace-end',
-    anchor: {
-      u: terrace.u0 + T / 2,
-      v: side === 'left' ? terrace.v0 - 1.9 * scale : terrace.v1 + 1.9 * scale,
-    },
-    maxSize: { width: 3.6 * scale, depth: Math.max(PERGOLA_FLOOR.depth, T) },
-    minSize: PERGOLA_FLOOR,
   };
 }
 

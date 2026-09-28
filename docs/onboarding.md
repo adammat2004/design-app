@@ -15,8 +15,8 @@ one, and shows a schedule of materials.
 
 The one idea everything else rests on: **a design is real geometry, never a picture.** Every patio,
 lawn, tree and table is a polygon, rectangle, circle or line in metres, and that data is the source
-of truth. The 2D plan, the "Visualise" view, the PNG export and (soon) the AR view are all drawn
-_from_ it. That is why the app can measure areas, count slabs, check that nothing crosses the fence,
+of truth. The 2D plan, the focused 3D structure editor, the PNG export and (soon) the AR view are all
+drawn _from_ it. That is why the app can measure areas, count slabs, check that nothing crosses the fence,
 and why the AI can never place anything directly (more on that below).
 
 ## The repository
@@ -155,16 +155,21 @@ once, because they share the dev database and slow each other to a crawl.
 
 - **Konva** is the interactive canvas.
 - **Canvas2D** draws thumbnails and exports.
-- **PixiJS** draws the "Visualise" tab, a tilted 2.5D view that uses a fake-perspective trick, not
-  real 3D.
+- **PixiJS** composites the plan's ground and planting under the editor's Konva canvas.
+
+(The tilted 2.5D "Visualise" view was removed in September 2026.)
 
 They paint with about 200 AI-generated **images** (`apps/web/public/assets/`: top-down textures and
 sprites). **None of this is 3D, and none of it should be imported by the mobile app.** It is built
-around 2D canvases and the browser. Two things are reusable as data:
+around 2D canvases and the browser. Three things are reusable as data:
 
 - **the seamless ground textures** (`public/assets/plan/textures/tex-*`, `face-*`), which are exactly
   what a textured ground plane in AR needs;
-- **the pure geometry** in `packages/schema`.
+- **the pure geometry** in `packages/schema`;
+- **a configurable structure's parts** — `resolveStructure` → `structureParts` in
+  `packages/schema/src/plan/structure/`, the same boxes the web's 3D structure editor (React Three
+  Fiber) renders, with finishes shaped like `ARMaterial`. A pergola's `solid` node is those parts
+  through `boxMesh`. See "Structures in 3D" in `CLAUDE.md`.
 
 ## Conventions
 
@@ -184,6 +189,6 @@ Search for these headings, in this order:
    revisions, `geometryOutline`, rectangles being centre-anchored.
 3. **"Heights live in a manifest"** and **"`site.orientation` is read by the sun model"**: the
    vertical facts the AR builder will need.
-4. **"The render scene, and the two views"** and **"Visualise is elevated"**: how the 2D and 2.5D
-   views are built, useful as a contrast with real 3D.
+4. **"Structures in 3D"**: the web's 3D structure editor, the persisted `structure` configuration
+   and how the AR builder is meant to consume it.
 5. **"Traps already hit"**: environment gotchas (Postgres JIT, pnpm, Konva, jsdom).

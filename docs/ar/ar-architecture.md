@@ -326,7 +326,12 @@ WebP; check that Viro accepts WebP, and convert to PNG/JPG when copying them in 
   - textures ≤ 1024 px (plants 512).
 - Bundle the models in the app at first, which works offline and loads instantly. Move to downloaded
   files only when the app gets too big.
-- If a web 3D view is ever built, move the manifest to a shared package so both use the same files.
+- **A web 3D view now exists, for single structures** (Sep 2026): the structure editor in
+  `apps/web/src/components/structure-3d/`, fed by `apps/web/src/lib/structures/model-registry.ts`.
+  Today every structure there is procedural — `structureParts` from `packages/schema`, sized from the
+  rect — and structures stay `solid`s in the AR contract for the same reason. When production GLBs
+  arrive (for furniture keys, or to dress a structure's parts), move the manifest to a shared package
+  so the web and the phone use the same files and the same group → node naming.
 
 ## 10. Talking to the API (later)
 
@@ -391,7 +396,7 @@ Things to watch from the start:
 
 | Phase            | Mobile (B)                                                                                                                                                       | Web/API (A)                                                                                                  | Done when                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| **1. Spike**     | §5: Viro, dev build, pergola + cube at true scale, the four measurements                                                                                         | Fix the API's host binding; move the pure structure and roof geometry from `apps/web` into `packages/schema` | Scale within 3%, and a decision on Viro                 |
+| **1. Spike**     | §5: Viro, dev build, pergola + cube at true scale, the four measurements                                                                                         | Fix the API's host binding; ~~move the pure structure geometry into `packages/schema`~~ (done for pergola/gazebo: `plan/structure/parts.ts`); move the roof geometry | Scale within 3%, and a decision on Viro                 |
 | **2. Renderer**  | Draw every node kind from the sample garden; fallbacks for models; tap-and-turn; tabletop mode                                                                   | Start the builder (`PlanDocument → ARScene`) and generate scenes for the eleven fixture plans                | The sample and the generated scenes render on the phone |
 | **3. Placement** | Two-point house-wall alignment, nudge, confirm; test on the second platform                                                                                      | "Download AR scene" from the web; the phone opens `.ar.json` files                                           | A real design lined up in a real garden                 |
 | **4. Surfaces**  | Textures, translucency toggle, merged meshes                                                                                                                     | Levels, steps, edging, boundary kinds, house and roof in the builder                                         | Paths, patios and lawn read correctly outdoors          |

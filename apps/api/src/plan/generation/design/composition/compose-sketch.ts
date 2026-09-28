@@ -7,29 +7,22 @@ import {
   type Room,
   type Slot,
   type SketchPath,
-  type TemplateId,
 } from '../../layout/sketch.js';
-import type { GardenComposition, GeometryLanguage } from './types.js';
+import type { GardenComposition } from './types.js';
 
 /**
  * A composition, said in the vocabulary the rest of the pipeline already speaks.
  *
  * The contract below `LayoutSketch` — `fitInSlot`, the preview, the realisation, the adapters, the
- * scorer — does not change, which is what lets a composed archetype and a hand-drawn one be enumerated
- * side by side in one candidate field. What a composed sketch adds is `composed`: the facts the
+ * scorer — did not change when the plans stopped being hand-drawn, which is what let composed and
+ * hand-drawn archetypes be enumerated side by side while the one replaced the other. What a sketch
+ * carries beyond the old contract is `composed`: the facts the
  * realisation has to honour for the composition to survive being built — that the lawn was reserved
  * first, why each tree is where it is, what each bed is for.
  *
  * A bay becomes a slot of the same id, sized to the bay, with the bay's purpose. The corridors do not
  * appear at all: they are the gaps the beds were drawn round, and the routes are laid in them.
  */
-
-const TEMPLATE: Record<GeometryLanguage, TemplateId> = {
-  rectilinear: 'rectilinear',
-  soft_organic: 'curved',
-  formal_symmetric: 'formal',
-  asymmetric_geometric: 'rectilinear',
-};
 
 export function composeSketch(composition: GardenComposition, room: Room): LayoutSketch {
   const slots: Slot[] = [
@@ -63,7 +56,6 @@ export function composeSketch(composition: GardenComposition, room: Room): Layou
   );
 
   return {
-    template: TEMPLATE[composition.language],
     beds: beds.map((mass) => ({ name: mass.name, shape: mass.shape })),
     terrace: composition.terrace,
     lawn: composition.openSpace?.shape ?? null,

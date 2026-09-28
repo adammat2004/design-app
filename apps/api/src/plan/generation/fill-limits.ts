@@ -2,8 +2,8 @@
  * The smallest fill PostGIS will keep, shared by the query that enforces it and the sketch that
  * must respect it.
  *
- * A leaf module on purpose. `fill.service.ts` imports the database driver, and the templates in
- * `layout/` are pure functions a test runs without one — so the constant they both need lives
+ * A leaf module on purpose. `fill.service.ts` imports the database driver, and the composition
+ * layer is pure functions a test runs without one — so the constant they both need lives
  * here rather than in either. A bed sketched thinner than `MIN_FILL_SIDE` is not drawn thin; it
  * is silently thrown away by the sliver guard, which is how a small garden came out with a lawn,
  * a patio and nothing else.

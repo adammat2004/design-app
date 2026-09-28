@@ -8,14 +8,11 @@ import {
   type PlantingLayer,
   type Point,
 } from '@garden-studio/schema';
-import type { AssetCamera, AssetId } from '../materials/assets/asset-spec';
+import type { AssetId } from '../materials/assets/asset-spec';
 import { catalogueVariants } from '../materials/assets/catalogue';
-import { elevatedTwin } from '../materials/assets/material-assets';
 import { assetsMatching, type TaxonQuery } from '../materials/assets/taxonomy';
 import type { SurfaceLayer } from '../materials/layers';
-import { foldRotation } from '../materials/symbols/elevated';
-import { MATURITY } from './maturity';
-import type { Maturity, RenderPlant } from './scene';
+import type { RenderPlant } from './scene';
 import { layerForPlantingRole } from './visual-layer';
 import { plantingClusterAt } from './plant-clusters';
 
@@ -50,12 +47,10 @@ const INSTANCE_DENSITY = 0.8;
  * The bands in `SCHEMES` were authored for the *painted* bed, where a unit is a soft blob that
  * bleeds into its neighbours; read as real plants they are nursery sizes rather than mature ones —
  * a mass perennial at 0.4 to 0.7 m is a pot, where the hardy geranium or alchemilla it stands for
- * is 0.6 to 1.0 m across in its third year. The garden this app draws is the mature one: that is
- * what `maturity` means and what the whole planting model claims.
+ * is 0.6 to 1.0 m across in its third year. The garden this app draws is the mature one.
  *
  * Applied to the **drawn** spread only, after the clamp, and deliberately not to `cellSize`. The
- * sampler's world grid, every plant's identity and the `year-1 ⊆ year-3 ⊆ mature` nesting all key
- * on the band, so widening the band itself would move every plant in every saved plan and change
+ * sampler's world grid and every plant's identity key on the band, so widening the band itself would move every plant in every saved plan and change
  * what the generator places from the same layers. This moves nothing and only fills the gaps.
  *
  * At 1.45, with the density above, the model is 6 plants per m² at a mean 0.65 m rather than 10 at
@@ -106,15 +101,7 @@ export function buildPlants(
   layers: SurfaceLayer[],
   outline: Point[],
   exclusions: Point[][],
-  maturity: Maturity,
-  /**
-   * Which library to draw from. **Never inferred**: resolving a family and then translating it to
-   * its elevated twin is how `vis-*` art reached the 2D Plan once already, and nothing below this
-   * line can tell which view it is being built for.
-   */
-  camera: AssetCamera = 'elevated',
 ): RenderPlant[] {
-  const factors = MATURITY[maturity];
   const plants: RenderPlant[] = [];
 
   const understorey = understoreyLayer(bed, layers);
@@ -135,13 +122,12 @@ export function buildPlants(
     const seed = layer === understorey ? `${bed.id}:understorey` : index === 0 ? bed.id : `${bed.id}#${index}`;
 
     /*
-     * Density is the *only* thing maturity is allowed to change about the sampling, and it goes
-     * in as `share`. See `maturity.ts`: touching `spread` here would change `cellSize`, renumber
-     * the world grid and slide the entire bed as the slider moved.
+     * The presentation gain goes in as `share`, never as `spread`: touching `spread` would change
+     * `cellSize`, renumber the world grid and slide the entire bed.
      */
     const thinned: PlantingLayer = {
       ...layer.planting,
-      share: layer.planting.share * factors.density * INSTANCE_DENSITY,
+      share: layer.planting.share * INSTANCE_DENSITY,
     };
     const cell = cellSize(layer.planting);
     const visualLayer = layerForPlantingRole(layer.planting.role, taxonType(layer.planting));
@@ -160,12 +146,12 @@ export function buildPlants(
       const col = Math.floor(placement.at.x / cell);
       const row = Math.floor(placement.at.y / cell);
 
-      // Clamped into the material's own band before maturity scales it, as the painter does.
+      // Clamped into the material's own band, as the painter does.
       const drawn = Math.min(maxSize, Math.max(minSize, placement.spread));
       // Keep this middle-height layer in genuine planting bays. Narrow transition beds retain
       // their low infill, and real structural plants keep their own exclusion space.
       if (layer === understorey && distanceToEdge(placement.at, outline) < drawn * 0.45) continue;
-      const spread = drawn * factors.crown * CROWN_FILL;
+      const spread = drawn * CROWN_FILL;
 
       /*
        * Height from where this plant's spread fell in its band, mapped onto the height band. A
@@ -174,24 +160,18 @@ export function buildPlants(
        */
       const t = maxSize > minSize ? (drawn - minSize) / (maxSize - minSize) : 0.5;
       const band = layer.planting.heightBand;
-      const height = (band.min + (band.max - band.min) * t) * factors.crown;
+      const height = band.min + (band.max - band.min) * t;
 
       const familyChoice = plantingClusterAt(seed, placement.at).family;
-      const asset = query ? chooseAsset(query, placement.variant, familyChoice, camera) : null;
+      const asset = query ? chooseAsset(query, placement.variant, familyChoice) : null;
 
       plants.push({
         id: `${bed.id}:${layer.planting.role}:${col},${row}`,
         at: placement.at,
         spread,
         height,
-        /*
-         * An elevated sprite carries its own light, so a full turn turns the sun with it and the
-         * bed ends up lit from every direction at once. A plan sprite is lit flat and turns freely,
-         * which is where most of a bed's variety comes from — so the limit applies to one and not
-         * the other, and `foldRotation` narrows the distribution rather than clamping it onto two
-         * values. Costs no draw, so the sampler's sequence is untouched either way.
-         */
-        rotation: asset?.elevated ? foldRotation(placement.rotation) : placement.rotation,
+        // A plan sprite is lit flat and turns freely, which is where most of a bed's variety comes from.
+        rotation: placement.rotation,
         assetId: asset?.assetId ?? null,
         variant: asset?.variant ?? 0,
         /*
@@ -234,29 +214,15 @@ function chooseAsset(
   query: TaxonQuery,
   unitInterval: number,
   familyChoice: number,
-  camera: AssetCamera,
-): { assetId: AssetId; variant: number; elevated: boolean } | null {
+): { assetId: AssetId; variant: number } | null {
   // Species repeat in short drifts, while individuals retain their own crown variant.
   const families = assetsMatching(query).filter((id) => catalogueVariants(id).length > 0);
   if (!families.length) return null;
-  const planId = families[Math.min(families.length - 1, Math.floor(familyChoice * families.length))]!;
-
-  /*
-   * The plan family is chosen first and *then* translated, which is the whole design of
-   * `ELEVATED_TWINS` — see the note there. Asking the elevated library directly would answer a
-   * different-length list, so the seeded index would land on a different species and the same
-   * garden would be planted differently in the two views.
-   *
-   * The variant is re-drawn from the same `unitInterval` against the twin's own count, so a family
-   * with three elevated variants still spreads its plants across all three rather than collapsing
-   * onto whichever one happened to share a number with the plan sprite.
-   */
-  const twin = camera === 'elevated' ? elevatedTwin(planId) : null;
-  const assetId = twin ?? planId;
+  const assetId = families[Math.min(families.length - 1, Math.floor(familyChoice * families.length))]!;
   const variants = catalogueVariants(assetId);
   if (!variants.length) return null;
   const entry = variants[Math.min(variants.length - 1, Math.floor(unitInterval * variants.length))]!;
-  return { assetId, variant: entry.variant, elevated: twin !== null };
+  return { assetId, variant: entry.variant };
 }
 
 /**

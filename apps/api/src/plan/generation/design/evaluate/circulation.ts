@@ -246,7 +246,15 @@ function cutsThrough(route: DesignSubject['routes'][number], bed: Point[]): bool
 /** Whether a feature is reached by a route, or near enough to the house not to need one. */
 function isServed(item: SubjectItem, subject: DesignSubject): boolean {
   const door = subject.analysis.exits.primary?.centre ?? subject.analysis.house?.centre ?? null;
-  const terrace = subject.items.find((other) => other.feature === 'seating');
+  /*
+   * The terrace is what stands across the doors — named by its purpose where the plan gives one —
+   * and only failing that the seating. Where a dining area claims the terrace, the seating is a
+   * room of its own further out, and measuring reach from it reported a kitchen beside the terrace
+   * as connected to nothing.
+   */
+  const terrace =
+    subject.items.find((other) => other.purpose === 'terrace') ??
+    subject.items.find((other) => other.feature === 'seating');
 
   /*
    * Outline to outline. This measured from the terrace's *corners* only, so a water feature a metre

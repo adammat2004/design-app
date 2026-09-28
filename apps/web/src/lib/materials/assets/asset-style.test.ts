@@ -2,30 +2,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ASSET_FAMILIES, ASSET_IDS, type AssetFamily } from './asset-spec';
-import {
-  ASSET_SPEC_VERSION,
-  composePrompt,
-  ELEVATED,
-  SHARED_RULES,
-  STYLE,
-  TEMPLATE_CAMERA,
-} from './asset-style';
+import { ASSET_SPEC_VERSION, composePrompt, STYLE } from './asset-style';
 
 /**
  * The specification is one module and every prompt is composed from it. These tests hold the
- * families to the specification's shape — the right camera, a subject per variant — and hold the
- * two cameras to each other, so a rewording of one cannot quietly leave the other behind.
+ * families to the specification's shape — a subject per variant, the camera left to the template.
  */
 
 const families = ASSET_IDS.map((id) => [id, ASSET_FAMILIES[id] as AssetFamily] as const);
 
 describe('every family fits the specification', () => {
-  it('draws with a template of its own camera', () => {
-    for (const [id, family] of families) {
-      expect(TEMPLATE_CAMERA[family.template], id).toBe(family.camera ?? 'plan');
-    }
-  });
-
   it('names one subject per variant, or none at all', () => {
     for (const [id, family] of families) {
       if (family.variantSubjects) {
@@ -60,21 +46,12 @@ describe('every family fits the specification', () => {
   });
 });
 
-describe('the two cameras share one visual system', () => {
-  it('say the shared rules in the same words', () => {
-    for (const rule of SHARED_RULES) {
-      expect(STYLE.camera.plan.toLowerCase(), rule).toContain(rule.toLowerCase());
-      expect(STYLE.camera.elevated.toLowerCase(), rule).toContain(rule.toLowerCase());
-    }
-  });
-
-  it('every sprite template begins with its camera', () => {
+describe('the camera', () => {
+  it('every sprite template begins with it', () => {
     for (const [name, text] of Object.entries(STYLE.template)) {
-      const camera = TEMPLATE_CAMERA[name as keyof typeof STYLE.template];
       if (name === 'procedural' || name === 'face' || name === 'tile' || name === 'skin') continue;
-      expect(text.startsWith(STYLE.camera[camera]), name).toBe(true);
+      expect(text.startsWith(STYLE.camera), name).toBe(true);
     }
-    expect(ELEVATED).toBe(STYLE.camera.elevated);
   });
 });
 
@@ -103,12 +80,9 @@ describe('composePrompt', () => {
     );
   });
 
-  it('tints only a recolourable plan sprite', () => {
+  it('tints only a recolourable sprite', () => {
     const plant = { ...base, template: 'plant' as const, recolourable: true };
     expect(composePrompt(plant, 1)).toContain(STYLE.tintable);
-
-    const elevated = { ...plant, camera: 'elevated' as const, template: 'elevated-shrub' as const };
-    expect(composePrompt(elevated, 1)).not.toContain(STYLE.tintable);
 
     const furniture = { ...base, recolourable: false };
     expect(composePrompt(furniture, 1)).not.toContain(STYLE.tintable);
@@ -138,7 +112,7 @@ describe('composePrompt', () => {
 describe('the written contract', () => {
   it('carries the version the code is at', () => {
     const doc = readFileSync(
-      join(__dirname, '..', '..', '..', '..', '..', '..', 'docs', 'visualise-asset-style.md'),
+      join(__dirname, '..', '..', '..', '..', '..', '..', 'docs', 'asset-style.md'),
       'utf8',
     );
     expect(doc).toContain(`ASSET_SPEC_VERSION = '${ASSET_SPEC_VERSION}'`);

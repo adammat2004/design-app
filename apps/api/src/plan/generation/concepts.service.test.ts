@@ -24,6 +24,11 @@ import {
   suggestedAccess,
   thresholdRect,
   wallSegment,
+  frontDirection,
+  polygonCentroid,
+  resolveStructure,
+  structureDefinitionFor,
+  type DesignElement,
   type GardenBrief,
   type GeneratedConcept,
   type PlanDocument,
@@ -1583,6 +1588,111 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
 
       expect(result.violations).toEqual([]);
     }
+  });
+
+  /*
+   * The 3D editor is for refining a structure, never for building one. So every pergola and gazebo
+   * the generator places arrives with its whole configuration stored, a height of its own, a frame
+   * its definition offers, a size the product exists in, and its way in facing the terrace or the
+   * house — before anybody opens anything.
+   */
+  describe('structures arrive configured', () => {
+    const structuresOf = (concepts: GeneratedConcept[]) =>
+      concepts.flatMap((concept) =>
+        concept.elements
+          .filter((element) => structureDefinitionFor(element) !== null)
+          .map((element) => ({ concept, element })),
+      );
+
+    const expectConfigured = (element: DesignElement) => {
+      const definition = structureDefinitionFor(element)!;
+      expect(element.structure?.preset, 'a preset is recorded').toBeTruthy();
+      expect(element.structure?.model).toMatch(/^(classic|modern)$/);
+      expect(definition.roof!.kinds.map((kind) => kind.id)).toContain(element.structure?.roof?.kind);
+      expect(Object.keys(element.structure?.sides ?? {}).sort()).toEqual(['left', 'rear', 'right']);
+      expect(typeof element.structure?.lighting).toBe('boolean');
+      expect(element.height, 'an explicit height').toBeGreaterThanOrEqual(definition.dimensions.height.min);
+      expect(element.height).toBeLessThanOrEqual(definition.dimensions.height.max);
+      expect(definition.frameMaterials).toContain(element.material);
+      expect(element.shape.kind).toBe('rect');
+      if (element.shape.kind !== 'rect') return;
+      expect(element.shape.width).toBeLessThanOrEqual(definition.dimensions.width.max);
+      expect(element.shape.depth).toBeLessThanOrEqual(definition.dimensions.depth.max);
+      // What the editor resolves is exactly what was stored: nothing is left to a fallback.
+      const resolved = resolveStructure(element)!;
+      expect(resolved.roof.kind).toBe(element.structure?.roof?.kind);
+      expect(resolved.sides).toEqual(element.structure?.sides);
+    };
+
+    it('gives a generated pergola a complete configuration, open towards what it serves', async () => {
+      const concepts = await service.generate(
+        plan({ brief: { ...brief, desiredFeatures: ['seating', 'pergola'] } }),
+        1,
+      );
+      const placed = structuresOf(concepts);
+      expect(placed.length, 'a pergola is placed').toBeGreaterThan(0);
+
+      for (const { concept, element } of placed) {
+        expectConfigured(element);
+        if (element.shape.kind !== 'rect') continue;
+        const { centre } = element.shape;
+        // Its open front faces the terrace or the house, never the fence behind it.
+        const terrace = concept.elements.find(
+          (other) => other.category === 'paved-area' && other.purpose === 'terrace',
+        );
+        const targets = [housePolygon(plan().site.house!), terrace ? geometryOutline(terrace.shape) : null]
+          .filter((ring): ring is NonNullable<typeof ring> => ring !== null)
+          .map(polygonCentroid);
+        const front = frontDirection(element.shape);
+        const facing = targets.some((target) => {
+          const dx = target.x - centre.x;
+          const dy = target.y - centre.y;
+          return (front.x * dx + front.y * dy) / Math.hypot(dx, dy) > 0.5;
+        });
+        expect(facing, `${element.name} opens towards the terrace or the house`).toBe(true);
+      }
+    });
+
+    it('gives a modern brief that can afford it the aluminium frame', async () => {
+      const concepts = await service.generate(
+        plan({ brief: { ...brief, budget: 'premium', desiredFeatures: ['seating', 'pergola'] } }),
+        1,
+      );
+      const modern = structuresOf(concepts).filter(({ element }) => element.structure?.preset === 'modern');
+      expect(modern.length).toBeGreaterThan(0);
+      for (const { element } of modern) expect(element.material).toBe('aluminium-dark');
+    });
+
+    /*
+     * A traditional garden with its seating and its table by the house, and a pergola asked for too:
+     * the formal axis ends in it, and a covered room standing at the end of a garden is a gazebo —
+     * somewhere to sit that is worth the walk, rather than a second dining room.
+     */
+    it('draws a covered room at the far end of a traditional garden as a gazebo', async () => {
+      const document = deepPlan('formal');
+      const concepts = await service.generate(
+        { ...document, brief: { ...document.brief, desiredFeatures: ['seating', 'dining', 'pergola'] } },
+        1,
+      );
+      const gazebos = structuresOf(concepts).filter(({ element }) => element.symbol === 'gazebo');
+      expect(gazebos.length, 'some concept puts the pergola at the far end').toBeGreaterThan(0);
+
+      for (const { concept, element } of gazebos) {
+        expectConfigured(element);
+        expect(element.name).toBe('Gazebo');
+        expect(element.structure?.roof?.kind).toBe('hipped');
+        expect(
+          concept.requestedFeaturesIncluded.find((check) => check.feature === 'pergola')?.included,
+          'a gazebo is the pergola the brief asked for',
+        ).toBe(true);
+        // Somewhere to sit: the table is already by the house.
+        const ring = geometryOutline(element.shape);
+        const inside = concept.elements.filter(
+          (other) => other.category === 'furniture' && polygonContainsPolygon(ring, geometryOutline(other.shape)),
+        );
+        expect(inside.map((item) => item.symbol)).toEqual(['sofa-set']);
+      }
+    });
   });
 
   describe('the redesign area', () => {

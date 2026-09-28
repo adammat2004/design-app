@@ -92,6 +92,11 @@ const CASES: { name: string; document: PlanDocument }[] = [
     name: 'deep, a fire pit and a shed',
     document: plot(30, { desiredFeatures: ['seating', 'firePit', 'storage', 'dining'] }),
   },
+  // The formal axis ends in the pergola, which both halves must call a gazebo.
+  {
+    name: 'deep traditional, a gazebo at the end of the axis',
+    document: plot(30, { style: 'formal', desiredFeatures: ['seating', 'dining', 'pergola'] }),
+  },
 ];
 
 /** A nudge moves a footprint up to two metres from its anchor; another slot is further than that. */

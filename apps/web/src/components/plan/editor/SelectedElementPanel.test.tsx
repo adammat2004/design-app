@@ -144,3 +144,55 @@ it('draws nothing when nothing is selected', () => {
   render(<SelectedElementPanel />);
   expect(screen.queryByTestId('selected-element')).toBeNull();
 });
+
+/**
+ * "Edit in 3D" is offered for the structures that have a 3D editor and nothing else — asked of the
+ * structure definitions, so a shed gains the button the day it gains a definition and not before.
+ */
+describe('Edit in 3D', () => {
+  const show = (element: DesignElement) => {
+    usePlanEditorStore.setState({ selectedId: element.id, present: { elements: [element] } });
+    return render(<SelectedElementPanel />);
+  };
+  const rect = { kind: 'rect' as const, centre: { x: 6, y: 6 }, width: 3, depth: 3, rotation: 0 };
+  const structure = (symbol: string): DesignElement => ({
+    id: symbol,
+    name: symbol,
+    category: 'structure',
+    role: 'feature',
+    zone: 'back',
+    symbol,
+    shape: rect,
+  });
+
+  it('is offered for a pergola and a gazebo, and opens the 3D editor', () => {
+    show(structure('pergola'));
+    fireEvent.click(screen.getByTestId('edit-in-3d'));
+    expect(usePlanEditorStore.getState().structureEdit).toEqual({ elementId: 'pergola' });
+  });
+
+  it('is offered for a gazebo', () => {
+    show(structure('gazebo'));
+    expect(screen.getByTestId('edit-in-3d')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a shed', structure('shed')],
+    ['a patio', { ...structure('patio'), category: 'paved-area', symbol: undefined } as DesignElement],
+    [
+      'a tree',
+      {
+        id: 'tree',
+        category: 'planting-bed',
+        role: 'feature',
+        zone: 'back',
+        symbol: 'tree-deciduous',
+        shape: { kind: 'point', at: { x: 4, y: 4 }, radius: 1 },
+      } as DesignElement,
+    ],
+    ['a dining set', { ...structure('dining-set-4'), category: 'furniture' } as DesignElement],
+  ])('is not offered for %s', (_, element) => {
+    show(element);
+    expect(screen.queryByTestId('edit-in-3d')).toBeNull();
+  });
+});

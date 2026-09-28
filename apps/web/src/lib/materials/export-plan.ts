@@ -7,7 +7,6 @@ import {
   type Point,
 } from '@garden-studio/schema';
 import type { Unit } from '../units';
-import type { Maturity, SceneView } from '../render/scene';
 import type { RendererVersion } from '../render/primitives';
 import { getAssetVariants } from './assets/registry';
 import { drawPlan, type PlanContext, type PlanScene } from './render-plan';
@@ -50,10 +49,9 @@ const SUPERSAMPLE = 2;
  * There used to be one: a contrast and saturation lift, plan view only, on the delivered canvas —
  * written to put back the separation that compositing dozens of independently tinted photographs
  * averages away. It was a look somebody chose, and it pulled two of the measured scene grade's
- * terms in the opposite direction, which is why it had to be switched off for Visualise and left on
- * for the plan. Two finishing passes disagreeing about one picture is not a policy.
+ * terms in the opposite direction. Two finishing passes disagreeing about one picture is not a policy.
  *
- * `drawPlan` grades both views now, from the one set of constants in `grade.ts` that were solved
+ * `drawPlan` grades every drawing now, from the one set of constants in `grade.ts` that were solved
  * against the reference rather than dialled. A downloaded plan is therefore no longer
  * byte-identical to one downloaded before this work — deliberately, and it is the judging sheets
  * rather than this file that the change was looked at on.
@@ -70,16 +68,7 @@ export interface ExportOptions {
   unit: Unit;
   /** Feature chips on or off — the editor's own labels toggle. */
   labels: boolean;
-  /**
-   * Which view to draw. Defaults to the plan, which is what the 2D tab and the review screen want.
-   *
-   * Visualise exports what Visualise shows: instanced planting at the chosen maturity, and a roof
-   * on the house. A download that did not match the view it was taken from would be the same
-   * class of contradiction as step 4 disagreeing with step 5.
-   */
-  view?: SceneView;
-  maturity?: Maturity;
-  /** The editor's own shadows toggle, for the reason `labels` and `maturity` are here. */
+  /** The editor's own shadows toggle, for the reason `labels` is here. */
   shadows?: boolean;
   rendererVersion?: RendererVersion;
 }
@@ -118,8 +107,7 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
       assets: getAssetVariants,
     },
     rasterOrigin,
-    { view: options.view ?? 'plan', ...(options.rendererVersion ? { rendererVersion: options.rendererVersion } : {}),
-      ...(options.maturity ? { maturity: options.maturity } : {}),
+    { ...(options.rendererVersion ? { rendererVersion: options.rendererVersion } : {}),
       ...(options.shadows === undefined ? {} : { shadows: options.shadows }) },
   );
 

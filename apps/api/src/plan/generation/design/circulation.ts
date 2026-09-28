@@ -342,7 +342,7 @@ export interface LayRoutesInput {
   terrace: Point[] | null;
   gate: { centre: Point; inward: Point } | null;
   /**
-   * The reserved open space, in world metres, on a composed plan — `null` on a hand-drawn one.
+   * The reserved open space, in world metres — `null` on a courtyard, which has none.
    * A primary or secondary route may not cross it: that is what the corridors were kept for.
    */
   panel: Point[] | null;

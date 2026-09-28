@@ -2,62 +2,22 @@ import { boundingBox, type Point } from '@garden-studio/schema';
 import { CAMERA_TILT_DEGREES, RISE } from './camera';
 
 /**
- * The one camera: how a height becomes a picture.
+ * How a height becomes a picture: a point `h` metres above the ground is drawn at `(x, y − h × RISE)`.
  *
- * ## What this is
+ * An oblique lift — no camera position, no vanishing point, no perspective — so the ground plane stays
+ * exactly the plan: unforeshortened, measurable, every footprint the shape the validator measured.
+ * The full elevated view built on this (sheds and houses extruded, a depth-sorted stack) was retired
+ * with Visualise in Sep 2026. What remains is used by the plan itself: an edging course that stands
+ * proud is `extrude`d so it shows a face, and plant bounds are `visualBounds` because a sprite is
+ * drawn a little up the screen.
  *
- * Visualise draws an **oblique elevated projection**. The ground plane stays exactly what it is in
- * plan — unforeshortened, measurable, every footprint its true shape — and the only thing height
- * does is move a point *up the screen*:
- *
- * ```
- * a point h metres above the ground is drawn at  (x, y − h × RISE)
- * ```
- *
- * That is the whole of it. There is no camera position, no vanishing point, no depth buffer and no
- * perspective divide. A vertical edge stays vertical and stays the same length wherever it is on
- * the plot, so two sheds of the same height show the same face whether they stand at the top of the
- * drawing or the bottom.
- *
- * ## Why oblique rather than isometric or perspective
- *
- * Because a plan has to stay a plan. The brief is explicit that the drawing is "still fundamentally
- * a 2D structured plan" and that the assets must not be "strongly isometric" or look like a game.
- * Isometric rotates the ground plane, which destroys the one property the whole application rests
- * on: that what you see is the footprint the validator measured. Perspective is worse still — a
- * footprint becomes a trapezium that no rectangle can hold, and every placement, selection and
- * dimension in the editor would need a second coordinate system to answer in.
- *
- * Oblique gives up nothing. `geometryOutline` is still what is drawn on the ground; height is an
- * offset applied on top of it, and switching the view off removes the offset and leaves the plan.
- *
- * ## Why 12°, and why it is a constant rather than a setting
- *
- * Twelve degrees is shallow enough that the plan still reads — a 6 m house lifts 1.3 m up the
- * screen, about a seventh of its own depth — and steep enough that everything the brief asks to see
- * is visible: a 1.8 m fence shows a 38 cm face, a 2.3 m shed shows 49 cm of front wall, a 0.45 m
- * raised bed shows 10 cm of sleeper. Past about 20° the faces start hiding the ground behind them
- * and the drawing tips over into a model village.
- *
- * It is a constant and not a control because **the generated assets are drawn at this angle**. The
- * elevated sprite library is photographed from a camera tilted twelve degrees (see
- * `docs/visualise-asset-style.md` and the `ELEVATED` prompt in `asset-spec.ts`), so a slider here
- * would put the drawn geometry at an angle the photographs do not share, and a shed would stand at
- * a different attitude from the sofa beside it. One number, two places, and they are the same fact.
- *
- * ## What this module has no opinion about
- *
- * It does not know what a shed is, does not read a `DesignElement`, and returns no colours. It is
- * given an outline in world metres, a height in metres and the scene's light, and it answers with
- * more world metres. Nothing here is authoritative about anything: every outline it is handed came
- * from `geometryOutline`, every height from `heightFor`, and deleting the file would leave the plan
- * dimensionally identical and merely flat.
+ * It does not know what a shed is, does not read a `DesignElement`, and returns no colours. Nothing
+ * here is authoritative: every outline came from `geometryOutline`, every height from `heightFor`.
  */
 
 /*
- * The angle itself lives in `camera.ts`, which imports nothing — `asset-spec.ts` needs it too and
- * is read by `tools/assets`, a package that cannot resolve the schema. Re-exported here so the rest
- * of the renderer only ever has to know about the projection.
+ * The angle itself lives in `camera.ts`, which imports nothing. Re-exported here so the rest of the
+ * renderer only ever has to know about the projection.
  */
 export { CAMERA_TILT_DEGREES, RISE };
 
@@ -244,18 +204,4 @@ export function visualBounds(
   height: number,
 ): { minX: number; minY: number; width: number; length: number } {
   return boundingBox([...footprint, ...liftRing(footprint, Math.max(0, height))]);
-}
-
-/**
- * Where a thing sorts in the stack, given what it stands on.
- *
- * The **footprint's** furthest-down-screen point, never the visual bounds': what decides whether a
- * tree is in front of a shed is where the two stand, not how tall they are. Sorting by the lifted
- * extent would put a tall thing behind a short one standing in front of it, which is the classic
- * way an oblique drawing goes wrong.
- */
-export function depthOf(footprint: Point[]): number {
-  let max = -Infinity;
-  for (const point of footprint) if (point.y > max) max = point.y;
-  return max === -Infinity ? 0 : max;
 }

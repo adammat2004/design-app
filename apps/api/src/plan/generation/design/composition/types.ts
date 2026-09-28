@@ -41,6 +41,10 @@ export const PURPOSES = [
   'terrace',
   'dining-room',
   'lounge',
+  /* A second seat, set in the afternoon sun where the terrace is in the shade. */
+  'sun-seat',
+  /* A seat at the far end, where nothing else asked for is worth walking to. */
+  'end-seat',
   'destination',
   'focal',
   'play',

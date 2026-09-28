@@ -1,4 +1,4 @@
-import { boundingBox, edgingHeight, elementAnchor, elementOutline, type Point, type ShadowOccluder, type SiteSection } from '@garden-studio/schema';
+import { boundingBox, edgingHeight, elementOutline, type Point, type ShadowOccluder, type SiteSection } from '@garden-studio/schema';
 import {
   CONTACT_SHADOW_OFFSET_RATIO,
   CONTACT_SHADOW_SCALE,
@@ -9,9 +9,7 @@ import { fingerprint } from './fingerprint';
 import { compileLinearCourse, type LinearCourse } from './linear-course';
 import { compilePlantClusters, type PlantCluster } from './plant-clusters';
 import type { RenderItem, RenderLight, RenderNode, RenderScene, RenderSurface } from './scene';
-import { boundaryContributions, structureContributions } from './depth-fragments';
 import { visualBounds } from './projection';
-import { footBand, footBandDepth } from '../materials/symbols/elevated';
 
 export const RENDER_PASSES = ['terrain', 'surfaces', 'courses', 'seams', 'cast-shadows', 'contacts',
   'ground-light', 'standing', 'emissive', 'access'] as const;
@@ -34,8 +32,7 @@ export interface SurfacePrimitive extends PrimitiveBase { kind: 'surface'; item:
 export interface LinearCoursePrimitive extends PrimitiveBase {
   kind: 'linear-course'; surface: RenderSurface; course: LinearCourse | null; height: number;
 }
-export interface SpritePrimitive extends PrimitiveBase { kind: 'sprite'; node: Extract<RenderNode, { kind: 'plant' | 'object' }> }
-export interface ExtrusionPrimitive extends PrimitiveBase { kind: 'extrusion'; node: Extract<RenderNode, { kind: 'extrusion' | 'house' }> }
+export interface SpritePrimitive extends PrimitiveBase { kind: 'sprite'; node: RenderNode }
 export interface ShadowCaster extends PrimitiveBase { kind: 'shadow-caster'; occluder: ShadowOccluder }
 export interface ContactShadowPrimitive extends PrimitiveBase {
   kind: 'contact-shadow'; at: Point; radius: number; character: 'foliage' | 'built';
@@ -53,7 +50,7 @@ export interface TerrainPrimitive extends PrimitiveBase { kind: 'terrain'; outli
 export interface SeamPrimitive extends PrimitiveBase { kind: 'seam'; outline: Point[] }
 export interface AmbientPrimitive extends PrimitiveBase { kind: 'ambient'; night: number }
 export interface AccessPrimitive extends PrimitiveBase { kind: 'access'; site: SiteSection }
-export type StandingPrimitive = SpritePrimitive | ExtrusionPrimitive;
+export type StandingPrimitive = SpritePrimitive;
 export type RenderPrimitive = SurfacePrimitive | LinearCoursePrimitive | StandingPrimitive | ShadowCaster |
   ContactShadowPrimitive | GroundLightPrimitive | EmissivePrimitive | PlantMassPrimitive | TerrainPrimitive |
   SeamPrimitive | AmbientPrimitive | AccessPrimitive;
@@ -66,7 +63,7 @@ export function emptyRenderPasses(): RenderPasses {
 
 type SceneContent = Omit<RenderScene, 'passes' | 'clusters' | 'revision'>;
 
-export function compilePrimitives(scene: SceneContent, site: SiteSection, depthFragments = false) {
+export function compilePrimitives(scene: SceneContent, site: SiteSection) {
   const passes = emptyRenderPasses();
   const clusters = compilePlantClusters(scene.plants);
   const base = (id: string, sourceId: string, pass: RenderPassName, bounds: WorldBounds,
@@ -113,39 +110,18 @@ export function compilePrimitives(scene: SceneContent, site: SiteSection, depthF
     add({ ...base(`${sourceId}:caster:${part}`, sourceId, 'cast-shadows', boundingBox(occluder.outline), [occluder, scene.shadows.cast]),
       kind: 'shadow-caster', occluder });
   }
-  const standingNodes = scene.stack.flatMap((node) => structureContributions(node, scene.light))
-    .flatMap((node) => depthFragments ? boundaryContributions(node, scene.light) : [node]);
-  for (const node of standingNodes) {
-    const sourceId = node.kind === 'plant' ? node.plant.hostId :
-      node.kind === 'extrusion' && node.source.of === 'boundary' ? node.source.run.edgeVertexId :
-      node.kind === 'extrusion' && node.source.of === 'level' ? node.source.level.hostId :
-      node.kind === 'extrusion' && node.source.of === 'element' ? node.source.element.id : node.id;
-    // Edging is a ground course. Its low face is painted with it before cast shadows.
-    if (node.kind === 'extrusion' && node.source.of === 'edging') continue;
-    const common = { ...base(node.id, sourceId, 'standing', node.bounds, [node, scene.light], node.depth), lod: 'standing' as const };
-    if (node.kind === 'plant' || node.kind === 'object') {
-      add({ ...common, kind: 'sprite', node });
-      const at = node.kind === 'plant' ? node.plant.at : elementAnchor(node.item.element);
-      const box = node.kind === 'object' ? boundingBox(elementOutline(node.item.element)) : null;
-      const radius = node.kind === 'plant' ? node.plant.spread / 2 : Math.max(box!.width, box!.length) / 2;
-      // A mat has nothing standing off the ground to cast; see `MIN_CONTACT_SHADOW_HEIGHT`.
-      const grounded = node.kind === 'plant' && node.plant.height < MIN_CONTACT_SHADOW_HEIGHT;
-      if (radius > 0 && !grounded) {
-        const reach = radius * (CONTACT_SHADOW_SCALE + CONTACT_SHADOW_OFFSET_RATIO);
-        add({ ...base(`${node.id}:contact`, sourceId, 'contacts',
-          { minX: at.x - reach, minY: at.y - reach, width: reach * 2, length: reach * 2 }, [at, radius, scene.light]),
-          kind: 'contact-shadow', at, radius,
-          character: node.visualLayer === 'tree' || node.kind === 'plant' ? 'foliage' : 'built' });
-      }
-    } else {
-      add({ ...common, kind: 'extrusion', node });
-      // An overhead member has no ground contact. Its posts do, at their true bases.
-      const extrusion = node.kind === 'house' ? node.walls : node.contribution === 'beam' ? null : node.extrusion;
-      for (const [index, face] of (extrusion?.faces ?? []).entries()) {
-        const outline = footBand(face.base[0], face.base[1], footBandDepth(extrusion!.height));
-        add({ ...base(`${node.id}:contact:${index}`, sourceId, 'contacts', boundingBox(outline), outline),
-          kind: 'contact-shadow', at: face.base[0], radius: 0, outline, character: 'built' });
-      }
+  for (const node of scene.stack) {
+    const sourceId = node.plant.hostId;
+    add({ ...base(node.id, sourceId, 'standing', node.bounds, [node, scene.light], node.depth),
+      lod: 'standing', kind: 'sprite', node });
+    // A mat has nothing standing off the ground to cast; see `MIN_CONTACT_SHADOW_HEIGHT`.
+    const radius = node.plant.spread / 2;
+    if (radius > 0 && node.plant.height >= MIN_CONTACT_SHADOW_HEIGHT) {
+      const at = node.plant.at;
+      const reach = radius * (CONTACT_SHADOW_SCALE + CONTACT_SHADOW_OFFSET_RATIO);
+      add({ ...base(`${node.id}:contact`, sourceId, 'contacts',
+        { minX: at.x - reach, minY: at.y - reach, width: reach * 2, length: reach * 2 }, [at, radius, scene.light]),
+        kind: 'contact-shadow', at, radius, character: 'foliage' });
     }
   }
   // Sort here, once. Backends must not invent their own ordering or category exceptions.

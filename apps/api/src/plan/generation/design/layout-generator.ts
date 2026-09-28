@@ -11,17 +11,20 @@ import {
   type PlanGeometry,
   type Point,
   type ZoneId,
+  type StyleDirection,
 } from '@garden-studio/schema';
 import { FEATURE_SPECS, inradius, scaledSpec } from '../archetypes.js';
 import { treeSpeciesFor } from '../constraints.js';
 import type { DesignConstraints } from '../constraints.js';
 import type { LayoutArchetype } from '../knowledge/archetypes/types.js';
 import { FEATURE_LIBRARY, placementLadder, roomSpec } from '../knowledge/feature-library.js';
+import { hostChoice } from '../knowledge/structures.js';
 import { assignByPriority } from '../layout/assign.js';
 import { fitInSlot, type FitContext, type Footprint } from '../layout/fit.js';
 import type { DesignFrame, LocalBox } from '../layout/frame.js';
 import {
   rectSize,
+  RESERVED_SEATS,
   terraceClaim,
   type LayoutSketch,
   type Slot,
@@ -31,6 +34,7 @@ import { localShapeRing, treeBudget, treeCandidates } from '../layout/trees.js';
 import { circulationFor } from '../room-policy.js';
 import { layRoutes } from './circulation.js';
 import { localShade, lowSides } from './site-analysis.js';
+import { sunSeatAffordable } from '../room-policy.js';
 import { planZones } from './zone-planner.js';
 import {
   NO_ADJUSTMENTS,
@@ -179,6 +183,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     scale: constraints.scale.sizeFactor,
     style: constraints.style,
     lawnAllowed: request.lawnAllowed,
+    maintenance: constraints.maintenance,
     gateSide: request.gateSide,
     houseWallLength: frame.wallLength,
     doorWidth: frame.doorWidth,
@@ -192,6 +197,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     lowSides: lowSides(analysis),
     primaryZone: request.brief.primaryZone,
     shade: localShade(analysis),
+    sunSeat: sunSeatAffordable(constraints),
   };
 
   const zonePlan = planZones({
@@ -240,9 +246,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
        * pipeline: they are furnished differently. `terraceClaim` decides, and only a composition —
        * which reserves a room for the seating the table displaces — hands it the primary zone.
        */
-      const feature: DesiredFeature =
-        terraceClaim(placing, sketch.composed ? sketchRequest.primaryZone : undefined) ??
-        'seating';
+      const feature: DesiredFeature = terraceClaim(placing, sketchRequest.primaryZone) ?? 'seating';
       terrace = record(feature, geometry, terraceSlot, nextId());
       placed.push(terrace);
       filled.set(terraceSlot.id, terrace);
@@ -259,21 +263,28 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     (feature) => !FEATURE_LIBRARY[feature].composed && !settled.has(feature),
   );
   const assigned = assignByPriority(
-    { ...sketch, slots: sketch.slots.filter((slot) => slot.kind !== 'terrace') },
+    {
+      ...sketch,
+      slots: sketch.slots.filter(
+        (slot) => slot.kind !== 'terrace' && !RESERVED_SEATS.includes(slot.purpose ?? ''),
+      ),
+    },
     toPlace,
   );
 
   const unplaced: DesiredFeature[] = [];
   for (const feature of toPlace) {
     const spec = scaledSpec(
-      roomSpec(feature, sketch.composed?.language, sketchRequest.primaryZone),
+      roomSpec(feature, sketch.composed.language, sketchRequest.primaryZone),
       constraints,
     );
     const entry = assigned.find((candidate) => candidate.feature === feature);
     const candidates = [
       ...sketch.slots.filter((slot) => slot.id === entry?.slotId),
       ...placementLadder(feature).flatMap((kind) =>
-        sketch.slots.filter((slot) => slot.kind === kind),
+        sketch.slots.filter(
+          (slot) => slot.kind === kind && !RESERVED_SEATS.includes(slot.purpose ?? ''),
+        ),
       ),
     ].filter((slot) => !filled.has(slot.id) && !slotBarred(adjustments, feature, slot.id));
 
@@ -286,7 +297,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
       continue;
     }
 
-    const item = record(feature, fitted.geometry, fitted.slot, nextId());
+    const item = record(feature, fitted.geometry, fitted.slot, nextId(), constraints.style);
     placed.push(item);
     filled.set(fitted.slot.id, item);
     obstacles.push(item.ring);
@@ -315,7 +326,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     gate: request.gateCentre
       ? { centre: request.gateCentre, inward: inwardFrom(request.gateCentre, request.room) }
       : null,
-    panel: sketch.composed ? lawn : null,
+    panel: lawn,
     frame,
     obstacles,
     thresholds: request.thresholds,
@@ -338,7 +349,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     .map((bed, index) => ({
       name: bed.name,
       ring: localShapeRing(bed.shape, frame),
-      purpose: sketch.composed?.bedPurposes[index],
+      purpose: sketch.composed.bedPurposes[index],
     }))
     .filter((bed) => bed.ring.length >= 3 && polygonArea(bed.ring) > 0.5);
 
@@ -377,7 +388,7 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
   };
 
   /* The same candidates, in the same order, the realisation plants from. See `treeCandidates`. */
-  for (const candidate of treeCandidates(sketch, frame, request.room, adjustments.treeNudge)) {
+  for (const candidate of treeCandidates(sketch, frame, adjustments.treeNudge)) {
     if (trees.length >= treeCap) break;
     const { symbol, radius } = nextTree();
     const at = candidate.points.find((point) => treeFits(point, radius));
@@ -407,8 +418,11 @@ function record(
   geometry: PlanGeometry,
   slot: Slot,
   id: string,
+  style: StyleDirection | null = null,
 ): PlacedItem {
   const spec = FEATURE_SPECS[feature];
+  // The name the realisation gives it too — a far-end pergola is a gazebo in both, or parity breaks.
+  const choice = hostChoice(feature, slot.kind, style);
   const ring = geometryOutline(geometry);
   return {
     id,
@@ -417,7 +431,7 @@ function record(
     slotId: slot.id,
     geometry,
     ring,
-    name: spec.planName ?? feature,
+    name: choice.planName ?? spec.planName ?? feature,
     category: spec.category,
     ...(slot.purpose ? { purpose: slot.purpose } : {}),
   };

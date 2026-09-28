@@ -25,7 +25,7 @@ import type { DesignSubject } from './subject.js';
  */
 
 /** How much space a person needs behind a structure to build it and to maintain it. */
-const MAINTENANCE_GAP = 0.3;
+export const MAINTENANCE_GAP = 0.3;
 
 /** A rise this far above grade needs a way down off it. */
 const NEEDS_STEPS = 0.15;

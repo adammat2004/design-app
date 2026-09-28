@@ -14,8 +14,8 @@ import {
 } from './grade';
 
 /**
- * The grade exists twice — as a CSS `filter` on the Visualise wrapper and as pixel arithmetic for
- * the sheets, the export and the thumbnails — because no single canvas holds both of Visualise's
+ * The grade exists twice — as a CSS `filter` on `EditorScene`'s wrapper and as pixel arithmetic for
+ * the sheets, the export and the thumbnails — because no single canvas holds both of the editor's
  * stacked layers, and no DOM exists on the drawn paths. Two implementations of one effect is
  * exactly the drift `buildRenderScene` was built to prevent, so they are held to each other here.
  *

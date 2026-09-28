@@ -1,8 +1,9 @@
 import type { Point } from '@garden-studio/schema';
 
 /**
- * The geometry behind the drawn structures: a pergola's posts, a shed's roof, a gazebo's hips, a
- * raised bed's rails.
+ * The geometry behind the drawn structures: a shed's roof, a garden room's glazing, a raised bed's
+ * rails. A pergola and a gazebo are drawn from `structureParts` instead (`structure-plan.ts`), the
+ * same parts the 3D editor renders.
  *
  * Pure point functions in world metres, like `canopy.ts`, for the same reason: the Konva canvas
  * and the plan composer both draw from them, and neither can be tested without a browser unless
@@ -30,35 +31,6 @@ function frame(rect: RectShape): (x: number, y: number) => Point {
     x: rect.centre.x + x * cos - y * sin,
     y: rect.centre.y + x * sin + y * cos,
   });
-}
-
-function square(
-  at: (x: number, y: number) => Point,
-  cx: number,
-  cy: number,
-  half: number,
-): Point[] {
-  return [
-    at(cx - half, cy - half),
-    at(cx + half, cy - half),
-    at(cx + half, cy + half),
-    at(cx - half, cy + half),
-  ];
-}
-
-/** The four corner posts of a pergola, as rings. `postSize` is the post's side in metres. */
-export function pergolaPosts(rect: RectShape, postSize = 0.15): Point[][] {
-  const at = frame(rect);
-  const hw = rect.width / 2 - postSize / 2;
-  const hd = rect.depth / 2 - postSize / 2;
-  const half = postSize / 2;
-
-  return [
-    square(at, -hw, -hd, half),
-    square(at, hw, -hd, half),
-    square(at, hw, hd, half),
-    square(at, -hw, hd, half),
-  ];
 }
 
 /**
@@ -91,24 +63,6 @@ export function shedRoof(rect: RectShape): { ridge: [Point, Point]; slopes: [Poi
       [at(0, -hd), at(hw, -hd), at(hw, hd), at(0, hd)],
     ],
   };
-}
-
-/**
- * A hipped roof: four facets meeting at the centre. In order: top, right, bottom, left, so the
- * caller can light the two facing the sun.
- */
-export function gazeboRoof(rect: RectShape): Point[][] {
-  const at = frame(rect);
-  const hw = rect.width / 2;
-  const hd = rect.depth / 2;
-  const apex = at(0, 0);
-
-  return [
-    [at(-hw, -hd), at(hw, -hd), apex],
-    [at(hw, -hd), at(hw, hd), apex],
-    [at(hw, hd), at(-hw, hd), apex],
-    [at(-hw, hd), at(-hw, -hd), apex],
-  ];
 }
 
 /**

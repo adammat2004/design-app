@@ -1,5 +1,6 @@
 import type { DesignBrief } from '@garden-studio/schema';
 import { rankArchetypes, type ArchetypeFit } from './archetype-selector.js';
+import { courtyard } from '../knowledge/archetypes/courtyard.js';
 import { previewLayout, type LayoutPreview, type PreviewRequest } from './layout-generator.js';
 import type { GeometryLanguage } from '@garden-studio/schema';
 import type { CandidateParams, SiteAnalysis } from './types.js';
@@ -56,11 +57,24 @@ export interface EnumerateRequest {
  * produces the composition the plot and the style agreed on.
  */
 export function enumerateCandidates(request: EnumerateRequest): Candidate[] {
-  const ranked = rankArchetypes(request.analysis, request.brief).slice(0, ARCHETYPES_PER_BRIEF);
+  const ranked = rankArchetypes(request.analysis, request.brief);
   const ceiling = Number(process.env.DESIGN_CANDIDATES ?? CEILING);
 
+  /*
+   * Compositions that composed on this plot. A composition that declines every variation cannot hold
+   * this brief on this plot round its own idea, and what it falls back to is a different garden
+   * under its name — so it is not offered, and the last-resort courtyard is offered under its own
+   * name only where none of the compositions worth trying composed at all.
+   *
+   * The ranking is **not** walked further to replace one that declined. That was tried: the fourth
+   * composition for a narrow cottage plot was a formal axis, and it composed, and it came out a
+   * corridor of paths with a tenth of the garden planted. The loop's own answer to a short field is
+   * better — a second drawing of a composition that suits, at the price `pickDistinct` charges for
+   * a repeat.
+   */
   const candidates: Candidate[] = [];
-  for (const fit of ranked) {
+  for (const fit of ranked.slice(0, ARCHETYPES_PER_BRIEF)) {
+    if (candidates.length >= ceiling) break;
     /*
      * `DESIGN_DRAWINGS=0` enumerates the archetype's own variations alone, in its default language —
      * the field before languages and framing were candidates — so a benchmark can say what drawing
@@ -93,17 +107,52 @@ export function enumerateCandidates(request: EnumerateRequest): Candidate[] {
       });
     }
     /*
-     * A variation the composition declined is the hand-drawn template again, not another drawing of
-     * the composition — and its preview is the one that flatters: it cannot show the features the
-     * realisation will then sample in wherever there is room, so it scores the plan without them.
-     * Where some variations composed, the declined ones are dropped; where none did, the template
-     * stands, because it is the only drawing of this composition the plot allows.
+     * A variation the composition declined is the last-resort courtyard, not another drawing of the
+     * composition, and it is never offered under the archetype's name.
      */
-    const composed = own.filter((candidate) => candidate.preview.sketch.composed);
-    candidates.push(...(composed.length > 0 ? composed : own));
+    candidates.push(
+      ...own.filter(
+        (candidate) =>
+          candidate.preview.sketch.composed && !candidate.preview.sketch.composed.lastResort,
+      ),
+    );
   }
 
-  return candidates;
+  return candidates.length > 0 ? candidates : lastResortCandidates(request, ranked);
+}
+
+/**
+ * Where none of the compositions worth trying composed: the courtyard, drawn so that it cannot
+ * decline, under its own name. Every room it can carve off the floor, and the rest reported — never
+ * a feature stood on a lawn or handed to the sampler, which is what the hand-drawn templates this
+ * replaces did. Offered even where the courtyard's own suitability refused the plot, because that
+ * refusal is "a lawn fits here", and on this brief no composition could keep one.
+ */
+function lastResortCandidates(request: EnumerateRequest, ranked: ArchetypeFit[]): Candidate[] {
+  const fit: ArchetypeFit = ranked.find((entry) => entry.archetype.id === 'courtyard') ?? {
+    archetype: courtyard,
+    score: 0,
+    reasons: [
+      'No composition could hold what the brief most wants and keep a lawn, so the garden is designed as a room: a paved floor with the spaces carved off it.',
+    ],
+    shortlisted: false,
+  };
+  return fit.archetype.params(request.analysis, request.brief).map((variation, index) => {
+    const params: CandidateParams = { ...variation, language: 'rectilinear', lastResort: true };
+    return {
+      id: `${request.brief.id}-courtyard-last-${index}`,
+      brief: request.brief,
+      fit,
+      params,
+      preview: previewLayout({
+        ...request.context,
+        archetype: fit.archetype,
+        params,
+        brief: request.brief,
+        analysis: request.analysis,
+      }),
+    };
+  });
 }
 
 /**

@@ -4,7 +4,6 @@ import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { draftPolygon } from '@/lib/boundary-geometry';
 import { downloadPlanPng, planFileName } from '@/lib/materials/export-plan';
-import type { SceneView } from '@/lib/render/scene';
 import { browserRendererVersion } from '@/lib/render/diagnostics';
 import { emitDesignEvent } from '@/state/design-events';
 import { useBoundaryStore } from '@/state/boundary-store';
@@ -19,20 +18,7 @@ import { edgeRulesNow } from '@/lib/edge-rules';
  * screen cannot hand it two different gardens. Whatever is on the plan right now is what goes in
  * the file, including edits the autosave has not flushed — the picture is of the screen.
  */
-export function DownloadPlanButton({
-  variant = 'toolbar',
-  view = 'plan',
-}: {
-  variant?: 'toolbar' | 'primary';
-  /**
-   * Which drawing to export.
-   *
-   * The Visualise tab passes `'visualise'` so the file matches the view it was taken from — a
-   * download that quietly delivered the plan drawing from the Visualise tab would be exactly the
-   * kind of contradiction between two pictures of one garden that the shared scene exists to stop.
-   */
-  view?: SceneView;
-}) {
+export function DownloadPlanButton({ variant = 'toolbar' }: { variant?: 'toolbar' | 'primary' }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -51,14 +37,11 @@ export function DownloadPlanButton({
           elements: editor.present.elements,
           // The same brief the screen resolves its edging against, or the download would differ.
           edgeRules: edgeRulesNow(),
-          site: view === 'visualise' && editor.previewMinutes !== null
-            ? { ...boundaryDraft, sun: { ...boundaryDraft.sun, minutes: editor.previewMinutes } } : boundaryDraft,
+          site: boundaryDraft,
         },
         {
           unit,
-          labels: view === 'visualise' ? false : editor.labelsVisible,
-          view,
-          maturity: editor.maturity,
+          labels: editor.labelsVisible,
           shadows: editor.shadowsVisible,
           rendererVersion: browserRendererVersion(),
           fileName: planFileName(projectName),

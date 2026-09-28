@@ -86,6 +86,12 @@ interface Row {
   lawnPieces: number;
   /** Whether the plan's largest open panel curves, or `null` where it has none. */
   lawnCurved: boolean | null;
+  /**
+   * Whether the plan was drawn as the last-resort courtyard: `under` its own name where nothing
+   * else composed, `mislabelled` under another composition's name — a divergence between the
+   * preview and the realisation, which should never happen.
+   */
+  lastResort: 'under' | 'mislabelled' | null;
   /** Features and routes the composition gave no reason for, on a plan that gives reasons at all. */
   orphans: number;
   /**
@@ -252,9 +258,15 @@ async function measure(
     elements: concept.elements.length,
     repairs: concept.explanation?.repairs.length ?? 0,
     lawnPieces: concept.elements.filter(
-      (element) => element.category === 'lawn' && element.role === 'fill' && element.fillKind === 'accent',
+      (element) =>
+        element.category === 'lawn' && element.role === 'fill' && element.fillKind === 'accent',
     ).length,
     lawnCurved: lawnCurves(concept.elements),
+    lastResort: concept.explanation?.decisions.some((decision) => decision.kind === 'last-resort')
+      ? 'mislabelled'
+      : concept.explanation?.decisions.some((decision) => decision.kind === 'last-resort-courtyard')
+        ? 'under'
+        : null,
     orphans: concept.elements.some((element) => element.purpose)
       ? concept.elements.filter(
           (element) =>
@@ -309,7 +321,10 @@ function borderSpread(
     const point = frame.toWorld(u, v);
     return beds.some((ring) => pointInPolygon(point, ring));
   };
-  const depthAlong = (at: (t: number) => { u: number; v: number }, inward: { u: number; v: number }) => {
+  const depthAlong = (
+    at: (t: number) => { u: number; v: number },
+    inward: { u: number; v: number },
+  ) => {
     const depths: number[] = [];
     for (let k = 1; k <= 7; k += 1) {
       const start = at(0.15 + (0.7 * (k - 1)) / 6);
@@ -419,7 +434,9 @@ function summarise(
     console.log(
       `\n  lawn in one piece       ${rate(rows.filter((row) => row.lawnPieces <= 1).length, rows.length)}`,
     );
-    console.log(`  orphans per concept      ${mean(rows.map((row) => row.orphans)).toFixed(2)} (mean)`);
+    console.log(
+      `  orphans per concept      ${mean(rows.map((row) => row.orphans)).toFixed(2)} (mean)`,
+    );
     /*
      * Whether three cards are three answers. A set of concepts is one case at one seed; it offers a
      * choice of drawing when one card's open ground curves and another's is straight, and a choice of
@@ -438,7 +455,13 @@ function summarise(
       (set) => new Set(set.map((row) => row.archetype)).size === set.length,
     ).length;
     console.log(`  sets offering a straight and a curved garden   ${rate(both, sets.size)}`);
-    console.log(`  sets of three different compositions          ${rate(threeCompositions, sets.size)}`);
+    console.log(
+      `  sets of three different compositions          ${rate(threeCompositions, sets.size)}`,
+    );
+    console.log(
+      `  drawn as the last resort                      ${rate(rows.filter((row) => row.lastResort === 'under').length, rows.length)}` +
+        `   (mislabelled ${rows.filter((row) => row.lastResort === 'mislabelled').length})`,
+    );
     const spreads = rows
       .map((row) => row.borderSpread)
       .filter((spread): spread is number => spread !== null);

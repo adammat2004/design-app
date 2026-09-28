@@ -191,7 +191,7 @@ function sceneOf(document: PlanDocument): PlanScene {
   };
 }
 
-/** Rendered in Visualise, with assets on — the palette question needs the photographs present. */
+/** Rendered with assets on — the palette question needs the photographs present. */
 function measureFixture(name: string): Measurement {
   const scene = sceneOf(loadFixture(name));
   const box = boundingBox(scene.boundary);
@@ -215,7 +215,6 @@ function measureFixture(name: string): Measurement {
       assets: getAssetVariants,
     },
     origin,
-    { view: 'visualise' },
   );
 
   const image = context.getImageData(0, 0, width, height).data;
@@ -279,12 +278,8 @@ const SAMPLE_METRES = 0.1;
 
 function measurePlanting(document: PlanDocument): PlantingMeasurement {
   const scene = sceneOf(document);
-  /*
-   * Visualise, because that is where planting exists as things. In the plan view the same plants
-   * are painted into each bed's raster and there is nothing to count — which is itself one of the
-   * findings this measurement exists to make checkable.
-   */
-  const built = buildRenderScene(scene, { view: 'visualise' });
+  // Planting is instanced in the plan: each plant is a `RenderPlant` on the scene, so it can be counted.
+  const built = buildRenderScene(scene);
 
   const beds = scene.elements.filter(
     (element) => element.category === 'planting-bed' && element.shape.kind !== 'point',
@@ -384,7 +379,7 @@ function hexLuminance(hex: string): number {
  * If the catalogue's own mean colours are already far more saturated than the reference, then a
  * runtime grade is compensating every frame for something that could be corrected once, offline,
  * in `tools/assets --reprocess` — and the baked answer would improve 2D Plan, the concept cards and
- * the export as well, which a Visualise-only grade cannot.
+ * the export as well, which a screen-only grade cannot.
  */
 function measurePalette(): void {
   const entries = (catalogue as { assets: { id: string; meanColour?: string }[] }).assets;

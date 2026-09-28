@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rectToPolygon, type Point } from '@garden-studio/schema';
-import { depthOf, extrude, lift, liftRing, RISE, visualBounds } from './projection';
+import { extrude, lift, liftRing, RISE, visualBounds } from './projection';
 
 const LIGHT: Point = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
 
@@ -65,10 +65,8 @@ describe('extruding an outline', () => {
   });
 
   /**
-   * The whole reason built structures are extruded rather than photographed.
-   *
-   * A single elevated raster has its lit side and its visible face baked in, so turning it turns
-   * both. Here the geometry is recomputed from the outline, so whichever wall faces the viewer is
+   * Why a raised face is extruded rather than photographed: a raster has its lit side and its
+   * visible face baked in, so turning it turns both. Here the geometry is recomputed from the outline, so whichever wall faces the viewer is
    * the wall that gets drawn — at every angle, including the ones between the right angles.
    */
   it('always shows the wall facing the viewer, at every rotation', () => {
@@ -167,16 +165,7 @@ describe('what a lifted thing occupies', () => {
     expect(visualBounds(SQUARE, 0)).toEqual({ minX: 0, minY: 0, width: 2, length: 2 });
   });
 
-  /**
-   * Depth is about where a thing *stands*, never about how tall it is.
-   *
-   * Sorting by the visual bounds instead would put a tree behind the shed it stands in front of,
-   * simply because the canopy reaches further up the screen — the classic way an oblique drawing
-   * goes wrong, and it looks like a z-order bug rather than a sorting-key one.
-   */
-  it('sorts on where the thing stands, not on how tall it is', () => {
-    expect(depthOf(SQUARE)).toBe(2);
-    expect(depthOf(liftRing(SQUARE, 5))).toBeLessThan(depthOf(SQUARE));
+  it('reaches up the screen past the footprint by the lift', () => {
     expect(visualBounds(SQUARE, 5).minY).toBeLessThan(0);
   });
 });

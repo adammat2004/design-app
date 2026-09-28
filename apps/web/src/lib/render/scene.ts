@@ -13,7 +13,6 @@ import type { MaterialManifestEntry } from '../materials/palette';
 import type { ElementPass } from '../materials/scene-passes';
 import type { PatternAnchor } from '../materials/render-surface-pattern';
 import type { RenderRoof } from './roof';
-import type { Extrusion } from './projection';
 import type { RenderPasses, RendererVersion } from './primitives';
 import type { PlantCluster } from './plant-clusters';
 
@@ -38,7 +37,7 @@ import type { PlantCluster } from './plant-clusters';
  * It has **no authority**. Every outline on it came from `geometryOutline`, every area from
  * `elementArea`, every height from `heightFor`. Nothing downstream reads it, nothing is stored
  * from it, and deleting the whole directory would leave the plan dimensionally identical and
- * merely plainer. The presentation data here — an asset variant, a rotation, a maturity — is
+ * merely plainer. The presentation data here — an asset variant, a rotation — is
  * derived afresh on every build and deliberately never reaches `PlanDocument`.
  *
  * The one field that legitimately travels the other way is `DesignElement.pattern`, which was
@@ -74,7 +73,6 @@ export interface RenderScene {
    */
   plants: RenderPlant[];
   house: RenderHouse | null;
-  view: SceneView;
   /** What casts a solar shadow, and how. `cast` is null when the plan makes no solar claim. */
   shadows: { cast: ShadowCast | null; occluders: ShadowOccluder[]; sourceIds: string[] };
   /** Unit vector *towards* the light. The real sun when there is one, the drawing light otherwise. */
@@ -114,34 +112,20 @@ export interface RenderScene {
    * plans and every plan that existed before this.
    */
   levels: RenderLevel[];
-  maturity: Maturity;
   boundaryRuns: BoundaryRun[];
   /**
-   * Everything that stands up off the ground, in the order it is drawn.
+   * The instanced plants, one node each, in the order the standing pass draws them.
    *
-   * **Empty in `'plan'`**, where the drawing is the flat diagram it has always been and the
-   * ground/object split `scenePasses` produces is the whole of the order. Populated in
-   * `'visualise'`, where it replaces that split for everything above the cast-shadow layer.
-   *
-   * The thing this makes possible is the one the flat view cannot express at all: a tree canopy
-   * over a roof, a border disappearing behind the fence in front of it, a bench in front of the
-   * shrub it stands against. Until now the house, the fence and every object were drawn on the 2D
-   * overlay *above* the WebGL planting, so no overlap in either direction was possible — a shrub
-   * could never be in front of anything, and the fence could never be in front of a shrub.
-   *
-   * See `buildStack` for the sort and why depth beats layer.
+   * The v2 renderer draws standing things from here rather than from `plants`, so the plan's
+   * planting under Pixi and in the composer come from one list. It held a whole depth-sorted
+   * elevated drawing — extruded sheds, a lifted house, fences with faces — while the Visualise
+   * view existed; that view was retired in Sep 2026 and plants are all that is left in it.
    */
   stack: RenderNode[];
 }
 
-/**
- * One thing in the depth-sorted stack.
- *
- * A tagged union rather than one shape with optional fields, so a backend's switch is total and a
- * new kind of standing thing is a compile error in every backend rather than a silent omission —
- * the same reason `ElementCategory` is a `Record` everywhere it is consumed.
- */
-export type RenderNode = RenderPlantNode | RenderObjectNode | RenderExtrusionNode | RenderHouseNode;
+/** One thing in the standing stack: today, always a plant. */
+export type RenderNode = RenderPlantNode;
 
 interface RenderNodeBase {
   /**
@@ -153,10 +137,8 @@ interface RenderNodeBase {
    */
   id: string;
   /**
-   * Where the thing stands: the furthest-down-screen point of its own **footprint**.
-   *
-   * Never its visual extent. What decides whether a tree is in front of a shed is where the two
-   * stand, not how far the canopy reaches up the screen — see `depthOf`.
+   * Where the thing stands — a plant's own stem, `at.y` — never its visual extent: what decides
+   * which of two plants is drawn over the other is where they stand, not how far the crowns reach.
    */
   depth: number;
   /**
@@ -180,70 +162,6 @@ interface RenderNodeBase {
 export interface RenderPlantNode extends RenderNodeBase {
   kind: 'plant';
   plant: RenderPlant;
-}
-
-/**
- * Something drawn from a sprite: furniture, a light fitting, a tree, a placed shrub.
- *
- * `height` is what the lift is computed from, resolved here through `heightFor` so the backends do
- * not each answer it — and so the height a thing is *drawn* at is the height it *casts a shadow*
- * from, which is the only way the two can be made to agree.
- */
-export interface RenderObjectNode extends RenderNodeBase {
-  kind: 'object';
-  item: RenderItem;
-  height: number;
-}
-
-/**
- * Something built, raised from its own outline.
- *
- * The answer to rotation, and the reason there is no photograph of a shed anywhere in the library:
- * a built thing is whatever polygon the placer or the user gave it, at any angle, and the faces the
- * camera can see are recomputed from that polygon every render. A raster would have its visible
- * face and its lit side baked in, so turning it would turn both.
- */
-export interface RenderExtrusionNode extends RenderNodeBase {
-  kind: 'extrusion';
-  extrusion: Extrusion;
-  source: ExtrusionSource;
-  /** Render-only pieces of an open structure, or one continuous boundary run. */
-  contribution?: 'post' | 'beam' | 'boundary-segment';
-  parentRun?: BoundaryRun;
-}
-
-/**
- * What is being raised, so the painter can choose its materials.
- *
- * The node carries geometry and identity; the paint stays the painter's business. That split is
- * what lets one extrusion painter serve a shed, a fence and a retaining wall without knowing what
- * any of them is.
- */
-export type ExtrusionSource =
-  | { of: 'element'; element: DesignElement; surface: RenderSurface | null }
-  /**
-   * `inward` is the run's own unit normal pointing into the plot, resolved here rather than in the
-   * painters. It needs the boundary ring's winding, which is a fact about the whole plot rather
-   * than about the run — so each backend working it out for itself is the standard way the two come
-   * to disagree about which side of the fence the garden is on.
-   */
-  | { of: 'boundary'; run: BoundaryRun; inward: Point }
-  | { of: 'level'; level: RenderLevel }
-  /**
-   * An edging course, raised by how far the product stands proud of the ground.
-   *
-   * Small — 50 mm of steel, 200 mm of sleeper — and worth doing anyway: a kerb with no side is a
-   * painted stripe, and the one thing a kerb is for is standing slightly proud of what it edges.
-   * The `surface` carries the painter's arguments, exactly as it does on the flat pass.
-   */
-  | { of: 'edging'; surface: RenderSurface; height: number };
-
-/** The building, its walls raised to the eaves and its roof sitting on top of them. */
-export interface RenderHouseNode extends RenderNodeBase {
-  kind: 'house';
-  house: RenderHouse;
-  /** The outline raised to eaves height. The roof on `house.roof` is drawn on its top ring. */
-  walls: Extrusion;
 }
 
 /**
@@ -367,7 +285,7 @@ export interface RenderPlant {
   id: string;
   /** World metres. */
   at: Point;
-  /** Metres across, after maturity has scaled it. */
+  /** Metres across. */
   spread: number;
   /** Metres tall, from the scheme layer's own height band. */
   height: number;
@@ -409,7 +327,7 @@ export interface RenderHouse {
   outline: Point[];
   /** The floor inside the wall band. Null when the footprint is too small to inset. */
   interior: Point[] | null;
-  /** Derived every build, and only in `'visualise'`; the plan drawing keeps the flat diagram. */
+  /** Derived every build, drawn strictly within `outline`. */
   roof: RenderRoof | null;
   /**
    * The doors and windows, resolved to where they actually are.
@@ -431,14 +349,6 @@ export interface RenderOpening {
   /** Unit vector pointing out of the building. */
   normal: Point;
 }
-
-/**
- * How grown-in the planting is drawn.
- *
- * Presentation only, and deliberately not a planting schedule: it scales how big a crown is
- * drawn and how much of the bed is covered, not what was specified or what anything costs.
- */
-export type Maturity = 'year-1' | 'year-3' | 'mature';
 
 /**
  * Where a thing sits in the visual stack.
@@ -471,33 +381,10 @@ export type VisualLayer =
    */
   | 'lighting';
 
-/**
- * Which of the two views is being drawn.
- *
- * One axis, not several, because every difference between the views moves together and a plan
- * that could be half-visualised is a state nobody wants. Prompt §12 is explicit that the two
- * should differ: 2D Plan prioritises editability and clarity, Visualise prioritises presentation.
- * They are two views over the same plan, and switching between them changes nothing about the
- * design itself.
- *
- * - `'plan'` — planting is painted into each bed's raster, cached per surface per zoom bucket,
- *   where it cannot interfere with selection or hit-testing; the house is the wall-and-floor
- *   diagram step 1 draws. This is what the plan has always looked like.
- * - `'visualise'` — surfaces draw their ground only and the planting becomes `RenderPlant[]`
- *   above them, free to overlap its bed's edge, its neighbours and the lawn beside it; the house
- *   gets a roof. That overlap is the point: a bed clipped to its own outline reads as a cut-out,
- *   which is the single largest reason the plan drawing looks diagrammatic.
- */
-export type SceneView = 'plan' | 'visualise';
-
 export interface SceneOptions {
-  view: SceneView;
-  maturity: Maturity;
   rendererVersion: RendererVersion;
-  /** Prototype switch; whole-run ordering remains available for seam comparisons. */
-  depthFragments: boolean;
   /**
-   * Whether the plan draws cast shadows at all. A view preference beside `maturity`.
+   * Whether the plan draws cast shadows at all. A view preference beside the grid.
    *
    * On by default, because a garden whose objects are not attached to the ground reads as a
    * diagram. Off is a real thing to want: a printed drawing somebody is going to measure or write
@@ -509,10 +396,6 @@ export interface SceneOptions {
 }
 
 export const DEFAULT_SCENE_OPTIONS: SceneOptions = {
-  view: 'plan',
-  maturity: 'mature',
   rendererVersion: 'v2',
-  // Long-run fragmentation remains a lab prototype until crossing/seam gates are signed off.
-  depthFragments: false,
   shadows: true,
 };

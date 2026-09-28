@@ -14,7 +14,6 @@
   "include": [
     "src",
     "../../apps/web/src/lib/materials/assets/asset-spec.ts",
-    "../../apps/web/src/lib/materials/assets/asset-style.ts",
-    "../../apps/web/src/lib/render/camera.ts"
+    "../../apps/web/src/lib/materials/assets/asset-style.ts"
   ]
 }

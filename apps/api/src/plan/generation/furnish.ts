@@ -13,7 +13,7 @@ import {
 } from '@garden-studio/schema';
 import { materialFor } from './archetypes.js';
 import type { DesignConstraints } from './constraints.js';
-import { FURNISHINGS, HOST_SYMBOLS, MARGIN } from './furnishings.js';
+import { FURNISHINGS, HOST_FURNISHINGS, HOST_SYMBOLS, MARGIN } from './furnishings.js';
 
 export { hostFloor, MARGIN } from './furnishings.js';
 
@@ -45,6 +45,11 @@ export interface FurnishOptions {
    * the house rather than to the page. A round host has no rotation of its own to inherit.
    */
   bearing?: number;
+  /**
+   * The garden already has a table by the house, so a structure at the far end is for sitting —
+   * read only by hosts whose symbol has its own list (`HOST_FURNISHINGS`).
+   */
+  diningElsewhere?: boolean;
 }
 
 /** The symbol the host itself carries, if its feature implies one. */
@@ -57,7 +62,12 @@ export function furnish(
   feature: DesiredFeature,
   options: FurnishOptions,
 ): DesignElement | null {
-  const choices = FURNISHINGS[feature];
+  const byHost = host.symbol ? HOST_FURNISHINGS[host.symbol as SymbolId] : undefined;
+  const choices = byHost
+    ? options.diningElsewhere
+      ? byHost.lounging
+      : byHost.dining
+    : FURNISHINGS[feature];
   if (!choices || choices.length === 0) return null;
 
   /*
@@ -66,8 +76,10 @@ export function furnish(
    * concept's own index decides, so the balanced concept and the entertaining one differ on
    * purpose rather than by chance.
    */
-  const start =
-    feature === 'play'
+  // A host's own list is an order of preference rather than a menu the concepts take turns at.
+  const start = byHost
+    ? 0
+    : feature === 'play'
       ? Math.floor(options.rng() * choices.length)
       : Math.min(options.index, choices.length - 1);
 
@@ -164,7 +176,12 @@ export function furnishRoom(
     }
   }
 
-  if ((feature === 'seating' || feature === 'pergola') && host.shape.kind === 'rect') {
+  // A gazebo is a room of its own, not a terrace: nothing is set round its edge.
+  if (
+    (feature === 'seating' || feature === 'pergola') &&
+    host.shape.kind === 'rect' &&
+    host.symbol !== 'gazebo'
+  ) {
     const hostShape = host.shape;
     const radians = (hostShape.rotation * Math.PI) / 180;
     const at = (x: number, y: number) => ({

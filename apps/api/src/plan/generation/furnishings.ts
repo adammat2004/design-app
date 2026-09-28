@@ -1,11 +1,11 @@
-import { SYMBOLS, type DesiredFeature, type SymbolId } from '@garden-studio/schema';
+import { FURNISH_MARGIN, SYMBOLS, type DesiredFeature, type SymbolId } from '@garden-studio/schema';
 
 /**
  * What a requested feature is furnished with, and the least a host must be to hold it.
  *
- * A leaf module, deliberately. `archetypes.ts` imports the template registry, the templates
- * import `sketch.ts`, and the sketch needs the terrace floor — which comes from these tables. If
- * the tables lived in `archetypes.ts` that would be a cycle, the kind that breaks under one
+ * A leaf module, deliberately. The sketch layer needs the terrace floor — which comes from these
+ * tables — and much of what `archetypes.ts` imports depends on the sketch layer. If the tables
+ * lived in `archetypes.ts` that would be a cycle, the kind that breaks under one
  * module evaluation order and not another. Nothing here imports anything of ours.
  */
 
@@ -45,8 +45,23 @@ export const FURNISHINGS: Partial<Record<DesiredFeature, SymbolId[]>> = {
   play: ['swing', 'trampoline', 'slide'],
 };
 
+/**
+ * What goes inside a host whose *symbol* says more than its feature does, in order of preference.
+ *
+ * A gazebo is the pergola feature drawn at the far end of the garden (see
+ * `knowledge/structures.ts`), and it is for sitting rather than for dinner when the garden already
+ * has a table by the house — so its list is the lounge set first there, and the four-seater first
+ * otherwise. Kept apart from `FURNISHINGS.pergola` on purpose: `hostFloor('pergola')` reads that list
+ * to size the terrace-end bay, and a sofa added to it would move every composition.
+ */
+export const HOST_FURNISHINGS: Partial<
+  Record<SymbolId, { dining: SymbolId[]; lounging: SymbolId[] }>
+> = {
+  gazebo: { dining: ['dining-set-4', 'sofa-set'], lounging: ['sofa-set', 'dining-set-4'] },
+};
+
 /** Clear surface kept round an item, so a table does not touch the edge of its patio. */
-export const MARGIN = 0.3;
+export const MARGIN = FURNISH_MARGIN;
 
 /**
  * The smallest host that can hold what a feature is furnished with.

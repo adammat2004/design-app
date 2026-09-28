@@ -14,8 +14,9 @@ import { AreaSummaryPanel } from './AreaSummaryPanel';
 import { EditorCanvasLoader } from './EditorCanvasLoader';
 import { EditorInspector } from './EditorInspector';
 import { EditorToolbar } from './EditorToolbar';
-import { VisualisePanel } from './VisualisePanel';
 import { PlacedElementsList } from './PlacedElementsList';
+import { structureDefinitionFor } from '@garden-studio/schema';
+import { StructureWorkspaceLoader } from '../../structure-3d/StructureWorkspaceLoader';
 
 export function EditorScreen() {
   const planHref = usePlanHref();
@@ -23,12 +24,15 @@ export function EditorScreen() {
   const seededFrom = usePlanEditorStore((state) => state.seededFrom);
   const seedFrom = usePlanEditorStore((state) => state.seedFrom);
   const [sidebar, setSidebar] = useState<'add' | 'layers'>('add');
-  const [view, setView] = useState<'plan' | 'visualise'>('plan');
-  const [visualiseOpened, setVisualiseOpened] = useState(false);
-  const changeView = (next: 'plan' | 'visualise') => {
-    if (next === 'visualise') setVisualiseOpened(true);
-    setView(next);
-  };
+  /*
+   * The structure the 3D editor has open — only while it still exists and still opens in 3D, so an
+   * Undo past its creation or a change of symbol drops back to the plan rather than to nothing.
+   */
+  const structureId = usePlanEditorStore((state) => {
+    const id = state.structureEdit?.elementId;
+    const element = id ? state.present.elements.find((item) => item.id === id) : undefined;
+    return element && structureDefinitionFor(element) ? element.id : null;
+  });
 
   /*
    * Load the chosen concept, and reload it if the user goes back and chooses a different one.
@@ -76,8 +80,14 @@ export function EditorScreen() {
         </nav>
         <Link href={planHref('concepts')} className="ml-auto shrink-0 text-xs text-garden-muted lg:hidden">Concepts</Link>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white lg:flex-row lg:overflow-hidden">
-        <aside data-testid="editor-catalogue" className={view === 'visualise' ? 'hidden' : "border-b border-garden-line lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-64"}>
+      {structureId ? <StructureWorkspaceLoader elementId={structureId} /> : null}
+      {/*
+        The plan stays mounted while the 3D editor is open, hidden rather than unmounted: the canvas
+        measures itself on mount and eases its zoom to fit, so unmounting it would throw away wherever
+        the user had panned to, and the assistant's session and the gesture-gated autosave live here.
+      */}
+      <div className={`${structureId ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col overflow-y-auto bg-white lg:flex-row lg:overflow-hidden`}>
+        <aside data-testid="editor-catalogue" className="border-b border-garden-line lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-64">
           <div
             className="flex border-b border-garden-line"
             role="tablist"
@@ -119,18 +129,9 @@ export function EditorScreen() {
         <main className="flex min-h-[540px] min-w-0 flex-1 flex-col gap-2 bg-slate-50 p-3 lg:min-h-0">
           {concept ? (
             <>
-              <EditorToolbar view={view} setView={changeView} />
+              <EditorToolbar />
               <div className="min-h-[420px] flex-1 lg:min-h-0">
-                {/*
-                  Both mounted, one hidden. The canvas measures itself on mount and eases its zoom
-                  to fit, so unmounting it on every tab switch would throw that away and re-fit —
-                  and the user would lose wherever they had panned to. `hidden` keeps the stage
-                  alive and its viewport where they left it.
-                */}
-                <div className={view === 'plan' ? 'h-full' : 'hidden'}>
-                  <EditorCanvasLoader />
-                </div>
-                {visualiseOpened ? <div className={view === 'visualise' ? 'h-full' : 'hidden'}><VisualisePanel /></div> : null}
+                <EditorCanvasLoader />
               </div>
             </>
           ) : (
@@ -149,7 +150,7 @@ export function EditorScreen() {
           collapses — the same trap step 2 already recorded — so the column clips and the inspector
           scrolls inside itself.
         */}
-        <aside data-testid="editor-inspector" className={view === 'visualise' ? 'hidden' : "flex flex-col border-l border-garden-line bg-white lg:min-h-0 lg:w-80 lg:shrink-0 lg:overflow-hidden xl:w-96"}>
+        <aside data-testid="editor-inspector" className="flex flex-col border-l border-garden-line bg-white lg:min-h-0 lg:w-80 lg:shrink-0 lg:overflow-hidden xl:w-96">
           {concept ? <EditorInspector /> : null}
         </aside>
       </div>

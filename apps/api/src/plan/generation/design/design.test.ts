@@ -11,12 +11,11 @@ import { describe, expect, it } from 'vitest';
 import { FEATURE_SPECS, REPEATABLE_FEATURES } from '../archetypes.js';
 import { resolveConstraints, type DesignConstraints } from '../constraints.js';
 import { ARCHETYPES } from '../archetypes.js';
-import { FEATURE_LIBRARY, placementLadder, tierFor } from '../knowledge/feature-library.js';
+import { FEATURE_LIBRARY, tierFor } from '../knowledge/feature-library.js';
 import { CONDITIONAL, PRINCIPLES } from '../knowledge/principles.js';
 import { RELATIONSHIP_RULES, rulesFor } from '../knowledge/relationship-rules.js';
 import { STYLE_RULES, styleFit } from '../knowledge/style-rules.js';
 import { weightProfile } from '../knowledge/weight-profiles.js';
-import { slotPreferences } from '../layout/assign.js';
 import { buildBriefs } from './brief-builder.js';
 import { capacityFor, inferIntent, interpretRequirements, withinCapacity } from './requirements.js';
 import { scenario, SCENARIOS } from './scenarios.js';
@@ -57,12 +56,6 @@ describe('the feature library', () => {
   it('shares the identical spec object with FEATURE_SPECS rather than a copy', () => {
     for (const feature of features) {
       expect(FEATURE_LIBRARY[feature].spec, feature).toBe(FEATURE_SPECS[feature]);
-    }
-  });
-
-  it('agrees with the existing slot preference table', () => {
-    for (const feature of features) {
-      expect(placementLadder(feature), feature).toEqual(slotPreferences(feature));
     }
   });
 

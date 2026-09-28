@@ -65,6 +65,14 @@ export interface LightingOptions {
 }
 
 /**
+ * Whether this garden is lit at all: not on a low budget unless lighting was asked for. One rule, so
+ * a pergola's light strip and the garden's lighting scheme are never on in one and off in the other.
+ */
+export function gardenIsLit(constraints: DesignConstraints): boolean {
+  return !(constraints.budget === 'low' && !constraints.wantsLighting);
+}
+
+/**
  * Every fitting this concept specifies.
  *
  * Returns `[]` on an unasked-for low budget and on a plan with nothing worth lighting, which is the
@@ -76,7 +84,7 @@ export function lightingScheme(
   options: LightingOptions,
 ): DesignElement[] {
   const { constraints, boundary, scope, index } = options;
-  if (constraints.budget === 'low' && !constraints.wantsLighting) return [];
+  if (!gardenIsLit(constraints)) return [];
 
   const material = materialFor('lighting', constraints, index);
   const lights: DesignElement[] = [];

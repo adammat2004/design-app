@@ -41,13 +41,20 @@ export function languageOf(
 }
 
 /**
- * An archetype drawn by the composition layer, with its hand-drawn sketch as the fallback.
+ * An archetype drawn by the composition layer.
  *
  * Each archetype says only what is particular to it — which shape languages it can be drawn in,
  * first the one it is drawn in by default, and for the destination garden that the far end is the
- * point — and `design/composition/` does the rest. Where the composition declines (a courtyard, or a
- * plot that cannot hold what the brief most wants without giving up the lawn), the archetype's own
- * hand-drawn sketch and zone pattern draw instead.
+ * point — and `design/composition/` does the rest.
+ *
+ * **Where the composition declines, the courtyard draws, and says it was the last resort.** Each
+ * archetype used to fall back to a hand-drawn template of its own, and those templates were the last
+ * place in the generator a feature could stand on a lawn or be handed to the sampler. A plot where
+ * a composition cannot hold what the brief most wants round a lawn is a plot that is, for this
+ * brief, a courtyard: the paving is the floor, the rooms are carved off it, and anything that will
+ * not fit is reported rather than stood somewhere. `ComposedFacts.lastResort` marks it, so the
+ * candidate loop still treats the archetype as having declined and never offers it under that name
+ * while anything else composed.
  *
  * The composition is pure and cheap, so `zonePattern` and `sketch` both compose rather than one
  * caching for the other: the same inputs give the same garden to the last bit, which is what the
@@ -56,7 +63,6 @@ export function languageOf(
 export function composed(
   id: LayoutArchetypeId,
   languages: GeometryLanguage[] | ((style: StyleDirection | null) => GeometryLanguage[]),
-  fallback: Pick<LayoutArchetype, 'sketch' | 'zonePattern'>,
   options: { primary?: FunctionalZoneType[] } = {},
 ): Pick<LayoutArchetype, 'sketch' | 'zonePattern' | 'languages'> {
   /*
@@ -79,19 +85,39 @@ export function composed(
 
   return {
     languages: spoken,
-    sketch(request, room, plan, params) {
+    sketch(request, room, _plan, params) {
       const composition = compose(request, room, params);
-      return composition
-        ? composeSketch(composition, room)
-        : fallback.sketch(request, room, plan, params);
+      if (composition) return composeSketch(composition, room);
+      const sketch = composeSketch(lastResort(request, room, params), room);
+      return { ...sketch, composed: { ...sketch.composed!, lastResort: true } };
     },
     zonePattern(zones, room, params, request) {
-      const composition = compose(request, room, params);
-      return composition
-        ? zonesFromComposition(zones, composition, options.primary ?? [])
-        : fallback.zonePattern(zones, room, params, request);
+      const composition = compose(request, room, params) ?? lastResort(request, room, params);
+      return zonesFromComposition(zones, composition, options.primary ?? []);
     },
   };
+}
+
+/**
+ * The courtyard, drawn so that it cannot decline: every room it can carve off the floor, and the
+ * rest reported. What every composition falls back to, and what the candidate loop offers where
+ * nothing else composed.
+ */
+export function lastResort(
+  request: SketchRequest,
+  room: Room,
+  params: CandidateParams,
+): GardenComposition {
+  const composition = composeCourt({
+    archetype: 'courtyard',
+    language: 'rectilinear',
+    request,
+    room,
+    params: { ...params, lastResort: true },
+  });
+  /* `composeCourt` declines only for an essential it could not seat, which `lastResort` forbids. */
+  if (!composition) throw new Error('The last-resort courtyard declined.');
+  return composition;
 }
 
 /**

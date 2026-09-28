@@ -406,8 +406,8 @@
                 "x": 4.5,
                 "y": 7.040593234312594
               },
-              "width": 6.6,
-              "depth": 5.081186468625188,
+              "width": 8.1,
+              "depth": 4.5730678217626695,
               "rotation": 180
             },
             "zone": "back",
@@ -497,7 +497,7 @@
           "candidateId": "c2-0"
         },
         "score": {
-          "total": 0.9848745346722659,
+          "total": 0.9877650445662405,
           "categories": {
             "style": 1,
             "canopy": 0.7901234567901235,
@@ -505,7 +505,7 @@
             "grouping": 1,
             "hierarchy": 1,
             "featureFit": 1,
-            "proportion": 0.97,
+            "proportion": 1,
             "circulation": 1,
             "composition": 1,
             "buildability": 1,
@@ -553,7 +553,7 @@
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 5 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
               "subjects": []
             },
             {
@@ -563,7 +563,7 @@
             },
             {
               "kind": "terrace-at-doors",
-              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.1 m.",
+              "text": "Put the seating patio directly outside the garden doors, 8.1 × 4.6 m.",
               "subjects": [
                 "c2-0-e1"
               ]
@@ -582,9 +582,9 @@
       },
       {
         "id": "c2-1",
-        "name": "Terrace and lawn",
+        "name": "Courtyard",
         "recommended": false,
-        "summary": "A terrace across the doors, one clean lawn set off-centre so the planting runs deeper down one side, and the gathering places in the far corner.",
+        "summary": "A paved floor corner to corner with deep planting against the walls and one thing worth looking at opposite the doors. Nothing in the middle, because the middle is where you stand.",
         "style": "Minimalist / Structured",
         "budget": "medium",
         "estimatedBudget": "medium",
@@ -603,7 +603,7 @@
         ],
         "elements": [
           {
-            "id": "c2-1-e6",
+            "id": "c2-1-e5",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -633,7 +633,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e7",
+            "id": "c2-1-e6",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -663,7 +663,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e8",
+            "id": "c2-1-e7",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -693,7 +693,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e9",
+            "id": "c2-1-e8",
             "category": "gravel-mulch",
             "role": "fill",
             "shape": {
@@ -723,7 +723,7 @@
             "material": "bark-mulch"
           },
           {
-            "id": "c2-1-e10",
+            "id": "c2-1-e9",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -755,7 +755,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-1-e11",
+            "id": "c2-1-e10",
             "category": "gravel-mulch",
             "role": "fill",
             "name": "Side return",
@@ -787,7 +787,7 @@
             "material": "decorative-gravel"
           },
           {
-            "id": "c2-1-e12",
+            "id": "c2-1-e11",
             "category": "planting-bed",
             "role": "fill",
             "name": "Rear border",
@@ -795,83 +795,28 @@
               "kind": "polygon",
               "points": [
                 {
-                  "x": 0.15,
-                  "y": 11.85
+                  "x": 0,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 11.85
+                  "x": 9,
+                  "y": 12
                 },
                 {
-                  "x": 8.85,
-                  "y": 10.472938
+                  "x": 9,
+                  "y": 9.581186
                 },
                 {
-                  "x": 0.15,
-                  "y": 10.472938
+                  "x": 0,
+                  "y": 9.581186
                 }
               ],
               "cornerRadius": 0
             },
             "zone": "back",
+            "purpose": "backdrop-planting",
             "fillKind": "accent",
             "material": "ground-cover",
-            "plantingStyle": "low-maintenance"
-          },
-          {
-            "id": "c2-1-e13",
-            "category": "planting-bed",
-            "role": "fill",
-            "name": "Flowering border",
-            "shape": {
-              "kind": "polygon",
-              "points": [
-                {
-                  "x": 0.15,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 10.472938
-                },
-                {
-                  "x": 1.35,
-                  "y": 9.767203
-                },
-                {
-                  "x": 2.67,
-                  "y": 9.414336
-                },
-                {
-                  "x": 2.67,
-                  "y": 8.708602
-                },
-                {
-                  "x": 1.35,
-                  "y": 8.355734
-                },
-                {
-                  "x": 1.35,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.75
-                },
-                {
-                  "x": 0.5,
-                  "y": 7.65
-                },
-                {
-                  "x": 0.15,
-                  "y": 7.65
-                }
-              ],
-              "cornerRadius": 0
-            },
-            "zone": "back",
-            "fillKind": "accent",
-            "material": "shrubs",
             "plantingStyle": "low-maintenance"
           },
           {
@@ -883,10 +828,10 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.040593234312594
               },
-              "width": 8,
-              "depth": 3,
+              "width": 8.1,
+              "depth": 4.5730678217626695,
               "rotation": 180
             },
             "zone": "back",
@@ -902,7 +847,7 @@
               "kind": "rect",
               "centre": {
                 "x": 4.5,
-                "y": 6.25
+                "y": 7.040593234312594
               },
               "width": 3.2,
               "depth": 2.4,
@@ -922,12 +867,12 @@
               "kind": "point",
               "at": {
                 "x": 4.5,
-                "y": 9.75
+                "y": 10.640593234312593
               },
               "radius": 0.709406765687406
             },
             "zone": "back",
-            "purpose": "destination",
+            "purpose": "water",
             "material": "naturalistic-pond"
           },
           {
@@ -938,52 +883,53 @@
             "shape": {
               "kind": "point",
               "at": {
-                "x": 1.9,
-                "y": 10.1
+                "x": 7.5,
+                "y": 10.5
               },
               "radius": 1.6
             },
             "zone": "back",
-            "purpose": "framing-tree",
+            "purpose": "backdrop-tree",
             "material": "ground-cover",
             "symbol": "tree-evergreen",
             "plantingStyle": "low-maintenance"
           },
           {
-            "id": "c2-1-e5",
+            "id": "c2-1-e12",
             "category": "planting-bed",
             "role": "feature",
-            "name": "Tree",
+            "name": "Evergreen shrub",
             "shape": {
               "kind": "point",
               "at": {
-                "x": 7.1,
-                "y": 10.1
+                "x": 1.3361536721782181,
+                "y": 10.787099917074599
               },
-              "radius": 2.5
+              "radius": 0.85
             },
             "zone": "back",
-            "purpose": "framing-tree",
-            "material": "ground-cover",
-            "symbol": "tree-deciduous",
+            "material": "shrubs",
+            "height": 1.5,
+            "symbol": "shrub-evergreen",
+            "bedId": "c2-1-e11",
             "plantingStyle": "low-maintenance"
           }
         ],
         "strategy": {
           "briefId": "B",
-          "archetype": "terrace_and_lawn",
+          "archetype": "courtyard",
           "candidateId": "c2-1"
         },
         "score": {
-          "total": 0.9553517374046183,
+          "total": 0.9832793442588069,
           "categories": {
             "style": 0.8333333333333334,
-            "canopy": 0.9928774928774928,
+            "canopy": 0.7901234567901235,
             "privacy": 1,
             "grouping": 1,
             "hierarchy": 1,
             "featureFit": 1,
-            "proportion": 0.6921052631578947,
+            "proportion": 1,
             "circulation": 1,
             "composition": 1,
             "buildability": 1,
@@ -992,18 +938,6 @@
           },
           "issues": [
             {
-              "code": "leftover-pocket",
-              "principle": "proportion",
-              "severity": "major",
-              "message": "41% of the ground has nothing designed onto it.",
-              "subjects": [],
-              "repair": "enlarge-lawn",
-              "guidance": {
-                "targetAreaFactor": 1.1078947368421053
-              },
-              "source": "geometry"
-            },
-            {
               "code": "too-many-materials",
               "principle": "style",
               "severity": "minor",
@@ -1011,6 +945,16 @@
               "subjects": [
                 "c2-1-e1",
                 "c2-1-e3"
+              ],
+              "source": "geometry"
+            },
+            {
+              "code": "sparse-canopy",
+              "principle": "canopy",
+              "severity": "minor",
+              "message": "Only 12% of the garden is under canopy, against about a third in a designed plan.",
+              "subjects": [
+                "c2-1-e4"
               ],
               "source": "geometry"
             }
@@ -1031,7 +975,7 @@
           }
         },
         "explanation": {
-          "strategy": "terrace_and_lawn",
+          "strategy": "courtyard",
           "briefId": "B",
           "intent": "relaxation",
           "emphasis": "open",
@@ -1039,24 +983,29 @@
           "decisions": [
             {
               "kind": "composition",
-              "text": "Terrace and lawn. A terrace, a gap and a rear border leave 2.5 m of lawn, which reads as a strip.",
+              "text": "Courtyard. No lawn fits behind the doors: a room to be in rather than a view to look at.",
               "subjects": []
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 5 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "subjects": []
+            },
+            {
+              "kind": "courtyard",
+              "text": "Designed the garden as a courtyard: a paved floor corner to corner, planting deep against the walls, and the water feature on the wall opposite the doors. Nothing stands in the middle, because the middle is where you stand.",
               "subjects": []
             },
             {
               "kind": "terrace-at-doors",
-              "text": "Put the seating patio directly outside the garden doors, 8.0 × 3.0 m.",
+              "text": "Put the seating patio directly outside the garden doors, 8.1 × 4.6 m.",
               "subjects": [
                 "c2-1-e1"
               ]
             },
             {
               "kind": "feature-in-zone",
-              "text": "Water feature at the far end, on the diagonal from the doors.",
+              "text": "Water feature at the end of the axis, terminating the view from the doors.",
               "subjects": [
                 "c2-1-e3"
               ]
@@ -1316,8 +1265,8 @@
                 "x": 4.5,
                 "y": 7.040593234312594
               },
-              "width": 6.6,
-              "depth": 5.081186468625188,
+              "width": 8.1,
+              "depth": 4.5730678217626695,
               "rotation": 180
             },
             "zone": "back",
@@ -1427,7 +1376,7 @@
           "candidateId": "c2-2"
         },
         "score": {
-          "total": 0.9880844840194433,
+          "total": 0.9904601571268237,
           "categories": {
             "style": 1,
             "canopy": 0.7901234567901235,
@@ -1435,7 +1384,7 @@
             "grouping": 1,
             "hierarchy": 1,
             "featureFit": 1,
-            "proportion": 0.97,
+            "proportion": 1,
             "circulation": 1,
             "composition": 1,
             "buildability": 1,
@@ -1483,7 +1432,7 @@
             },
             {
               "kind": "chosen-from",
-              "text": "Chosen from 10 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
+              "text": "Chosen from 5 arrangements of this garden, on circulation, grouping and how the space is proportioned.",
               "subjects": []
             },
             {
@@ -1493,7 +1442,7 @@
             },
             {
               "kind": "terrace-at-doors",
-              "text": "Put the seating patio directly outside the garden doors, 6.6 × 5.1 m.",
+              "text": "Put the seating patio directly outside the garden doors, 8.1 × 4.6 m.",
               "subjects": [
                 "c2-2-e1"
               ]
@@ -1745,8 +1694,8 @@
             "x": 4.5,
             "y": 7.040593234312594
           },
-          "width": 6.6,
-          "depth": 5.081186468625188,
+          "width": 8.1,
+          "depth": 4.5730678217626695,
           "rotation": 180
         },
         "zone": "back",
@@ -2060,8 +2009,8 @@
             "x": 4.5,
             "y": 7.040593234312594
           },
-          "width": 6.6,
-          "depth": 5.081186468625188,
+          "width": 8.1,
+          "depth": 4.5730678217626695,
           "rotation": 180
         },
         "zone": "back",

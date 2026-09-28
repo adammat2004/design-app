@@ -1,4 +1,5 @@
-import { boundingBox, elementOutline, type DesignElement, type Point } from '@garden-studio/schema';
+import { boundingBox, defaultMaterial, elementOutline, type DesignElement, type Point } from '@garden-studio/schema';
+import { resolvePattern } from './palette';
 
 export type ElementPass = 'all' | 'ground' | 'object';
 
@@ -14,7 +15,15 @@ export function scenePasses(elements: DesignElement[]) {
       element.category === 'lighting' ||
       element.category === 'existing-feature' ||
       (element.category === 'planting-bed' && element.shape.kind === 'point');
-    if (!raised || element.symbol === 'pergola') ground.push(element);
+    /*
+     * A pergola is drawn in both passes: its deck below the shadows, its rafters above them. The
+     * deck is its material laid as boards, so only a frame with a board pattern — timber — has one;
+     * an aluminium pergola stands on whatever is under it, and a flat metal-coloured slab across the
+     * whole footprint would read as dark paving that is not there.
+     */
+    if (!raised || (element.symbol === 'pergola' && hasDeck(element))) {
+      ground.push(element);
+    }
     if (raised) objects.push(element);
   }
   // Canopies stand above furniture, even when furniture was added later.
@@ -66,4 +75,9 @@ export function exclusionMap(elements: DesignElement[]): Map<string, Point[][]> 
       .filter((e) => e.category === 'planting-bed' && e.shape.kind !== 'point')
       .map((e) => [e.id, plantingExclusions(e, elements)]),
   );
+}
+
+/** A pergola's deck is its material as boards; absent means the category default, which is timber. */
+function hasDeck(element: DesignElement): boolean {
+  return resolvePattern(element.material ?? defaultMaterial(element.category)) !== null;
 }

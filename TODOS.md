@@ -9,6 +9,53 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## In flight — the 3D structure editor (28 Sep 2026)
+
+Visualise is gone; a focused React Three Fiber editor opens a pergola or a gazebo from the inspector's
+"Edit in 3D" and edits the same `DesignElement` (see "Structures in 3D" in CLAUDE.md). Built: the
+`structure` schema, definitions, finishes, `structureParts`, the plan symbol and shadows from those
+parts, the workspace with Size/Style/Roof/Sides/Finish/Lighting and camera presets, tests at every
+layer and an e2e; then presets as whole bundles, generated structures that arrive configured, and a
+resize that keeps what the structure is against and names what is in the way.
+
+- [ ] **A `configure` intent for the designer.** "Add a privacy screen on the left", "make it
+      taller", "a solid roof" have no verb: `material`, `resize` and `rotate` already work on a
+      pergola, but roof, sides, lighting and height do not. A 13th `anyOf` branch with every field
+      required-and-honestly-empty, `probe:assistant` before landing, re-pinned budget test, and the
+      planner mapping it onto `mergeStructureConfig` / `height`. **Effort:** M.
+- [ ] **An absolute resize intent.** "Make the pergola 4 metres wide" can only be a `factor` today,
+      which the model has to compute from an inventory it reads imprecisely. **Effort:** S.
+- [ ] **A production GLB per frame model.** `lib/structures/model-registry.ts` has the `gltf` shape,
+      keyed by `structure.model` since presets became bundles, and no entry uses it. Needs a model whose nodes are named by group, placed from the part boxes, within
+      the AR budgets. **Effort:** M, mostly sourcing.
+- [ ] **More structures.** Shed, garden room, greenhouse, raised bed, fence/screen panels, decking
+      and steps are each a definition plus a parts builder that keeps the containment property; their
+      plan symbols can move onto `structurePlanDrawing` as they arrive. **Effort:** M each.
+- [ ] **The AR builder consumes `structureParts`.** `resolveStructure` → parts → `boxMesh`, finishes
+      → `ARMaterial`; the pyramid needs a four-triangle helper in `ar-contract`. **Effort:** S once the
+      builder exists.
+- [x] **The generator configures every structure it places** (28 Sep 2026): preset, frame model,
+      frame, roof, sides, lighting and an explicit height, its open front turned towards the terrace
+      or the house, and a far-end pergola on a Traditional or Natural brief drawn as a gazebo. See
+      "Generated structures, and resizing one" in CLAUDE.md.
+- [ ] **Offer "take ground off the neighbour" as a resize alternative.** A blocked resize offers the
+      largest size that fits and a small move; it never trims the bed in the way, because that is a
+      planner decision with its own undo. The assistant's `reshape` already takes a strip off a
+      neighbour through `FillService.subtract`; a third alternative could propose exactly that, and
+      would need the server. **Effort:** M.
+- [ ] **Show the conflicting element on the canvas.** A blocked resize names what is in the way in
+      the inspector; outlining it in clash red on the plan would need one ephemeral store field
+      (mind the five edit points) and a pass in the chrome layer. **Effort:** S.
+- [ ] **A seats control.** `planStructureResize` takes `{ seats }` and `seatsOn` reads the table
+      under a structure; nothing in the UI offers "make it fit 8" yet, and the assistant would need
+      the `configure` verb above to ask for it. **Effort:** S.
+- [ ] **Does a lit pergola count as the brief's "lighting"?** `lightingScheme` is what satisfies the
+      lighting space today, by category; a structure's integrated strip does not count. Probably it
+      should when the scheme itself placed nothing. **Effort:** S.
+- [ ] **Gazebos get no timber deck.** The pergola-only switches in `build-scene.ts` and
+      `scene-passes.ts` (the deck under a board-frame pergola) do not fire for a gazebo; true of
+      hand-placed gazebos before the generator made any. **Effort:** S.
+
 ## In flight — AR viewer (`docs/ar/ar-architecture.md`, started 26 Sep 2026)
 
 Two developers: A keeps the web app, API and geometry; B owns `apps/mobile`. Built so far: the
@@ -45,7 +92,7 @@ sample garden in Expo Go. No AR view, no builder, no endpoint. The roadmap is §
 
 ## In flight — composing gardens rather than placing features (plan: `~/.claude/plans/i-want-you-to-wondrous-crab.md`)
 
-Phases 0–4 are built (24–26 Sep 2026). All seven compositions are composed; the preview and the
+Phases 0–4 and the first half of 5 are built (24–28 Sep 2026). All seven compositions are composed; the preview and the
 built plan are held to agreeing; planting depth follows its job; rooms take the plan's shape
 language and the room a concept is about is its most generous; each composition is drawn in every
 language it speaks and the brief can say which. See "Composing a garden rather
@@ -61,23 +108,58 @@ the numbers at each step.
       disagreeing, which is what took requested features drawn from 82% to 90%.
 - [x] **Phase 2: planting shapes space** — the side-zone band stops at the garden room, screening
       beds only where a boundary is too low to screen, depth varying by side measured by the harness.
-- [ ] **Delete the hand-drawn sketches once nothing declines to them** (plan Phase 5):
-      `LayoutArchetype.sketch`, each archetype's `handDrawn()`, `designedBeds`, `slotIn`/`edgeBed`,
-      `layout/templates/` and `golden.test.ts`. They are still the fallback where a composition
-      declines — a plot that cannot hold an essential round a lawn — so first measure how often each
-      one is reached, and give those plots a composed answer.
-- [ ] **Extract realisation from `concepts.service.ts` into its own service** (plan Phase 5).
+- [x] **Phase 5, first half: the hand-drawn sketches retire where a composition answers.** A
+      composition that declines every variation is no longer offered where another composed
+      (`enumerateCandidates`); a destination garden with nothing worth walking to puts a garden seat at
+      the far end instead of declining; and the hand-drawn plans of `side_by_side`, `linear_sequence`,
+      `courtyard` and `destination_garden` are deleted, with `LAST_RESORT` (the terrace-and-lawn
+      template) behind them. Every concept came out byte-identical across the deletion.
+      Hand-drawn concepts 21/117 → 12/117.
+- [x] **The last twelve hand-drawn concepts, and the three classic templates with them.** The
+      courtyard now carves rooms off its floor — a dining area at the far end with the kitchen against
+      the fence beside it, a kitchen by the house, a far room in the rear band — and drawn as the last
+      resort it never declines: it reports what it could not seat. It is what every composition falls
+      back to and what the candidate loop offers, under its own name, where nothing composed
+      (`lastResortCandidates`). The small-entertaining brief is a courtyard now (9/117 concepts, 0.93
+      mean, against 0.85 for the templates). The three L-shape concepts were **not** a composition
+      problem: a repair changed a candidate's parameters past the point where it composed, and the
+      fallback drew under the old name. The repair stage refuses that now. `layout/templates/`,
+      `golden.test.ts`, `designedBeds`, `assignSlots`/`slotPreferences`, `LAST_RESORT`,
+      `lawnPlanZones`, the lawn re-cut and the backdrop-tree walk are deleted.
+- [ ] **Sets of three different compositions 77% → 69%.** The declined compositions' templates were
+      standing in as the third answer; some of that variety was a template under another composition's
+      name, and some was real. Walking further down the ranking was tried and reverted: the fourth
+      composition for the narrow cottage plot was a formal axis with a tenth of the garden planted.
+- [ ] **The garden seat scores below the hand-drawn destination it replaced** on the unlocated and
+      side-gate plots (0.92 against 0.96, 0.88 against 0.93): the seat and its screen take the lawn to
+      15% against a 20% band, and the walk to it adds a paving.
+- [ ] **Extract the rest of realisation** (plan Phase 5). `realise/` now holds the ground cover,
+      the lawn and its beds, the fence borders, the front garden, the structural planting, the paths
+      (`routes.ts`) and the rooms beyond the brief — reserved seats, second helpings, the side lounge
+      and the garden lounge (`extra-rooms.ts`) — each with a typed context and each verified
+      byte-identical. `build` is 1,742 lines, from 2,581. What stays is stage 1's core: the terrace,
+      each requested feature into its bay, the steps, and the sampler on a plot with no house. Those
+      share `settled`, `checks`, `decisions`, `placedBySlot` and the terrace itself, and deciding who
+      owns that state is the design work rather than a move.
+- [ ] **The side lounge as a bay.** It is still placed by realisation in the side return, outside the
+      garden room the composition works in, so no composition and no preview knows it is there. This
+      is not a move: the composition, `fitInSlot` and the preview all work inside `grammar.room`, and a
+      side return is outside it by definition. It needs the composition to be handed the side strips
+      in the frame and a slot that may be fitted outside the room.
 - [ ] **A store on a garden six metres wide is always in the view from the doors**: the cone is the
       whole width there, and it is why the sequence is the weakest composition (0.792). The answer is
       probably a store by the house on the gate side rather than at the far end — a ladder question,
       and it would also answer "the store belongs by the gate" (`relationship-unmet`, 33).
 - [x] **No path crosses a lawn** (`route-crosses-panel` 3 → 0), since the sweeping lawn's curve
       stopped bulging past its own rectangle.
-- [ ] **Seating in shade: 81** (75 before Phase 3). A room that wants the sun now takes the first
-      place on its list that is not mostly in shade (`request.shade`), but the terrace itself is at
-      the house and a north-facing plot's terrace is in shade whatever happens. Moving the sofas off
-      a dining-led terrace put two things there in shade where there had been one; the answer is a
-      second sitting area composed on the sunny side, not only preferred there.
+- [x] **Seating in shade: 84 → 48.** The sun principle judges seating by its sunniest seat, and the
+      composition reserves a small sun terrace wherever the terrace it drew is two-fifths shaded —
+      converting a spare seat where there was one, placed only out of the afternoon shade, and the
+      first thing to give way when the lawn cannot hold everything. What is left is mostly plots
+      already full of what was asked for, and the dining table, which is judged where it stands.
+- [ ] **The sun terrace costs canopy (0.831 → 0.804) and the minimum (0.771 → 0.758).** On the long
+      narrow plot it takes the lawn corner the framing tree stood in. A tree beside it would shade
+      the seat it is there to put in the sun; recorded rather than traded away.
 - [ ] **Too many materials (87) and sparse canopy (63)** are untouched by composition; the first is
       a `materialFor` question, the second the tree budget against what the bays leave room for.
       Materials rose from 81 because spare seats now succeed more often and bring a paving of their own.
@@ -622,7 +704,8 @@ grade and the shadows that shipped.
       **Context:** prior learning `design-app-main-zone-border-call-is-dead`, 2026-09-10.
       **Depends on:** nothing. **Effort:** M.
 
-- [ ] **Nothing exercises a near-empty plan in Visualise.**
+- [x] **Nothing exercises a near-empty plan in Visualise.** _Obsolete: Visualise was removed on
+      28 Sep 2026._
       **What:** a fixture with a boundary, a house and almost nothing else, on the judging sheet.
       **Why:** every fixture is a fully generated design, so the sheets say nothing about what a
       user sees immediately after step 1, which is the first Visualise anyone ever opens. The grade,
@@ -633,7 +716,10 @@ grade and the shadows that shipped.
       **Context:** raised by the design review's states pass. **Depends on:** nothing.
       **Effort:** S.
 
-## In flight — the elevated Visualise (plan: `~/.claude/plans/read-prompt-1-md-and-plan-kind-music.md`)
+## Retired — the elevated Visualise (removed 28 Sep 2026; plan: `~/.claude/plans/read-prompt-1-md-and-plan-kind-music.md`)
+
+_Kept as a record. The view, its stack and its asset library were removed; open items below are
+obsolete unless they say otherwise._
 
 - [x] **Phase 1 — the specification.** `docs/visualise-asset-style.md`; `AssetFamily.camera` and
       `heightMetres` with `assetsMatching` defaulting to `plan`, so no existing query changed its
@@ -694,7 +780,8 @@ grade and the shadows that shipped.
       the near and far fences, a dining set under a pergola). The furniture rotation decision —
       one asset or four directional variants — is meant to be made on that sheet and cannot be
       made before the art exists. **Effort:** S.
-- [ ] **Two suns: the art is lit from the upper left and a located plan's is not.** Measured on the
+- [x] **Two suns: the art is lit from the upper left and a located plan's is not.** _Obsolete with
+      the elevated library._ Measured on the
       suburban fixture (Manchester, day 172, 15:00) `lightDirection` is `{-0.91, +0.41}` — the sun is
       low in the west, below and left — while every generated sprite is lit from the upper left.
       An *unlocated* plan has no disagreement at all, the art is deliberately low-contrast, and the
@@ -702,7 +789,7 @@ grade and the shadows that shipped.
       fix is mirroring a sprite horizontally when the sun crosses to the right; the expensive ones
       all give up either the time slider or the form the elevated library exists for. **A decision,
       not a bug.** See the style doc's "The cost, measured rather than assumed".
-- [ ] **A side fence shows no face, by construction.** A wall running up and down the screen is
+- [x] **A side fence shows no face, by construction.** _Obsolete with the elevated view._ A wall running up and down the screen is
       edge-on to a vertical lift. It reads through its posts, its shade band and its cast shadow.
       Revisit only with evidence from a real plan that it is not enough; the fix is leaning the
       lift diagonally and it costs the measurable-footprint guarantee. **Effort:** L, and probably

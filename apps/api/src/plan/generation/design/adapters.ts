@@ -8,6 +8,7 @@ import {
 import type { LayoutPreview } from './layout-generator.js';
 import { FEATURE_SPECS } from '../archetypes.js';
 import { FEATURE_LIBRARY } from '../knowledge/feature-library.js';
+import { HOST_PLAN_NAMES } from '../knowledge/structures.js';
 
 /**
  * Reading a finished element list back as a design.
@@ -64,6 +65,10 @@ export function identifyFeatures(elements: DesignElement[]): Map<string, Desired
    */
   byName.set('Terrace', 'seating');
   byName.set('Garden lounge', 'seating');
+  byName.set('Sun terrace', 'seating');
+  byName.set('Garden seat', 'seating');
+  // A far-end pergola drawn as a gazebo is still the pergola the brief asked for.
+  for (const [name, feature] of Object.entries(HOST_PLAN_NAMES)) byName.set(name, feature);
 
   const found = new Map<string, DesiredFeature>();
   for (const element of elements) {

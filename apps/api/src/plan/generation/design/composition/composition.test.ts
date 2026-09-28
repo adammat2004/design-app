@@ -450,11 +450,27 @@ describe('a destination garden', () => {
     }
   });
 
-  it('declines a plot with nothing worth walking to', () => {
+  it('puts a garden seat at the far end where nothing asked for is worth walking to', () => {
     const composition = composeGarden({
       archetype: 'destination_garden',
       language: 'rectilinear',
       request: request({ features: ['seating', 'storage', 'vegPatch'] }),
+      room: room({ uMax: 18 }),
+      params: defaultParams('destination_garden'),
+    })!;
+    const seat = composition.bays.find((bay) => bay.purpose === 'end-seat');
+    expect(seat).toBeDefined();
+    expect(seat!.rect.u1).toBeGreaterThan(composition.openSpace!.rect.u1);
+    expect(composition.decisions.find((d) => d.kind === 'destination')?.text).toContain(
+      'garden seat',
+    );
+  });
+
+  it('declines where there is nothing to walk to and nowhere asked to sit', () => {
+    const composition = composeGarden({
+      archetype: 'destination_garden',
+      language: 'rectilinear',
+      request: request({ features: ['storage', 'vegPatch'] }),
       room: room({ uMax: 18 }),
       params: defaultParams('destination_garden'),
     });
@@ -699,7 +715,52 @@ describe('the shape language', () => {
     /* Pushed to one side rather than centred on the doors. */
     const lawn = asymmetric.openSpace!.rect;
     expect(Math.abs((lawn.v0 + lawn.v1) / 2)).toBeGreaterThan(0.5);
-    expect(asymmetric.decisions.some((decision) => decision.kind === 'lawn-interlocked')).toBe(true);
+    expect(asymmetric.decisions.some((decision) => decision.kind === 'lawn-interlocked')).toBe(
+      true,
+    );
+  });
+});
+
+describe('a seat for the sun', () => {
+  /* The afternoon shadow of the house: the first four metres out from the wall, fence to fence. */
+  const houseShadow: LocalPoint[][] = [
+    [
+      { u: -1, v: -8 },
+      { u: 4.5, v: -8 },
+      { u: 4.5, v: 8 },
+      { u: -1, v: 8 },
+    ],
+  ];
+  const compose = (over: Partial<SketchRequest>) =>
+    composeGarden({
+      archetype: 'terrace_and_lawn',
+      language: 'rectilinear',
+      request: request({ features: ['seating', 'storage'], ...over }),
+      room: room({ uMax: 18 }),
+      params: defaultParams('terrace_and_lawn'),
+    })!;
+  const inShadow = (point: LocalPoint) => inside(point, houseShadow[0]!);
+
+  it('is set where the sun is when the terrace is in the shade', () => {
+    const shaded = compose({ shade: houseShadow, sunSeat: true });
+    const seat = shaded.bays.find((bay) => bay.purpose === 'sun-seat');
+    expect(seat).toBeDefined();
+    const { u0, u1, v0, v1 } = seat!.rect;
+    const corners = [
+      { u: u0, v: v0 },
+      { u: u1, v: v0 },
+      { u: u1, v: v1 },
+      { u: u0, v: v1 },
+    ];
+    expect(corners.filter(inShadow).length).toBeLessThanOrEqual(2);
+    expect(shaded.decisions.some((decision) => decision.kind === 'sun-seat')).toBe(true);
+  });
+
+  it('is not reserved for a terrace in the sun, or where the budget does not allow it', () => {
+    const sunny = compose({ shade: [], sunSeat: true });
+    expect(sunny.bays.some((bay) => bay.purpose === 'sun-seat')).toBe(false);
+    const cheap = compose({ shade: houseShadow, sunSeat: false });
+    expect(cheap.bays.some((bay) => bay.purpose === 'sun-seat')).toBe(false);
   });
 });
 

@@ -21,13 +21,13 @@ import { edgeRulesOf } from '../edge-rules';
  * This existed only as a habit before. `scripts/render-plan.ts` says so in its own header — "Nothing
  * here asserts anything" — and `preview-dir.ts` keeps exactly one previous run inside a gitignored
  * folder, so running the script twice destroys the baseline you were going to compare against. Every
- * presentation change to Visualise edits files both views share (`render-plan.ts`, `light.ts`,
- * `build-scene.ts`), which makes a silent plan-view regression the likeliest way that work goes
- * wrong, and nothing in the suite could see it.
+ * presentation change edits files the whole plan shares (`render-plan.ts`, `light.ts`,
+ * `build-scene.ts`), which makes a silent regression the likeliest way that work goes wrong, and
+ * nothing in the suite could see it.
  *
  * So: real generator fixtures, drawn through the real composer, against committed bytes.
  *
- *     scene ──▶ drawPlan (view: 'plan') ──▶ RGBA ──┐
+ *     scene ──▶ drawPlan ──▶ RGBA ─────────────────┐
  *                                                  ├─▶ per-channel |diff| <= TOLERANCE
  *     __golden__/plan-<fixture>.png ──▶ RGBA ──────┘
  *
@@ -210,22 +210,4 @@ describe('2D Plan is unchanged', () => {
       ).toBe(0);
     });
   }
-
-  /**
-   * The other half, and it is not decoration.
-   *
-   * A test that only demands "the plan view did not change" passes perfectly when a presentation
-   * change silently does nothing at all — a grade wired to the wrong branch, a wash inside a
-   * condition that is never true. Pinning that Visualise *does* differ means the pair can only both
-   * be green when the change landed where it was meant to and nowhere else.
-   */
-  it('renders Visualise differently from the plan view', () => {
-    const scene = sceneOf(loadFixture('suburban'));
-
-    const plan = render(scene, { view: 'plan' });
-    const visualise = render(scene, { view: 'visualise' });
-
-    const { over } = worstDifference(visualise, plan);
-    expect(over).toBeGreaterThan(0);
-  });
 });

@@ -10,7 +10,6 @@ import { renderSeamLayer, SEAM_SHADE_OPACITY } from '../../materials/render-seam
 import type { LoadedAsset } from '../../materials/assets/registry';
 import type { MakeCanvas, PatternCanvas } from '../../materials/render-surface-pattern';
 import { RasterLru } from '../../materials/raster-lru';
-import { elevatedPlacement } from '../../materials/symbols/elevated';
 import { RISE } from '../camera';
 import type { RenderScene, RenderPlant } from '../scene';
 import { intersects, RENDER_PASSES, type RenderPrimitive, type WorldBounds, type RenderPassName } from '../primitives';
@@ -343,17 +342,10 @@ export class SceneRenderer {
       this.textures.set(key, texture);
     }
     const sprite = new Sprite(texture);
-    const placement = elevatedPlacement(plant.assetId, plant.at, { width: plant.spread, depth: plant.spread });
-    if (placement) {
-      sprite.anchor.set((plant.at.x - placement.x) / placement.width, (plant.at.y - placement.y) / placement.height);
-      sprite.width = placement.width; sprite.height = placement.height;
-      sprite.position.set(plant.at.x, plant.at.y);
-    } else {
-      sprite.anchor.set(0.5);
-      const factor = plant.spread / Math.max(asset.image.width, asset.image.height);
-      sprite.width = asset.image.width * factor; sprite.height = asset.image.height * factor;
-      sprite.position.set(plant.at.x, plant.at.y - plant.height / 2 * RISE);
-    }
+    sprite.anchor.set(0.5);
+    const factor = plant.spread / Math.max(asset.image.width, asset.image.height);
+    sprite.width = asset.image.width * factor; sprite.height = asset.image.height * factor;
+    sprite.position.set(plant.at.x, plant.at.y - plant.height / 2 * RISE);
     sprite.rotation = plant.rotation;
     if (scene.night) {
       const channel = Math.round(255 * (1 - scene.night * NIGHT_MAX_ALPHA * 0.8));

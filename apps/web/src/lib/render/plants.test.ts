@@ -6,7 +6,7 @@ import {
   type Point,
 } from '@garden-studio/schema';
 import { buildRenderScene, type PlanScene } from './build-scene';
-import type { Maturity, RenderPlant } from './scene';
+import type { RenderPlant } from './scene';
 
 const BOUNDARY: Point[] = [
   { x: 0, y: 0 },
@@ -54,8 +54,8 @@ function scene(elements: DesignElement[]): PlanScene {
   };
 }
 
-function plantsOf(elements: DesignElement[], maturity: Maturity = 'mature'): RenderPlant[] {
-  return buildRenderScene(scene(elements), { view: 'visualise', maturity }).plants;
+function plantsOf(elements: DesignElement[]): RenderPlant[] {
+  return buildRenderScene(scene(elements)).plants;
 }
 
 describe('render-only planting', () => {
@@ -148,47 +148,6 @@ describe('render-only planting', () => {
     });
   });
 
-  describe('maturity', () => {
-    /*
-     * The invariant `maturity.ts` argues for. The sampler's acceptance draw sits at a fixed
-     * position in each cell's sequence and scales linearly with `share`, so thinning can only
-     * remove plants — a young garden is the mature one with plants taken out, not a different
-     * garden that happens to be sparser.
-     */
-    it('is a subset: a young garden is the mature one thinned', () => {
-      const mature = plantsOf([bed('bed-a', 2)], 'mature');
-      const young = plantsOf([bed('bed-a', 2)], 'year-1');
-      const ids = new Set(mature.map((plant) => plant.id));
-
-      expect(young.length).toBeLessThan(mature.length);
-      expect(young.length).toBeGreaterThan(0);
-      for (const plant of young) expect(ids.has(plant.id)).toBe(true);
-    });
-
-    it('thins monotonically through the three settings', () => {
-      const counts = (['year-1', 'year-3', 'mature'] as Maturity[]).map(
-        (maturity) => plantsOf([bed('bed-a', 2)], maturity).length,
-      );
-      expect(counts[0]!).toBeLessThanOrEqual(counts[1]!);
-      expect(counts[1]!).toBeLessThanOrEqual(counts[2]!);
-    });
-
-    /* A plant that survives the thinning keeps its place; only its crown changes. */
-    it('moves nothing, and only scales the crown', () => {
-      const mature = plantsOf([bed('bed-a', 2)], 'mature');
-      const young = plantsOf([bed('bed-a', 2)], 'year-1');
-      const byId = new Map(mature.map((plant) => [plant.id, plant]));
-
-      for (const plant of young) {
-        const grown = byId.get(plant.id)!;
-        expect(plant.at).toEqual(grown.at);
-        expect(plant.rotation).toBe(grown.rotation);
-        expect(plant.assetId).toBe(grown.assetId);
-        expect(plant.spread).toBeLessThan(grown.spread);
-      }
-    });
-  });
-
   /*
    * Coverage, measured rather than inferred. Summing crown areas double-counts every overlap, so
    * it says nothing about how much ground is actually hidden; sampling the bed on a lattice and
@@ -198,8 +157,8 @@ describe('render-only planting', () => {
   describe('coverage', () => {
     const AREA = { x: 2, y: 2, width: 6, length: 7 };
 
-    function covered(maturity: Maturity): number {
-      const plants = plantsOf([bed('bed-a', 2)], maturity);
+    function covered(): number {
+      const plants = plantsOf([bed('bed-a', 2)]);
       const steps = 90;
       let hits = 0;
 
@@ -233,8 +192,7 @@ describe('render-only planting', () => {
      * about the risk and wrong about the remedy. What makes individual plants legible is that they
      * differ in size, and `measure:render` reports that directly: the share of plants under half a
      * metre fell from about 80% to about 20% in the same change that closed the bed. Bare soil
-     * between crowns is not the thing doing that work. What still protects "visibly open" is the
-     * first-year band below, which is a statement about a *young* garden and is unchanged in kind.
+     * between crowns is not the thing doing that work.
      *
      * `PLANTING_REPORT=1 pnpm test` prints where inside the band we actually sit instead of only
      * asserting that we are somewhere in it — the same escape hatch `COMPOSITION_REPORT=1` gives
@@ -243,28 +201,14 @@ describe('render-only planting', () => {
      * either edge.
      */
     it('closes a mature bed almost completely, without quite tiling it', () => {
-      const fraction = covered('mature');
+      const fraction = covered();
 
       if (process.env.PLANTING_REPORT === '1') {
-        const report = (['year-1', 'year-3', 'mature'] as Maturity[])
-          .map((maturity) => `${maturity} ${(covered(maturity) * 100).toFixed(1)}%`)
-          .join('   ');
-        console.log(`\n  PLANTING COVERAGE   ${report}\n`);
+        console.log(`\n  PLANTING COVERAGE   ${(fraction * 100).toFixed(1)}%\n`);
       }
 
       expect(fraction).toBeGreaterThan(0.9);
       expect(fraction).toBeLessThan(0.999);
-    });
-
-    it('leaves a first-year bed visibly open', () => {
-      const fraction = covered('year-1');
-      expect(fraction).toBeGreaterThan(0.25);
-      expect(fraction).toBeLessThan(0.8);
-    });
-
-    it('fills in as the garden grows', () => {
-      expect(covered('year-1')).toBeLessThan(covered('year-3'));
-      expect(covered('year-3')).toBeLessThan(covered('mature'));
     });
   });
 });

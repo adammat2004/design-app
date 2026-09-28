@@ -18,6 +18,7 @@ import {
   CONTACT_SHADOW_OFFSET_RATIO,
   CONTACT_SHADOW_SCALE,
   LIGHT_DIRECTION,
+  SHADOW_TONE,
 } from '@/lib/materials/light';
 import {
   beamLines,
@@ -34,12 +35,11 @@ import {
   roofTones,
 } from '@/lib/materials/symbols/draw-symbol';
 import { symbolSprite } from '@/lib/materials/symbols/sprites';
+import { structurePlanDrawing } from '@/lib/materials/symbols/structure-plan';
 import {
   facesLight,
   gardenRoomParts,
-  gazeboRoof,
   glazingBars,
-  pergolaPosts,
   raisedBedRails,
   rectNormal,
   shedRoof,
@@ -364,22 +364,27 @@ function SymbolDrawing({
   const ringPoints = (ring: Point[]) => ring.flatMap((p) => [at(p).x, at(p).y]);
 
   switch (symbol) {
-    case 'pergola': {
-      if (Math.min(shape.width, shape.depth) * scale < MIN_STRUCTURE_DETAIL_PX) return null;
+    case 'pergola':
+    case 'gazebo': {
+      /*
+       * Both from the same parts the composer and the 3D editor draw — see `structure-plan.ts`.
+       * Below the detail floor only the roof is drawn, as the composer does.
+       */
+      const drawing = structurePlanDrawing(element, lit);
+      if (!drawing) return null;
+      const detailed = Math.min(shape.width, shape.depth) * scale >= MIN_STRUCTURE_DETAIL_PX;
       return (
         <Group listening={false}>
-          {beamLines(shape.centre, shape.width, shape.depth, shape.rotation).map((beam, index) => (
-            <Line
-              key={index}
-              points={ringPoints(beam)}
-              stroke={CATEGORY_COLOURS.structure.stroke}
-              strokeWidth={1.5}
-              opacity={0.55}
-            />
-          ))}
-          {pergolaPosts(shape).map((post, index) => (
-            <Line key={`post-${index}`} points={ringPoints(post)} closed fill={POST_TONE} />
-          ))}
+          {detailed
+            ? drawing.slatShadows.map((ring, index) => (
+                <Line key={`shade-${index}`} points={ringPoints(ring)} closed fill={SHADOW_TONE} opacity={0.17} />
+              ))
+            : null}
+          {drawing.pieces
+            .filter((piece) => detailed || piece.group === 'roof')
+            .map((piece, index) => (
+              <Line key={index} points={ringPoints(piece.ring)} closed fill={piece.fill} opacity={piece.alpha} />
+            ))}
         </Group>
       );
     }
@@ -410,28 +415,6 @@ function SymbolDrawing({
             stroke={CATEGORY_COLOURS.structure.stroke}
             strokeWidth={1.5}
           />
-        </Group>
-      );
-    }
-    case 'gazebo': {
-      const { lit: litTone, unlit: unlitTone } = roofTones(element);
-      const normals: Point[] = [
-        { x: 0, y: -1 },
-        { x: 1, y: 0 },
-        { x: 0, y: 1 },
-        { x: -1, y: 0 },
-      ];
-      return (
-        <Group listening={false}>
-          {gazeboRoof(shape).map((facet, index) => (
-            <Line
-              key={index}
-              points={ringPoints(facet)}
-              closed
-              fill={facesLight(rectNormal(shape, normals[index]!), lit) ? litTone : unlitTone}
-              opacity={ROOF_ALPHA}
-            />
-          ))}
         </Group>
       );
     }

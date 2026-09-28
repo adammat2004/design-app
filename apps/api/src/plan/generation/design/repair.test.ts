@@ -7,6 +7,7 @@ import { elementsFromPreview } from './adapters.js';
 import { buildBriefs } from './brief-builder.js';
 import { enumerateCandidates } from './candidates.js';
 import { chooseLayouts } from './choose.js';
+import { NO_PATH_NEEDED, ringGap } from './evaluate/circulation.js';
 import { evaluateDesign } from './evaluate/index.js';
 import { previewLayout, type PreviewRequest } from './layout-generator.js';
 import { repairCandidate, UNAVAILABLE } from './repair.js';
@@ -314,6 +315,16 @@ describe('a preview', () => {
       const candidate = enumerateCandidates({ analysis, brief: briefs[0]!, context })[0]!;
       const { preview } = candidate;
       if (preview.terraceRefused || preview.placed.length < 2) continue;
+      /*
+       * A room within a stride of the terrace is reached from it with no path, which is every room
+       * in a courtyard: each is carved off the floor. Only a plan with a room further out owes one.
+       */
+      const terrace = preview.placed.find((item) => item.slotId === 'terrace');
+      const far = preview.placed.filter(
+        (item) =>
+          item !== terrace && (!terrace || ringGap(item.ring, terrace.ring) > NO_PATH_NEEDED),
+      );
+      if (far.length === 0) continue;
 
       /* Not every room can be reached on every plot; what must hold is that it was attempted. */
       expect(preview.routes.length, entry.key).toBeGreaterThan(0);

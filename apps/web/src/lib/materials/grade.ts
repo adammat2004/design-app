@@ -1,11 +1,11 @@
 /**
- * The Visualise scene grade.
+ * The scene grade.
  *
  * One set of numbers, two applications, and a test that pins them to each other.
  *
- * **Why two applications.** Visualise on screen is two stacked DOM canvases — a WebGL one for the
- * ground, surfaces, shadows and planting, and a transparent 2D one over it for the house, the
- * fence, the objects and the night wash. Nothing draws both, so nothing can grade both; the only
+ * **Why two applications.** The plan on screen is two stacked DOM canvases (`EditorScene`) — a
+ * WebGL one for the ground, surfaces, shadows and planting, and a transparent 2D one over it for
+ * the house, the fence, the objects and the night wash. Nothing draws both, so nothing can grade both; the only
  * element that contains them is the wrapper `div`, which takes `gradeCss()`. The judging sheets,
  * the PNG export and the concept thumbnails are the opposite case — one canvas, no DOM, no wrapper
  * — so they take `applyGrade`. A grade that existed only as CSS would be invisible to
@@ -189,7 +189,7 @@ export function warmthMatrix(): string {
 }
 
 /**
- * The grade as a CSS `filter` value, for the Visualise wrapper.
+ * The grade as a CSS `filter` value, for `EditorScene`'s wrapper.
  *
  * Identity terms are left out rather than written as `saturate(1)`: a filter list that is entirely
  * identity should be `none`, so the browser skips compositing the element into its own layer.

@@ -149,6 +149,16 @@ export function repairCandidate(request: RepairRequest): RepairResult {
      * smaller garden, and the score would read the absence as an improvement.
      */
     if (!keepsWhatItPlaced(candidate.preview, preview, next)) continue;
+    /*
+     * A change to the parameters can take a composition past the point where it holds the brief,
+     * and what draws then is the last-resort courtyard under the composition's name. It can score
+     * better — it is a smaller, simpler garden — which is exactly why it has to be refused before
+     * the score is read: this is how three L-plot concepts headed "Sweeping lawn" came to be paved
+     * corner to corner, and before the courtyard existed, drawn by a hand-drawn template.
+     */
+    if (preview.sketch.composed?.lastResort && !candidate.preview.sketch.composed?.lastResort) {
+      continue;
+    }
 
     const { elements, featureOf } = elementsFromPreview(preview, request.context.zoneAt);
     const scored = evaluateDesign({

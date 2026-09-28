@@ -143,147 +143,25 @@ house by `computeZones`, so storing them could only create something stale.
   layout templates — "Terrace and lawn", "Sweeping lawn", "Formal axis" — and the brief's style
   picks the recommended one. See "The layout grammar" below.
 
-- **Visualise is a live WebGL view, not a picture of one**: `buildRenderScene` resolves the plan
-  once and two backends draw it — Canvas2D for thumbnails, exports and the judging sheets, PixiJS
-  for the Visualise tab, which pans, zooms and answers to a planting-maturity control and a
-  time-of-day slider. Planting there is lifted out of each bed's raster and drawn as sprites above
-  it, so foliage overlaps its bed's edge and its neighbours; the house gets a derived roof. See
-  "The render scene, and the two views" and "PixiJS, and where it earns its place" below.
-- **Visualise is also _elevated_**: an oblique projection lifts anything with a height `h × RISE`
-  up the screen (`RISE = tan 12°`), so a shed shows its front wall, the house shows render under
-  its roof and a fence has a face. Everything built is **extruded from its own outline** rather
-  than photographed, so it is correct at any rotation; everything placed is a sprite. One
-  depth-sorted `RenderScene.stack` replaces the old pass order in that view, which is what lets a
-  canopy fall across a roof and a border hide behind the fence in front of it. The plan view is
-  untouched and its `stack` is empty. The matching **elevated asset library** (`vis-*`, `skin-*`)
-  is specified in `docs/visualise-asset-style.md` and `asset-spec.ts` and **is generated** — 28
-  `vis-*` and 4 `skin-*` files. A family with no twin still falls back to its plan sprite, which is
-  what lets the library arrive in waves. See "Visualise is elevated" and "The two cameras" below.
+- **the full-garden Visualise view is gone (28 Sep 2026)**, and a **focused 3D editor for
+  structures** replaces it: select a pergola or a gazebo, press **Edit in 3D**, and a React Three
+  Fiber configurator opens over the editor — dimensions, roof, side screens, frame finish, integrated
+  lighting and a style preset, with Orbit/Front/Side/Top cameras. It edits the **same
+  `DesignElement`**: width and depth are the element's `rect`, height its `height`, the frame its
+  `material`, and only what has no top-down home is in the new optional `DesignElement.structure`.
+  One pure `structureParts` in `packages/schema` feeds the plan symbol, the shadow model, the 3D
+  view and (later) the AR builder. See "Structures in 3D" and "Visualise was removed" below.
+- **generated structures arrive configured**, so the 3D editor refines rather than builds: every
+  pergola the generator places carries a preset's whole look, an explicit height and its open front
+  turned towards the terrace or the house, and a far-end one on a Traditional or Natural brief is a
+  gazebo. Resizing — from 2D, 3D or the assistant — keeps the side the structure is against, names
+  what is in the way and offers checked alternatives. See "Generated structures, and resizing one".
 
-**There is a measurement of how a plan composes, and it is the seed of the evaluation harness.**
-`measureComposition` (`packages/schema/src/plan/composition.ts`, beside `quantities.ts`) samples a
-grid over the zones in scope and classifies each point by the **topmost** element covering it, so
-shares of hard landscaping, lawn, planting and base-showing-through sum to one by construction.
-Element areas overlap by design — a base fill is the whole zone and everything is drawn over it —
-so summing them double counts; sampling is the pure way to read coverage without a polygon-boolean
-library. It has no authority: every outline came from `geometryOutline`, and deleting the file
-leaves the plan dimensionally identical.
 
-**The bands come from the traced target, not from the generator.**
-`apps/web/scripts/fixtures/target.plan.json` is `target_design.png` traced by hand and scaled so the
-house is 9 m wide; it measures hard 0.42, lawn 0.21, planting 0.32, with 0.02 of base showing.
-`COMPOSITION_BANDS` (`apps/api/src/plan/generation/composition-rules.ts`) widens those and
-cross-checks them against the usual rules of thumb. Calibrating against the generator's own output
-would only ever confirm what it already did. The target renders on the judging sheet as the eleventh
-fixture, which is the comparison the sheet exists for.
-
-**The bands are asserted on the garden proper, and the whole plot is reported beside it.**
-`reference-fixture.test.ts` runs the rules over 10 fixtures × 3 concepts of live generation;
-`COMPOSITION_REPORT=1` prints both rows instead of asserting. The room is what the templates
-control. Over the whole plot, generated plans still show 5-46% base ground against the target's 2%,
-and closing that is the arrival grammar and the second side room — recorded in TODOS.md rather than
-hidden by a wider band. `MEASURE_TOLERANCE` is 0.05 m because clipping to an odd room and
-simplifying in PostGIS shaves centimetres off a floor the sketch guaranteed.
-
-- **there is a designer's reading of every plan, and a benchmark over the generator**: a pure
-  TypeScript design agent (`apps/api/src/plan/generation/design/`, `knowledge/`) that analyses the
-  site, infers what the garden is *for*, ranks the requested features by tier, writes a strategy per
-  concept slot, and scores the finished elements against twelve landscape-design principles — with the
-  faults it found, each a measured sentence. `GeneratedConcept` carries `strategy`, `score` and
-  `explanation`; step 4 shows the decisions and why a feature was left out.
-  `pnpm --filter @garden-studio/api eval:generator` is the harness: 13 cases × 3 seeds, reporting
-  validity, composition bands, score per principle, inclusion, determinism and latency. Today's
-  numbers: **117/117 valid, deterministic, mean score 0.891, minimum 0.781, no critical faults, 90%
-  of requested features drawn, 74% inside the composition bands.** Nothing here moves a coordinate.
-- **all seven compositions are composed, not sketched**: `design/composition/` reserves the open
-  space first, puts every room in a bay *outside* it, keeps corridors for the paths, plans the focal
-  point, gives every tree a role and every element a `purpose`, and hands the result on as an
-  ordinary `LayoutSketch`. The twelfth principle, `composition`, detects the object-by-object faults
-  it was built to remove. **Measured** (Phase 0 → now): features standing on the open ground 47 →
-  17, leftover-shaped lawns 74 → 21, paths cutting the lawn 33 → 0, every lawn in one piece. Each
-  hand-drawn sketch survives as the fallback a composition declines to. See "Composing a garden
-  rather than placing features".
-- **rooms take the plan's shape language, and the room a concept is about is its most generous**:
-  a square fire pit in a straight plan and round rooms beside a sweeping lawn, an asymmetric
-  terrace-and-lawn for a modern brief, the table taking the terrace in a dining-led concept, and the
-  terrace held to a lawn-led concept's lawn. Mixed geometry 48 → 6, mean score 0.891 → 0.899. See
-  "Phase 3: the plan's shape language".
-- **each composition is drawn several ways, and the brief can say which**: every candidate is an
-  archetype in one of the shape languages it speaks, framed or not, and a brief (or a model) can
-  state the recommendation's language. Sets of three cards offering a straight and a curved garden
-  69% → 85% at no cost in score. See "Phase 4: a composition drawn several ways".
-- **the planting is as deep as its job**: borders vary in depth by side (80% of plans, a mean
-  spread of 1.9 m, measured by the harness), a screening bed goes against a boundary only where it is
-  too low to screen a seat, and the side-zone band no longer plants over the garden's own paths.
-  `pnpm render:plan` writes `00-schematic-sheet.png` — flat colour, routes with arrows, the view line
-  and every element's purpose — which is where a composition is judged.
-- **the scorer judges a garden against its own brief, and there is a benchmark over the scorer
-  itself.** The weights follow what the concept is *for* (`knowledge/weight-profiles.ts`), four
-  principles read the fields that vary by concept slot, and `maintenanceFit` is the tenth principle.
-  `pnpm --filter @garden-studio/api eval:scorer` measures it against nine hand-built gardens with no
-  database and no generator (`design/evaluate/gallery.ts`). **Measured**: the three concept slots
-  were identical to three decimal places and now differ on every garden; a well-composed plan given
-  to the wrong brief dropped from 0.97 to 0.89 under that brief while scoring 0.97+ under the other
-  three; the composition pairs still separate by 0.31 to 0.39. See "The scorer reads the brief".
-- **the layout is chosen rather than cycled**: seven composition archetypes
-  (`apps/api/src/plan/generation/knowledge/archetypes/`), each answering for itself whether a plot
-  can hold it — a refusal is honoured — with the brief's style weighed evenly against the site. Four
-  of them are compositions the three original templates could not express: rooms beside each other
-  on a wide shallow plot, a sequence of rooms down a corridor, a courtyard designed as a room, and a
-  garden whose point is the far end. Functional zones (`design/zone-planner.ts`) position the *rooms*
-  and the features are fitted inside them, so `Slot.zoneId` says which room a slot belongs to. Every
-  concept carries the composition it used and the decisions it took, each naming real elements.
-  **Measured against the Phase 1 baseline**: mean score 0.851 → 0.865, relationships 0.50 → 0.66,
-  routes that reach nothing 59 → 46, sheds in the sightline 43 → 31, and the largest fixture four
-  times faster.
-- **many layouts are drawn and the best is offered**: `design/choose.ts` enumerates every suitable
-  composition against the variations each offers, previews each one with no query at all
-  (`design/layout-generator.ts`), scores the field on the same principles the finished plan is
-  judged by, and takes the best
-  that is not too like what the other slots have already taken. A candidate is judged on its score
-  *and* on how well its composition suited the job; repeating a composition costs extra, because
-  three cards are a promise of three answers. **Measured**: the worst plan in the fixture set went
-  from 0.680 to 0.739, eight of eleven comparable fixtures improved, and the whole field of
-  candidates costs a few milliseconds because nothing in it touches PostGIS.
-- **what people do with a design is recorded**: `design_events` stores which concept was chosen,
-  which was rerolled, and what was added, moved, resized, deleted or reset afterwards, each stamped
-  with the composition the garden was drawn from (`state/design-events.ts`, `POST
-  /plan-projects/:id/events`). It is the only outside opinion on the generator the project has —
-  every other number is the scorer marking its own homework. Nothing in the design layer reads it,
-  deliberately, because a scorer consuming its own feedback stops being inspectable.
-- **the strategy can be written by a model, and the geometry never is**: with
-  `DESIGN_BRIEF_LLM=true` one call per generation decides what each of the three concepts is *for*
-  and how the requested spaces rank in it (`assistant/design-brief/`), reconciled field by field
-  against what the user actually asked for and what the plot can hold. There is nowhere in a
-  `DesignBrief` to put a coordinate, so the model cannot place anything; every failure falls back to
-  the deterministic brief, so generation cannot fail because of it. Off by default, because step 4
-  generates the moment a user arrives on it.
-- **a chosen plan is improved rather than merely chosen**: `design/repair.ts` takes the winner's
-  worst repairable fault, changes the one thing the scorer named — moves that feature to its next
-  room, takes the next approach to that path, leaves that one thing out — redraws the layout and
-  keeps the result only if the score measurably rose. What it accepts is carried into realisation
-  rather than being a preview-only fiction, and the card says what was adjusted. **Measured**: 24
-  repairs across 15% of concepts, relationships 0.697 → 0.717, mean 0.870 → 0.872, and a plan that
-  scored 0.74 now scores 0.92. It helps about one time in six it is tried, which is the
-  accept-only-on-improvement gate doing its job.
-- **an AI designer can be watched working on the plan**: a redesign arrives as a `DesignRun` of
-  structured `DesignOperation`s (`packages/schema/src/plan/operations.ts`), a pure executor
-  (`apps/web/src/lib/ai-run/`) turns it into a function of the clock, and the editor animates it
-  against the real `DesignElement[]` — the terrace is selected, enlarged in its own paving, the
-  furniture travels with it, the route is set out and redrawn, a border is deepened and the lawn
-  gives up the same strip, lights are added, the reviewer looks over it and centres the seating.
-  One gesture bracket per run, so the whole thing is one Undo; Stop, Skip, Compare and Replay round
-  it out. `Demo AI redesign` in the editor's AI panel plays a scripted one against whatever concept
-  is on screen. Nothing about the reasoning is in it yet — see "Visual AI agents" below.
-- **you can point at something and talk about it**: click an element and the composer says what the
-  request will be about, so "make this bigger" — or "use porcelain instead", with no noun in it at
-  all — resolves to the thing on screen instead of the designer asking which one is meant.
-  `ProposeRequest.selection` is ids, never a position, and the chip is a view of the canvas
-  selection rather than a second copy of it. See "The selection is what 'this' means" below.
-
-**Not built yet:** printing at true scale, a navigable 3D preview, the **AR view** (only its scene
-format and an Expo skeleton exist; see "Augmented reality"), and the optional AI photo-render. React Three Fiber is installed but unused — the WebGL that shipped is PixiJS, and it
-draws the same top-down scene rather than a camera. There is still **no user study**: the feedback
+**Not built yet:** printing at true scale, a navigable 3D preview of the whole garden (deliberately —
+see "Structures in 3D"), the **AR view** (only its scene
+format and an Expo skeleton exist; see "Augmented reality"), and the optional AI photo-render. React Three Fiber is used by the structure editor only; the plan's
+WebGL is PixiJS, which draws the top-down scene. There is still **no user study**: the feedback
 events below are collected but nobody has yet sat down with the table and asked it anything. The two faults the harness reports most
 are both outside the design agent's reach as it stands: too many materials in one plan is a
 `materialFor` question, and seating in shade on a north-facing plot wants a *second* sitting area in
@@ -2879,10 +2757,9 @@ were picked by `index % 3`, so every plot got a terrace-and-lawn plan, a sweepin
 axis whatever its shape — which is why a nine-metre courtyard was offered an axis, and why every
 test identifies a concept by matching its display name. `knowledge/archetypes/` names them
 (`terrace_and_lawn`, `sweeping_lawn`, `formal_axis`), and `strategy.archetype` puts the name on the
-wire. **The sketch functions themselves did not move**: `golden.test.ts` pins their output to a
-nanometre, structure exactly. It was meant to be deleted when the candidate loop landed, and it is
-kept instead: the three templates are now the **fallback** a composition declines to (see "Composing
-a garden rather than placing features"), so they are still drawn, and still worth pinning.
+wire. The sketch functions themselves were kept, pinned by `golden.test.ts`, as the fallback a
+composition declined to — until the courtyard took that job and both were deleted (see "Phase 5,
+second half").
 
 **An archetype is a strategy, not a template, and `suitability` returning zero is a refusal that is
 honoured.** A formal axis on a plot with no axis is not a worse plan, it is the wrong plan. Four
@@ -3095,8 +2972,9 @@ SiteAnalysis → DesignBrief → ZonePlan → GardenComposition → LayoutSketch
 
 **It is said in the vocabulary the rest of the pipeline already speaks.** `composeSketch` turns a
 composition into an ordinary `LayoutSketch`. A bay becomes a slot of the same id, so `fitInSlot`,
-the preview, `LayoutAdjustments.avoidSlots`, repair and the explanations all work unchanged, and a
-composed archetype and a hand-drawn one are enumerated side by side in one candidate field. What the
+the preview, `LayoutAdjustments.avoidSlots`, repair and the explanations all work unchanged — which
+is what let composed and hand-drawn archetypes share one candidate field while the one replaced the
+other. What the
 sketch gains is `composed`, the facts realisation must honour: the language, why each tree is where
 it is, and what each bed is for. `knowledge/archetypes/composed.ts` wires every archetype to it — see
 "The other three, and what they share".
@@ -3125,13 +3003,11 @@ the first `PROTECTED` rooms count as essential when the brief does not say. Play
 that may stand on the grass, and that exemption comes from the relationship rule `preferNear lawn`,
 not from a second list.
 
-**A composition that cannot hold an essential declines, and the template draws instead.**
-`composeGarden` returns `null` when an essential room will not fit, or when the lawn would fall
-under its floor. The archetype then falls back to its hand-drawn sketch, which is why
-`layout/templates/`, each archetype's own `handDrawn()` and `golden.test.ts` are still here: they
-are the fallback where a composition declines.
-Dropping the essential instead was the first version, and it put a critical fault on every small
-plot.
+**A composition that cannot hold an essential declines.** `composeGarden` returns `null` when an
+essential room will not fit, or when the lawn would fall under its floor. The candidate loop then
+offers another composition, and where none composes, the last-resort courtyard. (Until Phase 5 the
+archetype fell back to its own hand-drawn sketch.) Dropping the essential instead was the first
+version, and it put a critical fault on every small plot.
 
 **Corridors are the paths' own ground, not undesigned ground.** A route's centreline runs `SERVE`
 (0.58 m) from the face of what it serves. That is under the 0.6 m the circulation principle counts
@@ -3150,7 +3026,7 @@ one lawn. The formal axis is still paved, because on a formal plan the paved axi
 **The sampler is off inside a composed plan.** It was the mechanism that stood features on the
 lawn. A feature with no bay is reported instead: "No room for it in this composition without
 standing it on the lawn". That is honest, and it is most of why inclusion fell two points. The
-sampler still runs on the no-house path and when a composition declines to its hand-drawn sketch. The surplus pass uses
+sampler still runs on the no-house path, and nowhere else now the hand-drawn sketches are gone. The surplus pass uses
 the spare lounge bays instead (`SketchRequest.extraRooms`), and the tree top-up runs only when the
 plan is not composed.
 
@@ -3202,8 +3078,8 @@ both through.
 
 ### The destination garden, composed
 
-**`composed.ts` is how an archetype joins the composition layer**: a shape language, a hand-drawn
-fallback for when the composition declines, and optionally the zone types it is organised round.
+**`composed.ts` is how an archetype joins the composition layer**: a shape language and optionally
+the zone types it is organised round.
 The classic three and `destination_garden` all go through it; `composeGarden` reads
 `input.archetype === 'destination_garden'` for the rules below and nothing else about the id.
 
@@ -3252,13 +3128,14 @@ candidate out of the field on the 20 × 9 test plot — three cards of `side_by_
 ### The other three, and what they share
 
 **`knowledge/archetypes/composed.ts` is how every archetype reaches the composition layer.** It takes
-a shape language (fixed, or `styleLanguage`, which reads the brief's style), a hand-drawn fallback
-for when the composition declines, and optionally the zone types the plan is organised round. It also
+a shape language (fixed, or `styleLanguage`, which reads the brief's style), and optionally the zone
+types the plan is organised round; where the composition declines it draws the last-resort
+courtyard. It also
 picks the composer: `composeGarden` for the five plans whose rooms lie behind the terrace,
 `composeBeside` (`design/composition/beside.ts`) for `side_by_side`, and `composeCourt`
 (`design/composition/court.ts`) for `courtyard`. All three return a `GardenComposition`, so the
 sketch, the zones and realisation are shared. Each of them declines where it cannot hold what the
-brief most wants, and the archetype's hand-drawn sketch draws instead.
+brief most wants.
 
 **`linear_sequence` is the destination garden's mode read along a corridor plot.** It has the terrace,
 a lawn entered through a planted threshold with an opening in front of the doors, a divider, and a
@@ -3280,7 +3157,7 @@ the lawn's far corner, turned if square-on it is wider than the gap, reached alo
 the fence. If nothing lands there, the lawn takes back the path's width it gave up. The store stays
 where the hand-drawn plan put it, clear of the lane along the house, with a short spur from the
 terrace's end where it is more than a stride away. `TERRACE_SHARE` and `ACCESS_LANE` moved into
-`beside.ts`, and the hand-drawn fallback imports them.
+`beside.ts`.
 
 **The courtyard carves room rather than finding it.** Its hand-drawn places were a metre-deep
 corner and a strip of rear border that no store or fire pit fitted, so every such feature fell to
@@ -3413,7 +3290,7 @@ language the plan is in, and a room in the other language is the contradiction.
 - A formal pool is a rectangle.
 
 Areas are within a few per cent of the default, so the room a feature needs does not move with its
-shape. A hand-drawn fallback sketch has no language and keeps the quoted spec. Round rooms needed
+shape. A plot with no composition at all keeps the quoted spec. Round rooms needed
 `fitInside` to seat a rectangular table in a circle, measured against the drawn sixteen-gon and
 turned to the frame's bearing (`FurnishOptions.bearing`). The dining circle is 2.4 m in radius
 because a four-seater has to fit at ordinary plot scales.
@@ -3426,8 +3303,9 @@ that weighs a room by size. `geometryArea` is unchanged, because the editor's fa
 **The room a concept is organised around is its most generous, and there are three mechanisms.**
 - **`terraceClaim`.** In a dining-led concept the table takes the terrace at the doors and the
   seating goes to a room of its own. `seating`'s ladder is now `terrace`, `terrace-corner`,
-  `far-room`. Only a composition is handed the primary zone: a hand-drawn sketch reserves no room
+  `far-room`. Only a composition was handed the primary zone: a hand-drawn sketch reserved no room
   for the displaced seating, and was measured squeezing it into 1.8 m² and losing three paths.
+  Every sketch is composed now, so every terrace claim reads it.
 - **`roomSpec`.** A room whose zone is the primary one is drawn a quarter larger along each side.
   Only rooms whose size is a choice grow; a hot tub is a product.
 - **The terrace is held**, and the hold is **measured, not estimated**. `composeGarden` composes once,
@@ -3552,6 +3430,200 @@ stands on the view or in the corner.
 
 The point of the phase was the first two rows, and quality held while they moved. The two variety
 lines are new to `eval:generator`.
+
+### A seat in the sun where the terrace is in the shade
+
+**The sun principle judges seating by its sunniest seat, and that _reverses_ "every seat in the
+shade is a fault".** The terrace goes across the doors because that is what a terrace is, and on a
+north-facing plot it is in the afternoon shade whatever the plan does. The designer's answer is a
+second seat in the sun. Reporting every shaded seat marked that answer as a fault and let the plan
+that never offered it score the same. The table, the kitchen garden and the hot tub are still
+judged one by one, because you eat, grow and soak where they stand. On its own this took
+`seating-in-shade` from 84 to 69, counting seats plans already had.
+
+**The composition decides whether a sun seat is wanted, against the terrace it drew.** A guess made
+before composing, from the ground by the doors, disagreed with the drawn terrace on the L-plot.
+- **Trigger.** The terrace is two-fifths shaded by the sun principle's own five probes (`TERRACE_SHADED`),
+  not more than half. The fitter nudges the terrace before it is built, and the probes land either
+  side of the shadow's edge.
+- **Which seat.** It converts a spare seat the plot was already carrying, and only otherwise reserves
+  one (`sunWant`). Two spares, one in the sun and one in the shade beside the terrace, is paving
+  that competes for one lawn.
+- **Size.** It is a nook for a bench or a pair of loungers, not a second patio. At patio size there was
+  nowhere on the small north-facing plots that did not take the lawn past its share.
+- **Where.** It goes only out of the afternoon shade, and never at all rather than in the shade. The lawn's
+  far end is on its list, because the side bays sit in the fences' own shadow.
+- **Priority.** It may take the lawn to its floor, but it is the first thing to give way when the lawn
+  cannot hold everything. Ranked with the protected rooms, it once evicted a requested water feature,
+  and what the user asked for outranks what the plan adds.
+- **Honesty.** The decision is written once at the end, from what survived, so it cannot claim a seat
+  the lawn then refused.
+
+**The bay is labelled `SUN_SEAT` and nothing else may take it.** The fitter's own ladder put a fire pit
+or a water feature in it, since it is a far room like any other; the preview and the realisation
+both filter it out of feature assignment now. Realisation fills it first, as the "Sun terrace":
+paved in the terrace's own material (a new paving made it a fourth or fifth surface), fitted at the
+nook's size, and round in a curved plan.
+
+**Two older gaps it found.**
+- The rooms by the terrace were never clash-checked against any other bay, which let a seat be
+  reserved on top of a dining area stepped down off the terrace's corner.
+- The focal step relabelled whatever ended the view, which erased the sun seat's purpose.
+
+**Measured** with `SUN_SEAT=0` against the same code: seating in shade 69 → 48, sun 0.582 → 0.659,
+mean 0.899 → 0.900, materials 87 → 84, geometry-mixed 9 → 12. The costs are canopy 0.831 → 0.804
+and the minimum 0.771 → 0.758. On the long narrow plot the seat takes the lawn corner the framing
+tree stood in, and a tree beside it would shade the seat it is there to put in the sun.
+
+### Phase 5: the templates retire, and realisation starts to leave `build`
+
+**A composition that declines every variation is no longer offered where another composed.**
+`enumerateCandidates` keeps the templates aside and uses them only where none of the compositions
+worth trying composed at all. Offering a declined composition's template was offering a different
+garden under its name, with a preview that flatters because it cannot show what the sampler adds.
+
+**The ranking is not walked further to replace one that declined, and that was measured.** The
+fourth composition for the narrow cottage plot was a formal axis. It composed, and it came out a
+corridor of paths with a tenth of the garden planted, failing the reference fixture's bands. A
+second drawing of a composition that suits, at `pickDistinct`'s repeat price, is the better answer
+to a short field.
+
+**A destination garden with nothing worth walking to puts a garden seat at the far end** (`END_SEAT`)
+instead of declining. That is the oldest destination a garden has, and it is what the deleted
+hand-drawn plan drew. `RESERVED_SEATS` is the rule that no requested feature may take a bay kept
+for a seat. Realisation fills both kinds of seat in one pass, before the second helpings.
+
+**The four newer compositions' hand-drawn plans are deleted** (about 925 lines), along with `slotIn`,
+`edgeBed`, `planFromSketch` and `onlyDefaults`. `LAST_RESORT` in `classic.ts`, the terrace-and-lawn
+template, stood behind them until the second half replaced it with the courtyard. Every generated concept across 13 cases × 3 seeds hashed identical
+before and after.
+
+**Five realisation stages moved to `realise/`**: `ground.ts`, `lawn-and-beds.ts`, `borders.ts`,
+`front-garden.ts` and `structure.ts`, plus `placeable.ts`, which they all need. Each takes a typed
+context; each move was checked byte-identical against the same hashes, and `build` went from 2,581
+lines to about 2,050. Stage 1 and the routes remain; they share a dozen pieces of mutable state.
+
+**Two traps from doing it.**
+- **An identifier rewrite also rewrote prose:** "the way past the context.house". Comments are checked
+  after every such move now.
+- **A debug `if` removed by a one-line pattern left its body behind.** Prettier had split the
+  `console.log` across lines, so every generation logged until the benchmark output showed it.
+
+**Measured** at that point: hand-drawn concepts 21/117 → 12/117, mean 0.900 → 0.896, sets of three
+different compositions 77% → 69%, inside the bands 72% either way.
+
+### Phase 5, second half: the courtyard is the last resort, and the templates are gone
+
+**The courtyard carves rooms off its floor.** `composeCourt` hosted a store and one thing to look at;
+it now hosts five kinds of bay, each taking its space from the floor and never the floor below the
+terrace's own:
+
+- **`terrace-end`** — a dining area at the floor's far end, away from the gate. Whatever of that strip
+  the table does not take is planted as a `Dining screen`.
+- **`beside-terrace`** — an outdoor kitchen. Where a dining area was carved at the far end, the
+  kitchen is reserved *with* it, against the fence level with the table, and the side bed gives way
+  round it. Laid by the house instead it was six metres from the table it serves.
+- **`far-room`** — a corner of the rear band, which deepens to hold it; `destination: 'far-centre'`
+  centres it.
+- **`utility`** and **`axis-end`**, as before.
+
+Anything built other than a store stands `MAINTENANCE_GAP` off the fence — the scorer's own
+clearance, so a room carved here is never one it complains about. The courtyard's one tree takes
+the first corner clear of anything *built* (a crown may reach over a pool, not through a kitchen).
+
+**Drawn as the last resort it cannot decline.** `CandidateParams.lastResort` makes `composeCourt`
+report an essential it could not seat rather than return `null`, because there is nothing left to
+decline to. Two places use it:
+
+- **`composed()`'s fallback.** A composition that declines draws the lenient courtyard and marks the
+  sketch `composed.lastResort`, so the candidate loop still treats the archetype as having declined.
+  The fallback is `lastResort()` in `composed.ts`.
+- **`lastResortCandidates`** in `candidates.ts`, where nothing worth trying composed. It offers the
+  courtyard under its own name, even where its suitability refused the plot. That refusal says "a
+  lawn fits here", and on this brief no composition could keep one.
+
+**The courtyard has four variations now:**
+
+- the floor as designed;
+- a smaller floor with deeper planting (`terraceDepth` read the other way round);
+- the far room centred;
+- the second room on the gate side (`lawnBias: 'away'`).
+
+It had one, and three cards drawn from one variation are one answer three times.
+
+**A low-upkeep courtyard plants only the wall opposite the doors.** `SketchRequest.maintenance` is
+the resolved level, set by both the preview and realisation. With side beds, the low-upkeep fixture
+went from 1.00 to 0.42 on `maintenanceFit` (the ceiling its brief set) and from 0.98 to 0.94
+overall.
+
+**Side beds are drawn `BED_MARGIN` (0.1 m) over the sliver guard.** A bed at exactly `BED_MIN_DEPTH`
+is refused once PostGIS simplifies it, so on rooms under ten metres wide both side beds vanished and a
+third of the courtyard read as bare ground.
+
+**Three of the "hand-drawn" concepts were a repair bug, not a plot no composition could hold.**
+`repairCandidate` changes parameters (`enlarge-lawn` moves `lawnBias`, `shrink-terrace` moves
+`terraceDepth`), and on the L-plot the new parameters took a sweeping lawn past the point where it
+composed. The fallback drew — then a template, now a courtyard — under the name "Sweeping lawn".
+It scored *better* (0.888 against 0.803) because it was a smaller, simpler garden, so the gate
+accepted it. A repair whose preview is the last resort is refused now, before the score is read.
+
+**`concepts.service` says so if it ever happens again**, as a `last-resort` decision on the card.
+The harness counts them as `mislabelled`, and it should read nought.
+
+**Two measurement fixes the courtyard needed:**
+
+- **`largestPanel` skips `passage` and `arrival` purposes**, as the scorer's `subject.panels`
+  already did. A courtyard with a gravel side return was judged as a garden with no lawn and failed
+  a band it can never meet.
+- **The reach rule measures from the terrace, not the seating.** `isServed` takes the item whose
+  purpose is `terrace` and only falls back to the seating. Where dining claims the terrace, the
+  seating is a room further out, and a kitchen beside the terrace was reported as reached by nothing.
+
+**Deleted**, and nothing reads any of it:
+
+- `layout/templates/` (the three classic templates) and `golden.test.ts`;
+- `layout/beds.ts` (`designedBeds`), and `assignSlots` / `slotPreferences` / `PREFERENCES`
+  (`assignByPriority` reads `placementLadder`, which a test had pinned equal);
+- `LAST_RESORT`, `lawnPlanZones`, `withZoneIds`, `describeConcept`, `behindTerrace`,
+  `terraceEndSlot`;
+- `LayoutSketch.template` and `TemplateId`;
+- the lawn re-cut and `LawnAndBeds.patches`;
+- the backdrop-tree walk and its constants.
+
+`LayoutSketch.composed` is required now, so every `sketch?.composed` became `sketch`. The cleanup
+after the courtyard change hashed identical across all 39 generations.
+
+**Two more realisation stages moved to `realise/`**, each hashed identical:
+
+- **`routes.ts`** (`layPaths`): the formal axis, every route the composition names, and on a plot
+  with no house the paths to what the sampler placed.
+- **`extra-rooms.ts`** (`layExtraRooms`): the rooms beyond the brief, in order — reserved seats,
+  second helpings, the side lounge and the garden lounge. It takes `hostFor`, `furnish` and `place`
+  as functions, because they close over the concept's id counter, its random stream and its SQL
+  seed step. Note `extraRooms` was already a *number* in `build` (the spare rooms handed to the
+  sketch), and shadowing it is a type error in the wrong place.
+
+`build` went from 2,064 to 1,742 lines. Stage 1's core stays: the terrace, the features into their
+bays, the steps and the no-house sampler share `settled`, `checks`, `decisions` and the terrace.
+The side lounge is still placed in the side return, outside the room the composition sees; making
+it a bay needs the composition and the fitter to work outside `grammar.room`. Both are in TODOS.
+
+**Measured** (`scripts/eval-generator.baseline.md`):
+
+| | Phase 5, first half | Now |
+|---|---|---|
+| Mean score | 0.896 | 0.903 |
+| Minimum score | 0.758 | 0.758 |
+| Inside composition bands | 72% | 72% |
+| Requested features drawn | 89% | 87% |
+| `feature-in-open-space` | 13 | 0 |
+| `orphan-feature` | 9 | 0 |
+| Drawn by a hand-drawn template | 12/117 | 0 |
+| Drawn as the last-resort courtyard | — | 9/117, mislabelled 0 |
+| Courtyard concepts, mean | 0.977 (9) | 0.969 (18) |
+
+The two points of inclusion are the small-entertaining courtyard reporting the pergola and the fire
+pit it has no room for, where the template stood them on the floor.
 
 ## Traps Phase 2 paid for
 
@@ -3995,6 +4067,11 @@ band in PostGIS, and formal symmetry.
 
 ## The render scene, and the two views
 
+_Since 28 Sep 2026 there is one view: the Visualise half of this section is history, kept where it
+explains a decision the plan still carries (instanced planting, the roof inside the footprint). The
+`view` axis, `maturity`, the elevated stack and the elevated library are gone — see "Visualise was
+removed"._
+
 **`buildRenderScene` is the seam, and it exists because there were two drawings of one garden.**
 `ElementDrawing.tsx` builds Konva nodes for the editor and the concept cards; `drawPlan` paints
 the same picture into a 2D context for thumbnails, the PNG and the judging sheets. They shared the
@@ -4009,10 +4086,9 @@ from `geometryOutline`, every height from `heightFor`. `quantities.ts` cannot se
 Delete `lib/render/` and the plan is dimensionally identical and merely plainer, exactly as
 `lib/materials/` already promised.
 
-**One axis, `view: 'plan' | 'visualise'`, not a bag of flags.** Every difference between the two
-views moves together and a half-visualised plan is a state nobody wants. Prompt §12's rule is kept
-literally: 2D Plan prioritises editability, Visualise prioritises presentation, and switching
-between them changes nothing about the design.
+**There is no `view` option any more.** It was one axis, `'plan' | 'visualise'`, and with one value
+left it was a flag that could only be wrong; `SceneOptions` is now the renderer version and the
+shadows toggle.
 
 **Planting was clipped to its own bed, and that single fact was most of the visual gap.** The
 painter drew a bed's plants _inside_ `clip(outline)`, so by construction no plant could cross its
@@ -4111,9 +4187,8 @@ colour a border has — one entry of five, so a fifth of every blob, every low-z
 tinted sprite came out purple-grey, and at a distance a bed read as lavender gravel. A border is
 mostly foliage; the flowers in it are accents drawn as flowers.
 
-**`maturity` is a view preference in `ephemeralState()`, beside `gridVisible`** — same five edit
-points, same trap. It changes how the picture is drawn and nothing about the design: no geometry
-moves, no area changes, and the schedule cannot see it.
+**Maturity (year 1 / year 3 / mature) was removed with Visualise**, which was the only place it could
+be changed. The plan always drew `mature`, whose factors are 1 and 1, so removing it moved no pixel.
 
 **The roof is derived, never stored, and never overhangs.** There is no roof form, pitch or storey
 count anywhere in `PlanDocument` and none was added. `roofFor` reads the footprint: a hipped roof
@@ -4178,10 +4253,11 @@ reused unchanged, so there is no second implementation of a material to drift fr
 is what keeps `render/pixi/renderer.ts` small.
 
 **What WebGL is actually for here is the plant sprites.** A mature garden is a few thousand of
-them and Visualise is a view you pan, zoom and drag a maturity slider through; Pixi batches
+them and the editor is a view you pan and zoom through every frame of a drag; Pixi batches
 same-texture sprites so the count stops mattering. A one-shot still never needed this.
 
-**Visualise is two canvases, and the split is a division of labour rather than a compromise.**
+**The editor's scene is two canvases (`EditorScene`), and the split is a division of labour rather
+than a compromise.**
 WebGL underneath for the ground, the shadow layer and the planting; a 2D canvas over it for the
 objects, the house and the fence, drawn by `drawOverlay` — the same function `drawScene` calls.
 Pixi earns nothing on the twenty-odd pergolas, benches and trees on a plan, and writing those a
@@ -4235,316 +4311,224 @@ from the second render onwards the garden is covered by a white rectangle the si
 Unlike the three above this one draws happily; it just draws a white rectangle, and it appears on
 the _second_ render, so it shows up when a control is touched rather than on arrival.
 
-## Visualise is elevated: the projection, the stack, and the second asset camera
+## Visualise was removed (28 Sep 2026)
 
-**Visualise draws an oblique elevated projection, and the whole of it is one number.** `RISE` in
-`lib/render/camera.ts` is `tan(12°)`: a point `h` metres above the ground is drawn `h × RISE` metres
-**up the screen**, and nothing else changes. The ground plane stays unforeshortened, every footprint
-stays its true shape, and switching the view off removes the offset and leaves the plan. There is no
-camera position, no vanishing point and no depth buffer.
+**The full-garden 2.5D view is gone, and its replacement is deliberately not a 3D garden.** The
+product has three representations of one design: the 2D plan (where the garden is designed and the
+geometry lives), a focused 3D editor for structures, and the future AR viewer. Rebuilding the whole
+garden in three.js would have been Visualise in a new engine.
 
-Isometric and perspective were both rejected for the same reason: they rotate or distort the ground
-plane, and the application rests on what you see being the footprint the validator measured. Under
-perspective a footprint is a trapezium no rect can hold, and every placement, selection and
-dimension in the editor would need a second coordinate system to answer in.
+**What went:** the Visualise tab, `VisualisePanel`/`VisualiseView`, the elevated stack (`buildStack`,
+extrusion/object/house nodes, `depth-fragments`, `drawFlight`, eaves), the `view` scene option,
+`maturity` and the preview time slider, `LegacySceneRenderer`, `RenderLab` and its e2e, the 53
+`vis-*`/`skin-*` files with their families, templates, twin table and QA, and
+`docs/visualise-asset-style.md` (now `docs/asset-style.md`, the plan library's spec). The 2D plan's
+pixels did not move: the goldens passed unchanged through the removal.
 
-**Twelve degrees is a constant and not a control, because the assets are photographed at it.** The
-elevated sprite library's prompt says "tilted twelve degrees from vertical" in words
-(`docs/visualise-asset-style.md`, the `ELEVATED` preamble in `asset-spec.ts`). A slider would put the
-drawn geometry at an angle the photographs do not share, so a shed would stand at a different
-attitude from the sofa beside it. `camera.ts` holds the angle alone and imports nothing — `projection.ts`
-re-exports it — because `asset-spec.ts` needs it too and is read by `tools/assets`, a package that
-cannot resolve `@garden-studio/schema`. Same reason `zone-id.ts` is a leaf.
+**What stayed, because the plan uses it:** Pixi (`EditorScene` composites the ground and planting),
+instanced planting, `presentationCast` shadows, night and lighting, the roof inside the footprint,
+`extrude`/`visibleEdges`/`RISE` (an edging course that stands proud shows a face; a plant sprite is
+lifted half its height), `grade.ts`, and `skin-roof-slate`, re-homed as a plan texture because the
+plan's roof draws it. `edgingHeight` is still *exposed* height rather than product height.
 
-**Built things are extruded; placed things are photographed.** `extrude(outline, height, light)`
-returns the top ring and the faces whose outward normal points down the screen, sorted far to near.
-The criterion for which model a thing gets is not "is it big" but **is its shape arbitrary**: a shed
-is whatever rectangle the placer gave it at whatever angle, so no photograph fits it, and its faces
-are recomputed from its own outline every render — correct at every rotation by construction. A
-dining set is a known object of a known size that a sprite can be fitted inside. `isBuilt` is that
-line, and it is `category === 'structure'`.
+**Two traps found on the way out, both worth knowing.** The editor's Download button was exporting
+the *Visualise* drawing (`view="visualise"`), so the 2D tab downloaded a picture that was not on
+screen; and `buildPlants` defaulted to the elevated camera, so any caller that forgot the argument
+drew `vis-*` art. Both are gone with the parameter. The lesson that outlives them: **a test must
+state the property, not the mechanism** — `build-scene.test.ts` asserts the plan's stack is plants
+only and no sprite is from a removed family, and `e2e/editor.spec.ts` asserts `data-stack` equals
+`data-plants` in a browser, because a caller asking for the wrong thing is invisible to every guard
+below the call site.
 
-**The lift is a rigid translation, so the plan drawing *is* the top of the elevated drawing.** Raise
-the walls, translate the context up by `liftPx(height)`, then call exactly what the flat view calls.
-A shed's two roof slopes, a gazebo's four hips, a pergola's beams, a retaining wall's top course and
-the whole of `drawHouse` are drawn by the code that already draws them. **No symbol needed a second
-version**, which is the entire reason this was a small change rather than a second renderer.
+**Still true from that work:** `visibleEdges` is the one place "which side faces the viewer" lives;
+filter a scene by `source`, never by an id substring (a plant with scheme role `edge` has an id
+containing `:edge:` too); `12-levels` on the judging sheet is synthesised because no fixture has a
+level change.
 
-**`RenderScene.stack` is one depth-sorted list, and it is empty in the plan view.** Sorted
-`(group, depth, layer, id)`, and the order of those keys is the design. Sorting by layer — ground
-cover, perennials, shrubs, trees, as the flat view stacks a bed — puts every tree in front of every
-shrub regardless of where the two stand, so a shrub at the front of a border draws *behind* a tree at
-the back of it and the picture reads as a collage. Depth is the furthest-down-screen point of the
-thing's own **footprint**, never its visual extent: what decides whether a tree is in front of a shed
-is where the two stand, not how far the canopy reaches. Layer is the tiebreak and earns its place
-there, because a generated plan aligns things constantly. `id` last makes the sort total.
+## Structures in 3D
 
-**Lighting is the one thing not depth-sorted**, kept last for the reason already in `LAYER_ORDER`: a
-spike light is 120 mm and the ones that matter most are uplighting a tree, so honest depth-sorting
-would bury every one of them under the thing it lights.
+**A structure opens in a focused 3D editor, and the editor edits the plan's own element.** Select a
+pergola or a gazebo; the inspector shows **Edit in 3D** (`structureDefinitionFor(element)` non-null);
+the editor opens as a workspace state (`plan-editor-store.structureEdit`, the `edgeEdit` pattern with
+the same five edit points) with the plan hidden but mounted behind it. **Back to plan** and **Done**
+both just close: there is no draft copy, every change was an ordinary undoable edit and is already
+autosaved.
 
-**A boundary run takes the depth of its *furthest* point — the only thing in the stack that does.**
-A side fence spans the whole plot, so on `depthOf` it sorts after everything and lays a line over the
-border planted against it, which is exactly backwards. Taking the far end says the honest thing about
-an object drawn as one piece: it reaches back to here, so everything nearer is in front of it. The
-exact answer is to split each run into segments and sort each; it is not worth a dozen anti-aliased
-seams down every fence.
+**Geometry is still the source of truth, and the schema makes drift impossible rather than unlikely.**
 
-**A wall running up and down the screen shows no face at all, and that is the price of the
-projection rather than a bug.** Its normal has no y component, so a lift straight up the screen shows
-neither of its long sides — only the end cap, a hundred millimetres wide. It reads as having height
-through its posts, its shade band (`fenceShadeBands`, drawn first in the visualise branch for exactly
-this reason) and, most of all, the shadow it casts. The alternative is leaning the lift diagonally,
-which shows every wall and gives up the property everything here rests on.
+| What | Where it lives | Written by |
+| --- | --- | --- |
+| position, width, depth, rotation | `shape` (the `rect`) | `resizeStructure` — anchored, validated, alternatives (below); the 2D inspector uses it too |
+| height | `height` (read by `heightFor`) | `setHeight` |
+| frame finish | `material` (so the schedule and cost band see it) | `setMaterial` |
+| roof, sides, lighting, preset, frame model | `structure` (new, optional) | `setStructure` → `mergeStructureConfig`; a whole preset through `setStructurePreset` |
 
-**`HOUSE_WALL_TONE` is not `COLOUR.houseWall`.** That one is the dark slate the flat diagram strokes
-its wall band in, which works when the band is two pixels. As a metre and a quarter of solid colour
-under a slate roof the two read as one dark mass and the roof simply looks blurry at the bottom. A
-warm off-white render instead, the same material `skin-render` is written for. The house is the one
-thing in the garden with no `material`, so unlike every other face its tone has to be stated.
+`DesignElement.structure` (`packages/schema/src/plan/structure/config.ts`):
 
-**The visible cost, accepted: a six-metre house hides 1.27 m of the garden behind it.** That is what
-an elevated view of a building does, and the strip it hides is the one a photograph would hide too.
+```ts
+{ preset?: string;                                   // which bundle it started from — a record, not a fallback
+  model?: string;                                    // 'classic' | 'modern': the frame drawing, and the model key
+  roof?: { kind?: string; finish?: string };         // kind: 'open'|'slatted'|'solid'|'hipped'; finish absent = same as frame
+  sides?: { left?: string; right?: string; rear?: string };  // 'open' | 'slatted'; front is always open
+  lighting?: boolean }
+```
 
-**Pixi still composites; the split moved.** Plants are batched WebGL sprites — thousands of them,
-which is the load Pixi is there for. Everything else in the stack is **a raster the composer
-painted**, cached per node per √2 zoom bucket per light per asset version, uploaded once. There are
-tens of those, so batching would buy nothing and a WebGL shed would be a second implementation to
-drift. Both go into one container in stack order, so a plant genuinely can be drawn in front of a
-fence. A pan changes no key and costs no repaints.
+Plain strings, all optional, **no migration and no version bump** — the `material`/`plantingStyle`
+rule. `resolveStructure(element)` checks every value against the definition and falls back, so an old
+pergola and a value a later catalogue dropped both resolve to the defaults. Sides are named in the
+rect's **local** frame: rear is −y, left −x, right +x, front (+y) is the way in — facing the front,
+your left is −x, in plan and in 3D alike. `sameElements` compares `structure`, `height` and `symbol`
+now (the `sameDraft` trap), and `structure` is in `PropertyChangesSchema` and `propertyChanges` so AI
+runs carry it.
 
-**`drawOverlay` branches on the view, and in Visualise it draws only the stack, the access marks and
-the night wash.** The objects/house/fence pass order is kept verbatim for the plan view. Plants are
-drawn in `drawScene` only when the view is not visualise, or they would be drawn twice.
+**One geometry, four consumers.** `structureParts(resolved)` (`structure/parts.ts`) returns boxes and a
+pyramid in local metres — X across the width, Y up, Z towards the front, origin on the ground at the
+centre (the ar-contract convention before yaw). **Every part lies inside width × depth and under the
+height**, and a test sweeps every preset, roof and size to say so. The plan symbol
+(`symbols/structure-plan.ts`, used by both `draw-symbol.ts` and the Konva `ElementDrawing`), the shadow
+occluders (`shadows.ts`), the 3D model and the future AR builder all read it — the rafter count used
+to be written out in four places and had already drifted (0.35 m in the composer, 0.6 m on the Konva
+canvas). An unconfigured pergola keeps the rafters it always had; it gained a beam front and rear,
+which is the one deliberate golden change (`plan-suburban.png`, diff confined to the pergola and its
+shadow). A pergola draws its own deck only where its frame has a board pattern: an aluminium frame
+stands on whatever is under it.
 
-**Logical footprint versus visual bounds.** `RenderNode.bounds` is the footprint *and* the height
-above it plus a margin — what has to be repainted, cached and uploaded. The footprint is what every
-measurement, validation and schedule line is about. Nothing derived from `bounds` may reach
-`houseFitsInside`, `geometryIsLegal` or `quantities.ts`.
+**Finishes are data shaped like `ARMaterial`** (`structure/finishes.ts`: base colour, roughness,
+metalness, optional emissive/opacity). The frame finishes are exactly the structure `MaterialId`s —
+`aluminium-dark` and `aluminium-light` were added, appended so no generated plan changes and
+`probe:assistant` passes with the larger enum. `apps/web/src/lib/structures/materials-3d.ts` is the
+only place a three.js material is made.
 
-**There are two asset cameras, and `assetsMatching` defaults to `plan`.** `AssetFamily.camera` is
-absent on every family generated before this, so every existing query returns exactly what it
-returned — which is what let the elevated library be appended without touching a call site. A query
-cannot ask for "either": a caller that does not care which camera it gets is about to mix them in one
-picture.
+**Capabilities, not a switch.** `STRUCTURE_DEFINITIONS` (`structure/definitions.ts`) states per symbol
+the presets, dimension limits, frame materials, roof kinds and finishes, side options and whether it
+can be lit. The inspector renders a tab only for what a definition has.
 
-**Visualise resolves the plan sprite first and then swaps in its twin (`ELEVATED_TWINS`), rather than
-running a second query.** A query is answered in manifest order and the sampler indexes into it with
-a seeded generator, so two queries of different lengths put a *different plant* in each cell: the
-same garden would be planted differently in the two views, and switching tabs would look like the
-design had changed. Resolving once in the plan camera and translating keeps the cell, the species and
-the variant, and gives the per-family fallback for free — a twin with no generated files keeps its
-plan sprite, so a half-finished library and **no library at all** both draw.
+**To add a structure type** (a shed, a garden room): add a definition keyed by its symbol, give it a
+`builder` (a new id in `StructureBuilderId`) and a parts builder in `parts.ts` that keeps the
+containment property, add a case to `structurePlanDrawing` if it wants a distinct plan symbol, and
+add its model entry in `lib/structures/model-registry.ts`. The button, the tabs, persistence and
+shadows follow.
 
-**`elevatedTwin` keys on the catalogue, not the registry**: what has been generated, not what has
-finished loading. Loading is asynchronous and per-wave, so keying on it would have a bed swap species
-halfway through a preload.
+**To add or replace a GLB:** put it under `apps/web/public/models/`, and replace the preset's
+procedural entry in `model-registry.ts` with a `gltf` one whose `nodes` map logical groups (`post`,
+`beam`, `rafter`, `roof`, `side-left`…, `light`) to node names. Place nodes from the part boxes and
+show/hide them by group; never scale a model to its natural size — `size` comes from the rect, and
+there is no `scale` in the persisted config, for the reason the AR contract has none. Budgets as
+`docs/ar/ar-architecture.md`: ≤15k triangles, ≤1024 px textures.
 
-**The camera separation held at every level except the one that mattered, and the 2D Plan shipped a
-commit drawing the elevated library.** `EditorCanvas` built its scene with `view: 'visualise'`, and
-that canvas is what renders when the tab is `plan` — so the flat diagram was drawn with `vis-*`
-sprites, `skin-*` faces and the oblique lifted stack, and because Konva's own drawing is suppressed
-once `richReady` flips, that was every visible pixel. **Every test passed**, and that is the whole
-lesson: `assetsMatching` defaulted correctly, `buildPlants` ran only when instanced, `stack` was
-empty outside Visualise, and each of those was pinned. None of them can see a caller asking for the
-wrong camera. A guarantee that holds only while one call site passes the right string is not a
-guarantee.
+**For AR:** the phone reads an `ARScene`, never a `PlanDocument`. The (unwritten) builder turns a
+configured structure into a `solid` node by `resolveStructure` → `structureParts` → `boxMesh` per
+part (a pyramid is four triangles), placing the set with the element's centre, `elevation` and
+`yawFromPlanDegrees(rotation)`, and maps each part's `finish` through `STRUCTURE_FINISHES` to an
+`ARMaterial` one to one.
 
-Three things came out of it, and the second is the one worth copying:
+**The viewport** (`components/structure-3d/StructureViewport.tsx`): a lawn, a paved pad the size of
+the footprint plus 0.5 m in the plan library's own tiles, a `Lightformer` environment (no HDRI
+download — works offline), one shadow-mapped sun, `ContactShadows`, ACES tone mapping,
+`frameloop="demand"`, drei `CameraControls` with presets that fly only when a preset or Reset is
+pressed, never on a resize. The whole workspace is `next/dynamic` with `ssr: false`, so three.js is
+not in the plan editor's bundle until Edit in 3D is pressed.
 
-- **The test states the property, not the mechanism.** `build-scene.test.ts` asserts that a plan
-  scene contains no elevated `assetId` *and* an empty `stack` — with a **control** asserting the same
-  garden in Visualise does draw elevated art, because otherwise the test passes just as happily on a
-  broken twin table or an empty catalogue.
-- **The call site's answer is visible from outside.** `EditorScene` exposes `data-view`, and
-  `visualise.spec.ts` asserts the Plan tab's scene is `plan`. Nothing below the call site could ever
-  have caught this, so the assertion has to live above it — in a browser, which is where this class
-  of bug already lives (see the Konva hit-testing note).
-- **`audit:assets` asks the question in both directions.** It had `planCameraPlanting` — is Visualise
-  still drawing flat art, a gap that degrades gracefully — and nothing asking whether the plan is
-  drawing elevated art, which is not a gap but a wrong drawing. `elevatedInPlan` is on the one line
-  the console prints, because a wrong camera is invisible unless something says so out loud.
+**AI:** no grammar change was made. The existing `material`, `resize` and `rotate` intents already
+work on a pergola. A `configure` verb (roof, sides, lighting, "make it taller") and an absolute
+resize ("4 metres wide") are in TODOS.md; the verb would be the 13th branch and needs
+`probe:assistant` and re-pinned budgets.
 
-**The corroborating half of that test went stale, and nothing noticed for a phase.** It asserted
-`data-plants` was 0 on the plan scene, on the reasoning that planting is lifted out of the beds only
-in Visualise — true when it was written and false the moment the planting rework instanced both
-views, which is the change that stops the 2D Plan's beds reading as cut-outs. The browser suite is
-not part of `pnpm test`, so it went a whole phase without being run. What is still true of the plan
-camera and only of it is that its stack is **plants and nothing else**: `buildStack` is not called
-on that path, so `data-stack` equals `data-plants` there and does not in Visualise. **Run
-`pnpm exec playwright test` after anything that touches the scene**, not only after touching Pixi.
+## Generated structures, and resizing one
 
-**The same divergence was one layer down in the shadows.** The composer softens a cast shadow only
-in Visualise (`view === 'visualise' ? PRESENTATION_SHADOW_SOFTNESS : 0`) and both Pixi backends
-hardcoded the soft value — so a plan's shadows were soft on screen and hard in the PNG. Soft is a
-presentation choice; a diagram draws the edge. Worth knowing that the export disagreeing with the
-screen is the *symptom* both faults shared, and the cheapest thing to check after touching either.
+**Nobody should have to open the 3D editor to make a generated pergola usable.** `hostFor` in
+`concepts.service.ts` runs every host through `configureStructure` (`structure/configure.ts`) before
+it is pushed onto `obstacles` or furnished: a preset's whole look, an explicit `height`, the frame
+the cost band was worked out from where it is timber, the fence-facing sides slatted where the
+brief's `privacy` is `screen-neighbours` or `enclose`, lighting only where `gardenIsLit` says the
+garden is lit at all, and a rect clamped *down* about its centre if the placer made it bigger than
+the product exists (`sizeFactor` × the primary-room growth reached 6.75 m against a 6 m pergola).
+Everything that is not a configurable structure passes through untouched.
 
-**The library is sorted by camera on disk: `public/assets/{plan,elevated}/{sprites,textures}`.**
-_This reverses_ `docs/visualise-asset-style.md` §10, which made the `vis-`/`skin-` prefix the only
-marker so that no second place had to be kept in step — right at a handful of files, wrong at 181
-across two cameras. `assetFile` is the single place layout is decided and the generator **derives**
-its output directories from that function rather than restating them. Be clear about what this does
-not buy: nothing resolves an asset by path, so it cannot prevent the fault above. It buys a listing
-that answers the question, and a `plan/` that can be preloaded on its own.
+**A preset is a bundle applied on write, never read as a fallback.** `StructurePreset`
+(`structure/presets.ts`) carries a frame model, frame, roof, sides, lighting and height, and applying
+one writes all of them onto the element. `resolveStructure` still fills gaps from
+`definition.defaults`. The alternative — gaps filled from the named preset — would let a catalogue
+edit silently move every saved pergola, and would make the preset a second answer to "how tall is
+it" beside `heightFor`, which the shadows, the plan and the 3D model all read. `classic` is exactly
+the old defaults, so a pergola stored before any of this and one given `classic` now are the same.
 
-**An elevated asset's frame is derived, never declared.** `elevatedFrame` is
-`{ w: metres.w, h: metres.h + heightMetres × RISE }`, and the bottom `metres.h` of the image is the
-footprint in true plan. `elevatedAnchor` is the middle of that band, which is where the thing
-actually stands — a plan sprite *is* its footprint so its anchor is the image centre, and assuming
-the same here would float every object half its own height off the ground. A test pins `sizePx`
-against the implied aspect, because a family whose declared size disagrees is padded to one aspect
-and drawn at another.
+**`structure.model` is the frame drawing and the model key, and it is not the preset.** `parts.ts`
+and the web's model registry used to switch on `preset === 'modern'`; with four pergola presets
+sharing two frames that stopped meaning anything. A stored element with no `model` takes its
+preset's, so a plan saved as `preset: 'modern'` still draws modern. A GLB is registered per model.
 
-**Elevated art is never `recolourable`.** The tint is a proportional multiply and these carry their
-own light, so it would darken them exactly where they are already shaded. The plan families were
-written flat and neutral *so that* they could be tinted; this is the opposite bargain, and variety
-comes from the variant instead.
+**The way in is pointed by re-describing the rect, never by storing a front.** `reexpressRect`
+turns the rotation by 90·k and swaps width and depth for odd k: an identical ring, so the validator,
+the schedule and every rotation reader (all fold by 90°) cannot tell, but the rect-local frame — and
+with it the open front (+y) — turns. On the grammar path a terrace-end pergola's front faced the
+house *wall* (local +y is always `−frame.axis`), with the terrace it serves on its side. A stored
+front would have had to be applied by the parts builder, the plan symbol, the shadows, the sides'
+names, the inspector and AR — the drift `parts.ts` exists to prevent. Do it before furnishing: the
+planters go in the front corners.
 
-**Shadows are a hybrid, and it is the only split that survives rotation and a real sun.** The image
-model bakes **self-shading only**; cast shadows stay procedural, world-space and height-aware. A
-baked ground shadow rotates with the object and is fixed at one hour, so it would point the wrong way
-the moment either changed. The accepted cost is that a sun in the south-east still meets art lit from
-the upper left, which at this contrast reads as ambient rather than as a contradiction.
+**A far-end pergola on a Traditional (`formal`) or Natural (`cottage`) brief is a gazebo.**
+`hostChoice` (`knowledge/structures.ts`) keys on the slot *kind* — `far-room` or `axis-end` — not its
+purpose word, because the focal step and the seat bays relabel purposes. It rarely fires on the
+ordinary plots: the pergola's ladder is `terrace-end` first, so it only goes out when the terrace
+end is taken (seating on the terrace and dining beside it; a formal axis ends in it). Three things
+must agree or parity breaks, so they are one commit:
 
-**A skin is the one elevated family lit flat.** A skin goes on a face whose brightness the renderer
-computes from that face's own normal, exactly as the roof planes already are; baked light would be
-light applied twice, and the two would disagree as soon as the sun moved.
+- `record()` in the preview names the host from `hostChoice`, as the realisation does — `parity.test.ts` matches them **by name**;
+- `identifyFeatures` maps `Gazebo` back to `pergola` (`HOST_PLAN_NAMES`), or the scorer, the explanation and the harness's inclusion rate lose it;
+- `HOST_FURNISHINGS.gazebo` is a separate list. `FURNISHINGS.pergola` feeds `hostFloor` → `PERGOLA_FLOOR` → the terrace-end bay, so a sofa added there moves every composition. A gazebo is a sofa first where dining is already by the house, has no planters round its edge, and its list is an order of preference rather than a menu the concepts take turns at.
 
-**The foot band is a drawing convention in the contact-shadow class.** It earns its place most on the
-faces the camera *cannot* see: without a mark where it meets the ground, an edge-on wall appears to
-hover.
+**A resize keeps what the structure is against, and that is derived at the moment of the resize.**
+`planStructureResize` (`structure/resize.ts`) is the one rule for the 3D editor, the 2D panel and the
+assistant's `resize` intent. `structurePins` walks out from three stations on each side
+(`sideSurroundings`, `structure/surroundings.ts`) and pins a side within `PIN_REACH` — the boundary
+graph's `WALL_REACH`, 0.35 m, which covers a 0.25 m fitter nudge and the 0.3 m fence gap — of the
+house, the boundary, a paved or gravel surface or path, or another structure, **including the edge
+of a surface it is standing on**, which is what "aligned with the patio" means. It grows away from a
+single pin, and about its centre with none or two. A stored "attached to the house" would go stale
+the first time the pergola was dragged into the lawn. `sideSurroundings` is not the boundary graph's
+classifier exported: that one only takes ground hosts, probes 8 cm, and cannot see a surface underneath.
 
-**`--strict` refuses an asset the QA pass complains about; the raw PNG is always kept.** Most of the
-checks are judgements a number gets *mostly* right — a wide low planter legitimately has a broad
-foot — so a tool that refused them by default would have the author tuning thresholds instead of
-looking at pictures. `footAlpha` is the ground-plane detector: an object's own feet are a few percent
-of the bottom edge and a baked patch of grass is most of it. `--audit` answers the question
-`provenance.promptHash` was recorded for and nothing could ask until now: which files no longer match
-the sentence that specifies them.
+**A conflict is only what the resize makes worse.** Overlap is measured by Sutherland–Hodgman clip of
+each obstacle against the candidate (convex), and a conflict is overlap that *grows* by more than
+0.01 m² — so a pergola somebody put over a bed by hand, or against the house (allowed since "a thing
+may sit on the house"), can still be resized. Obstacles: structures, water, paths (polyline paved
+areas only; a terrace is something to stand on), beds, tree **trunks** (`legalFootprint`), furniture
+not standing on it. Furniture that *was* standing on it and would not fit after a shrink is a
+conflict of its own (`no-longer-fits`). Nothing is ever trimmed.
 
-**A dry run writes nothing, including the catalogue.** It used to rewrite `generatedAt` every time,
-which left the tree dirty for a command whose whole point is that it does nothing.
+**Blocked means nothing changed, and the alternatives have each been checked.** `fit` is the largest
+size on the way to the request that clears (a binary search, rounded towards the current size to the
+centimetre and re-checked); `shift` is the requested size moved up to a metre along an axis with no
+pin — moving along a pinned axis would break the relationship the resize exists to keep — and never
+to a spot newly a sliver (0.05–0.3 m) off the fence, which buildability marks down. Alternatives
+carry what they are, not a sentence: `describeStructureAlternative(alternative, unit)` and
+`describeStructureConflict` are the words, in the schema so the editor's notice and the planner's
+refusal never describe one clash differently. The store's `resizeStructure` *returns* the result
+rather than storing it, so there is no new ephemeral field and no five-edit-points trap;
+`applyStructureCandidate` re-checks against the plan as it is now and refuses a stale one.
 
-### Making a building read as a building
+**Limits are monotone everywhere.** `heldToLimits` (a typed size, the handles' live drag) and
+`structureLimitRefusal` (the AI executor's `resolveOperation`) let an oversized legacy structure
+shrink towards the range and never grow further out of it, so a pergola the old generator made at
+6.75 m is not frozen and is not snapped.
 
-**A roof oversails its walls, in Visualise only, and that reverses an earlier refusal without
-contradicting it.** The old note is still right about the *plan* drawing, where the roof is the
-house's drawn extent and an overhang would put geometry outside the outline `houseFitsInside`
-measures. In the elevated view the roof is already drawn a metre and a quarter up the screen, so the
-question is no longer whether drawn geometry may leave the outline — it left by a factor of four —
-but whether the building reads as one. `roofFor` takes an `overhang` defaulting to 0; only the
-visualise branch passes `EAVES_OVERHANG`, and a garden building gets the smaller
-`STRUCTURE_OVERHANG`. **Nothing derived from either may reach a measurement**, and nothing can.
+**Capacity is read off the furniture, never stored.** `seatsOn` counts the seating symbols contained
+in the outline; `sizeForSeats` is the dining set plus `FURNISH_MARGIN` (moved into the schema so
+`furnish` and the resize share it) with 0.8 m per extra pair, so four seats is exactly
+`hostFloor('pergola', 'smallest')` and a test says so. `planStructureResize` takes `{ seats }`;
+nothing in the UI asks for it yet.
 
-**`insetPolygon` was generalised rather than copied.** It refused a negative distance, and the
-offset maths — the winding probe, the corner intersections, the fold-through refusal — is subtle
-enough that a second copy would be a second thing to get wrong. There is now a shared
-`offsetPolygon` with `insetPolygon` and `outsetPolygon` over it, both keeping their old contracts.
-**Reversing the ring does not outset**: it flips the winding *and* the edge direction, so the two
-sign flips cancel and you get the inset back. That was the first attempt and it silently shrank the
-roof.
-
-**The eaves shade is a sliver drawn after the roof, never a copy of the roof drawn before it.** The
-first version filled the whole roof outline offset down the screen and relied on the roof covering
-it. That works for the house, whose roof is opaque, and fails completely for a shed, whose roof is
-washed over its boards at `ROOF_ALPHA` on purpose — the shadow showed straight through and laid a
-grey sheet over the whole building. Drawing the band explicitly on the edges `visibleEdges` returns
-depends on nothing being opaque, which is the only version right for both.
-
-**A garden building's boarding is drawn to the roof line, not to the footprint.** Same cause, second
-symptom: grow the roof and the oversailing rim has no boards under it, so the translucent wash
-composites over the grass and the shed comes out with a grey frame instead of eaves. Drawing the
-boards to the eaves is also the truthful picture — what you see from above *is* the roof's own
-boarding. The anchor and seed stay the element's, so the grain is continuous and deterministic, and
-the footprint the validator checks is untouched because nothing reads this.
-
-**Doors and windows are drawn on the wall faces the camera can see**, from the document's own
-`sillHeight`, `floorLevel` and `OPENING_HEIGHTS`. Only where `normal.y > 0`: a wall facing away is
-the back of the building, and drawing its glazing on the near side is the class of mistake that
-makes a drawing quietly untrustworthy. **A frame inset by the same width in both directions is
-invisible** — a metre *up* the wall is `RISE` metres of screen, so a 90 mm section inset by 90 mm of
-height lands at a fifth of a pixel. The vertical inset is divided by `RISE` to ask for 90 mm *as
-seen*. Note the consequence: the garden-facing wall of a house at the top of the plot is visible and
-the one at the bottom is not, which is true of the reference photograph too.
-
-**`PatternContext` grew a `transform`, and it is the one thing translate and rotate cannot do.** A
-vertical face is a **parallelogram**: its base runs along the wall at the wall's own angle and its
-height runs straight up the screen whatever that angle is. Those axes are not perpendicular, so the
-frame has to be given as a matrix. Inside it one unit is one metre along the wall and one metre up
-it, so a 120 mm board is 120 mm on every wall of every building at every rotation — tiling in screen
-space instead runs the boards across the drawing rather than along the wall. Widening the interface
-is safe on the grounds `strokeStyle` already established.
-
-**A face's skin comes from what the renderer already knows, not from a new table.** A boundary has a
-`BoundaryKind`, a retaining wall and a building have a material the user chose, and only the house —
-which is not an element and has no material — needs a named default. So a shed the user made of
-painted timber shows painted boards rather than a generic fence skin. `null` is the ordinary answer
-and means the flat tone everything drew before.
-
-**A building is lifted by at most one storey, and the shadow is not.** A two-storey house lifts its
-roof 1.27 m up the screen, and every square metre of garden in that strip disappears underneath it —
-on the reference fixture, the near half of a dining set. The projection is not wrong to do it; a real
-aerial from the south hides the ground immediately north of a house the same way. But a garden plan
-is a drawing of the *garden*, so `MAX_DRAWN_LIFT` caps it at 3 m. That number is measured off the
-reference rather than chosen: the wall band there is about 7% of the roof's depth, which on a
-nine-metre house is 0.63 m, and `3 × RISE` is 0.64 m. **`shadowOccluders` still reads `houseHeight`**,
-so a two-storey house throws a two-storey shadow — how far a building shades its own garden is a
-fact about the site, not a drawing convention.
-
-**`footAlpha` is recorded, not judged, and that cost three false failures.** A high value means the
-object is as wide where it meets the ground as its frame is — a ground plane for a sofa, and simply
-the truth for a planter, a raised bed or a trampoline, each of which *is* a box or a disc. What
-actually marks a baked ground is that it **spreads**: it reaches out past the object standing on it,
-where legs and a pot's base never do. `spreadsAtTheFoot` compares the bottom band against a band
-through the body and is blind to how wide the object happens to be. The same mistake was in the
-audit script and in `catalogue.test.ts`; the rule now is that **pixel judgements live in the tool,
-where the pixels are**, and the catalogue-level checks only ask whether the library still agrees
-with the manifest.
-
-**`--reprocess` never calls the model, and it used to.** The flag reads as "spend nothing", and it
-re-ran the post-processing over existing raws — but a family with *no* raw fell through to
-generation, so `--only vis- --reprocess` to re-measure a handful of finished assets quietly bought
-every ungenerated family under that prefix. Found the expensive way. It now skips them.
-
-**A flight of steps is the one standing thing that is not a prism.** Raised like everything else it
-comes out a solid block the height of its top step, which hides that it is a flight at all — and the
-whole reason a flight is in the plan is to *resolve* a level change, so drawing it as a block draws
-the problem instead of the answer. `drawFlight` divides it into `risers` bands along its depth, band
-`i` from the terrace sitting at `elevation × (risers − i) / risers`: the first band is flush with the
-terrace and the step from the last band to the ground is the final riser, so `risers` bands give
-`risers` risers. Every number comes from `stepFlight`, which is what the level change itself is
-derived from. **The terrace end is the `−depth/2` end** — a convention `stepsFromTerrace` sets when
-it places the flight beyond the terrace with the frame's own bearing, and which `stepNosings` already
-counts from. Each band's tread is the flight's own surface raster clipped and lifted, so the paving
-runs continuously up the steps instead of restarting on each one.
-
-**Edging stands proud, and `EDGING_HEIGHTS` is exposed height rather than product height.** A kerb is
-a 250 mm unit with half of it bedded; a steel edging is a 100 mm blade showing 50 mm. Quoting the
-product would raise a kerb twice as far as one stands. It lives beside `MATERIAL_HEIGHTS` rather than
-in it for the same reason `EDGING_MATERIALS` sits outside `MATERIALS` — edging is not an element and
-has no category. In Visualise a course is an extrusion in the stack; in plan it stays the flat band
-it always was. Small (50–200 mm, so a pixel or two) and worth it: a kerb with no side is a painted
-stripe, and standing slightly proud of what it edges is the one thing a kerb is for.
-
-**Nothing in the eleven fixtures has a level change, so `12-levels` is synthesised.** The generator
-raises a terrace only on a formal or modern brief at a high budget and no fixture lands there, which
-is exactly how levels, steps and walling came to be the last things nobody had looked at. The sheet
-makes an ordinary edit to a real plan — `elevation`, `retaining`, and a `steps` element — rather than
-re-capturing fixtures and changing every other sheet. Getting the flight's rotation backwards puts it
-under the house, which is the quickest way to notice the convention above.
-
-**A plant whose scheme role is `edge` has an id beginning `bed:edge:`, and so does an edging course.**
-They never collide (a plant's always carries a `col,row`), but filtering a stack by `id.includes(':edge:')`
-catches both — which is how a test for edging heights came to be reading planting. Filter on
-`source.of` instead.
-
-**`visibleEdges` is the one place the "which side faces the viewer" rule lives.** `extrude` builds
-its faces from it and the eaves shade draws its bands from it. Two copies of that winding probe is
-exactly how the walls and the shadow on them would come to disagree about which side of a building
-is the front.
+**Measured: `eval:generator` is identical to the committed baseline** (mean 0.903, min 0.758, 72%
+inside the bands, 87% of features drawn, the same fault counts). That is the expected answer rather
+than a missed one: the scorer reads footprints, and neither a stored configuration nor a
+re-described rect moves one. The golden images are unchanged too — the fixtures carry no
+configuration, and an unconfigured pergola resolves to `classic`.
 
 ## Asset Library v2: one specification, composed prompts, a recorded lineage
+
+_The elevated camera (`vis-*`, `skin-*`, `ELEVATED_TWINS`, the elevated templates and QA) was removed with
+Visualise on 28 Sep 2026; references to it below are history. The plan library is 70 families._
 
 **Every prompt is composed; no family carries one.** `asset-style.ts` holds the versioned visual
 specification — `ASSET_SPEC_VERSION`, the two camera preambles, one template per kind of subject,
@@ -4564,7 +4548,7 @@ only ever disagree with the camera it is composed onto.
 **Bump `ASSET_SPEC_VERSION` when a template's *meaning* changes**, never for a reworded subject —
 `promptHash` catches that on its own. The catalogue records the version beside every generated
 file, so an audit can say "drawn to 1.x" rather than only "something moved". A test holds
-`docs/visualise-asset-style.md` to the same number.
+`docs/asset-style.md` to the same number.
 
 **The catalogue has two records per file and they mean different things.** `generation` is written
 only when a model is called — model, quality, the size actually requested and returned, spec

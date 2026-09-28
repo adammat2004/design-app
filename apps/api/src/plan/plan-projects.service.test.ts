@@ -1,4 +1,9 @@
-import { emptyPlanDocument, type PlacedFeature, type SiteSection } from '@garden-studio/schema';
+import {
+  emptyPlanDocument,
+  PatchLayoutSchema,
+  type PlacedFeature,
+  type SiteSection,
+} from '@garden-studio/schema';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -184,6 +189,42 @@ describe.skipIf(connection === null)('PlanProjectsService', () => {
     expect(result.violations.map((v) => v.code)).toContain('features_overlap');
     // Stored regardless.
     expect((await service.findOne(created.id)).document.features.features).toHaveLength(2);
+  });
+
+  /**
+   * A structure's 3D configuration survives the layout write and the read back — through the same
+   * Zod schema the controller's pipe applies, which drops any key the schema does not know.
+   */
+  it('keeps a structure configuration through a layout write and a read', async () => {
+    const created = await createProject({ name: 'Pergola' });
+    const site = await service.patchSection(created.id, 'site', created.revision, closedSite);
+    const pergola = {
+      id: 'e-1',
+      category: 'structure',
+      role: 'feature',
+      symbol: 'pergola',
+      material: 'aluminium-dark',
+      height: 2.7,
+      zone: 'back',
+      shape: { kind: 'rect', centre: { x: 5, y: 5 }, width: 3, depth: 3, rotation: 15 },
+      structure: {
+        preset: 'modern',
+        roof: { kind: 'solid', finish: 'polycarbonate-opal' },
+        sides: { left: 'slatted', rear: 'slatted' },
+        lighting: true,
+      },
+    };
+    const body = PatchLayoutSchema.parse({
+      revision: site.project.revision,
+      section: { elements: [pergola], seededFrom: null, pristine: null },
+    });
+
+    await service.patchSection(created.id, 'layout', body.revision, body.section);
+    const [stored] = (await service.findOne(created.id)).document.layout.elements;
+
+    expect(stored!.structure).toEqual(pergola.structure);
+    expect(stored!.shape).toEqual(pergola.shape);
+    expect(stored!.height).toBe(2.7);
   });
 
   it('409s on a stale revision and hands back the current project', async () => {

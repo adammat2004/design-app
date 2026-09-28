@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ASSET_FAMILIES,
   ASSET_IDS,
-  elevatedFrame,
   type AssetFamily,
   type AssetGroup,
   type AssetId,
@@ -14,19 +13,16 @@ import {
 import { ASSET_SPEC_VERSION } from '@/lib/materials/assets/asset-style';
 import { ASSET_BASE_URL } from '@/lib/materials/assets/browser-loader';
 import { catalogueVariants, type CatalogueEntry } from '@/lib/materials/assets/catalogue';
-import { assetAnchor } from '@/lib/materials/assets/taxonomy';
 import { useAssetPreload, useAssetVersion } from '@/lib/materials/assets/use-assets';
 import {
   CONTACT_SHADOW_ALPHA,
   CONTACT_SHADOW_OFFSET_RATIO,
   CONTACT_SHADOW_SCALE,
 } from '@/lib/materials/light';
-import { VEGETATION_MAX_ROTATION } from '@/lib/materials/symbols/elevated';
 import { buildRenderScene } from '@/lib/render/build-scene';
 import { drawCanvasScene } from '@/lib/render/canvas-compositor';
 import type { PlantingPreview } from '@/lib/render/plant-clusters';
 import { QUALITY_FIXTURES, qualityScene, type QualityFixture } from '@/lib/render/quality-fixtures';
-import type { Maturity } from '@/lib/render/scene';
 
 /**
  * The asset comparison lab.
@@ -34,7 +30,7 @@ import type { Maturity } from '@/lib/render/scene';
  * The question this page exists to answer is not "does this tree look good" but **"do thirty
  * different assets look like they belong in the same garden"** — so every panel here draws assets
  * beside each other, at one scale, on one ground, with the renderer's own placement arithmetic
- * (`elevatedFrame`, `assetAnchor`, the contact-shadow constants) rather than a fit of its own. What
+ * (a sprite centred on its footprint, the contact-shadow constants) rather than a fit of its own. What
  * you judge here is what the plan draws.
  *
  * Old against new is a second library root: `public/assets-v1/` is a gitignored copy taken before
@@ -133,12 +129,6 @@ interface LineupItem {
   label: string;
 }
 
-function frameOf(family: AssetFamily): { w: number; h: number } {
-  return family.camera === 'elevated' && family.kind === 'sprite'
-    ? elevatedFrame(family)
-    : family.metres;
-}
-
 function fillGround(
   context: CanvasRenderingContext2D,
   ground: Ground,
@@ -173,9 +163,8 @@ function fillGround(
 /**
  * One asset at one scale on one ground point, placed exactly as the renderer places it.
  *
- * `ground` is the centre of the footprint in canvas pixels. A plan sprite is centred on it and
- * spans its `metres`; an elevated sprite's frame hangs from its anchor so the bottom band of the
- * image is the footprint; both turn about the same point. The contact shadow is the real
+ * `ground` is the centre of the footprint in canvas pixels. A sprite is centred on it, spans its
+ * `metres` and turns about it. The contact shadow is the real
  * `fx-soft-shadow` file at the renderer's own scale, alpha and offset, pushed down-right as the
  * default plan light would.
  */
@@ -189,10 +178,8 @@ function drawFamily(
   rotation: number,
 ): void {
   const family: AssetFamily = ASSET_FAMILIES[id];
-  const frame = frameOf(family);
-  const anchor = assetAnchor(id);
-  const width = frame.w * pxPerMetre;
-  const height = frame.h * pxPerMetre;
+  const width = family.metres.w * pxPerMetre;
+  const height = family.metres.h * pxPerMetre;
 
   if (family.kind === 'sprite' && shadow && family.taxon.group !== 'effect') {
     const reach =
@@ -212,7 +199,7 @@ function drawFamily(
   context.save();
   context.translate(ground.x, ground.y);
   context.rotate(rotation);
-  context.drawImage(image, -anchor.x * width, -anchor.y * height, width, height);
+  context.drawImage(image, -width / 2, -height / 2, width, height);
   context.restore();
 }
 
@@ -273,7 +260,7 @@ function Lineup({
     if (!element) return;
     const pad = 16;
     const cells = items.map((item) => {
-      const frame = frameOf(ASSET_FAMILIES[item.id]);
+      const frame = ASSET_FAMILIES[item.id].metres;
       return {
         item,
         w: Math.max(frame.w * pxPerMetre, 72) + pad,
@@ -310,11 +297,9 @@ function Lineup({
 
     for (const { cell, x: left, y: top } of placed) {
       const family: AssetFamily = ASSET_FAMILIES[cell.item.id];
-      const frame = frameOf(family);
-      const anchor = assetAnchor(cell.item.id);
       const at = {
         x: left + cell.w / 2,
-        y: top + pad / 2 + anchor.y * frame.h * pxPerMetre,
+        y: top + pad / 2 + (family.metres.h * pxPerMetre) / 2,
       };
       const image = loaded.get(`${ROOTS[root]}${cell.item.entry.file}`);
       if (footprints && family.kind === 'sprite') drawFootprint(context, family, at, pxPerMetre);
@@ -344,15 +329,13 @@ const SCENE_SIZE = { width: 640, height: 640 };
 
 function ScenePanel() {
   const [fixture, setFixture] = useState<QualityFixture>('dense');
-  const [view, setView] = useState<'plan' | 'visualise'>('visualise');
-  const [maturity, setMaturity] = useState<Maturity>('mature');
   const [scale, setScale] = useState(32);
   const [error, setError] = useState('');
   const canvas = useRef<HTMLCanvasElement>(null);
   const assets = useAssetVersion();
   const scene = useMemo(
-    () => buildRenderScene(qualityScene(fixture), { view, maturity, rendererVersion: 'v2' }),
-    [fixture, view, maturity],
+    () => buildRenderScene(qualityScene(fixture), { rendererVersion: 'v2' }),
+    [fixture],
   );
   useEffect(() => {
     if (!canvas.current) return;
@@ -399,29 +382,6 @@ function ScenePanel() {
           </select>
         </label>
         <label>
-          View{' '}
-          <select
-            aria-label="Scene view"
-            value={view}
-            onChange={(event) => setView(event.target.value as 'plan' | 'visualise')}
-          >
-            <option>plan</option>
-            <option>visualise</option>
-          </select>
-        </label>
-        <label>
-          Maturity{' '}
-          <select
-            aria-label="Scene maturity"
-            value={maturity}
-            onChange={(event) => setMaturity(event.target.value as Maturity)}
-          >
-            <option>year-1</option>
-            <option>year-3</option>
-            <option>mature</option>
-          </select>
-        </label>
-        <label>
           px/m{' '}
           <input
             aria-label="Scene scale"
@@ -457,7 +417,6 @@ export function AssetLab() {
   useAssetPreload();
   const assets = useAssetVersion();
   const [group, setGroup] = useState<AssetGroup | 'all'>('all');
-  const [camera, setCamera] = useState<'all' | 'plan' | 'elevated'>('all');
   const [kind, setKind] = useState<'all' | 'sprite' | 'texture' | 'face'>('all');
   const [search, setSearch] = useState('');
   const [compare, setCompare] = useState(false);
@@ -473,7 +432,6 @@ export function AssetLab() {
       ASSET_IDS.filter((id) => {
         const family: AssetFamily = ASSET_FAMILIES[id];
         if (group !== 'all' && family.taxon.group !== group) return false;
-        if (camera !== 'all' && (family.camera ?? 'plan') !== camera) return false;
         if (kind !== 'all' && family.kind !== kind) return false;
         if (search) {
           const haystack = `${id} ${family.taxon.type} ${(family.taxon.tags ?? []).join(' ')}`;
@@ -481,7 +439,7 @@ export function AssetLab() {
         }
         return true;
       }),
-    [group, camera, kind, search],
+    [group, kind, search],
   );
 
   const lineup = useMemo<LineupItem[]>(
@@ -505,13 +463,7 @@ export function AssetLab() {
     const variants = catalogueVariants(selected);
     const first = variants[0];
     if (!first) return { family, variants, ladder: [], turns: [], all: [] };
-    const elevated = family.camera === 'elevated' && family.kind === 'sprite';
-    const angles =
-      elevated && family.taxon.group === 'vegetation'
-        ? [-VEGETATION_MAX_ROTATION, 0, VEGETATION_MAX_ROTATION]
-        : family.kind === 'sprite'
-          ? [0, Math.PI / 4, Math.PI / 2, Math.PI]
-          : [0];
+    const angles = family.kind === 'sprite' ? [0, Math.PI / 4, Math.PI / 2, Math.PI] : [0];
     return {
       family,
       variants,
@@ -557,18 +509,6 @@ export function AssetLab() {
             {GROUPS.map((name) => (
               <option key={name}>{name}</option>
             ))}
-          </select>
-        </label>
-        <label>
-          Camera{' '}
-          <select
-            aria-label="Camera"
-            value={camera}
-            onChange={(event) => setCamera(event.target.value as typeof camera)}
-          >
-            <option value="all">all</option>
-            <option>plan</option>
-            <option>elevated</option>
           </select>
         </label>
         <label>
@@ -681,7 +621,6 @@ export function AssetLab() {
           <h2 className="text-base font-semibold">
             {selected} · {detail.family.taxon.group}/{detail.family.taxon.type} ·{' '}
             {detail.family.metres.w}×{detail.family.metres.h} m
-            {detail.family.heightMetres ? ` · ${detail.family.heightMetres} m tall` : ''}
           </h2>
           <p className="text-sm text-neutral-600">{detail.family.subject}</p>
           {detail.family.variantSubjects ? (
@@ -703,7 +642,7 @@ export function AssetLab() {
                       ground={ground}
                       root={root}
                       footprints={footprints}
-                      width={Math.max(120, frameOf(detail.family).w * scale + 40)}
+                      width={Math.max(120, detail.family.metres.w * scale + 40)}
                     />
                   </div>
                 ))}
@@ -750,7 +689,7 @@ export function AssetLab() {
               >
                 <div className="font-medium">{id}</div>
                 <div className="text-neutral-500">
-                  {family.camera ?? 'plan'} · {family.kind} · {family.taxon.type}
+                  {family.kind} · {family.taxon.type}
                 </div>
                 {variants.length === 0 ? (
                   <div className="text-red-700">not generated ({family.variants} wanted)</div>

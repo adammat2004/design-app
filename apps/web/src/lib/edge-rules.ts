@@ -7,7 +7,7 @@ import { useBriefStore } from '@/state/brief-store';
 /**
  * The brief's say in what automatic edging lays, for every surface that draws a plan.
  *
- * **One source for all of them, and that is the point.** The editor, Visualise, the concept cards,
+ * **One source for all of them, and that is the point.** The editor, the concept cards,
  * the PNG export and the schedule each build their own scene, and a scene built without the brief
  * resolves a formal garden's borders as if no style had been chosen. The export disagreeing with
  * the screen is the symptom two separate bugs in this codebase have already shared; routing every

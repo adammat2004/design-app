@@ -68,29 +68,19 @@ export function EditorScene({ scene, site, transform, onReady }: {
   }, [mounted, scene, site, transform, assets, onReady]);
 
   /*
-   * `data-view` is the camera this scene was built to, exposed so a browser test can assert it.
-   * The 2D Plan tab once built a *visualise* scene and drew the elevated library for a whole
-   * commit while every unit test passed — because each guard one layer down was intact and the
-   * fault was a caller asking for the wrong camera. Nothing below the call site can catch that,
-   * so the call site's answer has to be visible from outside.
-   *
-   * `data-stack` is the corroborating half, and it took over from `data-plants` when the planting
-   * rework made the 2D Plan draw instanced sprites too: a plan scene has plants now, so their
-   * absence stopped being evidence of anything. What is still true of the plan camera and only of
-   * it is that its stack holds **plants and nothing else** — `buildStack`, which is the whole of
-   * the elevated drawing, is not called on that path — so the two counts are equal there and are
-   * not in Visualise, where the objects, the house and the fence join them.
+   * `data-stack` against `data-plants`: the plan's stack holds **plants and nothing else**, so the
+   * two counts are equal. A browser test asserts it, because a caller asking the scene for the
+   * wrong thing is the one fault no guard below the call site can see.
    */
   return <>
     <GradeFilter />
     <div ref={host} data-testid="editor-scene" data-plants={scene.plants.length}
-      data-view={scene.view}
       data-stack={scene.stack.length}
       data-scale={transform.scale} data-offset-x={transform.offsetX} data-offset-y={transform.offsetY}
       aria-hidden className="pointer-events-none absolute inset-0"
       /*
-       * The same grade the sheets and the download get, and for the same reason the Visualise
-       * wrapper carries one: this div is the only element that contains **both** the Pixi canvas
+       * The same grade the sheets and the download get: this div is the only element that
+       * contains **both** the Pixi canvas
        * and the 2D overlay, so it is the only place a single filter reaches all the design pixels.
        * As CSS rather than as arithmetic because this repaints on every frame of every drag, and
        * `getImageData` over the viewport per frame is a cost the download does not pay.

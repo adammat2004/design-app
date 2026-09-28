@@ -47,9 +47,8 @@ function presetFor(sizePx: { w: number; h: number }): { w: number; h: number } {
  *
  * `gpt-image-2` and later take any `WIDTHxHEIGHT` with both sides a multiple of 16 and the aspect
  * within 3:1, so the frame is requested at its own aspect rather than snapped to a preset and
- * padded — which is what an elevated sprite's bottom-aligned framing was always asking for. The
- * family's `sizePx` is the *output*; the model is asked for the same aspect with the long edge
- * between 1024 and 2048 px, and the post-processing downsamples.
+ * padded. The family's `sizePx` is the *output*; the model is asked for the same aspect with the
+ * long edge between 1024 and 2048 px, and the post-processing downsamples.
  */
 export function customSizeFor(sizePx: { w: number; h: number }): { w: number; h: number } {
   const long = Math.max(sizePx.w, sizePx.h);

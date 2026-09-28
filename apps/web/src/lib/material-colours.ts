@@ -45,6 +45,8 @@ export const MATERIAL_FILLS: Record<MaterialId, string | null> = {
   'dark-stained-timber': '#4b453d',
   hardwood: '#b89a72',
   'powder-coated-steel': '#b9bcb5',
+  'aluminium-dark': '#55595c',
+  'aluminium-light': '#d3d5d1',
   // water-feature
   'naturalistic-pond': '#a8cadf',
   'formal-pool': '#9dc3dc',

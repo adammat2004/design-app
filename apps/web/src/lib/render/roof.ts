@@ -2,7 +2,6 @@ import {
   DEFAULT_ROOF_MATERIAL,
   boundingBox,
   insetPolygon,
-  outsetPolygon,
   polygonArea,
   type Point,
   type RoofMaterial,
@@ -27,13 +26,7 @@ import {
  * pixel — and one a later reader would reasonably assume must matter.
  *
  * **The footprint is untouched**, and that rule has survived the arrival of an eaves overhang
- * rather than being weakened by it. `overhang` defaults to zero, so the plan drawing is still the
- * roof drawn *within* `housePolygon(house)` — where an oversail would put drawn geometry outside
- * the outline `houseFitsInside` measures, and a presentation flourish that can make a legal house
- * look illegal is not worth a millimetre of shading. Visualise passes `EAVES_OVERHANG`, where the
- * roof is already drawn a metre and a quarter up the screen and the question is no longer whether
- * drawn geometry may leave the outline but whether the building reads as one. See `EAVES_OVERHANG`.
- * The prompt's rule is kept either way: do not modify *measurement* geometry to make the roof look
+ * TOKEN is kept either way: do not modify *measurement* geometry to make the roof look
  * good, and nothing here does.
  *
  * ## How the shape is derived
@@ -89,8 +82,7 @@ export interface RenderRoof {
   /** The ridge and hips, as lines to draw over the planes. Empty for a flat roof. */
   ridge: [Point, Point][];
   /**
-   * The roof's own outer edge — the walls grown by the overhang, or the walls themselves when
-   * there is none.
+   * The roof's own outer edge, which in plan is the wall line itself.
    *
    * Carried rather than left to the painter to reassemble from the planes. The planes tile this
    * ring, so it *could* be recovered from them, and a painter doing that would be rebuilding
@@ -179,50 +171,16 @@ const GABLE_ASPECT = 1.35;
 /** Held back off the true half-span so the ridge stays a line rather than collapsing to a point. */
 const RIDGE_INSET_RATIO = 0.46;
 
-/**
- * How far a roof oversails its own walls, in metres. Visualise only.
- *
- * ## Why this exists now, when it was deliberately refused before
- *
- * The original note stands on its own terms: in the **plan** drawing the roof *is* the house's
- * drawn extent, so an overhang would put geometry outside the outline `houseFitsInside` measures,
- * and a presentation flourish that can make a legal house look illegal is not worth a millimetre of
- * shading. None of that has changed and the plan view still gets `overhang: 0`.
- *
- * What changed is the elevated view, where the roof is already drawn 1.27 m up the screen from the
- * footprint — far further than any eaves. The question there is not whether drawn geometry may
- * leave the outline, which it already does by a factor of four, but whether the building reads as a
- * building. A roof flush with its walls reads as an extruded block; an oversailing one reads as a
- * roof, and it is the single clearest difference between the reference photograph and what we draw.
- *
- * 0.35 m is a real domestic eaves projection. **Nothing derived from it may reach validation**, and
- * nothing can: it is applied inside `roofFor` in the visualise branch and never touches
- * `housePolygon`, which is what every measurement still reads.
- */
-export const EAVES_OVERHANG = 0.35;
-
 export interface RoofOptions {
-  /** How far the roof oversails its walls. Zero in the plan view; see `EAVES_OVERHANG`. */
-  overhang?: number;
   /** What it is covered with, from the document. */
   material?: RoofMaterial;
 }
 
 export function roofFor(walls: Point[], light: Point, options: RoofOptions = {}): RenderRoof | null {
-  const overhang = options.overhang ?? 0;
   const material = options.material ?? DEFAULT_ROOF_MATERIAL;
   if (walls.length < 3) return null;
 
-  /*
-   * Everything below works on the eaves line rather than on the wall line, so the hips, the ridge
-   * and every plane are derived from the roof's real extent. Drawing the roof from the walls and
-   * then fattening it afterwards would put the hips where no roof has them.
-   *
-   * An outset that folds through itself falls back to no overhang rather than to nothing: a roof
-   * flush with its walls is a worse drawing, and no roof at all is a hole in the plan.
-   */
-  const grown = overhang > 0 ? outsetPolygon(walls, overhang) : null;
-  const outline = grown && grown.length === walls.length ? grown : walls;
+  const outline = walls;
 
   const rectangular = rectangularRoof(outline, light, material);
   if (rectangular) return rectangular;

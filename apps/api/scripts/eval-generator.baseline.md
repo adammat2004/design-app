@@ -410,3 +410,283 @@ SUMMARY over 117 concepts (3 seeds)
     l-shape                   298 m²      755 ms
     suburban                  405 m²     1258 ms
 ```
+
+## A seat in the sun where the terrace is in the shade
+
+26 Sep 2026. The sun principle judges seating by its sunniest seat; the composition reserves a sun
+seat where the terrace it drew is two-fifths shaded. `SUN_SEAT=0` withholds the seat, so the first
+block is the scorer change alone on identical code.
+
+```
+SUN_SEAT=0
+fixture / concept           total      circ      group     prop      comp      relat     priv      hier      style     build     sun       upkp      tree      fit       issues
+  inside composition bands 84/117 (72%)
+  requested features drawn 89% (mean)
+  design score   mean 0.899   min 0.771
+    relationships    mean 0.817   min 0.000   measured on 96/117
+    sun              mean 0.582   min 0.200   measured on 99/117
+    canopy           mean 0.831   min 0.000   measured on 117/117
+    too-many-materials         87
+    seating-in-shade           69
+    geometry-mixed              9
+```
+
+```
+SUMMARY over 117 concepts (3 seeds)
+
+  generated at all         every case
+  valid geometry           117/117 (100%)
+  inside composition bands 84/117 (72%)
+  deterministic            yes
+  requested features drawn 89% (mean)
+  repairs accepted         9 across 9/117 (8%) of concepts
+
+  design score   mean 0.900   min 0.758
+  weak (< 0.6)    0/117 (0%)
+  with a critical fault    0/117 (0%)
+
+  by principle:
+    circulation      mean 0.964   min 0.750   measured on 117/117
+    grouping         mean 0.998   min 0.969   measured on 117/117
+    proportion       mean 0.964   min 0.692   measured on 117/117
+    composition      mean 0.963   min 0.778   measured on 117/117
+    relationships    mean 0.817   min 0.000   measured on 96/117
+    privacy          mean 1.000   min 1.000   measured on 117/117
+    hierarchy        mean 0.709   min 0.319   measured on 117/117
+    style            mean 0.872   min 0.667   measured on 117/117
+    buildability     mean 0.987   min 0.750   measured on 117/117
+    sun              mean 0.659   min 0.400   measured on 99/117
+    maintenanceFit   mean 0.777   min 0.000   measured on 117/117
+    canopy           mean 0.804   min 0.000   measured on 117/117
+    featureFit       mean 0.960   min 0.737   measured on 117/117
+
+  commonest faults:
+    too-many-materials         84
+    sparse-canopy              66
+    seating-in-shade           48
+    composition-off-brief      45
+    relationship-unmet         36
+    upkeep-heavy               31
+    panel-complexity           27
+    no-primary-space           24
+    route-dead-end             18
+    route-missing              17
+
+  lawn in one piece       117/117 (100%)
+  orphans per concept      0.10 (mean)
+  sets offering a straight and a curved garden   33/39 (85%)
+  sets of three different compositions          30/39 (77%)
+  planting depth varies   39/48 (81%) of plans planted on two sides or more (mean spread 1.84 m)
+
+  by composition:
+    courtyard                6 concepts   mean 0.986   min 0.985
+    destination_garden      27 concepts   mean 0.901   min 0.758
+    formal_axis              6 concepts   mean 0.896   min 0.875
+    linear_sequence          3 concepts   mean 0.806   min 0.806
+    side_by_side             3 concepts   mean 0.932   min 0.932
+    sweeping_lawn           30 concepts   mean 0.894   min 0.813
+    terrace_and_lawn        42 concepts   mean 0.895   min 0.786
+
+  composition faults:
+    feature-in-open-space      14
+    route-crosses-panel         0
+    hard-island                 0
+    orphan-feature             12
+    one-sided                   0
+    panel-complexity           27
+    geometry-mixed             12
+
+  latency, one set of three concepts:
+    courtyard                  76 m²      218 ms
+    small-entertaining         88 m²     1343 ms
+    overloaded                132 m²      591 ms
+    long-narrow               143 m²      668 ms
+    side-gate-shed            176 m²      523 ms
+    unlocated                 176 m²      530 ms
+    l-shaped                  195 m²      670 ms
+    modern-vs-natural         202 m²      694 ms
+    natural-twin              202 m²      735 ms
+    family-play               235 m²      973 ms
+    wide-shallow              286 m²      606 ms
+    l-shape                   298 m²      736 ms
+    suburban                  405 m²     1454 ms
+```
+
+## Phase 5: the templates retire, and realisation starts to leave `build`
+
+28 Sep 2026. A composition that declines every variation is no longer offered where another
+composed; a destination garden with nothing to walk to gets a garden seat at the far end; the four
+newer compositions' hand-drawn plans are deleted; five realisation stages moved to `realise/`,
+byte-identical. Hand-drawn concepts 21/117 -> 12/117.
+
+```
+SUMMARY over 117 concepts (3 seeds)
+
+  generated at all         every case
+  valid geometry           117/117 (100%)
+  inside composition bands 84/117 (72%)
+  deterministic            yes
+  requested features drawn 89% (mean)
+  repairs accepted         12 across 12/117 (10%) of concepts
+
+  design score   mean 0.896   min 0.758
+  weak (< 0.6)    0/117 (0%)
+  with a critical fault    0/117 (0%)
+
+  by principle:
+    circulation      mean 0.964   min 0.750   measured on 117/117
+    grouping         mean 0.988   min 0.810   measured on 117/117
+    proportion       mean 0.966   min 0.800   measured on 117/117
+    composition      mean 0.961   min 0.778   measured on 117/117
+    relationships    mean 0.792   min 0.000   measured on 96/117
+    privacy          mean 1.000   min 1.000   measured on 117/117
+    hierarchy        mean 0.712   min 0.319   measured on 117/117
+    style            mean 0.866   min 0.667   measured on 117/117
+    buildability     mean 0.986   min 0.750   measured on 117/117
+    sun              mean 0.671   min 0.500   measured on 99/117
+    maintenanceFit   mean 0.773   min 0.000   measured on 117/117
+    canopy           mean 0.794   min 0.000   measured on 117/117
+    featureFit       mean 0.960   min 0.737   measured on 117/117
+
+  commonest faults:
+    too-many-materials         84
+    sparse-canopy              72
+    composition-off-brief      45
+    seating-in-shade           42
+    relationship-unmet         39
+    upkeep-heavy               33
+    panel-complexity           24
+    no-primary-space           24
+    route-dead-end             18
+    route-missing              16
+
+  lawn in one piece       117/117 (100%)
+  orphans per concept      0.08 (mean)
+  sets offering a straight and a curved garden   33/39 (85%)
+  sets of three different compositions          27/39 (69%)
+  planting depth varies   39/48 (81%) of plans planted on two sides or more (mean spread 1.86 m)
+
+  by composition:
+    courtyard                9 concepts   mean 0.977   min 0.959
+    destination_garden      27 concepts   mean 0.892   min 0.758
+    formal_axis              3 concepts   mean 0.875   min 0.875
+    linear_sequence          3 concepts   mean 0.806   min 0.806
+    side_by_side             3 concepts   mean 0.932   min 0.932
+    sweeping_lawn           33 concepts   mean 0.891   min 0.813
+    terrace_and_lawn        39 concepts   mean 0.890   min 0.786
+
+  composition faults:
+    feature-in-open-space      13
+    route-crosses-panel         0
+    hard-island                 0
+    orphan-feature              9
+    one-sided                   0
+    panel-complexity           24
+    geometry-mixed             15
+
+  latency, one set of three concepts:
+    courtyard                  76 m²      123 ms
+    small-entertaining         88 m²     1353 ms
+    overloaded                132 m²      696 ms
+    long-narrow               143 m²      633 ms
+    side-gate-shed            176 m²      567 ms
+    unlocated                 176 m²      607 ms
+    l-shaped                  195 m²      674 ms
+    modern-vs-natural         202 m²      699 ms
+    natural-twin              202 m²      743 ms
+    family-play               235 m²      998 ms
+    wide-shallow              286 m²      616 ms
+    l-shape                   298 m²      754 ms
+    suburban                  405 m²     1452 ms
+```
+
+## Phase 5, second half: the courtyard is the last resort, and the templates are gone
+
+28 Sep 2026. The courtyard carves rooms off its floor and, drawn as the last resort, never declines;
+it replaces the terrace-and-lawn template as what every composition falls back to, and is offered
+under its own name where nothing composed. A repair may no longer turn a composed candidate into the
+fallback. The composition measure no longer counts a gravel passage as open ground, and the reach
+rule measures from the terrace. The classic templates, `golden.test.ts`, `designedBeds` and the
+legacy assignment are deleted; two more realisation stages moved to `realise/`, byte-identical.
+
+```
+SUMMARY over 117 concepts (3 seeds)
+
+  generated at all         every case
+  valid geometry           117/117 (100%)
+  inside composition bands 84/117 (72%)
+  deterministic            yes
+  requested features drawn 87% (mean)
+  repairs accepted         9 across 9/117 (8%) of concepts
+
+  design score   mean 0.903   min 0.758
+  weak (< 0.6)    0/117 (0%)
+  with a critical fault    0/117 (0%)
+
+  by principle:
+    circulation      mean 0.974   min 0.833   measured on 117/117
+    grouping         mean 0.988   min 0.810   measured on 117/117
+    proportion       mean 0.976   min 0.858   measured on 117/117
+    composition      mean 0.970   min 0.826   measured on 117/117
+    relationships    mean 0.811   min 0.000   measured on 96/117
+    privacy          mean 1.000   min 1.000   measured on 117/117
+    hierarchy        mean 0.736   min 0.500   measured on 117/117
+    style            mean 0.866   min 0.667   measured on 117/117
+    buildability     mean 0.987   min 0.750   measured on 117/117
+    sun              mean 0.656   min 0.400   measured on 99/117
+    maintenanceFit   mean 0.786   min 0.000   measured on 117/117
+    canopy           mean 0.769   min 0.000   measured on 117/117
+    featureFit       mean 0.954   min 0.737   measured on 117/117
+
+  commonest faults:
+    too-many-materials         84
+    sparse-canopy              75
+    composition-off-brief      42
+    seating-in-shade           42
+    relationship-unmet         33
+    upkeep-heavy               27
+    panel-complexity           24
+    no-primary-space           21
+    route-dead-end             18
+    leftover-pocket            15
+
+  lawn in one piece       117/117 (100%)
+  orphans per concept      0.00 (mean)
+  sets offering a straight and a curved garden   33/39 (85%)
+  sets of three different compositions          27/39 (69%)
+  drawn as the last resort                      9/117 (8%)   (mislabelled 0)
+  planting depth varies   42/54 (78%) of plans planted on two sides or more (mean spread 1.84 m)
+
+  by composition:
+    courtyard               18 concepts   mean 0.969   min 0.944
+    destination_garden      27 concepts   mean 0.892   min 0.758
+    formal_axis              3 concepts   mean 0.875   min 0.875
+    linear_sequence          3 concepts   mean 0.806   min 0.806
+    side_by_side             3 concepts   mean 0.932   min 0.932
+    sweeping_lawn           33 concepts   mean 0.885   min 0.803
+    terrace_and_lawn        30 concepts   mean 0.902   min 0.786
+
+  composition faults:
+    feature-in-open-space       0
+    route-crosses-panel         0
+    hard-island                 0
+    orphan-feature              0
+    one-sided                   0
+    panel-complexity           24
+    geometry-mixed             15
+
+  latency, one set of three concepts:
+    courtyard                  76 m²       74 ms
+    small-entertaining         88 m²      119 ms
+    overloaded                132 m²      559 ms
+    long-narrow               143 m²      628 ms
+    side-gate-shed            176 m²      567 ms
+    unlocated                 176 m²      621 ms
+    l-shaped                  195 m²      695 ms
+    modern-vs-natural         202 m²      762 ms
+    natural-twin              202 m²     1255 ms
+    family-play               235 m²     1017 ms
+    wide-shallow              286 m²      606 ms
+    l-shape                   298 m²      628 ms
+    suburban                  405 m²     1498 ms
+```

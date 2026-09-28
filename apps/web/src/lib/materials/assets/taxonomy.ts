@@ -1,8 +1,6 @@
 import {
   ASSET_FAMILIES,
   ASSET_IDS,
-  elevatedAnchor,
-  type AssetCamera,
   type AssetFamily,
   type AssetGroup,
   type AssetId,
@@ -66,26 +64,10 @@ export interface TaxonQuery {
   /** Metres. Families whose natural size falls outside are skipped. */
   minMetres?: number;
   maxMetres?: number;
-  /**
-   * Which camera the asset must have been drawn to. **Absent means `plan`.**
-   *
-   * Defaulting rather than matching everything is the whole reason the elevated library can be
-   * added without touching a single existing call site. A query is answered in manifest order and
-   * its consumers index into the result with a seeded generator, so a query that suddenly returned
-   * twice as many families would redraw every planted bed in every saved plan — and would draw
-   * them with art from the wrong camera, which is worse than merely different.
-   *
-   * Visualise asks for `'elevated'` explicitly, and falls back per family when nothing has been
-   * generated yet. There is deliberately no way to ask for "either": a caller that does not care
-   * which camera it gets is a caller that is about to mix them in one picture.
-   */
-  camera?: AssetCamera;
 }
 
 function matches(family: AssetFamily, query: TaxonQuery): boolean {
   const { taxon } = family;
-
-  if ((family.camera ?? 'plan') !== (query.camera ?? 'plan')) return false;
 
   if (query.group && taxon.group !== query.group) return false;
 
@@ -125,7 +107,6 @@ export function assetsMatching(query: TaxonQuery): AssetId[] {
     query.tags ?? '',
     query.minMetres ?? '',
     query.maxMetres ?? '',
-    query.camera ?? 'plan',
   ]);
 
   const held = cache.get(key);
@@ -144,21 +125,6 @@ export function isRecolourable(id: AssetId): boolean {
   // field narrows to a type that does not have it at all.
   const family: AssetFamily = ASSET_FAMILIES[id];
   return family.recolourable === true;
-}
-
-/**
- * Where the thing stands inside its own image, as a fraction.
- *
- * Two defaults, because the two cameras frame differently and neither default is a guess. A plan
- * sprite is centred — its prompt says so. An elevated one stands in the footprint band at the
- * bottom of its frame, which `elevatedAnchor` computes from the family's own size and height, so
- * the answer follows from the specification rather than from a number typed per family. Either can
- * be overridden by a family that knows its foot is elsewhere.
- */
-export function assetAnchor(id: AssetId): { x: number; y: number } {
-  const family: AssetFamily = ASSET_FAMILIES[id];
-  if (family.anchor) return family.anchor;
-  return family.camera === 'elevated' ? elevatedAnchor(family) : { x: 0.5, y: 0.5 };
 }
 
 /* ---------------------------------------------------------------- test seams */

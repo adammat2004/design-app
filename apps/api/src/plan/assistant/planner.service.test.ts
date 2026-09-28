@@ -177,6 +177,72 @@ describe.skipIf(connection === null)('PlannerService', () => {
     expect(unplaceable[0]!.reason).toContain('ground cover');
   });
 
+  /*
+   * A pergola is resized by the same rule the editor's size fields use: it keeps the side it is
+   * against, and it names what is in the way rather than saying there is "no room".
+   */
+  describe('resizing a structure', () => {
+    const pergola = (centre: { x: number; y: number }) =>
+      element({
+        id: 'e-p',
+        name: 'Dining pergola',
+        category: 'structure',
+        symbol: 'pergola',
+        material: 'hardwood',
+        shape: { kind: 'rect', centre, width: 3, depth: 3, rotation: 0 },
+      });
+    const border = (x0: number) =>
+      element({
+        id: 'e-bed',
+        name: 'Rear border',
+        category: 'planting-bed',
+        role: 'fill',
+        fillKind: 'accent',
+        shape: {
+          kind: 'polygon',
+          cornerRadius: 0,
+          points: [
+            { x: x0, y: 9 },
+            { x: 15, y: 9 },
+            { x: 15, y: 15 },
+            { x: x0, y: 15 },
+          ],
+        },
+      });
+    const resize = (factor: number): DesignIntent => ({
+      kind: 'resize',
+      target: { elementIds: ['e-p'] },
+      factor,
+    });
+
+    it('grows away from the house wall it stands against', async () => {
+      // The house's back wall is at y = 7; the pergola's rear side is on it.
+      const { changes } = await planner.plan(plan([pergola({ x: 10, y: 8.5 })]), [resize(1.2)]);
+      const next = changes[0]!.next.shape;
+      expect(next.kind === 'rect' && next.depth).toBeCloseTo(3.6);
+      expect(next.kind === 'rect' && next.centre.y - next.depth / 2).toBeCloseTo(7);
+    });
+
+    it('takes the largest size that clears the border when the full one does not', async () => {
+      const { changes, unplaceable } = await planner.plan(plan([pergola({ x: 10, y: 12 }), border(12)]), [
+        resize(2),
+      ]);
+      expect(unplaceable).toEqual([]);
+      const next = changes[0]!.next.shape;
+      expect(next.kind === 'rect' && next.width).toBeGreaterThan(3.5);
+      expect(next.kind === 'rect' && next.width).toBeLessThanOrEqual(4);
+    });
+
+    it('names the border when it cannot grow at all', async () => {
+      const { changes, unplaceable } = await planner.plan(
+        plan([pergola({ x: 10, y: 12 }), border(11.5)]),
+        [resize(1.5)],
+      );
+      expect(changes).toEqual([]);
+      expect(unplaceable[0]!.reason).toBe('The rear border is in the way.');
+    });
+  });
+
   /* ---------------------------------------------------------------- move */
 
   it('moves towards the house and stops before touching it', async () => {

@@ -182,11 +182,12 @@ export interface PatternContext {
   /**
    * Multiply the current transform by an arbitrary matrix.
    *
-   * Used for exactly one thing, and it is a thing `translate` and `rotate` genuinely cannot do: a
-   * vertical face in the elevated view is a **parallelogram**, because its base runs along the wall
-   * at whatever angle the wall is and its height runs straight up the screen. Those two axes are
-   * not perpendicular, so no combination of translate, rotate and scale reaches it — the frame has
-   * to be given as a matrix, and then a wall's boards can be tiled along it at their real size.
+   * Used for two things `translate` and `rotate` genuinely cannot do: mirroring a texture tile, and
+   * a raised face (an edging course, a retaining face) drawn as a **parallelogram**, because its
+   * base runs along the edge at whatever angle the edge is and its height runs straight up the
+   * screen. Those two axes are not perpendicular, so no combination of translate, rotate and scale
+   * reaches it — the frame has to be given as a matrix, and then a material can be tiled along it
+   * at its real size.
    *
    * Widening the interface for it is safe on the same grounds `strokeStyle` was: this type is
    * narrowed to avoid the DOM's *nominal* type, not to avoid capability, and both the DOM context
@@ -243,7 +244,7 @@ export interface PatternAnchor {
  * against a real canvas in Node without mounting anything. A plain value object keeps that.
  */
 export interface DrawPass {
-  /** The scene's resolved stack. Visualise supplies soil only, with foliage drawn separately. */
+  /** The scene's resolved stack. A ground bed supplies soil only; its foliage is drawn as sprites. */
   layers?: import('./layers').SurfaceLayer[];
   /** World-space crowns and objects that leave gaps in a bed. */
   exclusions?: Point[][];

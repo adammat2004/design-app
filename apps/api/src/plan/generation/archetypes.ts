@@ -16,8 +16,6 @@ import {
   type ZoneId,
 } from '@garden-studio/schema';
 import type { DesignConstraints } from './constraints.js';
-import { TEMPLATE_NAMES } from './layout/templates/index.js';
-import type { TemplateId } from './layout/sketch.js';
 import type { GeometryLanguage } from './design/composition/types.js';
 
 /**
@@ -184,11 +182,11 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
   /*
    * ---- the three composed answers ----
    *
-   * A lawn, a border and a lighting scheme are things the plan already draws: the template lays a
-   * lawn panel, `designedBeds` cuts the borders, `lightingScheme` composes from what was placed.
-   * Asking for one of them therefore *steers* that pass rather than dropping a second copy on top
-   * of it — `concepts.service.ts` settles all three from what actually landed, and never sends
-   * them through `assignSlots` or the sampler.
+   * A lawn, a border and a lighting scheme are things the plan already draws: the composition
+   * reserves the lawn and draws the planting round it, `lightingScheme` composes from what was
+   * placed. Asking for one of them therefore *steers* that pass rather than dropping a second copy
+   * on top of it — `concepts.service.ts` settles all three from what actually landed, and never
+   * sends them through slot assignment or the sampler.
    *
    * They still need a spec, because `FEATURE_SPECS` is total and because the sampler is the whole
    * placer on a plot with no house to compose a room off. These footprints are what that fallback
@@ -235,7 +233,7 @@ export const FEATURE_SPECS: Record<DesiredFeature, FeatureSpec> = {
  * Note `plantingBeds` is deliberately absent despite being the most repeatable thing in a garden:
  * it is composed rather than placed, so it never reaches the surplus pass at all, and listing it
  * here would be a line that reads as policy and does nothing. The borders already grow with the
- * plot because `designedBeds` cuts them from the room.
+ * plot because the composition draws them from the room.
  */
 export const REPEATABLE_FEATURES: DesiredFeature[] = ['seating', 'dining', 'vegPatch', 'water'];
 
@@ -317,8 +315,7 @@ export const CONCEPTS_PER_SET = ARCHETYPES.length;
 /**
  * Which archetype a concept slot carries, given which slot is the recommendation.
  *
- * The three slots are the three layout templates, in a fixed order. The recommended slot takes
- * the balanced archetype — it answers the brief as written — and the other two take the
+ * The recommended slot takes the balanced archetype — it answers the brief as written — and the other two take the
  * entertaining and retreat positions in slot order, so a cottage brief's recommendation is still
  * budget-neutral and the alternatives still lean one way each.
  */
@@ -332,8 +329,7 @@ export function archetypeFor(index: number, recommendedIndex: number): Archetype
 /* ---------------------------------------------------------------- furnishing */
 
 // The furnishing tables live in a leaf module (`furnishings.ts`) because the sketch layer derives
-// the terrace floor from them, and this file imports the template registry that the sketch layer
-// is part of. Re-exported here for the callers that always found them here.
+// the terrace floor from them. Re-exported here for the callers that always found them here.
 export { FURNISHINGS, HOST_SYMBOLS } from './furnishings.js';
 
 /**
@@ -528,8 +524,8 @@ export function edgingFor(constraints: DesignConstraints): MaterialId | null {
  * storing pre-scaled footprints — would make the numbers in that table mean nothing on their own.
  */
 /**
- * The feature as a plan in `language` draws it. `null` — a hand-drawn sketch, or a plot with no
- * composition at all — keeps the spec as quoted.
+ * The feature as a plan in `language` draws it. `null` — a plot with no composition at all — keeps
+ * the spec as quoted.
  */
 export function specIn(
   feature: DesiredFeature,
@@ -574,16 +570,4 @@ export function styleLabel(brief: GardenBrief): string {
 export function featureLabel(feature: DesiredFeature, brief: GardenBrief): string {
   if (feature === 'other') return brief.featuresOther.trim() || DESIRED_FEATURE_LABELS.other;
   return DESIRED_FEATURE_LABELS[feature];
-}
-
-export function describeConcept(
-  template: TemplateId,
-  brief: GardenBrief,
-): { name: string; summary: string; style: string } {
-  const names = TEMPLATE_NAMES[template];
-  return {
-    name: names.name,
-    summary: names.summary,
-    style: `${styleLabel(brief)} / ${names.tone}`,
-  };
 }

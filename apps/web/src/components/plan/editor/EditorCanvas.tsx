@@ -152,20 +152,17 @@ export function EditorCanvas() {
     () => motion.filter((entry) => !entry.replacesSettled),
     [motion],
   );
-  const maturity = usePlanEditorStore((state) => state.maturity);
   /*
-   * **`view: 'plan'`, and the value is the whole of what this tab is.** "Rich" here means the
-   * photographic renderer — Pixi drawing the same ground rasters the composer paints — never the
-   * elevated camera. Built as `'visualise'` this tab drew `vis-*` sprites, `skin-*` faces and the
-   * oblique lifted stack, so the 2D Plan was a 2.5D picture and the PNG export (which passes the
-   * real view) disagreed with what was on screen. See the note in CLAUDE.md.
+   * "Rich" here means the photographic renderer — Pixi drawing the same ground rasters the
+   * composer paints — built from the same options the PNG export passes, so the download and the
+   * screen draw one garden.
    */
   const shadowsVisible = usePlanEditorStore((state) => state.shadowsVisible);
   const edgeRules = useEdgeRules();
   const richScene = useMemo(() => buildRenderScene({ boundary: draftPolygon(boundaryDraft),
     house: boundaryDraft.house, site: boundaryDraft, elements, edgeRules },
-    { view: 'plan', maturity, shadows: shadowsVisible, rendererVersion: browserRendererVersion() }),
-  [boundaryDraft, elements, maturity, shadowsVisible, edgeRules]);
+    { shadows: shadowsVisible, rendererVersion: browserRendererVersion() }),
+  [boundaryDraft, elements, shadowsVisible, edgeRules]);
 
   /*
    * One sun for the whole drawing. `undefined` means the plan has never said where it is, and

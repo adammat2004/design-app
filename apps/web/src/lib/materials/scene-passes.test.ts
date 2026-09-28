@@ -22,6 +22,14 @@ describe('physical scene passes', () => {
     expect(passes.ground).toEqual([pergola, patio]);
     expect(passes.objects).toEqual([pergola, tree]);
   });
+  /* An aluminium frame has no boards to lay, so it stands on whatever is under it. */
+  it('gives a timber pergola a deck and an aluminium one none', () => {
+    const timber = element('timber', 'structure', { symbol: 'pergola', material: 'hardwood' });
+    const metal = element('metal', 'structure', { symbol: 'pergola', material: 'aluminium-dark' });
+    const passes = scenePasses([timber, metal]);
+    expect(passes.ground).toEqual([timber]);
+    expect(passes.objects).toEqual([timber, metal]);
+  });
   it('clears nearby furniture and plants without repainting for distant objects', () => {
     const bed = element('bed', 'planting-bed');
     const chair = element('chair', 'furniture');

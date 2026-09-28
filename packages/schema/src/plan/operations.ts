@@ -3,6 +3,7 @@ import { PointSchema, polygonIsSimple, type Point } from '../geometry/primitives
 import { DesignElementSchema, isLocked, type DesignElement } from './concepts.js';
 import { MIN_FEATURE_SIDE, moveGeometry, type PlanGeometry } from './features.js';
 import { elementIsLegal } from './footprint.js';
+import { structureLimitRefusal } from './structure/resize.js';
 
 /**
  * What an AI designer is allowed to do to a layout, as data.
@@ -116,6 +117,7 @@ const PropertyChangesSchema = DesignElementSchema.pick({
   plantingStyle: true,
   zone: true,
   hidden: true,
+  structure: true,
 })
   .partial()
   .refine((changes) => Object.keys(changes).length > 0, 'A setProperty must change something.');
@@ -400,7 +402,11 @@ export function resolveOperation(
       }
       if (before.shape.kind !== 'rect')
         return { ok: false, reason: 'That is not a rectangle to resize.' };
-      return geometryChange(before, { ...before.shape, ...operation.to }, { resizing: true });
+      const shape = { ...before.shape, ...operation.to };
+      // A pergola has a size range a person's typed width is held to; the designer is held to it too.
+      const beyond = structureLimitRefusal(before, { ...before, shape });
+      if (beyond) return { ok: false, reason: beyond };
+      return geometryChange(before, shape, { resizing: true });
     }
 
     case 'rotate': {

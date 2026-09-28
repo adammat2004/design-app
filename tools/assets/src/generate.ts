@@ -7,7 +7,6 @@ import {
   ASSET_FAMILIES,
   ASSET_IDS,
   assetFile,
-  elevatedFrame,
   type AssetFamily,
   type AssetId,
 } from '../../../apps/web/src/lib/materials/assets/asset-spec';
@@ -19,7 +18,6 @@ import { readOpenAiKey } from './env.js';
 import { runPool } from './pool.js';
 import {
   POSTPROCESS_VERSION,
-  processElevatedSprite,
   processFace,
   processSprite,
   processTexture,
@@ -54,8 +52,7 @@ import type { ImageProvider, ImageQuality } from './providers/provider.js';
  * record forward untouched — it used to restamp every entry with today's model and today's prompt
  * hash, which erased the one question the record exists to answer.
  *
- * `--strict` refuses to ship an asset with a *defect* — an opaque background, a cropped object, one
- * that would float — and ships one that merely earned a warning, recording the warning. See
+ * `--strict` refuses to ship an asset with a *defect* — an opaque background — and ships one that merely earned a warning, recording the warning. See
  * `postprocess.ts` for the line between the two.
  *
  * `--audit` reads the library and exits non-zero if any file is missing, was drawn from a prompt
@@ -121,7 +118,7 @@ function parseArgs(argv: string[]): Options {
 
 /* ---------------------------------------------------------------- selection */
 
-/** `--only` names a prefix (`vis-`), a family (`plant-shrub`) or one file by stem (`plant-shrub-3`). */
+/** `--only` names a prefix (`plant-`), a family (`plant-shrub`) or one file by stem (`plant-shrub-3`). */
 function selects(only: string | null, id: AssetId, variant: number): boolean {
   if (!only) return true;
   return id.startsWith(only) || `${id}-${variant}` === only;
@@ -164,9 +161,6 @@ export interface CatalogueEntry {
   meanColour: string;
   opaqueRadiusRatio?: number;
   seamScore?: number;
-  /** Elevated sprites: where the opaque pixels are, and how much of the bottom edge they cover. */
-  opaqueBounds?: { minX: number; minY: number; maxX: number; maxY: number };
-  footAlpha?: number;
   /** The record written before `generation` existed. Kept as it was; never written afresh. */
   provenance?: { model: string; generatedAt: string; promptHash: string };
   generation?: GenerationRecord;
@@ -211,17 +205,8 @@ function writeCatalogue(entries: CatalogueEntry[]): Catalogue {
 async function postprocess(family: AssetFamily, png: Buffer): Promise<Processed> {
   switch (family.kind) {
     case 'sprite':
-      /*
-       * The two cameras frame differently, and this is the only place that matters.
-       *
-       * A plan sprite is centred in its frame — it *is* its footprint, so the middle of the image is
-       * the middle of the thing. An elevated one stands on the bottom edge with its height leaning
-       * up the screen above it, and is measured against that framing rather than against a radius
-       * from the centre. A skin is a texture in both worlds and never reaches here.
-       */
-      return family.camera === 'elevated'
-        ? processElevatedSprite(png, family.sizePx, family.metres.h, elevatedFrame(family).h)
-        : processSprite(png, family.sizePx);
+      // Centred in its frame: a plan sprite *is* its footprint.
+      return processSprite(png, family.sizePx);
     case 'texture':
       return processTexture(png, family.sizePx, family.correction);
     case 'face':
@@ -310,9 +295,8 @@ async function main(): Promise<void> {
   mkdirSync(RAW_DIR, { recursive: true });
   /*
    * The output directories are *derived from `assetFile`*, never restated here. They used to be
-   * two hardcoded names, which was fine while layout was one axis; now that it is camera and kind
-   * a restated list is a second place to keep in step, and a camera added to the manifest would
-   * arrive as a directory nobody had created.
+   * hardcoded names; a restated list is a second place to keep in step, and a directory added to
+   * `assetFile` would arrive as one nobody had created.
    */
   for (const dir of new Set(
     ASSET_IDS.map((id) => dirname(join(PUBLIC_ASSETS, assetFile(id, 1)))),
@@ -387,7 +371,7 @@ async function main(): Promise<void> {
        * are already on disk, and a family with no raw is simply not its business.
        *
        * It used to fall through to generation here, which is a genuinely expensive surprise: the
-       * flag reads as "do not spend anything", so `--only vis- --reprocess` to re-measure a handful
+       * flag reads as "do not spend anything", so `--only <prefix> --reprocess` to re-measure a handful
        * of finished assets quietly bought every ungenerated family in that prefix. Found the
        * expensive way.
        */
@@ -466,8 +450,7 @@ async function main(): Promise<void> {
         console.log(
           `  wrote  ${file}  ${result.widthPx}×${result.heightPx}  mean ${result.meanColour}` +
             (result.seamScore !== undefined ? `  seam ${result.seamScore}` : '') +
-            (result.opaqueRadiusRatio !== undefined ? `  reach ${result.opaqueRadiusRatio}` : '') +
-            (result.footAlpha !== undefined ? `  foot ${result.footAlpha}` : ''),
+            (result.opaqueRadiusRatio !== undefined ? `  reach ${result.opaqueRadiusRatio}` : ''),
         );
         for (const defect of result.defects ?? []) console.log(`         ✗ ${defect}`);
         for (const warning of result.warnings ?? []) console.log(`         ⚠ ${warning}`);
@@ -562,8 +545,6 @@ function record(
       ? { opaqueRadiusRatio: result.opaqueRadiusRatio }
       : {}),
     ...(result.seamScore !== undefined ? { seamScore: result.seamScore } : {}),
-    ...(result.opaqueBounds !== undefined ? { opaqueBounds: result.opaqueBounds } : {}),
-    ...(result.footAlpha !== undefined ? { footAlpha: result.footAlpha } : {}),
     ...lineage,
     processed: {
       postprocessVersion: POSTPROCESS_VERSION,

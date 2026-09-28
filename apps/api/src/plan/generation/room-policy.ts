@@ -53,3 +53,14 @@ export function wantsLoungeRoom(
     constraints.scale.designedArea >= 120
   );
 }
+
+/**
+ * Whether the budget allows a second seat for the sun, where the composition finds the terrace in
+ * the shade. Not at a low budget, because it is a second paved room. Read once per concept and handed
+ * to the preview and the realisation alike, so the two compose the same garden.
+ */
+export function sunSeatAffordable(constraints: DesignConstraints): boolean {
+  /* `SUN_SEAT=0` withholds it, so a benchmark can say what it changed on otherwise identical code. */
+  if (process.env.SUN_SEAT === '0') return false;
+  return constraints.budget !== 'low';
+}

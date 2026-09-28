@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, Trash2 } from 'lucide-react';
+import { Box, Copy, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   heightFor,
@@ -8,6 +8,7 @@ import {
   PLANT_CATALOGUE,
   PLANT_SYMBOLS,
   SYMBOLS,
+  structureDefinitionFor,
   type SymbolId,
 } from '@garden-studio/schema';
 import { elementAnchor, isLocked, type DesignElement } from '@/lib/concepts';
@@ -27,6 +28,7 @@ import { LengthInput } from '../SideLengthsPanel';
 import { CatalogueThumbnail } from './CatalogueThumbnail';
 import { EdgesTab } from './EdgesTab';
 import { Caption, Pill } from './Pill';
+import { StructureResizeNotice, type BlockedResize } from '../../structure-3d/StructureResizeNotice';
 
 export const inputClass =
   'w-full rounded-md border border-garden-line bg-white px-2.5 py-1.5 text-xs text-garden-ink focus-visible:border-garden-green focus-visible:outline-none disabled:opacity-40';
@@ -101,6 +103,9 @@ function ElementSheet({
    */
   const edgesOpen = usePlanEditorStore((state) => state.edgeEdit?.hostId === element.id);
   const [chosen, setChosen] = useState<SheetTab>('style');
+  // A structure's refused size, with what is in the way. The sheet is keyed by element, so it resets.
+  const [blocked, setBlocked] = useState<BlockedResize | null>(null);
+  const structure = structureDefinitionFor(element) !== null;
   const active: SheetTab = edgesOpen ? 'edges' : chosen === 'edges' ? 'style' : chosen;
 
   const choose = (tab: SheetTab) => {
@@ -115,6 +120,24 @@ function ElementSheet({
         <p data-testid="locked-reason" className="text-[11px] leading-relaxed text-garden-muted">
           Ground layer. Change its material here; its boundary follows the garden.
         </p>
+      ) : null}
+
+      {/*
+        The way into the focused 3D editor, for the structures that have one. Asked of the
+        definition rather than of a list of names, so a structure gains the button by gaining a
+        definition. It opens a view of this same element: nothing is copied, so what is changed
+        there is already true of the plan when the user comes back.
+      */}
+      {structureDefinitionFor(element) ? (
+        <button
+          type="button"
+          data-testid="edit-in-3d"
+          onClick={() => store.getState().openStructureEdit(element.id)}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-garden-forest px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-garden-green focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          <Box aria-hidden className="h-4 w-4" />
+          Edit in 3D
+        </button>
       ) : null}
 
       <div
@@ -270,14 +293,28 @@ function ElementSheet({
                       metres={rect[dimension]}
                       unit={unit}
                       onCommit={(value) => {
-                        store.getState().beginGesture();
-                        store.getState().resizeElementLive(element.id, { [dimension]: value });
-                        store.getState().endGesture();
+                        if (!structure) {
+                          store.getState().setSize(element.id, { [dimension]: value });
+                          return;
+                        }
+                        // A pergola is resized the way the 3D editor resizes it: anchored, and refused by name.
+                        const result = store.getState().resizeStructure(element.id, { [dimension]: value });
+                        setBlocked(result.status === 'blocked' ? result : null);
                       }}
                     />
                   </label>
                 ))}
               </div>
+              {blocked ? (
+                <div className="mt-2">
+                  <StructureResizeNotice
+                    elementId={element.id}
+                    result={blocked}
+                    unit={unit}
+                    onDone={() => setBlocked(null)}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
 

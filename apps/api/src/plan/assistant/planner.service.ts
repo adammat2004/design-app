@@ -17,6 +17,9 @@ import {
   computeZones,
   defaultMaterial,
   describeElement,
+  describeStructureConflict,
+  planStructureResize,
+  structureDefinitionFor,
   distanceToSegment,
   effectiveZoneIds,
   elementAnchor,
@@ -504,6 +507,47 @@ export class PlannerService {
           description: `Resize ${label(element)}`,
           reason: 'It is the ground cover for a whole area, so its outline is fixed.',
         });
+        continue;
+      }
+
+      /*
+       * A pergola or a gazebo goes through the same resize the editor's size fields do: it keeps the
+       * side it is against (the house, its terrace, the fence), stays inside the sizes the product
+       * comes in, and is refused by name when something is in the way. Where the full request runs
+       * into something, the largest size that does not is taken — the same "as big as it will go"
+       * the generic path below gives everything else.
+       */
+      if (structureDefinitionFor(element) && element.shape.kind === 'rect') {
+        const outcome = planStructureResize(
+          element,
+          {
+            width: element.shape.width * intent.factor,
+            depth: element.shape.depth * intent.factor,
+          },
+          {
+            elements: context.document.layout.elements,
+            boundary: context.boundary,
+            house: context.house,
+          },
+        );
+        const fit =
+          outcome.status === 'blocked'
+            ? outcome.alternatives.find((alternative) => alternative.kind === 'fit')
+            : undefined;
+        const next = outcome.status === 'ok' ? outcome.element : fit?.element;
+        if (next) {
+          result.changes.push(change(nextId(), 'resize', element, next, context));
+        } else {
+          result.unplaceable.push({
+            description: `Resize ${label(element)}`,
+            reason:
+              outcome.status === 'blocked'
+                ? describeStructureConflict(outcome.conflicts[0]!)
+                : intent.factor > 1
+                  ? 'It is already as large as one is made.'
+                  : 'It is already as small as one is made.',
+          });
+        }
         continue;
       }
 

@@ -99,9 +99,8 @@ export interface LayoutArchetype {
 /**
  * The composition as its author intended it.
  *
- * `archetype` is filled in per archetype; everything else is the neutral reading. Phase 2 runs
- * entirely on these, which is what makes the golden comparison meaningful — every number the
- * templates draw at these parameters is the number they drew before there were parameters.
+ * `archetype` is filled in per archetype; everything else is the neutral reading, and the first
+ * variation every archetype offers.
  */
 export const DEFAULT_PARAMS: Omit<CandidateParams, 'archetype'> = {
   terraceDepth: 1,

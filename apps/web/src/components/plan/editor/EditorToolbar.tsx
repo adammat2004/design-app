@@ -27,28 +27,14 @@ import { EditorIcon } from './EditorIcon';
 /**
  * The bar above the plan.
  *
- * Three view tabs, of which one works. 3D and Visualise are rendered rather than omitted because
- * they are on the roadmap and their absence would be the more confusing choice — the same
- * `available` flag pattern step 4's view select uses.
+ * There is one view: the plan. The full-garden "Visualise" render was retired in Sep 2026 in
+ * favour of a focused 3D editor for structures, reached from the inspector's "Edit in 3D" rather
+ * than from a tab here — a garden is designed in plan, and a pergola is looked at in 3D.
  *
  * Move is the pan tool, wired to the same `panning` state the zoom stack's hand button drives, so
  * there is one pan in the app rather than two that can disagree about whether the view is being
  * dragged.
  */
-
-/**
- * The two views this editor has.
- *
- * **3D is gone rather than disabled.** It sat here greyed out on the argument that omitting it
- * would be more confusing than showing it — which was reasonable while both extra tabs were
- * roadmap. It is not any more: Visualise now does something, and a permanently dead tab beside a
- * live one reads as a broken feature rather than a planned one. React Three Fiber stays installed;
- * when there is a 3D view worth having, the tab comes back.
- */
-const VIEWS: { id: 'plan' | 'visualise'; label: string }[] = [
-  { id: 'plan', label: '2D Plan' },
-  { id: 'visualise', label: 'Visualise' },
-];
 
 const TOOLS: { id: PlanEditorMode; label: string; icon: React.ReactNode; title: string }[] = [
   {
@@ -71,13 +57,7 @@ const TOOLS: { id: PlanEditorMode; label: string; icon: React.ReactNode; title: 
   },
 ];
 
-export function EditorToolbar({
-  view,
-  setView,
-}: {
-  view: 'plan' | 'visualise';
-  setView: (view: 'plan' | 'visualise') => void;
-}) {
+export function EditorToolbar() {
   const mode = usePlanEditorStore((state) => state.mode);
   const setMode = usePlanEditorStore((state) => state.setMode);
   const snapEnabled = usePlanEditorStore((state) => state.snapEnabled);
@@ -175,25 +155,6 @@ export function EditorToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <ToolbarGroup>
-        {VIEWS.map((item) => (
-          <ToolbarButton
-            key={item.id}
-            testId={`view-${item.id}`}
-            label={item.label}
-            icon={null}
-            pressed={view === item.id}
-            title={
-              item.id === 'plan'
-                ? 'The accurate, editable plan'
-                : 'A large clean render of the same plan'
-            }
-            onClick={() => setView(item.id)}
-          />
-        ))}
-      </ToolbarGroup>
-
-      {view === 'plan' ? <>
-      <ToolbarGroup>
         {TOOLS.map((tool) => (
           <ToolbarButton
             key={tool.id}
@@ -236,7 +197,7 @@ export function EditorToolbar({
               title="Back to the concept as generated, discarding your edits"
               onClick={resetToConcept}
             />
-            <DownloadPlanButton view="visualise" />
+            <DownloadPlanButton />
           </ToolbarGroup>
         </div>
       </details>
@@ -341,7 +302,6 @@ export function EditorToolbar({
           </div>
         ) : null}
       </div>
-      </> : <span className="ml-auto text-xs text-garden-muted">Garden presentation</span>}
     </div>
   );
 }

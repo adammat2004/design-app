@@ -1,21 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   geometryOutline,
-  pointInPolygon,
   polygonArea,
   polygonContainsPolygon,
   rectangleHouse,
   type HouseFootprint,
   type Point,
 } from '@garden-studio/schema';
-import { assignSlots } from './assign.js';
-import { designedBeds } from './beds.js';
 import { fitInSlot, floorScale, type FitContext } from './fit.js';
 import { backFrame, frontFrame, gardenRoom, localBox, sideReturn } from './frame.js';
 import { frontGarden } from './front.js';
 import {
   BED_MIN_DEPTH,
-  behindTerrace,
   isCourtyard,
   LAWN_FLOOR,
   lawnEnd,
@@ -31,7 +27,6 @@ import {
   type Room,
   type SketchRequest,
 } from './sketch.js';
-import { recommendedIndex, TEMPLATES, templateFor } from './templates/index.js';
 
 /**
  * The grammar is pure, so every test here runs without a database: a plot, a house, a brief's
@@ -198,185 +193,6 @@ describe('the terrace', () => {
   });
 });
 
-describe('the templates', () => {
-  const room: Room = { uMin: 0, uMax: 12, vMin: -9, vMax: 9 };
-
-  it('all give a terrace, a lawn and the slots the brief needs', () => {
-    for (const template of ['rectilinear', 'curved', 'formal'] as const) {
-      const sketch = TEMPLATES[template](request(), room);
-      expect(sketch.terrace).not.toBeNull();
-      expect(sketch.lawn).not.toBeNull();
-      expect(sketch.courtyard).toBe(false);
-      expect(sketch.slots.map((slot) => slot.kind)).toContain('utility');
-      expect(sketch.slots.map((slot) => slot.kind)).toContain('far-room');
-    }
-  });
-
-  it('keeps the lawn inside the room and off the terrace', () => {
-    for (const template of ['rectilinear', 'curved', 'formal'] as const) {
-      const sketch = TEMPLATES[template](request(), room);
-      const terrace = sketch.terrace!;
-      const points =
-        sketch.lawn!.kind === 'rect'
-          ? [
-              { u: sketch.lawn!.rect.u0, v: sketch.lawn!.rect.v0 },
-              { u: sketch.lawn!.rect.u1, v: sketch.lawn!.rect.v1 },
-            ]
-          : sketch.lawn!.points;
-      for (const point of points) {
-        expect(point.u).toBeGreaterThanOrEqual(terrace.u1 - 1e-9);
-        expect(point.u).toBeLessThanOrEqual(room.uMax);
-        expect(point.v).toBeGreaterThanOrEqual(room.vMin);
-        expect(point.v).toBeLessThanOrEqual(room.vMax);
-      }
-    }
-  });
-
-  it('puts the utility corner on the gate side and the far room on the other', () => {
-    const sketch = TEMPLATES.rectilinear(request({ gateSide: 'left' }), room);
-    const utility = sketch.slots.find((slot) => slot.kind === 'utility')!;
-    const far = sketch.slots.find((slot) => slot.kind === 'far-room')!;
-    expect(utility.anchor.v).toBeLessThan(0);
-    expect(far.anchor.v).toBeGreaterThan(0);
-  });
-
-  it('mirrors the formal plan about the door axis', () => {
-    const sketch = TEMPLATES.formal(request(), room);
-    expect(sketch.terrace!.v0).toBeCloseTo(-sketch.terrace!.v1);
-    expect(sketch.lawn!.kind === 'rect' && sketch.lawn!.rect.v0).toBeCloseTo(
-      -(sketch.lawn!.kind === 'rect' ? sketch.lawn!.rect.v1 : 0),
-    );
-    const utility = sketch.slots.find((slot) => slot.id === 'utility')!;
-    const mirror = sketch.slots.find((slot) => slot.id === 'utility-2')!;
-    expect(utility.anchor.v).toBeCloseTo(-mirror.anchor.v);
-    expect(utility.anchor.u).toBeCloseTo(mirror.anchor.u);
-    expect(sketch.axisPath).not.toBeNull();
-  });
-
-  it('keeps the formal terrace at its floor when the door is near a fence', () => {
-    // The door's edge is 0.3 m from the left fence: mirroring about it would leave a 2.2 m terrace.
-    const offCentre: Room = { uMin: 0, uMax: 12, vMin: -1.5, vMax: 17 };
-    const sketch = TEMPLATES.formal(request(), offCentre);
-    const terrace = sketch.terrace!;
-    expect(terrace.v1 - terrace.v0).toBeGreaterThanOrEqual(TERRACE_FLOOR.width - 1e-9);
-    // Still inside the room, still over the door.
-    expect(terrace.v0).toBeGreaterThanOrEqual(offCentre.vMin + 0.2 - 1e-9);
-    expect(terrace.v0).toBeLessThanOrEqual(-1.2);
-    expect(terrace.v1).toBeGreaterThanOrEqual(1.2);
-    // The lawn and the axis stay mirrored about the door within the narrow side.
-    expect(sketch.lawn!.kind === 'rect' && sketch.lawn!.rect.v0).toBeCloseTo(
-      -(sketch.lawn!.kind === 'rect' ? sketch.lawn!.rect.v1 : 0),
-    );
-  });
-
-  it('goes courtyard on a shallow room', () => {
-    const sketch = TEMPLATES.rectilinear(request(), { uMin: 0, uMax: 4, vMin: -4, vMax: 4 });
-    expect(sketch.courtyard).toBe(true);
-    expect(sketch.lawn).toBeNull();
-    expect(sketch.paths).toEqual([]);
-  });
-
-  it('gives every template a terrace slot with a floor and a pergola slot with its own', () => {
-    for (const template of ['rectilinear', 'curved', 'formal'] as const) {
-      const sketch = TEMPLATES[template](request(), room);
-      const terrace = sketch.slots.find((slot) => slot.kind === 'terrace')!;
-      expect(terrace.minSize).toEqual(TERRACE_FLOOR);
-      const end = sketch.slots.find((slot) => slot.kind === 'terrace-end')!;
-      expect(end.minSize).toEqual(PERGOLA_FLOOR);
-      expect(end.maxSize.depth).toBeGreaterThanOrEqual(PERGOLA_FLOOR.depth);
-    }
-  });
-
-  it('never sketches a bed thinner than the sliver guard', () => {
-    for (const template of ['rectilinear', 'curved', 'formal'] as const) {
-      for (const width of [4, 6, 9, 12, 22]) {
-        const wide: Room = { uMin: 0, uMax: 12, vMin: -width / 2, vMax: width / 2 };
-        const sketch = TEMPLATES[template](request(), wide);
-        for (const bed of sketch.beds) {
-          if (bed.shape.kind === 'rect') {
-            expect(bed.shape.rect.u1 - bed.shape.rect.u0).toBeGreaterThanOrEqual(BED_MIN_DEPTH - 1e-9);
-            expect(bed.shape.rect.v1 - bed.shape.rect.v0).toBeGreaterThanOrEqual(BED_MIN_DEPTH - 1e-9);
-          } else {
-            // A side bed's inner edge is never nearer its fence than the floor.
-            const edge = bed.shape.points[0]!.v;
-            for (const point of bed.shape.points.slice(2)) {
-              expect(Math.abs(point.v - edge)).toBeGreaterThanOrEqual(BED_MIN_DEPTH - 1e-9);
-            }
-          }
-        }
-      }
-    }
-  });
-
-  it('gives a small garden a rear bed alone, and a narrow one the focal side bed', () => {
-    const terrace = { u0: 0, u1: 3, v0: -1.8, v1: 1.8 };
-    // 3.6 m wide: no side planting fits beside a usable centre, but the rear bed does.
-    const tiny = designedBeds(request(), { uMin: 0, uMax: 6, vMin: -1.8, vMax: 1.8 }, terrace, 'rectilinear');
-    expect(tiny.map((bed) => bed.name)).toEqual(['Rear border']);
-    // 4 m wide: exactly one floor-deep bed fits down the focal side.
-    const four = designedBeds(request(), { uMin: 0, uMax: 6, vMin: -2, vMax: 2 }, terrace, 'rectilinear');
-    expect(four.map((bed) => bed.name)).toEqual(['Rear border', 'Specimen border']);
-    // 5.5 m wide: room for one side bed, on the focal side away from the gate.
-    const narrow = designedBeds(request(), { uMin: 0, uMax: 10, vMin: -2.75, vMax: 2.75 }, terrace, 'rectilinear');
-    expect(narrow.map((bed) => bed.name)).toEqual(['Rear border', 'Specimen border']);
-    // Too shallow behind the terrace for anything: nothing, honestly.
-    const shallow = designedBeds(request(), { uMin: 0, uMax: 3.5, vMin: -2, vMax: 2 }, terrace, 'rectilinear');
-    expect(shallow).toEqual([]);
-  });
-
-  it('plants the flanks either side of the terrace when the fence is far enough away', () => {
-    const terrace = { u0: 0, u1: 3.6, v0: -4, v1: 4 };
-    const beds = designedBeds(request(), { uMin: 0, uMax: 12, vMin: -9, vMax: 9 }, terrace, 'rectilinear');
-    const flanks = beds.filter((bed) => bed.name === 'Terrace flank');
-    expect(flanks).toHaveLength(2);
-    for (const flank of flanks) {
-      expect(flank.shape.kind).toBe('rect');
-      if (flank.shape.kind !== 'rect') continue;
-      expect(flank.shape.rect.u1).toBeCloseTo(3.6);
-      expect(flank.shape.rect.u0).toBeCloseTo(0.3);
-      // Clear of the terrace itself.
-      expect(flank.shape.rect.v1 <= terrace.v0 - 0.15 + 1e-9 || flank.shape.rect.v0 >= terrace.v1 + 0.15 - 1e-9).toBe(true);
-    }
-    // A terrace that runs to within a metre of the fence gets no flank on that side.
-    const tight = designedBeds(request(), { uMin: 0, uMax: 12, vMin: -5, vMax: 9 }, terrace, 'rectilinear');
-    expect(tight.filter((bed) => bed.name === 'Terrace flank')).toHaveLength(1);
-  });
-
-  it('recommends the style its own template', () => {
-    expect(templateFor(recommendedIndex('modern'))).toBe('rectilinear');
-    expect(templateFor(recommendedIndex('cottage'))).toBe('curved');
-    expect(templateFor(recommendedIndex('formal'))).toBe('formal');
-    expect(templateFor(recommendedIndex(null))).toBe('rectilinear');
-  });
-});
-
-describe('assignSlots', () => {
-  it('hands each feature its preferred slot and never one twice', () => {
-    const sketch = TEMPLATES.rectilinear(request(), { uMin: 0, uMax: 12, vMin: -9, vMax: 9 });
-    const { assigned, unassigned } = assignSlots(sketch, [
-      'pergola',
-      'firePit',
-      'storage',
-      'play',
-      'water',
-    ]);
-    const byFeature = new Map(assigned.map((entry) => [entry.feature, entry.slotId]));
-    expect(byFeature.get('pergola')).toBe('terrace-end');
-    expect(byFeature.get('firePit')).toBe('far-room');
-    expect(byFeature.get('storage')).toBe('utility');
-    expect(byFeature.get('play')).toBe('lawn-far');
-    expect(byFeature.get('water')).toBe('terrace-corner');
-    expect(unassigned).toEqual([]);
-    expect(new Set(assigned.map((entry) => entry.slotId)).size).toBe(assigned.length);
-  });
-
-  it('puts water on the axis of a formal plan', () => {
-    const sketch = TEMPLATES.formal(request(), { uMin: 0, uMax: 12, vMin: -9, vMax: 9 });
-    const { assigned } = assignSlots(sketch, ['water']);
-    expect(assigned[0]?.slotId).toBe('axis-end');
-  });
-});
-
 describe('fitInSlot', () => {
   const frame = backFrame(house())!;
   const room = gardenRoom(plot, house(), frame, ['front', 'back', 'left', 'right']);
@@ -477,7 +293,9 @@ describe('fitInSlot', () => {
 
     // Without a floor the old six-tenths rule still applies.
     expect(floorScale({ kind: 'rect', width: 3, depth: 2 }, { width: 2, depth: 3 })).toBeCloseTo(1);
-    expect(floorScale({ kind: 'rect', width: 3, depth: 2 }, { width: 1.5, depth: 2.4 })).toBeCloseTo(0.8);
+    expect(
+      floorScale({ kind: 'rect', width: 3, depth: 2 }, { width: 1.5, depth: 2.4 }),
+    ).toBeCloseTo(0.8);
     expect(floorScale({ kind: 'point', radius: 1 }, { width: 1, depth: 1 })).toBeCloseTo(0.5);
   });
 });
@@ -553,84 +371,5 @@ describe('roomBehind', () => {
   it('is the same box with a nearer edge when there is no outline', () => {
     const deep = roomBehind({ uMin: 0, uMax: 12, vMin: -6, vMax: 6 }, 3);
     expect(deep).toEqual({ uMin: 3, uMax: 12, vMin: -6, vMax: 6 });
-  });
-
-  it('sizes the kidney lawn on the deep limb, not the whole L', () => {
-    const sketch = TEMPLATES.curved(request({ style: 'cottage' }), room);
-    expect(sketch.lawn?.kind).toBe('polygon');
-    if (sketch.lawn?.kind !== 'polygon') return;
-    for (const point of sketch.lawn.points) {
-      expect(point.v).toBeLessThan(0.01);
-      expect(point.u).toBeGreaterThanOrEqual(4);
-    }
-  });
-});
-
-describe('behindTerrace', () => {
-  it('centres a slot in the strip behind the terrace and shrinks it to fit', () => {
-    const roomy = behindTerrace(4, 14, 4);
-    expect(roomy.depth).toBe(4);
-    expect(roomy.u + roomy.depth / 2).toBeLessThanOrEqual(14);
-    expect(roomy.u - roomy.depth / 2).toBeGreaterThan(4);
-
-    const tight = behindTerrace(4, 7, 4);
-    expect(tight.depth).toBeCloseTo(2.6);
-    expect(tight.u - tight.depth / 2).toBeGreaterThanOrEqual(4);
-  });
-});
-
-describe('the utility notch', () => {
-  it('cuts the shed corner out of the lawn on the gate side, and only when a shed is wanted', () => {
-    /*
-     * A ten-metre room rather than the sixteen this used to use, and the reason is the deeper
-     * borders rather than the notch.
-     *
-     * The notch exists for the case where the utility corner would otherwise be *inside* the lawn.
-     * With `borderDepth` at 2.2 m the rear border on a deep room is wide enough to contain the shed
-     * on its own, so the lawn is not cut at all — a better answer than a notch, and the one the
-     * template now gives on a big plot. Where the room is shallow the rear border is shallow with
-     * it, the corner lands in the grass, and this is what happens instead.
-     */
-    const room: Room = { uMin: 0, uMax: 10, vMin: -9, vMax: 9 };
-    const withShed = TEMPLATES.rectilinear(request({ scale: 1 }), room);
-    const without = TEMPLATES.rectilinear(
-      request({ scale: 1, features: ['seating', 'play', 'firePit'] }),
-      room,
-    );
-
-    expect(without.lawn?.kind).toBe('rect');
-    expect(withShed.lawn?.kind).toBe('polygon');
-    if (withShed.lawn?.kind !== 'polygon') return;
-    expect(withShed.lawn.points).toHaveLength(6);
-
-    // The shed's slot lies wholly outside the lawn polygon.
-    const utility = withShed.slots.find((slot) => slot.id === 'utility')!;
-    const corners = [
-      {
-        u: utility.anchor.u - utility.maxSize.depth / 2,
-        v: utility.anchor.v - utility.maxSize.width / 2,
-      },
-      {
-        u: utility.anchor.u + utility.maxSize.depth / 2,
-        v: utility.anchor.v + utility.maxSize.width / 2,
-      },
-    ];
-    const lawn = withShed.lawn.points.map(({ u, v }) => ({ x: u, y: v }));
-    for (const corner of corners) {
-      expect(pointInPolygon({ x: corner.u, y: corner.v }, lawn)).toBe(false);
-    }
-    /*
-     * And the lawn still stops short of the back fence, leaving the border.
-     *
-     * Twice the border depth now, not once. The lawn used to be inset by the same `b` on every
-     * side, and a shape inset by a constant leaves an annulus by construction — so the leftover was
-     * a continuous ring of planting round the whole garden and every plan read as a lawn marooned
-     * in a thicket. A designed garden is bordered unevenly: deep at the back, a mowing strip on the
-     * side you walk down. This pins the deep end.
-     */
-    expect(Math.max(...withShed.lawn.points.map((p) => p.u))).toBeCloseTo(
-      lawnEnd(1, 10, terraceDepth(1, 10)),
-      6,
-    );
   });
 });

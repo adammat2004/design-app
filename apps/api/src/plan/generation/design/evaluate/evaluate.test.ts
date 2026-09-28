@@ -1,4 +1,5 @@
 import {
+  pointInPolygon,
   rectToPolygon,
   type DesignBrief,
   type DesignElement,
@@ -587,6 +588,67 @@ describe('sun', () => {
     const terrace = feature('Seating patio', rect(7, 13, 6, 3.5));
     const result = score([terrace], [[terrace.id, 'seating']]);
     expect(result.categories.sun).toBeDefined();
+  });
+  /*
+   * The shade is the scenario's own, so the test finds a square wholly in it and one wholly out of
+   * it rather than assuming where the afternoon shadow falls.
+   */
+  function squareWhere(inShade: boolean) {
+    const rings = ANALYSIS.sun!.shade.filter((ring) => ring.length >= 3);
+    const shaded = (x: number, y: number) => rings.some((ring) => pointInPolygon({ x, y }, ring));
+    for (let y = 1; y < 20; y += 0.5) {
+      for (let x = 1; x < 13; x += 0.5) {
+        const corners = [
+          [x - 0.6, y - 0.6],
+          [x + 0.6, y - 0.6],
+          [x + 0.6, y + 0.6],
+          [x - 0.6, y + 0.6],
+          [x, y],
+        ] as const;
+        if (corners.every(([cx, cy]) => shaded(cx, cy) === inShade)) return { x, y };
+      }
+    }
+    throw new Error(`no square ${inShade ? 'in' : 'out of'} the shade`);
+  }
+
+  it('reports a shaded seat when there is nowhere sunnier to sit', () => {
+    const at = squareWhere(true);
+    const shady = feature('Seating patio', rect(at.x, at.y, 1.2, 1.2));
+    expect(codes(score([shady], [[shady.id, 'seating']]))).toContain('seating-in-shade');
+  });
+
+  it('accepts a shaded terrace where a second seat stands in the sun', () => {
+    /*
+     * The designer's answer on a north-facing plot: the terrace stays across the doors, and there is
+     * somewhere else to sit in the afternoon.
+     */
+    const shadeAt = squareWhere(true);
+    const sunAt = squareWhere(false);
+    const shady = feature('Seating patio', rect(shadeAt.x, shadeAt.y, 1.2, 1.2));
+    const sunny = feature('Sun terrace', rect(sunAt.x, sunAt.y, 1.2, 1.2));
+    const result = score(
+      [shady, sunny],
+      [
+        [shady.id, 'seating'],
+        [sunny.id, 'seating'],
+      ],
+    );
+    expect(codes(result)).not.toContain('seating-in-shade');
+  });
+
+  it('still judges a table in the shade on its own', () => {
+    const shadeAt = squareWhere(true);
+    const sunAt = squareWhere(false);
+    const table = feature('Dining terrace', rect(shadeAt.x, shadeAt.y, 1.2, 1.2));
+    const sunny = feature('Sun terrace', rect(sunAt.x, sunAt.y, 1.2, 1.2));
+    const result = score(
+      [table, sunny],
+      [
+        [table.id, 'dining'],
+        [sunny.id, 'seating'],
+      ],
+    );
+    expect(codes(result)).toContain('seating-in-shade');
   });
 });
 

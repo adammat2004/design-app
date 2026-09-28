@@ -6,14 +6,13 @@ import {
   canopiesForSymbol,
   CANOPY_SPRITES,
   CONTACT_SHADOW_SPRITE,
-  ELEVATED_TWINS,
   LIGHT_POOL_SPRITE,
   materialAssets,
   MATERIAL_ASSETS,
-  SKIN_ASSETS,
+  ROOF_SKINS,
   SYMBOL_SPRITES,
 } from './material-assets';
-import { assetAnchor, assetsMatching, clearTaxonomyCache, isRecolourable } from './taxonomy';
+import { assetsMatching, clearTaxonomyCache, isRecolourable } from './taxonomy';
 
 beforeEach(() => {
   clearTaxonomyCache();
@@ -98,7 +97,7 @@ describe('the taxonomy', () => {
   });
 });
 
-describe('recolourable and anchor', () => {
+describe('recolourable', () => {
   /**
    * Not recolourable is the safe default, and it has to be: tinting a teak dining set towards a
    * planting palette would make it green. Plants and mass textures opt in, because that tint is the
@@ -108,10 +107,6 @@ describe('recolourable and anchor', () => {
     expect(isRecolourable('furniture-dining-4')).toBe(false);
     expect(isRecolourable('plant-shrub')).toBe(true);
     expect(isRecolourable('tex-slate-chippings')).toBe(true);
-  });
-
-  it('centres a sprite that states no anchor, which is every one generated so far', () => {
-    expect(assetAnchor('plant-shrub')).toEqual({ x: 0.5, y: 0.5 });
   });
 });
 
@@ -245,14 +240,8 @@ describe('every generated asset is reachable', () => {
       CONTACT_SHADOW_SPRITE,
       LIGHT_POOL_SPRITE,
       ...CANOPY_SPRITES,
-      /*
-       * The elevated library reaches the drawing by two routes, and both are tables rather than
-       * queries: a sprite family is swapped for its twin when Visualise draws it, and a skin is
-       * named by the face it goes on. So reachability here is the same question it is for the plan
-       * camera — is anything going to ask for this file — asked of the two tables that ask.
-       */
-      ...(Object.values(ELEVATED_TWINS) as AssetId[]),
-      ...SKIN_ASSETS,
+      // A roof skin is named by the roof it covers rather than asked for by a query.
+      ...(Object.values(ROOF_SKINS) as AssetId[]),
     ]);
     // Trees resolve per species now, so the general canopy pool is no longer the whole story.
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
@@ -280,14 +269,8 @@ describe('every generated asset is reachable', () => {
       CONTACT_SHADOW_SPRITE,
       LIGHT_POOL_SPRITE,
       ...CANOPY_SPRITES,
-      /*
-       * The elevated library reaches the drawing by two routes, and both are tables rather than
-       * queries: a sprite family is swapped for its twin when Visualise draws it, and a skin is
-       * named by the face it goes on. So reachability here is the same question it is for the plan
-       * camera — is anything going to ask for this file — asked of the two tables that ask.
-       */
-      ...(Object.values(ELEVATED_TWINS) as AssetId[]),
-      ...SKIN_ASSETS,
+      // A roof skin is named by the roof it covers rather than asked for by a query.
+      ...(Object.values(ROOF_SKINS) as AssetId[]),
     ]);
     for (const symbol of TREE_SYMBOLS) for (const id of canopiesForSymbol(symbol)) reachable.add(id);
     for (const material of Object.keys(MATERIAL_ASSETS)) {

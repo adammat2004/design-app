@@ -2,14 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   cutEdgeMasks,
   housePolygon,
-  polygonArea,
   rectangleHouse,
   SiteSectionSchema,
   type DesignElement,
   type SiteSection,
   type Point,
 } from '@garden-studio/schema';
-import { ASSET_FAMILIES, type AssetFamily } from '../materials/assets/asset-spec';
+import { ASSET_FAMILIES } from '../materials/assets/asset-spec';
 import { LIGHT_DIRECTION } from '../materials/light';
 import { buildRenderScene, type PlanScene } from './build-scene';
 import { LAYER_ORDER } from './visual-layer';
@@ -56,7 +55,7 @@ function lawn(): DesignElement {
   } as DesignElement;
 }
 
-/** A furnished host, so the stack has a standing object with an elevated twin to draw. */
+/** A furnished host: a standing object that must never reach the plants-only stack. */
 function diningSet(): DesignElement {
   return {
     id: 'dining-1',
@@ -416,113 +415,51 @@ describe('buildRenderScene', () => {
 
   describe('planting mode', () => {
     /**
-     * _This reverses_ "bakes the planting into the bed by default, as the plan always has". A bed
-     * painted inside its own clip is a cut-out: nothing crosses its edge, nothing spills onto the
-     * lawn, every border ends in a line no garden has. Both views instance it now; what differs is
-     * only which library it is drawn from, which the camera test below is about.
+     * A bed painted inside its own clip is a cut-out: nothing crosses its edge, nothing spills onto
+     * the lawn, every border ends in a line no garden has. The planting is lifted out instead.
      */
-    it('lifts the planting out of the bed in both views, so foliage can cross its edge', () => {
-      for (const view of ['plan', 'visualise'] as const) {
-        const built = buildRenderScene(scene([bed('bed-a', 2)]), { view });
-        const layers = built.ground[0]!.surface!.layers;
+    it('lifts the planting out of the bed, so foliage can cross its edge', () => {
+      const built = buildRenderScene(scene([bed('bed-a', 2)]));
+      const layers = built.ground[0]!.surface!.layers;
 
-        // The ground the plants stand on stays; everything painted over it is lifted out.
-        expect(layers, view).toHaveLength(1);
-        expect(layers.some((layer) => layer.planting), view).toBe(false);
-        expect(built.plants.length, view).toBeGreaterThan(0);
-      }
-    });
-
-    /**
-     * Same garden, same seeds, same cells: a plant is in the same place whichever view drew it.
-     * That is what stops switching tabs from looking like the design changed, and it is a stronger
-     * statement than either view's own picture being right.
-     */
-    it('puts the same plants in the same places in both views', () => {
-      const plan = buildRenderScene(scene([bed('bed-a', 2)]), { view: 'plan' });
-      const visualise = buildRenderScene(scene([bed('bed-a', 2)]), { view: 'visualise' });
-
-      expect(plan.plants.map((plant) => plant.id)).toEqual(visualise.plants.map((plant) => plant.id));
-      expect(plan.plants.map((plant) => plant.at)).toEqual(visualise.plants.map((plant) => plant.at));
+      // The ground the plants stand on stays; everything painted over it is lifted out.
+      expect(layers).toHaveLength(1);
+      expect(layers.some((layer) => layer.planting)).toBe(false);
+      expect(built.plants.length).toBeGreaterThan(0);
     });
   });
 
-  /**
-   * The one assertion that says what the 2D Plan *is*, rather than pinning the two mechanisms that
-   * happen to deliver it.
-   *
-   * Both of those mechanisms were intact and tested — `plants` is empty without `instanced`, and
-   * `stack` is empty outside Visualise — and the plan was still drawn with elevated art for a whole
-   * commit, because `EditorCanvas` asked `buildRenderScene` for a *visualise* scene and every test
-   * here went on passing. A guarantee that only holds while one call site passes the right string is
-   * not a guarantee; this states the property itself, so the next caller to get it wrong fails here.
-   */
-  describe('the plan camera', () => {
+  describe('what the plan draws', () => {
     const furnished = () => scene([bed('bed-a', 2), lawn(), diningSet()]);
 
-    it('draws no elevated asset anywhere', () => {
+    /*
+     * Every plant draws from the plan library, and the stack carries nothing lifted, extruded or
+     * skinned. The elevated library and its stack were retired with Visualise; this is the
+     * property-level guard that neither comes back through a caller.
+     */
+    it('draws plan sprites, and a stack of plants only', () => {
       const built = buildRenderScene(furnished());
 
       for (const plant of built.plants) {
-        // Read through `AssetFamily`: the manifest is `as const`, so a literal that omits an
-        // optional field narrows to a type without it at all. Same reason `isRecolourable` does.
-        const family: AssetFamily | null = plant.assetId ? ASSET_FAMILIES[plant.assetId] : null;
-        expect(family?.camera ?? 'plan', plant.id).toBe('plan');
+        if (!plant.assetId) continue;
+        expect(ASSET_FAMILIES[plant.assetId], plant.id).toBeDefined();
+        expect(plant.assetId.startsWith('vis-'), plant.id).toBe(false);
       }
-
-      /*
-       * The other half of the property. `stack` is the only route to `drawElevatedObject` and to
-       * the `skin-*` face textures, neither of which records an asset id on the scene — so for
-       * those, what it *contains* is the assertion.
-       *
-       * It is no longer empty: the plan view's stack carries its plants, because the v2 renderer
-       * draws standing things from the stack and an empty one left the editor with no planting at
-       * all while the composer had it. What it must never carry is anything that is lifted,
-       * extruded or skinned — so the assertion is that every node in it is a plant.
-       */
       for (const node of built.stack) expect(node.kind, node.id).toBe('plant');
     });
 
     /*
-     * The control. Without it the test above passes just as happily on a scene that resolves no
-     * assets at all — which is exactly what a broken twin table or an empty catalogue would give.
-     */
-    it('is a real distinction: the same garden in Visualise does draw elevated art', () => {
-      const built = buildRenderScene(furnished(), { view: 'visualise' });
-      const cameras = built.plants.map((plant) => {
-        const family: AssetFamily | null = plant.assetId ? ASSET_FAMILIES[plant.assetId] : null;
-        return family?.camera ?? 'plan';
-      });
-
-      expect(cameras).toContain('elevated');
-      expect(built.stack.length).toBeGreaterThan(0);
-    });
-
-    /*
-     * **Both views draw a roof; only one of them lets it leave the footprint.**
-     *
-     * The plan used to get no roof at all, which is what left every concept card and judging sheet
-     * with a flat pale rectangle where the house is. It gets one now — and the rule the old
-     * arrangement was really protecting is the *overhang*, because in the plan the roof is the
+     * The plan draws a roof — without one every concept card had a flat pale rectangle where the
+     * house is — and the roof never leaves the footprint, because in the plan the roof is the
      * house's drawn extent and geometry outside `housePolygon` could make a legal house look as
      * though it leaves the plot.
-     *
-     * So the property is stated as what it is: the plan's eaves are the wall line exactly, and
-     * Visualise's are outside it. Asserting "the plan has no roof" would pass on a build that had
-     * quietly stopped drawing one, which is the regression this replaced.
      */
-    it('roofs both views, and oversails the walls in neither view but Visualise', () => {
+    it('roofs the house, with its eaves exactly on the wall line', () => {
       const house = rectangleHouse({ x: 5, y: 2.5 }, 6, 4);
-      const withHouse = (): PlanScene => ({ ...scene([lawn()]), house });
-      const walls = housePolygon(house);
+      const roof = buildRenderScene({ ...scene([lawn()]), house }).house?.roof;
 
-      const planRoof = buildRenderScene(withHouse(), { view: 'plan' }).house?.roof;
-      const elevatedRoof = buildRenderScene(withHouse(), { view: 'visualise' }).house?.roof;
-
-      expect(planRoof).not.toBeNull();
-      expect(elevatedRoof).not.toBeNull();
-      expect(planRoof!.eaves).toEqual(walls);
-      expect(polygonArea(elevatedRoof!.eaves)).toBeGreaterThan(polygonArea(walls));
+      expect(roof).not.toBeNull();
+      expect(roof!.eaves).toEqual(housePolygon(house));
     });
   });
 });

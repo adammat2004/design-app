@@ -264,6 +264,12 @@ function largestPanel(elements: DesignElement[], rotation: number): CompositionR
   for (const element of elements) {
     if (element.hidden || element.role !== 'fill' || element.fillKind !== 'accent') continue;
     if (element.category !== 'lawn' && element.category !== 'gravel-mulch') continue;
+    /*
+     * A gravel side return or a front garden's ground is the way past the house or the way in, not
+     * open ground anybody stands on: counted, a courtyard with a gravel passage beside the house was
+     * judged as a garden with no lawn. The scorer's `subject.panels` excludes the same two purposes.
+     */
+    if (element.purpose === 'passage' || element.purpose === 'arrival') continue;
     const area = elementArea(element);
     if (best && area <= best.area) continue;
     best = {
