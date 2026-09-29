@@ -22,7 +22,9 @@ const current = () => usePlanEditorStore.getState().present.elements[0]!;
 
 function show() {
   const element = current();
-  return render(<StructureInspector element={element} structure={resolveStructure(element)!} unit="m" />);
+  return render(
+    <StructureInspector element={element} structure={resolveStructure(element)!} unit="m" />,
+  );
 }
 
 beforeEach(() => {
@@ -45,8 +47,10 @@ describe('StructureInspector', () => {
   it('shows exactly the tabs the definition supports', () => {
     show();
     const labels = screen.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(labels).toEqual(['Size', 'Style', 'Roof', 'Sides', 'Finish', 'Lighting']);
-    expect(structureTabs(resolveStructure(PERGOLA)!)).toHaveLength(6);
+    expect(labels).toEqual(['Style', 'Roof', 'Sides', 'Finish', 'Lighting', 'Inside', 'Size']);
+    // It opens on the look, not on the footprint the plan already set.
+    expect(screen.getByTestId('structure-tab-style').getAttribute('aria-selected')).toBe('true');
+    expect(structureTabs(resolveStructure(PERGOLA)!)).toHaveLength(7);
   });
 
   it('writes a typed width to the plan rect, keeping its turn and centre', () => {
@@ -55,7 +59,12 @@ describe('StructureInspector', () => {
     fireEvent.change(width, { target: { value: '4.5' } });
     fireEvent.blur(width);
 
-    expect(current().shape).toMatchObject({ width: 4.5, depth: 3, rotation: 20, centre: { x: 8, y: 8 } });
+    expect(current().shape).toMatchObject({
+      width: 4.5,
+      depth: 3,
+      rotation: 20,
+      centre: { x: 8, y: 8 },
+    });
   });
 
   it('keeps a typed size inside what the structure can be', () => {
@@ -99,10 +108,15 @@ describe('StructureInspector', () => {
     fireEvent.click(screen.getByTestId('structure-preset-covered'));
 
     expect(current().shape).toEqual(shape);
-    expect(current().structure).toMatchObject({ preset: 'covered', roof: { kind: 'solid', finish: 'polycarbonate-opal' } });
+    expect(current().structure).toMatchObject({
+      preset: 'covered',
+      roof: { kind: 'solid', finish: 'polycarbonate-opal' },
+    });
 
     usePlanEditorStore.getState().setStructure(PERGOLA.id, { lighting: false });
-    rerender(<StructureInspector element={current()} structure={resolveStructure(current())!} unit="m" />);
+    rerender(
+      <StructureInspector element={current()} structure={resolveStructure(current())!} unit="m" />,
+    );
     expect(screen.getByTestId('structure-preset-covered').textContent).toContain('edited');
   });
 
@@ -137,7 +151,9 @@ describe('StructureInspector', () => {
     fireEvent.change(width, { target: { value: '6' } });
     fireEvent.blur(width);
 
-    expect(screen.getByTestId('structure-resize-blocked').textContent).toContain('The rear border is in the way.');
+    expect(screen.getByTestId('structure-resize-blocked').textContent).toContain(
+      'The rear border is in the way.',
+    );
     expect(current().shape).toMatchObject({ width: 3.6 });
 
     fireEvent.click(screen.getByTestId('structure-alternative-fit'));
@@ -146,5 +162,83 @@ describe('StructureInspector', () => {
     expect(shape.kind === 'rect' && shape.width).toBeGreaterThan(3.6);
     // Grown about its centre (nothing holds it), so it stops where its side meets the border.
     expect(shape.kind === 'rect' && shape.width).toBeLessThanOrEqual(5);
+  });
+
+  describe('the Inside tab', () => {
+    const TABLE: DesignElement = {
+      id: 't1',
+      name: 'Dining set for four',
+      category: 'furniture',
+      role: 'feature',
+      zone: 'back',
+      symbol: 'dining-set-4',
+      height: 0.75,
+      shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 2.4, depth: 2.4, rotation: 20 },
+    };
+    const element = (id: string) =>
+      usePlanEditorStore.getState().present.elements.find((item) => item.id === id);
+
+    beforeEach(() => {
+      usePlanEditorStore.setState({
+        present: { elements: [PERGOLA, TABLE] },
+        structureEdit: { elementId: PERGOLA.id, pieceId: null },
+      });
+    });
+
+    it('lays a floor, and takes it up again', () => {
+      const { rerender } = show();
+      fireEvent.click(screen.getByTestId('structure-tab-inside'));
+      fireEvent.click(screen.getByTestId('structure-floor-porcelain'));
+      expect(current().structure).toEqual({ floor: 'porcelain' });
+      rerender(
+        <StructureInspector
+          element={current()}
+          structure={resolveStructure(current())!}
+          unit="m"
+        />,
+      );
+      fireEvent.click(screen.getByTestId('structure-floor-ground'));
+      expect(current().structure).toEqual({});
+    });
+
+    it('lists what stands in it and swaps, turns and removes it', () => {
+      show();
+      fireEvent.click(screen.getByTestId('structure-tab-inside'));
+      expect(screen.getByTestId('structure-piece-t1').textContent).toContain('Dining set for four');
+
+      fireEvent.click(screen.getByTestId('structure-piece-turn-t1'));
+      expect(element('t1')!.shape).toMatchObject({ rotation: 110 });
+
+      fireEvent.change(screen.getByTestId('structure-piece-swap-t1'), {
+        target: { value: 'sofa-set' },
+      });
+      expect(element('t1')).toMatchObject({ symbol: 'sofa-set', shape: { width: 3, depth: 2.4 } });
+
+      fireEvent.click(screen.getByTestId('structure-piece-remove-t1'));
+      expect(element('t1')).toBeUndefined();
+    });
+
+    it('adds a piece from the ones suited to it, and says when there is no room', () => {
+      show();
+      fireEvent.click(screen.getByTestId('structure-tab-inside'));
+      const before = usePlanEditorStore.getState().present.elements.length;
+      fireEvent.change(screen.getByTestId('structure-piece-add'), { target: { value: 'planter' } });
+      expect(usePlanEditorStore.getState().present.elements).toHaveLength(before + 1);
+      expect(usePlanEditorStore.getState().structureEdit?.pieceId).toBeTruthy();
+    });
+
+    it('opens on its own when a piece is picked up in the view', () => {
+      const { rerender } = show();
+      usePlanEditorStore.getState().selectPiece('t1');
+      rerender(
+        <StructureInspector
+          element={current()}
+          structure={resolveStructure(current())!}
+          unit="m"
+        />,
+      );
+      expect(screen.getByTestId('structure-tab-inside').getAttribute('aria-selected')).toBe('true');
+      expect(screen.getByTestId('structure-piece-t1').getAttribute('aria-current')).toBe('true');
+    });
   });
 });

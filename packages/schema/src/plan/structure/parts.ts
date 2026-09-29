@@ -39,14 +39,7 @@ import type { StructureFinishId } from './finishes.js';
 export type Vec3 = [number, number, number];
 
 export type StructurePartGroup =
-  | 'post'
-  | 'beam'
-  | 'rafter'
-  | 'roof'
-  | 'side-left'
-  | 'side-right'
-  | 'side-rear'
-  | 'light';
+  'post' | 'beam' | 'rafter' | 'roof' | 'side-left' | 'side-right' | 'side-rear' | 'light';
 
 export type StructurePartShape =
   /** A cuboid, axis-aligned in the structure's local frame. `centre` is its middle. */
@@ -160,7 +153,13 @@ function canopyParts(structure: ResolvedStructure): StructurePart[] {
     [px, pz],
     [-px, pz],
   ].forEach(([x, z], index) => {
-    box(`post-${index}`, 'post', frame, [x!, beamBottom / 2, z!], [style.post, beamBottom, style.post]);
+    box(
+      `post-${index}`,
+      'post',
+      frame,
+      [x!, beamBottom / 2, z!],
+      [style.post, beamBottom, style.post],
+    );
   });
 
   /* ---- the frame on top of the posts ---- */
@@ -192,7 +191,13 @@ function canopyParts(structure: ResolvedStructure): StructurePart[] {
     const span = w - RAFTER_WIDTH;
     for (let i = 0; i <= count; i += 1) {
       const x = -span / 2 + (span * i) / count;
-      box(`rafter-${i}`, 'rafter', roofFinish, [x, H - RAFTER_HEIGHT / 2, 0], [RAFTER_WIDTH, RAFTER_HEIGHT, d]);
+      box(
+        `rafter-${i}`,
+        'rafter',
+        roofFinish,
+        [x, H - RAFTER_HEIGHT / 2, 0],
+        [RAFTER_WIDTH, RAFTER_HEIGHT, d],
+      );
     }
   } else if (roof.kind === 'slatted') {
     const innerW = w - 2 * bt;
@@ -201,11 +206,23 @@ function canopyParts(structure: ResolvedStructure): StructurePart[] {
     const span = innerW - BLADE_WIDTH;
     for (let i = 0; i < count; i += 1) {
       const x = count === 1 ? 0 : -span / 2 + (span * i) / (count - 1);
-      box(`blade-${i}`, 'rafter', roofFinish, [x, H - style.beamHeight / 2, 0], [BLADE_WIDTH, BLADE_HEIGHT, innerD]);
+      box(
+        `blade-${i}`,
+        'rafter',
+        roofFinish,
+        [x, H - style.beamHeight / 2, 0],
+        [BLADE_WIDTH, BLADE_HEIGHT, innerD],
+      );
     }
   } else if (roof.kind === 'solid') {
     if (modern) {
-      box('roof-panel', 'roof', roofFinish, [0, H - PANEL_HEIGHT, 0], [w - 2 * bt, PANEL_HEIGHT, d - 2 * bt]);
+      box(
+        'roof-panel',
+        'roof',
+        roofFinish,
+        [0, H - PANEL_HEIGHT, 0],
+        [w - 2 * bt, PANEL_HEIGHT, d - 2 * bt],
+      );
     } else {
       box('roof-panel', 'roof', roofFinish, [0, H - PANEL_HEIGHT / 2, 0], [w, PANEL_HEIGHT, d]);
     }
@@ -224,10 +241,22 @@ function canopyParts(structure: ResolvedStructure): StructurePart[] {
     for (let i = 0; i < boards; i += 1) {
       const y = SCREEN_FOOT + BOARD_HEIGHT / 2 + i * BOARD_SPACING;
       if (side === 'rear') {
-        box(`${group}-${i}`, group, frame, [0, y, -pz], [w - 2 * style.post, BOARD_HEIGHT, BOARD_THICKNESS]);
+        box(
+          `${group}-${i}`,
+          group,
+          frame,
+          [0, y, -pz],
+          [w - 2 * style.post, BOARD_HEIGHT, BOARD_THICKNESS],
+        );
       } else {
         const x = side === 'left' ? -px : px;
-        box(`${group}-${i}`, group, frame, [x, y, 0], [BOARD_THICKNESS, BOARD_HEIGHT, d - 2 * style.post]);
+        box(
+          `${group}-${i}`,
+          group,
+          frame,
+          [x, y, 0],
+          [BOARD_THICKNESS, BOARD_HEIGHT, d - 2 * style.post],
+        );
       }
     }
   }
@@ -281,7 +310,10 @@ export function partPlanOutline(part: StructurePart, rect: StructureRect): Point
 export function partHeights(part: StructurePart): { bottom: number; top: number } {
   const { shape } = part;
   if (shape.kind === 'box') {
-    return { bottom: shape.centre[1] - shape.size[1] / 2, top: shape.centre[1] + shape.size[1] / 2 };
+    return {
+      bottom: shape.centre[1] - shape.size[1] / 2,
+      top: shape.centre[1] + shape.size[1] / 2,
+    };
   }
   return { bottom: shape.centre[1], top: shape.centre[1] + shape.rise };
 }

@@ -6,6 +6,7 @@ import type { ElementCategory } from './concepts.js';
 import type { BudgetBand } from './brief.js';
 import { findMaterial, materialLabel, MATERIALS } from './materials.js';
 import { isCountable, materialPattern, unitsPerSquareMetre } from './material-patterns.js';
+import { structureFloor } from './structure/floor.js';
 
 /**
  * What a plan is made of, counted.
@@ -95,8 +96,13 @@ export function planSchedule(
 ): ScheduleLine[] {
   const lines = new Map<string, ScheduleLine>();
 
-  for (const element of elements) {
-    if (element.hidden) continue;
+  for (const stored of elements) {
+    if (stored.hidden) continue;
+    /*
+     * A structure with a floor is counted as its floor: the ground under a pergola is what is laid by
+     * the square metre, and counting the footprint as the frame as well would count it twice.
+     */
+    const element = structureFloor(stored) ?? stored;
 
     const material = findMaterial(element.material) ?? MATERIALS[element.category][0];
     if (!material) continue;

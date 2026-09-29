@@ -6,6 +6,7 @@ import { mergeStructureConfig, STRUCTURE_SIDES } from './config.js';
 import { resolveStructure, STRUCTURE_DEFINITIONS, structureDefinitionFor } from './definitions.js';
 import { isStructureFinish, STRUCTURE_FINISHES } from './finishes.js';
 import { partHeights, partPlanOutline, structureParts, type StructurePart } from './parts.js';
+import { structureSymbolNamed } from '../symbols.js';
 
 const pergola = (over: Partial<DesignElement> = {}): DesignElement => ({
   id: 'p1',
@@ -23,7 +24,8 @@ const pergola = (over: Partial<DesignElement> = {}): DesignElement => ({
 const gazebo = (over: Partial<DesignElement> = {}): DesignElement =>
   pergola({ id: 'g1', name: 'Gazebo', symbol: 'gazebo', height: 2.8, ...over });
 
-const partsOf = (element: DesignElement): StructurePart[] => structureParts(resolveStructure(element)!);
+const partsOf = (element: DesignElement): StructurePart[] =>
+  structureParts(resolveStructure(element)!);
 
 describe('which elements open in 3D', () => {
   it('opens a pergola and a gazebo', () => {
@@ -34,7 +36,9 @@ describe('which elements open in 3D', () => {
   it('opens nothing else', () => {
     expect(structureDefinitionFor(pergola({ symbol: 'shed' }))).toBeNull();
     expect(structureDefinitionFor(pergola({ symbol: undefined }))).toBeNull();
-    expect(structureDefinitionFor(pergola({ category: 'paved-area', symbol: undefined }))).toBeNull();
+    expect(
+      structureDefinitionFor(pergola({ category: 'paved-area', symbol: undefined })),
+    ).toBeNull();
     // A pergola symbol on the wrong category is not a pergola.
     expect(structureDefinitionFor(pergola({ category: 'furniture' }))).toBeNull();
   });
@@ -65,7 +69,9 @@ describe('resolveStructure', () => {
     expect(resolved.width).toBe(3.6);
     expect(resolved.depth).toBe(3.6);
     expect(resolved.height).toBe(2.7);
-    expect(resolveStructure(pergola({ height: undefined }))!.height).toBe(heightFor(pergola({ height: undefined })));
+    expect(resolveStructure(pergola({ height: undefined }))!.height).toBe(
+      heightFor(pergola({ height: undefined })),
+    );
   });
 
   /** A catalogue can change; a stored plan must still open, drawing the default instead. */
@@ -92,8 +98,12 @@ describe('resolveStructure', () => {
 
   it('refuses a roof kind this structure does not offer', () => {
     // A hipped pergola is a gazebo, and a slatted gazebo is a pergola.
-    expect(resolveStructure(pergola({ structure: { roof: { kind: 'hipped' } } }))!.roof.kind).toBe('slatted');
-    expect(resolveStructure(gazebo({ structure: { roof: { kind: 'slatted' } } }))!.roof.kind).toBe('hipped');
+    expect(resolveStructure(pergola({ structure: { roof: { kind: 'hipped' } } }))!.roof.kind).toBe(
+      'slatted',
+    );
+    expect(resolveStructure(gazebo({ structure: { roof: { kind: 'slatted' } } }))!.roof.kind).toBe(
+      'hipped',
+    );
   });
 
   it('is null for anything that is not a configurable structure', () => {
@@ -203,7 +213,11 @@ describe('structureParts', () => {
   });
 
   it('reaches exactly the height it was given', () => {
-    for (const element of [pergola(), gazebo(), pergola({ structure: { preset: 'modern', roof: { kind: 'solid' } } })]) {
+    for (const element of [
+      pergola(),
+      gazebo(),
+      pergola({ structure: { preset: 'modern', roof: { kind: 'solid' } } }),
+    ]) {
       const top = Math.max(...partsOf(element).map((part) => partHeights(part).top));
       expect(top).toBeCloseTo(heightFor(element), 9);
     }
@@ -221,7 +235,9 @@ describe('structureParts', () => {
 
   it('adds boards on each screened side and nowhere else', () => {
     const open = partsOf(pergola());
-    const screened = partsOf(pergola({ structure: { sides: { left: 'slatted', rear: 'slatted' } } }));
+    const screened = partsOf(
+      pergola({ structure: { sides: { left: 'slatted', rear: 'slatted' } } }),
+    );
 
     expect(open.some((part) => part.group.startsWith('side-'))).toBe(false);
     expect(screened.filter((part) => part.group === 'side-left').length).toBeGreaterThan(5);
@@ -231,7 +247,9 @@ describe('structureParts', () => {
 
   it('adds a warm strip when lit, and only then', () => {
     expect(partsOf(pergola()).some((part) => part.group === 'light')).toBe(false);
-    const lit = partsOf(pergola({ structure: { lighting: true } })).filter((part) => part.group === 'light');
+    const lit = partsOf(pergola({ structure: { lighting: true } })).filter(
+      (part) => part.group === 'light',
+    );
     expect(lit).toHaveLength(4);
     for (const part of lit) expect(part.finish).toBe('warm-led');
   });
@@ -240,7 +258,9 @@ describe('structureParts', () => {
     const hip = partsOf(gazebo()).find((part) => part.group === 'roof')!;
     expect(hip.shape.kind).toBe('pyramid');
 
-    const panel = partsOf(pergola({ structure: { roof: { kind: 'solid', finish: 'polycarbonate-opal' } } }));
+    const panel = partsOf(
+      pergola({ structure: { roof: { kind: 'solid', finish: 'polycarbonate-opal' } } }),
+    );
     const roof = panel.filter((part) => part.group === 'roof');
     expect(roof).toHaveLength(1);
     expect(roof[0]!.finish).toBe('polycarbonate-opal');
@@ -248,8 +268,12 @@ describe('structureParts', () => {
   });
 
   it('finishes the frame in the element material and the roof in its own finish', () => {
-    const parts = partsOf(pergola({ material: 'aluminium-light', structure: { roof: { finish: 'hardwood' } } }));
-    for (const part of parts.filter((candidate) => candidate.group === 'post' || candidate.group === 'beam')) {
+    const parts = partsOf(
+      pergola({ material: 'aluminium-light', structure: { roof: { finish: 'hardwood' } } }),
+    );
+    for (const part of parts.filter(
+      (candidate) => candidate.group === 'post' || candidate.group === 'beam',
+    )) {
       expect(part.finish).toBe('aluminium-light');
     }
     for (const part of parts.filter((candidate) => candidate.group === 'rafter')) {
@@ -285,7 +309,8 @@ describe('finishes', () => {
   it('describes every frame a definition offers', () => {
     for (const definition of Object.values(STRUCTURE_DEFINITIONS)) {
       for (const id of definition!.frameMaterials) expect(isStructureFinish(id), id).toBe(true);
-      for (const id of definition!.roof?.finishes ?? []) expect(isStructureFinish(id), id).toBe(true);
+      for (const id of definition!.roof?.finishes ?? [])
+        expect(isStructureFinish(id), id).toBe(true);
     }
   });
 
@@ -306,18 +331,43 @@ describe('mergeStructureConfig', () => {
       { roof: { kind: 'solid', finish: 'hardwood' }, sides: { left: 'slatted' } },
       { roof: { kind: 'open' }, sides: { rear: 'slatted' } },
     );
-    expect(merged).toEqual({ roof: { kind: 'open', finish: 'hardwood' }, sides: { left: 'slatted', rear: 'slatted' } });
+    expect(merged).toEqual({
+      roof: { kind: 'open', finish: 'hardwood' },
+      sides: { left: 'slatted', rear: 'slatted' },
+    });
   });
 
   it('removes a key set to undefined, which is how "same as the frame" is said', () => {
-    const merged = mergeStructureConfig({ roof: { finish: 'hardwood' }, lighting: true }, {
-      roof: { finish: undefined },
-      lighting: undefined,
-    });
+    const merged = mergeStructureConfig(
+      { roof: { finish: 'hardwood' }, lighting: true },
+      {
+        roof: { finish: undefined },
+        lighting: undefined,
+      },
+    );
     expect(merged).toEqual({});
   });
 
   it('starts from nothing on an element that has never been configured', () => {
     expect(mergeStructureConfig(undefined, { preset: 'modern' })).toEqual({ preset: 'modern' });
+  });
+});
+
+describe('structureSymbolNamed', () => {
+  it('reads the structure a name says it is, whole words only', () => {
+    expect(structureSymbolNamed('Pergola')).toBe('pergola');
+    expect(structureSymbolNamed('Dining gazebo')).toBe('gazebo');
+    expect(structureSymbolNamed('Garden shed')).toBe('shed');
+    // The longer label wins, so a garden room is not mistaken for anything shorter.
+    expect(structureSymbolNamed('Garden room office')).toBe('garden-room');
+    expect(structureSymbolNamed('Raised bed')).toBe('raised-bed');
+  });
+
+  it('says nothing about a name that is no particular structure', () => {
+    expect(structureSymbolNamed('Garden store')).toBeNull();
+    expect(structureSymbolNamed('Sheds of light')).toBeNull();
+    // A flight and a hot tub are never stamped on from a name.
+    expect(structureSymbolNamed('Steps')).toBeNull();
+    expect(structureSymbolNamed('Hot tub')).toBeNull();
   });
 });

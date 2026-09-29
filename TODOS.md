@@ -28,9 +28,26 @@ resize that keeps what the structure is against and names what is in the way.
 - [ ] **A production GLB per frame model.** `lib/structures/model-registry.ts` has the `gltf` shape,
       keyed by `structure.model` since presets became bundles, and no entry uses it. Needs a model whose nodes are named by group, placed from the part boxes, within
       the AR budgets. **Effort:** M, mostly sourcing.
-- [ ] **More structures.** Shed, garden room, greenhouse, raised bed, fence/screen panels, decking
-      and steps are each a definition plus a parts builder that keeps the containment property; their
-      plan symbols can move onto `structurePlanDrawing` as they arrive. **Effort:** M each.
+- [ ] **More structures — only the ones that pass the admission rule** (29 Sep 2026, see
+      "What earns 3D" in CLAUDE.md). **Shed next**: door on the rect's local front (+y) pointed by
+      `reexpressRect`, pent/apex roof, cladding finish, height; a definition, a `shed` parts builder,
+      presets, a `structurePlanDrawing` case reusing `shedRoof`, and `configureStructure` pointing
+      the door at the nearest path or terrace. Expect a golden diff and an `eval:generator` run.
+      Then garden room and greenhouse. Raised beds, planters, decking and steps are **not** getting
+      the workspace; fence and screen panels belong to a boundary side, not to an element.
+      **Effort:** M each.
+- [ ] **A small live 3D thumbnail for low objects** (raised bed, planter) in the 2D inspector.
+      Declined for now: it pulls three.js into the plan bundle, which is code-split today, for two
+      facts (height, material) that fields and the plan's shadow already state. Revisit once low
+      objects share the parts pipeline. **Effort:** S–M.
+- [ ] **Write DESIGN.md** (via `/design-consultation`): the `garden-*` tokens, the pill buttons, the
+      capability-generated tabs and the panel pattern. The 3D workspace is the third surface to copy
+      them by eye. **Effort:** S.
+- [x] **The 3D editor as a configurator with a few handles** (29 Sep 2026): opens on Style; click a
+      part to open its tab; drag a side or the top to resize through `resizeStructureLive` (one undo
+      entry per drag, stops dead where it would not fit, the refusal lands in Size); handles hidden on
+      coarse pointers; a loading label and a no-WebGL state; pergola and gazebo in the palette with a
+      "Configure in 3D" offer after placing one.
 - [ ] **The AR builder consumes `structureParts`.** `resolveStructure` → parts → `boxMesh`, finishes
       → `ARMaterial`; the pyramid needs a four-triangle helper in `ar-contract`. **Effort:** S once the
       builder exists.
@@ -52,9 +69,16 @@ resize that keeps what the structure is against and names what is in the way.
 - [ ] **Does a lit pergola count as the brief's "lighting"?** `lightingScheme` is what satisfies the
       lighting space today, by category; a structure's integrated strip does not count. Probably it
       should when the scheme itself placed nothing. **Effort:** S.
-- [ ] **Gazebos get no timber deck.** The pergola-only switches in `build-scene.ts` and
-      `scene-passes.ts` (the deck under a board-frame pergola) do not fire for a gazebo; true of
-      hand-placed gazebos before the generator made any. **Effort:** S.
+- [ ] **The AR builder needs the true surface cut.** The 3D editor lifts overlapping surfaces by
+      stacking order; an `ARScene` forbids overlap, so the builder must subtract what lies above each
+      surface (PostGIS `ST_Difference` or a client polygon boolean). **Effort:** M.
+- [ ] **Flowers in the 3D borders.** `RenderPlant.flower` is ignored by `bedPlants`; a sprinkle of
+      flower-coloured instances over the crowns would carry the plan's own flowering. **Effort:** S.
+- [ ] **Chairs that face the table on a round host.** `furnitureParts` places chairs in a
+      rectangular piece's frame; a dining set placed as a point (a round gazebo) draws as a block.
+      **Effort:** S.
+- [x] **Gazebos get no timber deck** — answered by `structure.floor` (29 Sep 2026): any pergola or
+      gazebo can be given timber decking, stone or any of the definition's floors, drawn in 2D and 3D.
 
 ## In flight — AR viewer (`docs/ar/ar-architecture.md`, started 26 Sep 2026)
 

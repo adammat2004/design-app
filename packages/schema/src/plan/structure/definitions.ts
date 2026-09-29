@@ -52,6 +52,8 @@ export interface StructureDefinition {
   };
   sides?: { options: { id: SideInfill; label: string }[] };
   lighting?: boolean;
+  /** The floors it may be given, laid inside its footprint. Absent: it takes no floor of its own. */
+  floors?: MaterialId[];
   defaults: {
     preset: string;
     roof: RoofKind;
@@ -72,6 +74,16 @@ const SIDE_OPTIONS: { id: SideInfill; label: string }[] = [
  * Every finish a frame may be in. The timber three are what the generator's `materialFor` has always
  * given a structure, so a generated pergola's frame is one the inspector can show as chosen.
  */
+/** What a covered room is floored in: the terrace materials a table stands on. */
+const FLOORS: MaterialId[] = [
+  'stone-pavers',
+  'porcelain',
+  'stone-setts',
+  'concrete',
+  'timber-decking',
+  'gravel-paving',
+];
+
 const FRAMES: MaterialId[] = [
   'hardwood',
   'softwood',
@@ -103,6 +115,7 @@ export const STRUCTURE_DEFINITIONS: Partial<Record<SymbolId, StructureDefinition
     },
     sides: { options: SIDE_OPTIONS },
     lighting: true,
+    floors: FLOORS,
     defaults: { preset: 'classic', roof: 'slatted', frame: 'hardwood' },
   },
   gazebo: {
@@ -125,6 +138,7 @@ export const STRUCTURE_DEFINITIONS: Partial<Record<SymbolId, StructureDefinition
     },
     sides: { options: SIDE_OPTIONS },
     lighting: true,
+    floors: FLOORS,
     defaults: { preset: 'classic', roof: 'hipped', frame: 'hardwood' },
   },
 };
@@ -156,6 +170,8 @@ export interface ResolvedStructure {
   lighting: boolean;
   /** The element's `material` where it is a finish, else the definition's default frame. */
   frame: StructureFinishId;
+  /** The floor laid in its footprint, or `null` where it stands on the garden's own ground. */
+  floor: MaterialId | null;
   /** Read from the element's rect and `heightFor` — never stored here. */
   width: number;
   depth: number;
@@ -189,7 +205,7 @@ export function resolveStructure(element: DesignElement): ResolvedStructure | nu
 
   const frame: StructureFinishId = isStructureFinish(element.material)
     ? element.material
-    : definition.defaults.frame as StructureFinishId;
+    : (definition.defaults.frame as StructureFinishId);
 
   const kinds = definition.roof?.kinds.map((kind) => kind.id) ?? [];
   const roofKind = kinds.includes(config.roof?.kind as RoofKind)
@@ -197,7 +213,9 @@ export function resolveStructure(element: DesignElement): ResolvedStructure | nu
     : definition.defaults.roof;
   const offeredFinishes: string[] = definition.roof?.finishes ?? [];
   const roofFinish =
-    config.roof?.finish && offeredFinishes.includes(config.roof.finish) && isStructureFinish(config.roof.finish)
+    config.roof?.finish &&
+    offeredFinishes.includes(config.roof.finish) &&
+    isStructureFinish(config.roof.finish)
       ? config.roof.finish
       : frame;
 
@@ -209,10 +227,16 @@ export function resolveStructure(element: DesignElement): ResolvedStructure | nu
     }),
   ) as Record<StructureSide, SideInfill>;
 
+  const floor =
+    config.floor && definition.floors?.includes(config.floor as MaterialId)
+      ? (config.floor as MaterialId)
+      : null;
+
   return {
     definition,
     preset,
     model,
+    floor,
     roof: { kind: roofKind, finish: roofFinish },
     sides,
     lighting: definition.lighting ? config.lighting === true : false,
@@ -261,9 +285,13 @@ export function applyStructurePreset(element: DesignElement, presetId: string): 
     structure: {
       preset: preset.id,
       model: preset.model,
-      roof: preset.roof.finish ? { kind: preset.roof.kind, finish: preset.roof.finish } : { kind: preset.roof.kind },
+      roof: preset.roof.finish
+        ? { kind: preset.roof.kind, finish: preset.roof.finish }
+        : { kind: preset.roof.kind },
       sides: { ...preset.sides },
       lighting: preset.lighting,
+      // A floor is what is inside it, not how it looks: a style never takes it away.
+      ...(element.structure?.floor ? { floor: element.structure.floor } : {}),
     },
   };
 }

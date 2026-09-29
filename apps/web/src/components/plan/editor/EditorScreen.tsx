@@ -17,6 +17,7 @@ import { EditorToolbar } from './EditorToolbar';
 import { PlacedElementsList } from './PlacedElementsList';
 import { structureDefinitionFor } from '@garden-studio/schema';
 import { StructureWorkspaceLoader } from '../../structure-3d/StructureWorkspaceLoader';
+import { StructurePlacedNotice } from './StructurePlacedNotice';
 
 export function EditorScreen() {
   const planHref = usePlanHref();
@@ -130,8 +131,9 @@ export function EditorScreen() {
           {concept ? (
             <>
               <EditorToolbar />
-              <div className="min-h-[420px] flex-1 lg:min-h-0">
+              <div className="relative min-h-[420px] flex-1 lg:min-h-0">
                 <EditorCanvasLoader />
+                <StructurePlacedNotice />
               </div>
             </>
           ) : (

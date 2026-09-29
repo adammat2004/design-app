@@ -29,7 +29,12 @@ export interface StructureFinish {
 export const STRUCTURE_FINISHES = {
   /* ---- frames: the `MaterialId`s in `MATERIALS.structure` ---- */
   softwood: { label: 'Treated softwood', baseColor: '#b58e5f', roughness: 0.8, metalness: 0 },
-  'painted-timber': { label: 'Painted timber', baseColor: '#7d8b83', roughness: 0.65, metalness: 0 },
+  'painted-timber': {
+    label: 'Painted timber',
+    baseColor: '#7d8b83',
+    roughness: 0.65,
+    metalness: 0,
+  },
   'dark-stained-timber': {
     label: 'Dark-stained timber',
     baseColor: '#4a3a2c',
@@ -43,7 +48,12 @@ export const STRUCTURE_FINISHES = {
     roughness: 0.5,
     metalness: 0.6,
   },
-  'aluminium-dark': { label: 'Dark aluminium', baseColor: '#34373a', roughness: 0.42, metalness: 0.75 },
+  'aluminium-dark': {
+    label: 'Dark aluminium',
+    baseColor: '#34373a',
+    roughness: 0.42,
+    metalness: 0.75,
+  },
   'aluminium-light': {
     label: 'Light aluminium',
     baseColor: '#c9cbc8',

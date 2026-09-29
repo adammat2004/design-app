@@ -1,7 +1,21 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { GenerateConceptsResultSchema, PlanProjectSchema, readPlanDocument, SectionPatchResultSchema, type PlanDocument } from '@garden-studio/schema';
+import {
+  boundaryPolygon,
+  elementIsLegal,
+  elementOutline,
+  GenerateConceptsResultSchema,
+  housePolygon,
+  planStructureResize,
+  PlanProjectSchema,
+  polygonCentroid,
+  readPlanDocument,
+  SectionPatchResultSchema,
+  standsInside,
+  type DesignElement,
+  type PlanDocument,
+} from '@garden-studio/schema';
 
 const output = resolve('.plan-preview');
 let projectId: string;
@@ -106,21 +120,40 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   page.on('pageerror', (error) => errors.push(error.message));
 
   const project = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
-  const xs = project.document.site.vertices.map((vertex) => vertex.x);
-  const ys = project.document.site.vertices.map((vertex) => vertex.y);
-  const centre = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-  const pergola = {
+  const { site, layout } = project.document;
+  const boundary = boundaryPolygon(site);
+  const xs = boundary.map((point) => point.x);
+  const ys = boundary.map((point) => point.y);
+  const pergolaAt = (centre: { x: number; y: number }): DesignElement => ({
     id: 'e-9001',
-    category: 'structure' as const,
-    role: 'feature' as const,
+    category: 'structure',
+    role: 'feature',
     name: 'Test pergola',
     symbol: 'pergola',
     material: 'hardwood',
     height: 2.4,
-    zone: 'back' as const,
-    shape: { kind: 'rect' as const, centre, width: 3, depth: 3, rotation: 25 },
-  };
-  const layout = project.document.layout;
+    zone: 'back',
+    shape: { kind: 'rect', centre, width: 3, depth: 3, rotation: 25 },
+  });
+  /*
+   * Somewhere the 3 → 4 m resize below is clean. A resize keeps whatever edge the pergola is against
+   * and refuses one that runs into a bed, so this asks the same rule the editor uses rather than
+   * hoping the middle of the plot is open lawn — and the assertion at the end is that rule's answer.
+   */
+  const context = { elements: layout.elements, boundary, house: site.house ? housePolygon(site.house) : null };
+  const candidates = [
+    { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 },
+    ...layout.elements
+      .filter((element) => element.category === 'lawn' || element.category === 'paved-area')
+      .map((element) => polygonCentroid(elementOutline(element))),
+  ];
+  const clean = candidates
+    .map(pergolaAt)
+    .map((candidate) => ({ candidate, resized: planStructureResize(candidate, { width: 4 }, context) }))
+    .find(({ candidate, resized }) => elementIsLegal(candidate, boundary) && resized.status === 'ok');
+  expect(clean, 'somewhere on the plan a 3 m pergola can become 4 m').toBeTruthy();
+  const pergola = clean!.candidate;
+  const expectedShape = clean!.resized.status === 'ok' ? clean!.resized.element.shape : null;
   const saved = await request.patch(`${api}/plan-projects/${projectId}/layout`, {
     data: { revision: project.revision, section: { ...layout, elements: [...layout.elements, pergola] } },
   });
@@ -137,7 +170,19 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   const viewport = page.getByTestId('structure-viewport');
   await expect(viewport.locator('canvas')).toHaveCount(1);
   await expect(viewport).toHaveAttribute('data-width', '3');
+  // It opens among its surroundings — the garden's own ground around it — which can be switched off.
+  await expect(viewport).toHaveAttribute('data-surroundings', 'on');
+  expect(Number(await viewport.getAttribute('data-context-surfaces'))).toBeGreaterThan(0);
+  await page.getByTestId('structure-surroundings').click();
+  await expect(viewport).toHaveAttribute('data-surroundings', 'off');
+  await expect(viewport).toHaveAttribute('data-context-surfaces', '0');
+  await page.getByTestId('structure-surroundings').click();
+  await expect(viewport).toHaveAttribute('data-surroundings', 'on');
+  await expect(viewport.locator('canvas')).toHaveCount(1);
 
+  // It opens on the look; the footprint is the last tab.
+  await expect(page.getByTestId('structure-tab-style')).toHaveAttribute('aria-selected', 'true');
+  await page.getByTestId('structure-tab-size').click();
   const width = page.getByTestId('structure-width');
   await width.fill('4');
   await width.press('Tab');
@@ -147,6 +192,37 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   await expect(viewport).toHaveAttribute('data-camera', 'front');
   await page.getByTestId('structure-tab-sides').click();
   await page.getByTestId('structure-side-left-slatted').click();
+
+  // A part clicked in the view opens the tab that edits it, and the hint that said so goes.
+  await expect(page.getByTestId('structure-hint')).toBeVisible();
+  await page.getByTestId('structure-tab-roof').click();
+  await page.getByTestId('structure-roof-kind-solid').click();
+  await page.getByTestId('structure-tab-size').click();
+  await page.getByTestId('structure-camera-top').click();
+  await page.waitForTimeout(1200);
+  const above = (await viewport.boundingBox())!;
+  await page.mouse.click(above.x + above.width / 2 + 40, above.y + above.height / 2 + 30);
+  await expect(page.getByTestId('structure-tab-roof')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('structure-hint')).toHaveCount(0);
+
+  // Inside it: lay a floor, put a table in it, and carry the table across the floor in the view.
+  await page.getByTestId('structure-tab-inside').click();
+  await page.getByTestId('structure-floor-stone-setts').click();
+  await expect(viewport).toHaveAttribute('data-floor', 'stone-setts');
+  await page.getByTestId('structure-piece-add').selectOption('dining-set-4');
+  await expect(viewport).toHaveAttribute('data-interior', '1');
+  const pieceId = await viewport.getAttribute('data-piece');
+  expect(pieceId).toBeTruthy();
+  await page.getByTestId('structure-camera-top').click();
+  await page.waitForTimeout(1200);
+  const frame = (await viewport.boundingBox())!;
+  const middle = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  await page.mouse.move(middle.x, middle.y);
+  await page.mouse.down();
+  await page.mouse.move(middle.x + 120, middle.y + 20, { steps: 10 });
+  await page.mouse.up();
+  await page.getByTestId('structure-camera-orbit').click();
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: resolve(output, 'browser-structure-editor.png') });
 
   await page.getByTestId('structure-done').click();
@@ -159,7 +235,14 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
   const stored = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
   const element = stored.document.layout.elements.find((candidate) => candidate.id === pergola.id)!;
-  expect(element.shape).toEqual({ ...pergola.shape, width: 4 });
-  expect(element.structure).toEqual({ sides: { left: 'slatted' } });
+  // Exactly what the resize rule said: 4 m wide, the turn kept, any edge it is against held.
+  expect(element.shape).toEqual(expectedShape);
+  expect(element.shape).toMatchObject({ width: 4, depth: 3, rotation: 25 });
+  expect(element.structure).toEqual({ sides: { left: 'slatted' }, roof: { kind: 'solid' }, floor: 'stone-setts' });
+  // The table is its own element, standing inside the pergola, and the drag moved it off-centre.
+  const table = stored.document.layout.elements.find((candidate) => candidate.id === pieceId)!;
+  expect(table).toMatchObject({ category: 'furniture', symbol: 'dining-set-4' });
+  expect(standsInside(element, table)).toBe(true);
+  expect(table.shape.kind === 'rect' && table.shape.centre).not.toEqual(element.shape.kind === 'rect' && element.shape.centre);
   expect(errors).toEqual([]);
 });

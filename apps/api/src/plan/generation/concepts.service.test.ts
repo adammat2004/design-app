@@ -1614,6 +1614,8 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
       expect(element.height, 'an explicit height').toBeGreaterThanOrEqual(definition.dimensions.height.min);
       expect(element.height).toBeLessThanOrEqual(definition.dimensions.height.max);
       expect(definition.frameMaterials).toContain(element.material);
+      // Laid on paving, not stood on the lawn: a floor the structure offers.
+      expect(definition.floors).toContain(element.structure?.floor);
       expect(element.shape.kind).toBe('rect');
       if (element.shape.kind !== 'rect') return;
       expect(element.shape.width).toBeLessThanOrEqual(definition.dimensions.width.max);
@@ -1651,6 +1653,24 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
         });
         expect(facing, `${element.name} opens towards the terrace or the house`).toBe(true);
       }
+    });
+
+    it('floors a pergola by the terrace in the terrace’s own paving', async () => {
+      const concepts = await service.generate(
+        plan({ brief: { ...brief, desiredFeatures: ['seating', 'pergola'] } }),
+        1,
+      );
+      let checked = 0;
+      for (const concept of concepts) {
+        const terrace = concept.elements.find((other) => other.purpose === 'terrace');
+        const pergola = concept.elements.find((other) => other.symbol === 'pergola');
+        if (!terrace || !pergola) continue;
+        const floors = structureDefinitionFor(pergola)!.floors!;
+        const expected = floors.includes(terrace.material as never) ? terrace.material : 'stone-pavers';
+        expect(pergola.structure?.floor).toBe(expected);
+        checked += 1;
+      }
+      expect(checked, 'some concept has a terrace and a pergola to compare').toBeGreaterThan(0);
     });
 
     it('gives a modern brief that can afford it the aluminium frame', async () => {

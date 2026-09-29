@@ -1,4 +1,5 @@
 import {
+  fitInside,
   geometryClearsHouse,
   geometryIsLegal,
   geometryOutline,
@@ -13,9 +14,11 @@ import {
 } from '@garden-studio/schema';
 import { materialFor } from './archetypes.js';
 import type { DesignConstraints } from './constraints.js';
-import { FURNISHINGS, HOST_FURNISHINGS, HOST_SYMBOLS, MARGIN } from './furnishings.js';
+import { FURNISHINGS, HOST_FURNISHINGS, HOST_SYMBOLS } from './furnishings.js';
 
 export { hostFloor, MARGIN } from './furnishings.js';
+// Shared with the 3D editor's Inside tab, which places furniture by the same rule.
+export { fitInside };
 
 /**
  * Puts a thing inside the feature the brief asked for.
@@ -210,66 +213,6 @@ export function furnishRoom(
   return items;
 }
 
-/**
- * The item's geometry, centred in the host with `MARGIN` clear all round, or `null` if it will
- * not go. A rect item may be turned a quarter to fit a host that runs the other way.
- */
-export function fitInside(host: PlanGeometry, symbol: SymbolId, bearing = 0): PlanGeometry | null {
-  const { footprint } = SYMBOLS[symbol];
-
-  if (host.kind === 'point') {
-    /*
-     * Measured against the circle as drawn — a sixteen-gon, whose flats sit a little inside the
-     * radius — because that is the outline the host's containment is checked against.
-     */
-    const inner = host.radius * Math.cos(Math.PI / 16);
-    if (footprint.kind === 'point') {
-      if (footprint.radius + MARGIN > inner) return null;
-      return { kind: 'point', at: host.at, radius: footprint.radius };
-    }
-    if (Math.hypot(footprint.width, footprint.depth) / 2 + MARGIN > inner) return null;
-    return {
-      kind: 'rect',
-      centre: host.at,
-      width: footprint.width,
-      depth: footprint.depth,
-      rotation: bearing,
-    };
-  }
-
-  if (host.kind !== 'rect') return null;
-
-  if (footprint.kind === 'point') {
-    const clear = footprint.radius * 2 + MARGIN * 2;
-    if (clear > host.width || clear > host.depth) return null;
-    return { kind: 'point', at: host.centre, radius: footprint.radius };
-  }
-
-  const fits = (w: number, d: number) =>
-    w + MARGIN * 2 <= host.width && d + MARGIN * 2 <= host.depth;
-
-  if (fits(footprint.width, footprint.depth)) {
-    return {
-      kind: 'rect',
-      centre: host.centre,
-      width: footprint.width,
-      depth: footprint.depth,
-      rotation: host.rotation,
-    };
-  }
-
-  if (fits(footprint.depth, footprint.width)) {
-    return {
-      kind: 'rect',
-      centre: host.centre,
-      width: footprint.depth,
-      depth: footprint.width,
-      rotation: host.rotation,
-    };
-  }
-
-  return null;
-}
 
 /** Whether an item's outline lies wholly inside its host's. The test's oracle, exported for it. */
 export function sitsInside(item: Point[], host: Point[]): boolean {

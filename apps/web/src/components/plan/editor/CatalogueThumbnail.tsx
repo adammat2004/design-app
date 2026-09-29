@@ -71,6 +71,16 @@ export function CatalogueThumbnail({
             <path key={x} d={`M${x} 10V67`} stroke="#91a0a0" opacity=".3" />
           ))}
         </>
+      ) : element.symbol === 'gazebo' ? (
+        // A hipped roof from above: four planes meeting at a finial.
+        <>
+          <path d="M10 10L45 38.5L80 10Z" fill="#6f5a47" />
+          <path d="M80 10L45 38.5L80 67Z" fill="#5a4838" />
+          <path d="M10 67L45 38.5L80 67Z" fill="#4a3b2e" />
+          <path d="M10 10L45 38.5L10 67Z" fill="#7d6653" />
+          <path d="M10 10L80 67M80 10L10 67" stroke="#3d3026" strokeWidth="1.5" />
+          <circle cx="45" cy="38.5" r="3" fill="#2f251d" />
+        </>
       ) : (
         <>
           {[16, 25, 34, 43, 52, 61, 70, 77].map((x) => (

@@ -11,6 +11,7 @@ import {
   type DesignIntent,
   type PlanDocument,
   type PlanGeometry,
+  structureDefinitionFor,
 } from '@garden-studio/schema';
 import { offBearing } from '../generation/design/bearing.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -224,9 +225,10 @@ describe.skipIf(connection === null)('PlannerService', () => {
     });
 
     it('takes the largest size that clears the border when the full one does not', async () => {
-      const { changes, unplaceable } = await planner.plan(plan([pergola({ x: 10, y: 12 }), border(12)]), [
-        resize(2),
-      ]);
+      const { changes, unplaceable } = await planner.plan(
+        plan([pergola({ x: 10, y: 12 }), border(12)]),
+        [resize(2)],
+      );
       expect(unplaceable).toEqual([]);
       const next = changes[0]!.next.shape;
       expect(next.kind === 'rect' && next.width).toBeGreaterThan(3.5);
@@ -373,8 +375,26 @@ describe.skipIf(connection === null)('PlannerService', () => {
     expect(changes[0]!.elementId).toBeNull();
     expect(changes[0]!.previous).toBeNull();
     expect(changes[0]!.next.name).toBe('Garden store');
+    // A name that is no particular structure stays a plain one.
+    expect(changes[0]!.next.symbol).toBeUndefined();
     // Given a default material rather than left blank, as the editor's own add does.
     expect(changes[0]!.next.material).toBe('softwood');
+  });
+
+  // A pergola asked for by name is a pergola: rafters on the plan, its own height, and Edit in 3D.
+  it('gives a structure it adds by name the symbol that makes it that thing', async () => {
+    const { changes } = await planner.plan(plan([patio]), [
+      {
+        kind: 'add',
+        category: 'structure',
+        name: 'Dining pergola',
+        footprint: { kind: 'rect', width: 3, depth: 3 },
+        affinity: 'any',
+      },
+    ]);
+
+    expect(changes[0]!.next).toMatchObject({ symbol: 'pergola', height: 2.4 });
+    expect(structureDefinitionFor(changes[0]!.next)).not.toBeNull();
   });
 
   /*
@@ -1263,7 +1283,14 @@ describe.skipIf(connection === null)('PlannerService', () => {
       name: 'Path to the gate',
       category: 'paved-area',
       material: 'stone-setts',
-      shape: { kind: 'polyline', width: 1, points: [{ x: 10, y: 14 }, { x: 10, y: 15.5 }] },
+      shape: {
+        kind: 'polyline',
+        width: 1,
+        points: [
+          { x: 10, y: 14 },
+          { x: 10, y: 15.5 },
+        ],
+      },
     });
     const garden = () => plan([baseFill, patio, path]);
     const runsOf = (element: DesignElement) => element.edges?.runs ?? [];
@@ -1285,7 +1312,9 @@ describe.skipIf(connection === null)('PlannerService', () => {
       expect(changes[0]!.after).toBe('No edging where it meets a path');
       expect(changes[0]!.next.edges?.mode).toBe('custom');
       // No run is left on the stretch the path meets — around x = 10 on the bottom side.
-      expect(runsOf(changes[0]!.next).some((run) => run.side === 2 && run.treatment === 'flush')).toBe(false);
+      expect(
+        runsOf(changes[0]!.next).some((run) => run.side === 2 && run.treatment === 'flush'),
+      ).toBe(false);
     });
 
     it('lays brick only along the lawn, as runs the designer owns', async () => {
@@ -1299,11 +1328,13 @@ describe.skipIf(connection === null)('PlannerService', () => {
       const { changes } = await planner.plan(garden(), [intent]);
       const runs = runsOf(changes[0]!.next);
 
-      expect(runs.filter((run) => run.treatment === 'brick').every((run) => run.source === 'agent')).toBe(true);
+      expect(
+        runs.filter((run) => run.treatment === 'brick').every((run) => run.source === 'agent'),
+      ).toBe(true);
       // Every side meets the lawn somewhere, and the bottom side is broken where the path leaves it.
-      expect(new Set(runs.filter((run) => run.treatment === 'brick').map((run) => run.side))).toEqual(
-        new Set([0, 1, 2, 3]),
-      );
+      expect(
+        new Set(runs.filter((run) => run.treatment === 'brick').map((run) => run.side)),
+      ).toEqual(new Set([0, 1, 2, 3]));
       expect(runs.filter((run) => run.side === 2 && run.treatment === 'brick')).toHaveLength(2);
       // What the path meets is left exactly as it was drawn.
       expect(runs.some((run) => run.side === 2 && run.treatment === 'flush')).toBe(true);

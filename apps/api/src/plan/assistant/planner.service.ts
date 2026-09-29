@@ -46,6 +46,8 @@ import {
   type Point,
   type ProposedChange,
   type Unit,
+  structureSymbolNamed,
+  SYMBOLS,
 } from '@garden-studio/schema';
 import {
   bearingOfElement,
@@ -220,7 +222,11 @@ export class PlannerService {
     const resolution = resolveEdges(
       elements,
       { boundary: context.boundary, ...(context.house ? { house: context.house } : {}) },
-      { style: brief.style ?? null, budget: brief.budget ?? null, maintenance: brief.maintenance ?? null },
+      {
+        style: brief.style ?? null,
+        budget: brief.budget ?? null,
+        maintenance: brief.maintenance ?? null,
+      },
     );
     const treatment = treatmentSpec(intent.treatment);
     const phrase = relationPhrase(intent.adjacent, intent.adjacentElementId, byId);
@@ -239,7 +245,9 @@ export class PlannerService {
 
       const stretches = resolution.graph
         .intervalsOf(element.id)
-        .filter((interval) => meets(interval.neighbour, intent.adjacent, intent.adjacentElementId, byId));
+        .filter((interval) =>
+          meets(interval.neighbour, intent.adjacent, intent.adjacentElementId, byId),
+        );
 
       if (stretches.length === 0) {
         result.unplaceable.push({
@@ -257,7 +265,8 @@ export class PlannerService {
         next = withStretch(next, stretch.side, stretch, intent.treatment, 'agent') ?? next;
       }
 
-      if (sameEdgePlan(next.edges, element.edges) && edgePlanOf(element).mode === 'custom') continue;
+      if (sameEdgePlan(next.edges, element.edges) && edgePlanOf(element).mode === 'custom')
+        continue;
 
       result.changes.push({
         id: nextId(),
@@ -1100,6 +1109,13 @@ export class PlannerService {
       if (!at) continue;
 
       const shape = geometryFor(intent.footprint, at);
+      /*
+       * "Add a pergola" is a pergola, not a box that happens to be called one: the symbol is what
+       * gives it rafters on the plan, a shadow of the right height and a way into the 3D editor.
+       * Read off the name here rather than asked of the model, so the intent schema — and its
+       * grammar budget — is untouched.
+       */
+      const symbol = intent.category === 'structure' ? structureSymbolNamed(intent.name) : null;
       const next: DesignElement = {
         id: `ai-${nextId()}`,
         category: intent.category,
@@ -1108,6 +1124,7 @@ export class PlannerService {
         shape,
         zone: zone.id,
         material: defaultMaterial(intent.category),
+        ...(symbol ? { symbol, height: SYMBOLS[symbol].height } : {}),
       };
 
       result.changes.push({
@@ -1624,13 +1641,21 @@ function relationPhrase(
 }
 
 /** What the stretches had before, in the words the diff line shows. */
-function edgeSummary(runs: ResolvedEdgeRun[], hostId: string, stretches: BoundaryInterval[]): string {
+function edgeSummary(
+  runs: ResolvedEdgeRun[],
+  hostId: string,
+  stretches: BoundaryInterval[],
+): string {
   const found = new Set<string>();
 
   for (const stretch of stretches) {
     const middle = (stretch.from + stretch.to) / 2;
     const own = runs.find(
-      (run) => run.hostId === hostId && run.side === stretch.side && middle >= run.from && middle <= run.to,
+      (run) =>
+        run.hostId === hostId &&
+        run.side === stretch.side &&
+        middle >= run.from &&
+        middle <= run.to,
     );
     const across =
       stretch.neighbour.kind === 'element'

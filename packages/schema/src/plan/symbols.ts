@@ -450,6 +450,35 @@ export function symbolLabel(id: SymbolId): string {
   return SYMBOLS[id].label;
 }
 
+/**
+ * The built structures a *name* can identify: "Pergola", "Dining gazebo", "Garden shed".
+ *
+ * A request to add a structure arrives as a category and a name, and without a symbol a pergola is
+ * a nameless box — drawn with no rafters, given no furniture, and with no way into the 3D editor.
+ * Steps and the hot tub are left out on purpose: a flight is a level change rather than a thing, and
+ * a hot tub is a product of one size that a name alone should not stamp onto any rectangle.
+ */
+const NAMEABLE_STRUCTURES: SymbolId[] = [
+  'garden-room',
+  'raised-bed',
+  'greenhouse',
+  'pergola',
+  'gazebo',
+  'shed',
+];
+
+/** The structure symbol a name says it is, or `null`. Whole words only; the longer label wins. */
+export function structureSymbolNamed(name: string): SymbolId | null {
+  const words = ` ${name
+    .toLowerCase()
+    .replace(/[^a-z]+/g, ' ')
+    .trim()} `;
+  const matches = NAMEABLE_STRUCTURES.filter((id) =>
+    words.includes(` ${SYMBOLS[id].label.toLowerCase()} `),
+  );
+  return matches.sort((a, b) => SYMBOLS[b].label.length - SYMBOLS[a].label.length)[0] ?? null;
+}
+
 /** The symbols a user may add from the editor, in the order the palette lists them. */
 export const ADDABLE_SYMBOLS: SymbolId[] = [
   /*
@@ -465,6 +494,12 @@ export const ADDABLE_SYMBOLS: SymbolId[] = [
   'shrub-flowering',
   'shrub-architectural',
   'shrub-topiary',
+  /*
+   * The two structures a person decides from the side — height, roof, screens — and so the two that
+   * open in the 3D editor. A plain "Structure" rectangle stays for everything else built.
+   */
+  'pergola',
+  'gazebo',
   'dining-set-4',
   'dining-set-6',
   'sofa-set',

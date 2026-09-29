@@ -14,10 +14,12 @@ export const StructureWorkspaceLoader = dynamic(
     ssr: false,
     loading: () => (
       <div
-        aria-hidden="true"
+        role="status"
         data-testid="structure-workspace-loading"
-        className="min-h-[420px] flex-1 animate-pulse bg-slate-100"
-      />
+        className="flex min-h-[420px] flex-1 animate-pulse items-center justify-center bg-slate-100 text-xs font-medium text-garden-muted"
+      >
+        Loading 3D view…
+      </div>
     ),
   },
 );

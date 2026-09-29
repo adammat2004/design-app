@@ -70,6 +70,12 @@ export const StructureConfigSchema = z.object({
     .optional(),
   /** A warm strip under the roof. Presentation of a real product, so it is on the document. */
   lighting: z.boolean().optional(),
+  /**
+   * What it stands on inside its own footprint: a paving or decking material id, laid under it and
+   * moving and resizing with it. Absent means it stands on whatever the garden has there — what every
+   * structure did before this existed, so a stored plan is unchanged.
+   */
+  floor: z.string().optional(),
 });
 export type StructureConfig = z.infer<typeof StructureConfigSchema>;
 
@@ -91,6 +97,7 @@ export interface StructureConfigPatch {
   roof?: { kind?: string | undefined; finish?: string | undefined };
   sides?: Partial<Record<StructureSide, string | undefined>>;
   lighting?: boolean | undefined;
+  floor?: string | undefined;
 }
 
 export function mergeStructureConfig(
@@ -100,7 +107,10 @@ export function mergeStructureConfig(
   const merged: Record<string, unknown> = { ...(current ?? {}) };
   for (const [key, value] of Object.entries(patch) as [keyof StructureConfigPatch, unknown][]) {
     if (key === 'roof' || key === 'sides') {
-      const inner = compact({ ...((current?.[key] as object | undefined) ?? {}), ...(value as object) });
+      const inner = compact({
+        ...((current?.[key] as object | undefined) ?? {}),
+        ...(value as object),
+      });
       if (Object.keys(inner).length) merged[key] = inner;
       else delete merged[key];
     } else if (value === undefined) {

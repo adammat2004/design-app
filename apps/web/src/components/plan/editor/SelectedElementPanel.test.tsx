@@ -168,7 +168,7 @@ describe('Edit in 3D', () => {
   it('is offered for a pergola and a gazebo, and opens the 3D editor', () => {
     show(structure('pergola'));
     fireEvent.click(screen.getByTestId('edit-in-3d'));
-    expect(usePlanEditorStore.getState().structureEdit).toEqual({ elementId: 'pergola' });
+    expect(usePlanEditorStore.getState().structureEdit).toEqual({ elementId: 'pergola', pieceId: null });
   });
 
   it('is offered for a gazebo', () => {

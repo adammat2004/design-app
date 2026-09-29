@@ -97,6 +97,13 @@ export interface StructurePolicy {
    * cost band was worked out from) where the chosen preset is timber too.
    */
   keepFrame?: boolean;
+  /**
+   * What to floor it in, where it takes a floor. The generator passes the terrace's own paving, so a
+   * covered room is laid in what the garden is already paved in rather than bringing another
+   * material — and a table under a pergola stands on paving, not on the lawn. Ignored when the
+   * structure does not offer that floor.
+   */
+  floor?: MaterialId | null;
 }
 
 const DEAR: BudgetBand[] = ['high', 'premium'];
@@ -184,6 +191,7 @@ export function configureStructure(
       ...dressed.structure,
       sides,
       lighting: policy.lit && preset.lighting,
+      ...(policy.floor && definition.floors?.includes(policy.floor) ? { floor: policy.floor } : {}),
     },
   };
 }

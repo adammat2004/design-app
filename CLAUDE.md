@@ -159,7 +159,7 @@ house by `computeZones`, so storing them could only create something stale.
 
 
 **Not built yet:** printing at true scale, a navigable 3D preview of the whole garden (deliberately —
-see "Structures in 3D"), the **AR view** (only its scene
+see "Structures in 3D"; the structure editor shows only a structure's neighbourhood), the **AR view** (only its scene
 format and an Expo skeleton exist; see "Augmented reality"), and the optional AI photo-render. React Three Fiber is used by the structure editor only; the plan's
 WebGL is PixiJS, which draws the top-down scene. There is still **no user study**: the feedback
 events below are collected but nobody has yet sat down with the table and asked it anything. The two faults the harness reports most
@@ -4347,6 +4347,22 @@ level change.
 
 ## Structures in 3D
 
+**What earns 3D, and what 3D may do (decided 29 Sep 2026).** An object gets the workspace only if a
+person would decide something about it *by looking from the side*: height against a fence, a screen
+against a neighbour, headroom, a roof, a door side. Pergola and gazebo have it; the shed is next, then
+garden room and greenhouse. Raised beds, planters, decking and steps do not — two fields and the
+plan's shadow already say everything about them. There is **no standalone single-structure
+designer**: the surroundings are what make the editor worth having, and a structure is always judged
+in its real place. And 3D is a **configurator, never a modeller**: it never moves or turns the
+structure (a garden decision, made on the plan). Its direct manipulation is exactly three things —
+click a part to open its tab (`tabForPart`, `lib/structures/part-tabs.ts`), drag a side or the top
+(`StructureHandles.tsx` → `resizeStructureLive` / `setStructureHeightLive`, bracketed, planned from
+the structure as the drag began so the anchoring cannot drift), and drag furniture inside. Every
+handle has a field the keyboard reaches, and on a coarse pointer the handles are not drawn at all,
+because one finger already means orbit. The height handle stands over the rear-right post, not the
+roof's middle: seen from above, the middle is where the table is, and a handle there took every
+furniture drag — found by the e2e, not by reasoning.
+
 **A structure opens in a focused 3D editor, and the editor edits the plan's own element.** Select a
 pergola or a gazebo; the inspector shows **Edit in 3D** (`structureDefinitionFor(element)` non-null);
 the editor opens as a workspace state (`plan-editor-store.structureEdit`, the `edgeEdit` pattern with
@@ -4422,12 +4438,112 @@ part (a pyramid is four triangles), placing the set with the element's centre, `
 `yawFromPlanDegrees(rotation)`, and maps each part's `finish` through `STRUCTURE_FINISHES` to an
 `ARMaterial` one to one.
 
-**The viewport** (`components/structure-3d/StructureViewport.tsx`): a lawn, a paved pad the size of
-the footprint plus 0.5 m in the plan library's own tiles, a `Lightformer` environment (no HDRI
-download — works offline), one shadow-mapped sun, `ContactShadows`, ACES tone mapping,
-`frameloop="demand"`, drei `CameraControls` with presets that fly only when a preset or Reset is
-pressed, never on a resize. The whole workspace is `next/dynamic` with `ssr: false`, so three.js is
-not in the plan editor's bundle until Edit in 3D is pressed.
+**The viewport** (`components/structure-3d/StructureViewport.tsx`): the structure among its
+surroundings (below), a plain lawn beyond them, a `Lightformer` environment (no HDRI download —
+works offline), one shadow-mapped sun whose shadow camera reaches the window's edge,
+`ContactShadows`, ACES tone mapping, `frameloop="demand"`, drei `CameraControls` with presets that
+fly only when a preset or Reset is pressed, never on a resize. With the surroundings switched off it
+is the structure alone on the lawn and a stand-in paved pad. The whole workspace is `next/dynamic`
+with `ssr: false`, so three.js is not in the plan editor's bundle until Edit in 3D is pressed.
+
+**The surroundings are the structure's neighbourhood, not a 3D garden.** A pergola on an empty lawn
+could not be judged — a screen against a fence nobody could see, a width against a bed that was not
+there. `structureNeighbourhood` (`structure/neighbourhood.ts`, pure, Node-tested) cuts the plan to a
+square window `NEIGHBOURHOOD_REACH` (6 m) past the structure and returns plain data in the
+structure's **own local frame** — the frame `structureParts` draws in, which is the ar-contract's
+`planToScene` then `rotateAboutY`, so it is a first cut of the AR builder's placement:
+
+- ground surfaces clipped to the window, carrying their plan stacking order as `layer`;
+- solids: boundary runs clipped as segments and thickened *inward* (the plan's band), buildings with
+  no 3D definition, furniture (with its symbol), existing features;
+- plants as trunk and crown, kept when the crown reaches into the window from outside it;
+- other pergolas and gazebos, drawn by the same `StructureModel` turned by the difference in yaw;
+- the house **whole, never cut** — a sliced building reads as broken, and the fog takes its far end;
+- `ground`: everything is measured from the structure's own base, so a raised one's garden sits
+  below it.
+
+It also carries what the drawing needs to be good rather than merely placed: each tree's species
+`symbol`, each boundary run's cut centreline and inward direction, and the house's `openings` in the
+local frame (sill and head from `OPENING_HEIGHTS`, `STOREY_HEIGHT` for an upper floor).
+`localFrame(element)` is the one definition of the frame both ways; the 3D drag needs the way back.
+
+The web draws it (`StructureSurroundings.tsx`) and decides nothing about where anything is:
+
+- **The ground is painted by the plan's own surface painter.** `surfaceRaster`
+  (`lib/structures/surface-raster.ts`) asks `getSurfacePattern` for the same raster the plan draws —
+  slabs, joints, bond, courses — with the planting layers lifted out as `build-scene.ts` lifts them,
+  and `rasterUv` maps each local vertex back to plan metres on it. A single photograph tiled square
+  was the first attempt and it stretched every non-square unit: `surfaceTexture` used the tile's
+  width both ways, so a 3.6 × 0.145 m decking board was drawn 3.6 m square. The tiled fallback now
+  takes both sides. Paving is a 30 mm slab with an edge, not a print on the lawn.
+- **Beds are planted where the plan plants them.** `bedPlants` (`lib/structures/nature-geometry.ts`)
+  runs the plan's own `buildPlants` on the bed's whole world outline with the same exclusions and
+  seeds, turns the result into the local frame and cuts it to the window; they draw as instanced
+  crowns, one draw per form and variant, capped at `MAX_BED_PLANTS`. A hedging bed is a clipped body
+  with a lumpy top, not a flat patch.
+- **Crowns are welded, noise-displaced lobes with dark-to-light vertex shading**, built once per
+  species and variant from the plan's `prng` and three's own `SimplexNoise` (no new dependency). The
+  first version was faceted and black underneath — `mergeGeometries` of non-indexed spheres keeps
+  per-face normals — and read as cut gems; `mergeVertices` before the normals is the fix. A tree
+  carries its crown on a clear stem (the top ~55%), species by `treeShape`.
+- **Boundaries are built**: a fence is posts at the palette's own `postSpacing` with panels and a top
+  rail, a wall has piers and a coping, a railing balusters, a hedge clipped lumps.
+- **The house has its real doors and windows**, as frames and glass set proud of the wall rather than
+  cut into it. The roof is the plan's own `roofFor`, lifted: a plane vertex on the eaves ring stays at
+  eaves height and every other one is ridge, `ROOF_PITCH_SHARE` of the shorter span up.
+- **The sun is the plan's** (`sunInFrame`, `lib/structures/sun-3d.ts`): `presentationCast` turned into
+  the frame, so a 3D shadow falls the way the 2D plan draws it, with PCSS soft shadows (drei
+  `SoftShadows`) and a shader sky — all offline. The mute towards the sky dropped from 0.22 to 0.08:
+  once the surroundings carried their own detail, a heavy mute only washed them out.
+- **Geometry is built directly in XZ**, not through `ShapeGeometry` and a turn about X, which mirrors
+  Z. Every triangle is wound to face out; the wall winding was backwards on the first attempt and only
+  the test that probes behind each face caught it.
+- **No polygon booleans.** The plan's surfaces overlap by design, so each is lifted `LAYER_LIFT`
+  (1.5 mm) above the last in stacking order. An AR scene still needs the true cut.
+- **During a drag the surroundings are drawn from the settled plan** (`gestureSnapshot`), as the
+  editor canvas holds its neighbouring beds still: moving a chair must not re-plant every border each
+  frame. The interior is read live.
+
+The toggle is a view preference in local state, like the camera. `structure-viewport` carries
+`data-surroundings`, `data-context-surfaces|solids|plants`, `data-interior`, `data-piece` and
+`data-floor`, which is what the e2e reads.
+
+## Inside a structure: its floor and its furniture
+
+**The floor is a field on the structure, not an element under it.** `structure.floor` is a paving id
+from the definition's `floors`; absent means it stands on the garden's own ground, which is what every
+stored structure did, so there is no migration. As a field it moves, turns and resizes with the
+structure for nothing, where a second paved element would have to be kept in step with every edit.
+`structureFloor(element)` (`structure/floor.ts`) derives the surface every reader asks for:
+
+- **the 2D ground pass** (`scene-passes.ts`) lays the structure itself painted in its floor material,
+  in place of the timber deck it used to paint — same id, so clicking the floor is still the pergola;
+- **the schedule** counts a floored structure's footprint as its floor, with slab counts, and not
+  also as its frame — the footprint is never counted twice. The cost index still reads the frame;
+- **the 3D view** lays it as a slab painted by the plan's painter (`StructureFloor`).
+
+A preset keeps the floor: a style is a look, not what is inside. The generator floors every covered
+room in the terrace's own paving where the structure offers it (else `stone-pavers`) — a dining
+pergola often lands on the base lawn, and a table on grass is wrong; reusing the terrace's paving
+adds no new material to a garden already marked down for too many.
+
+**Furniture stays its own element; "inside" is containment, read every time.** `structure/furnish.ts`
+holds the rules the Inside tab, a 3D drag and the generator share: `fitInside` (moved here from the
+API, which re-exports it), `piecesInside`, `pieceFor`, `swappedPiece` (the new symbol's own
+footprint — the plan's `replaceSymbol` keeps the old one, right for a plant and wrong for a dining set
+for six), `turnedPiece`, `clampInside` (exact, in the structure's frame) and `SUITABLE_PIECES`. **A
+placement keeps `FURNISH_MARGIN` clear; a turn or a drag need only stay inside** — adding or swapping
+in a table leaves room to pull the chairs out, and a planter can still be pushed into a corner. The
+first swap checked bare containment, so a six-seater swapped into a gazebo it could not be added to.
+
+**A picked-up piece is `structureEdit.pieceId`, never `selectedId`**, because selecting anything else
+closes the 3D editor. The store's `addPiece`, `swapPiece`, `turnPiece` and `movePieceLive` are each
+one undo entry (a drag is one gesture) and refuse with a sentence rather than half-apply.
+`StructureInterior.tsx` draws the pieces at full colour as proper forms (`furnitureParts`: a table on
+legs with its chairs, a sofa with a back and arms round a coffee table), outlines on hover and when
+picked, and drags by meeting the pointer ray with the floor plane and handing `frame.toPlan` of it to
+`movePieceLive`; the orbit is switched off while a piece is carried, read at drag time through
+`useThree`'s `get` because a value captured in render is not ours to change.
 
 **AI:** no grammar change was made. The existing `material`, `resize` and `rotate` intents already
 work on a pergola. A `configure` verb (roof, sides, lighting, "make it taller") and an absolute

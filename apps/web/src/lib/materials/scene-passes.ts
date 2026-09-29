@@ -1,4 +1,11 @@
-import { boundingBox, defaultMaterial, elementOutline, type DesignElement, type Point } from '@garden-studio/schema';
+import {
+  boundingBox,
+  defaultMaterial,
+  elementOutline,
+  structureFloor,
+  type DesignElement,
+  type Point,
+} from '@garden-studio/schema';
 import { resolvePattern } from './palette';
 
 export type ElementPass = 'all' | 'ground' | 'object';
@@ -21,7 +28,15 @@ export function scenePasses(elements: DesignElement[]) {
      * an aluminium pergola stands on whatever is under it, and a flat metal-coloured slab across the
      * whole footprint would read as dark paving that is not there.
      */
-    if (!raised || (element.symbol === 'pergola' && hasDeck(element))) {
+    const floor = structureFloor(element);
+    if (floor) {
+      /*
+       * A structure with a floor lays it here, in place of any painted deck. It is the structure
+       * itself painted in its floor material — same id, so clicking or dragging the floor is the
+       * pergola, exactly as the deck always was.
+       */
+      ground.push({ ...element, material: floor.material });
+    } else if (!raised || (element.symbol === 'pergola' && hasDeck(element))) {
       ground.push(element);
     }
     if (raised) objects.push(element);

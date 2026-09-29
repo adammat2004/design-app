@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { LayoutSectionSchema, resolveStructure, structureParts } from '@garden-studio/schema';
+import { LayoutSectionSchema, resolveStructure, standsInside, structureParts } from '@garden-studio/schema';
 import type { DesignElement, GeneratedConcept } from '@/lib/concepts';
 import { resetBoundaryStoreForTests, useBoundaryStore } from './boundary-store';
 import { hydratePlanEditorStore, resetPlanEditorStoreForTests, usePlanEditorStore } from './plan-editor-store';
@@ -74,7 +74,7 @@ beforeEach(() => {
 describe('opening the 3D editor', () => {
   it('opens on a pergola and selects it', () => {
     store().openStructureEdit(PERGOLA.id);
-    expect(store().structureEdit).toEqual({ elementId: PERGOLA.id });
+    expect(store().structureEdit).toEqual({ elementId: PERGOLA.id, pieceId: null });
     expect(store().selectedId).toBe(PERGOLA.id);
   });
 
@@ -307,6 +307,42 @@ describe('resizeStructure', () => {
     expect(flushRect().width).toBeLessThanOrEqual(3.2);
   });
 
+  /*
+   * A handle drag in the 3D view: many frames, one decision. Each frame asks the same question of
+   * the structure as it stood when the drag began, so the anchoring cannot drift frame by frame.
+   */
+  it('makes a whole handle drag one undo entry, planned from where the drag began', () => {
+    const before = store().past.length;
+    store().beginGesture();
+    for (const width of [3.02, 3.05, 3.08, 3.1]) {
+      expect(store().resizeStructureLive(FLUSH.id, { width }).status).toBe('ok');
+    }
+    store().endGesture();
+
+    expect(store().past.length).toBe(before + 1);
+    expect(flushRect().width).toBeCloseTo(3.1);
+    // Still anchored on the patio's edge after four frames, not walked away from it.
+    expect(flushRect().centre.x + flushRect().width / 2).toBeCloseTo(13.5);
+  });
+
+  it('leaves the last size that fitted when the drag runs into something', () => {
+    store().beginGesture();
+    store().resizeStructureLive(FLUSH.id, { width: 3.1 });
+    const blocked = store().resizeStructureLive(FLUSH.id, { width: 4 });
+    store().endGesture();
+
+    expect(blocked.status).toBe('blocked');
+    expect(flushRect().width).toBeCloseTo(3.1);
+  });
+
+  it('holds a dragged height to what the structure is made in', () => {
+    store().beginGesture();
+    store().setStructureHeightLive(FLUSH.id, 12);
+    store().endGesture();
+    const tallest = resolveStructure(flush())!.definition.dimensions.height.max;
+    expect(flush().height).toBe(tallest);
+  });
+
   it('refuses an alternative the plan has since outgrown', () => {
     const result = store().resizeStructure(FLUSH.id, { width: 4 });
     if (result.status !== 'blocked') throw new Error('expected the border to be in the way');
@@ -316,5 +352,87 @@ describe('resizeStructure', () => {
 
     expect(store().applyStructureCandidate(FLUSH.id, fit.element)).toBe(false);
     expect(flushRect().width).toBe(3);
+  });
+});
+
+/*
+ * What stands inside: a gazebo with a table in it, edited from the 3D editor without ever calling
+ * `select`, which would close it.
+ */
+describe('the pieces inside', () => {
+  const GAZEBO: DesignElement = {
+    id: 'gazebo-1',
+    category: 'structure',
+    role: 'feature',
+    name: 'Gazebo',
+    symbol: 'gazebo',
+    zone: 'back',
+    shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 3.6, depth: 3.2, rotation: 30 },
+  };
+  const TABLE: DesignElement = {
+    id: 'table-1',
+    category: 'furniture',
+    role: 'feature',
+    name: 'Dining set for four',
+    symbol: 'dining-set-4',
+    height: 0.75,
+    zone: 'back',
+    shape: { kind: 'rect', centre: { x: 8, y: 8 }, width: 2.4, depth: 2.4, rotation: 30 },
+  };
+  const find = (id: string) => store().present.elements.find((element) => element.id === id);
+
+  beforeEach(() => {
+    resetPlanEditorStoreForTests();
+    store().seedFrom(concept([GAZEBO, TABLE]));
+    store().openStructureEdit(GAZEBO.id);
+  });
+
+  it('picks a piece up without closing the editor', () => {
+    store().selectPiece(TABLE.id);
+    expect(store().structureEdit).toEqual({ elementId: GAZEBO.id, pieceId: TABLE.id });
+  });
+
+  it('swaps it for the new thing at its own size, as one undo entry', () => {
+    const before = store().past.length;
+    store().swapPiece(TABLE.id, 'sofa-set');
+    expect(store().past.length).toBe(before + 1);
+    expect(find(TABLE.id)).toMatchObject({ symbol: 'sofa-set', height: 0.8, name: 'Lounge set' });
+    expect(find(TABLE.id)!.shape).toMatchObject({ width: 3, depth: 2.4 });
+  });
+
+  it('refuses a swap that will not fit, and changes nothing', () => {
+    const before = store().past.length;
+    store().swapPiece(TABLE.id, 'dining-set-6');
+    expect(store().past.length).toBe(before);
+    expect(find(TABLE.id)!.symbol).toBe('dining-set-4');
+    expect(store().clash).toMatch(/will not fit/);
+  });
+
+  it('adds a piece centred and picks it up; removing it lets go', () => {
+    store().deleteElement(TABLE.id);
+    const id = store().addPiece(GAZEBO.id, 'bench')!;
+    expect(find(id)).toMatchObject({ category: 'furniture', symbol: 'bench' });
+    expect(store().structureEdit?.pieceId).toBe(id);
+    store().deleteElement(id);
+    expect(store().structureEdit).toEqual({ elementId: GAZEBO.id, pieceId: null });
+  });
+
+  it('holds a dragged piece inside, and the whole drag is one undo entry', () => {
+    store().deleteElement(TABLE.id);
+    const id = store().addPiece(GAZEBO.id, 'bench')!;
+    const before = store().past.length;
+    store().beginGesture();
+    store().movePieceLive(id, { x: 30, y: 30 });
+    store().movePieceLive(id, { x: 40, y: 8 });
+    store().endGesture();
+    expect(store().past.length).toBe(before + 1);
+    const bench = find(id)!;
+    const gazebo = find(GAZEBO.id)!;
+    expect(standsInside(gazebo, bench)).toBe(true);
+  });
+
+  it('turns a piece a quarter where it still fits', () => {
+    store().turnPiece(TABLE.id);
+    expect(find(TABLE.id)!.shape).toMatchObject({ rotation: 120 });
   });
 });

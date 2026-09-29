@@ -35,6 +35,7 @@ import {
   type PlanGeometry,
   type Point,
   configureStructure,
+  STRUCTURE_DEFINITIONS,
   type RequestedFeatureCheck,
   type ZoneId,
   estimateBudgetBand,
@@ -635,6 +636,7 @@ export class ConceptsService {
           lit: gardenIsLit(constraints),
           privacy: (slotChoice?.brief ?? design.brief).privacy,
           keepFrame: true,
+          floor: coveredRoomFloor(terrace),
         },
         {
           elements: featureLayer,
@@ -1780,4 +1782,10 @@ function stampEdging(elements: DesignElement[], constraints: DesignConstraints):
 
     return { ...element, edging };
   });
+}
+
+/** What a generated covered room is floored in: the terrace's own paving, else stone. */
+function coveredRoomFloor(terrace: DesignElement | null): MaterialId {
+  const paving = terrace?.material as MaterialId | undefined;
+  return paving && STRUCTURE_DEFINITIONS.pergola!.floors!.includes(paving) ? paving : 'stone-pavers';
 }

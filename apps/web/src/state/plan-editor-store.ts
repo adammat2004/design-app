@@ -11,7 +11,12 @@ import {
   mergeStructureConfig,
   structureDefinitionFor,
   applyStructurePreset,
+  clampInside,
   heldToLimits,
+  pieceAt,
+  pieceFor,
+  swappedPiece,
+  turnedPiece,
   planStructureResize,
   structureConflicts,
   materialisedRuns,
@@ -154,9 +159,14 @@ export interface EdgeEditState {
 /** Which structure the 3D editor has open. */
 export interface StructureEditState {
   elementId: string;
+  /**
+   * The piece of furniture picked up inside the structure, if any. A sub-selection rather than
+   * `selectedId`, because selecting anything else closes the 3D editor.
+   */
+  pieceId: string | null;
 }
 
-interface PlanEditorState {
+export interface PlanEditorState {
   past: PlanEditorDraft[];
   present: PlanEditorDraft;
   future: PlanEditorDraft[];
@@ -287,10 +297,32 @@ interface PlanEditorState {
    */
   resizeStructure: (id: string, request: StructureResizeRequest) => StructureResizeResult;
   /**
+   * One frame of a resize-handle drag in the 3D editor. Planned from the structure as it stood when
+   * the gesture began, so every frame is the same question asked with a different size rather than a
+   * resize of a resize; a blocked frame changes nothing and leaves the last one that fitted on screen.
+   * Bracket with a gesture.
+   */
+  resizeStructureLive: (id: string, request: StructureResizeRequest) => StructureResizeResult;
+  /** One frame of a height-handle drag, held to the structure's limits. Bracket with a gesture. */
+  setStructureHeightLive: (id: string, metres: number) => void;
+  /**
    * One of the alternatives a blocked resize offered, checked again against the plan as it is now
    * and applied as one undo entry. False when the plan has changed underneath it.
    */
   applyStructureCandidate: (id: string, candidate: DesignElement) => boolean;
+
+  /*
+   * What stands inside the structure being edited in 3D. Each is one undo entry and is refused with a
+   * sentence in `clash` rather than half-applied; "inside" is containment, read every time.
+   */
+  selectPiece: (pieceId: string | null) => void;
+  /** A new piece centred in the structure. Returns its id, or null when there is no room. */
+  addPiece: (structureId: string, symbol: SymbolId) => string | null;
+  /** The piece swapped for another, at the new thing's own size. */
+  swapPiece: (pieceId: string, symbol: SymbolId) => void;
+  turnPiece: (pieceId: string) => void;
+  /** One frame of a drag across the floor, held inside the structure. Bracket with a gesture. */
+  movePieceLive: (pieceId: string, at: Point) => void;
   selectEdgeRun: (runId: string | null) => void;
   hoverEdgeRun: (runId: string | null) => void;
   /** Auto, None or Custom. Entering Custom materialises what Auto was drawing. */
@@ -373,6 +405,12 @@ export function edgeContextNow(): { boundary: Point[]; house?: Point[] } {
   return { boundary: boundaryNow(), ...(house ? { house } : {}) };
 }
 
+
+/** The structure open in the 3D editor, if there is one. */
+function structureOf(state: { structureEdit: StructureEditState | null; present: PlanEditorDraft }) {
+  const id = state.structureEdit?.elementId;
+  return id ? (state.present.elements.find((item) => item.id === id) ?? null) : null;
+}
 
 /** What a structure's resize measures against, read live. */
 export function structureContextNow(elements: DesignElement[]) {
@@ -846,7 +884,12 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     openStructureEdit: (id) => {
       const element = get().present.elements.find((candidate) => candidate.id === id);
       if (!element || !structureDefinitionFor(element)) return;
-      set({ selectedId: id, edgeEdit: null, clash: null, structureEdit: { elementId: id } });
+      set({
+        selectedId: id,
+        edgeEdit: null,
+        clash: null,
+        structureEdit: { elementId: id, pieceId: null },
+      });
     },
 
     closeStructureEdit: () => set({ structureEdit: null, clash: null }),
@@ -871,18 +914,75 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       commitElement(id, (element) => applyStructurePreset(element, presetId), { checkGeometry: false }),
 
     resizeStructure: (id, request) => {
-      const element = get().present.elements.find((candidate) => candidate.id === id);
-      if (!element) return { status: 'unsupported' };
-      const result = planStructureResize(element, request, structureContextNow(get().present.elements));
-      if (result.status === 'ok') {
-        get().beginGesture();
-        applyLive(id, () => result.element);
-        get().endGesture();
-      } else if (result.status === 'blocked') {
-        // Nothing was applied, so an older refusal would now describe an edit that did not happen.
-        set({ clash: null });
-      }
+      get().beginGesture();
+      const result = get().resizeStructureLive(id, request);
+      get().endGesture();
       return result;
+    },
+
+    resizeStructureLive: (id, request) => {
+      const settled = get().gestureSnapshot?.elements ?? get().present.elements;
+      const element = settled.find((candidate) => candidate.id === id);
+      if (!element) return { status: 'unsupported' };
+      const result = planStructureResize(element, request, structureContextNow(settled));
+      if (result.status === 'ok') applyLive(id, () => result.element);
+      // Nothing was applied, so an older refusal would now describe an edit that did not happen.
+      else if (result.status === 'blocked') set({ clash: null });
+      return result;
+    },
+
+    setStructureHeightLive: (id, metres) =>
+      applyLive(id, (element) => {
+        const limits = structureDefinitionFor(element)?.dimensions.height;
+        const height = limits ? Math.min(limits.max, Math.max(limits.min, metres)) : Math.max(0, metres);
+        return element.height === height ? element : { ...element, height };
+      }),
+
+    selectPiece: (pieceId) =>
+      set((state) => (state.structureEdit ? { structureEdit: { ...state.structureEdit, pieceId } } : state)),
+
+    addPiece: (structureId, symbol) => {
+      const structure = get().present.elements.find((item) => item.id === structureId);
+      if (!structure) return null;
+      const piece = pieceFor(structure, symbol, nextElementId());
+      if (!piece) {
+        set({ clash: `There is no room for a ${SYMBOLS[symbol].label.toLowerCase()} in it.` });
+        return null;
+      }
+      commit((draft) => ({ ...draft, elements: [...draft.elements, piece] }));
+      get().selectPiece(piece.id);
+      emitDesignEvent('element_added', { elementId: piece.id, category: 'furniture' });
+      return piece.id;
+    },
+
+    swapPiece: (pieceId, symbol) => {
+      const host = structureOf(get());
+      const piece = get().present.elements.find((item) => item.id === pieceId);
+      if (!host || !piece) return;
+      const swapped = swappedPiece(host, piece, symbol);
+      if (!swapped) {
+        set({ clash: `A ${SYMBOLS[symbol].label.toLowerCase()} will not fit in it.` });
+        return;
+      }
+      commitElement(pieceId, () => swapped);
+    },
+
+    turnPiece: (pieceId) => {
+      const host = structureOf(get());
+      const piece = get().present.elements.find((item) => item.id === pieceId);
+      if (!host || !piece) return;
+      const turned = turnedPiece(host, piece);
+      if (!turned) {
+        set({ clash: 'Turned, it would not fit inside.' });
+        return;
+      }
+      commitElement(pieceId, () => turned);
+    },
+
+    movePieceLive: (pieceId, at) => {
+      const host = structureOf(get());
+      if (!host) return;
+      applyLive(pieceId, (piece) => pieceAt(piece, clampInside(host, piece, at)));
     },
 
     applyStructureCandidate: (id, candidate) => {
@@ -1060,7 +1160,12 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       }));
       set((state) => ({
         selectedId: state.selectedId === id ? null : state.selectedId,
-        structureEdit: state.structureEdit?.elementId === id ? null : state.structureEdit,
+        structureEdit:
+          state.structureEdit?.elementId === id
+            ? null
+            : state.structureEdit?.pieceId === id
+              ? { ...state.structureEdit, pieceId: null }
+              : state.structureEdit,
       }));
       /*
        * The most informative event there is: the generator put something here and a person took it

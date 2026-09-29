@@ -30,6 +30,21 @@ describe('physical scene passes', () => {
     expect(passes.ground).toEqual([timber]);
     expect(passes.objects).toEqual([timber, metal]);
   });
+  /* A floor is laid in the footprint in its own material, in place of any painted deck. */
+  it('lays a structure’s floor in the ground pass, as the structure itself', () => {
+    const metal = element('metal', 'structure', {
+      symbol: 'pergola',
+      material: 'aluminium-dark',
+      structure: { floor: 'porcelain' },
+    });
+    const gazebo = element('gazebo', 'structure', { symbol: 'gazebo', structure: { floor: 'stone-setts' } });
+    const passes = scenePasses([metal, gazebo]);
+    expect(passes.ground.map((item) => [item.id, item.material])).toEqual([
+      ['metal', 'porcelain'],
+      ['gazebo', 'stone-setts'],
+    ]);
+    expect(passes.objects).toEqual([metal, gazebo]);
+  });
   it('clears nearby furniture and plants without repainting for distant objects', () => {
     const bed = element('bed', 'planting-bed');
     const chair = element('chair', 'furniture');

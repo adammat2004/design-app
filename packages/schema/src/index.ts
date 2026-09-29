@@ -57,6 +57,9 @@ export * from './plan/structure/surroundings.js';
 export * from './plan/structure/capacity.js';
 export * from './plan/structure/configure.js';
 export * from './plan/structure/resize.js';
+export * from './plan/structure/neighbourhood.js';
+export * from './plan/structure/floor.js';
+export * from './plan/structure/furnish.js';
 export * from './plan/material-patterns.js';
 // The design agent's vocabulary. Before `concepts.js`, which carries three of its types.
 export * from './plan/design/vocabulary.js';
