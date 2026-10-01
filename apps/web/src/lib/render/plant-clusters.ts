@@ -1,4 +1,4 @@
-import { boundingBox, moduleRandom, type Point } from '@garden-studio/schema';
+import { boundingBox, plantingClusterAt, type Point } from '@garden-studio/schema';
 import type { RenderPlant, RenderNode } from './scene';
 
 /** Render-lab comparison only; never persisted or included in scene compilation. */
@@ -18,22 +18,8 @@ export interface PlantCluster {
   massEligible: boolean;
 }
 
-/** A jittered world-space Voronoi field creates rounded drifts instead of square species cells. */
-export function plantingClusterAt(seed: string, at: Point): { id: string; centre: Point; family: number } {
-  const size = 2.4;
-  const col = Math.floor(at.x / size), row = Math.floor(at.y / size);
-  let winner = { id: '', centre: at, family: 0 }, nearest = Infinity;
-  for (let y = row - 1; y <= row + 1; y++) for (let x = col - 1; x <= col + 1; x++) {
-    const random = moduleRandom(`${seed}:drift`, x, y);
-    const centre = { x: (x + 0.2 + random() * 0.6) * size, y: (y + 0.2 + random() * 0.6) * size };
-    const distance = (at.x - centre.x) ** 2 + (at.y - centre.y) ** 2;
-    if (distance < nearest) {
-      nearest = distance;
-      winner = { id: `${x},${y}`, centre, family: random() };
-    }
-  }
-  return winner;
-}
+/** Drifts are geometry, and live with the placements in the schema. */
+export { plantingClusterAt };
 
 export function compilePlantClusters(plants: RenderPlant[]): PlantCluster[] {
   const groups = new Map<string, { centre: Point; plants: RenderPlant[] }>();

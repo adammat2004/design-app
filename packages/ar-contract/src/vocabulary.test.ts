@@ -1,6 +1,6 @@
-import { SYMBOLS, SymbolIdSchema, type SymbolId } from '@garden-studio/schema';
+import { OpeningTypeSchema, SYMBOLS, SymbolIdSchema, type SymbolId } from '@garden-studio/schema';
 import { describe, expect, it } from 'vitest';
-import { ModelKeySchema } from './vocabulary.js';
+import { ModelKeySchema, OpeningKindSchema } from './vocabulary.js';
 
 /**
  * The contract keeps its own copy of the product symbols so the phone never imports the schema.
@@ -28,5 +28,11 @@ describe('ModelKey', () => {
     const products = SymbolIdSchema.options.filter((id) => !structures.has(id));
     expect([...ModelKeySchema.options].sort()).toEqual([...products].sort());
     for (const id of structures) expect(SYMBOLS[id].category).toBe('structure');
+  });
+});
+
+describe('OpeningKind', () => {
+  it('is exactly the plan’s opening types', () => {
+    expect([...OpeningKindSchema.options].sort()).toEqual([...OpeningTypeSchema.options].sort());
   });
 });

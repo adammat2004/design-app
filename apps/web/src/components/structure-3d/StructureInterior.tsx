@@ -17,10 +17,14 @@ import {
 import {
   contextSolidMaterial,
   cushionMaterial,
+  dressFloor,
   furnitureMaterial,
   PIECE_OUTLINE,
   rasterSurfaceMaterial,
 } from '@/lib/structures/materials-3d';
+import { furnitureModel } from '@/lib/structures/furniture-models';
+import { fitToFootprint } from '@/lib/structures/model-fit';
+import { useResource } from '@/lib/structures/resource';
 import { rasterUv, surfaceRaster } from '@/lib/structures/surface-raster';
 import {
   extrudedGeometry,
@@ -39,6 +43,11 @@ import { usePlanEditorStore } from '@/state/plan-editor-store';
  * into plan metres, and handed to `movePieceLive`, which holds the piece inside the structure. The
  * whole drag is one gesture, so one undo entry. The camera stops orbiting while a piece is held,
  * or the drag would also swing the view.
+ *
+ * A piece with a model in the furniture library (`furniture-models.ts`) is drawn as that model, fitted
+ * into its footprint by one uniform scale (`fitToFootprint`) and dressed in the piece's own material;
+ * until it arrives, if it never does, or if it would not fit, it is the boxes `furnitureParts` draws,
+ * at the same places — the layouts are shared, so nothing jumps when the model lands.
  */
 export function StructureInterior({
   pieces,
@@ -89,13 +98,22 @@ function Piece({
   const drag = useRef<{ offset: LocalPoint; pointerId: number } | null>(null);
   const plane = useMemo(() => new Plane(new Vector3(0, 1, 0), -floor), [floor]);
 
+  const model = useResource(furnitureModel(piece.symbol));
+  const fit = useMemo(
+    () => (model ? fitToFootprint(model.entry.naturalSize, piece.ring, piece.base + floor) : null),
+    [model, piece.ring, piece.base, floor],
+  );
+
   const geometries = useMemo(
     () =>
-      furnitureParts(piece.symbol, piece.ring, piece.base + floor, piece.height).flatMap((part) => {
+      (fit
+        ? []
+        : furnitureParts(piece.symbol, piece.ring, piece.base + floor, piece.height)
+      ).flatMap((part) => {
         const geometry = extrudedGeometry(part.ring, part.base, part.height);
         return geometry ? [{ geometry, cushion: part.cushion === true }] : [];
       }),
-    [piece, floor],
+    [piece, floor, fit],
   );
   useEffect(() => () => geometries.forEach((part) => part.geometry.dispose()), [geometries]);
 
@@ -160,6 +178,26 @@ function Piece({
       onPointerUp={release}
       onPointerCancel={release}
     >
+      {model && fit ? (
+        <mesh
+          geometry={model.geometry}
+          material={material}
+          position={fit.position}
+          rotation-y={fit.yaw}
+          scale={fit.scale}
+          castShadow
+          receiveShadow
+        >
+          {outline ? (
+            <Outlines
+              thickness={selected ? 3 : 2}
+              color={PIECE_OUTLINE}
+              opacity={selected ? 1 : 0.6}
+              transparent
+            />
+          ) : null}
+        </mesh>
+      ) : null}
       {geometries.map(({ geometry, cushion }) => (
         <mesh
           key={geometry.uuid}
@@ -210,12 +248,15 @@ export function StructureFloor({
       FLOOR_THICKNESS,
       raster ? rasterUv(raster, frame) : tiledUv(1, 1),
       FLOOR_THICKNESS,
+      // Relief under the painted joints, laid in metres (`dressFloor`).
+      (point) => [point.x, -point.z],
     );
     if (!geometry) return null;
     if (raster) {
       const { material, texture } = rasterSurfaceMaterial(
         raster.canvas as unknown as HTMLCanvasElement,
       );
+      if (floor.material) dressFloor(material, floor.material);
       return { geometry, material, dispose: () => (texture.dispose(), material.dispose()) };
     }
     return {

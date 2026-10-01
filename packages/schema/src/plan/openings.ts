@@ -9,7 +9,9 @@ import { clampOffset, spanFits, spanOnSegment, spansOverlap } from './along-edge
 import {
   isGardenDoor,
   isGroundWindow,
+  OPENING_HEIGHTS,
   OPENINGS_BY_WALL,
+  STOREY_HEIGHT,
   type Opening,
   type OpeningType,
 } from './opening.js';
@@ -417,4 +419,33 @@ export function primaryDoor(house: HouseFootprint | null): Opening | null {
   const candidates = patio.length > 0 ? patio : doors;
 
   return candidates.reduce((widest, door) => (door.width > widest.width ? door : widest));
+}
+
+/** A door or a window resolved in plan metres: its span on the wall, which way is out, sill and head. */
+export interface OpeningSpan {
+  opening: Opening;
+  a: Point;
+  b: Point;
+  outward: Point;
+  /** Metres above the house's ground: the sill, and the head. */
+  bottom: number;
+  top: number;
+}
+
+/**
+ * Every opening that resolves, stood up: its span and outward direction from `openingSegment` and
+ * `openingNormal`, the sill from its storey and `sillHeight`, the head `OPENING_HEIGHTS` above that.
+ * One rule for every 3D view — the structure editor's neighbourhood and the scene the phone reads —
+ * so a door is the same height in both. One that no longer resolves is skipped, as everywhere.
+ */
+export function openingSpans(house: HouseFootprint): OpeningSpan[] {
+  const spans: OpeningSpan[] = [];
+  for (const opening of houseOpenings(house)) {
+    const span = openingSegment(house, opening);
+    const outward = openingNormal(house, opening);
+    if (!span || !outward) continue;
+    const bottom = opening.floorLevel * STOREY_HEIGHT + opening.sillHeight;
+    spans.push({ opening, a: span[0], b: span[1], outward, bottom, top: bottom + OPENING_HEIGHTS[opening.type] });
+  }
+  return spans;
 }

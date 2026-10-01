@@ -15,6 +15,8 @@ import { DesignScoreSchema } from './design/design-score.js';
 import { hashString } from './prng.js';
 import { formatArea, formatLength, formatLengthValue, type Unit } from './units.js';
 import { ZoneIdSchema } from './zone-id.js';
+import { BedPlantingSchema } from './plants/mixes.js';
+import { EnclosureSchema } from './enclosure.js';
 
 /**
  * What a generated design concept is, as data.
@@ -65,6 +67,12 @@ export const ElementCategorySchema = z.enum([
    */
   'lighting',
   'existing-feature',
+  /**
+   * A fence, a screen, a wall, a hedge or a kerb the design proposes, drawn as a line. See
+   * `enclosure.ts`: the survey's own sides stay in `site.boundaryStyles`, and one of these laid along
+   * the property's edge replaces what is there without touching them.
+   */
+  'enclosure',
 ]);
 export type ElementCategory = z.infer<typeof ElementCategorySchema>;
 
@@ -242,8 +250,33 @@ export const DesignElementSchema = z.object({
    * the editor eventually change one bed's style without touching its neighbours.
    */
   plantingStyle: z.string().optional(),
+  /**
+   * A bed's own mix of species, overriding the mix its material names — see `plants/mixes.ts`.
+   * Absent on nearly every bed: a bed made of a named mix takes that mix, and one of the five older
+   * planting materials names a kind of planting rather than species. Optional, so no version bump.
+   */
+  planting: BedPlantingSchema.optional(),
+  /**
+   * What a proposed fence, screen, wall, hedge or kerb is. Only on the `enclosure` category, whose
+   * polyline is its line and whose width is its thickness; its height is `height`, and a hedge names
+   * its species through `plantId`. See `enclosure.ts`.
+   */
+  enclosure: EnclosureSchema.optional(),
   /** Hidden from the plan and from the area summary, without being deleted. */
   hidden: z.boolean().optional(),
+  /**
+   * Held still by the user: no move, resize, reshape or delete by hand, and **nothing at all** by the
+   * AI designer — which is the point of it. Somebody who has placed the terrace exactly where the
+   * builder quoted for it can then ask for a redesign without the redesign moving it.
+   *
+   * By hand, what does not move anything stays allowed — a name, a material, its edging — exactly as
+   * for the locked ground layer; the lock is on geometry. The AI is held to the stricter rule because
+   * a lock that the designer could still re-materialise is a lock nobody could trust.
+   *
+   * Optional, so every stored plan reads as unlocked, with no version bump. See `isLocked`, and
+   * `isGroundLayer` for the other thing "locked" used to mean.
+   */
+  locked: z.boolean().optional(),
   /**
    * How a configurable structure — a pergola, a gazebo — is built: its roof, side screens, lighting
    * and preset. See `plan/structure/config.ts`.
@@ -399,6 +432,9 @@ export function layoutFingerprint(elements: DesignElement[]): string {
     element.material ?? '',
     element.name ?? '',
     element.hidden === true,
+    element.locked === true,
+    JSON.stringify(element.planting ?? null),
+    JSON.stringify(element.enclosure ?? null),
     JSON.stringify(element.shape),
   ]);
   return hashString(JSON.stringify(shape)).toString(36);
@@ -413,7 +449,24 @@ export function layoutFingerprint(elements: DesignElement[]): string {
  * turning the lawn into gravel is a real design decision — but their outline is fixed.
  */
 export function isLocked(element: DesignElement): boolean {
+  return isGroundLayer(element) || element.locked === true;
+}
+
+/**
+ * Whether this is the ground layer laid over a whole zone — the base fill every chosen zone gets.
+ *
+ * This is the rule `isLocked` was before a user could lock things, and it still answers a different
+ * question from "may this change": the ground under everything is never an obstacle, a neighbour to
+ * be pushed or a host to be carried with. A shed the user has locked still is all three, so every
+ * caller asking *that* question asks this, and only the "may not change" callers ask `isLocked`.
+ */
+export function isGroundLayer(element: DesignElement): boolean {
   return element.role === 'fill' && element.fillKind === 'base';
+}
+
+/** Locked by the user, as distinct from being the ground layer. */
+export function isUserLocked(element: DesignElement): boolean {
+  return element.locked === true;
 }
 
 /* ---------------------------------------------------------------- derived reads */

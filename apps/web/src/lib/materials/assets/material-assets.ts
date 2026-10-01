@@ -1,5 +1,5 @@
-import type { MaterialId, SymbolId } from '@garden-studio/schema';
-import { ASSET_IDS, type AssetId } from './asset-spec';
+import { speciesById, type MaterialId, type SymbolId } from '@garden-studio/schema';
+import { ASSET_FAMILIES, ASSET_IDS, type AssetId } from './asset-spec';
 import { assetsMatching, type TaxonQuery } from './taxonomy';
 
 /**
@@ -40,6 +40,11 @@ export interface MaterialAssetSpec {
   texture?: AssetId;
   sprites?: TaxonQuery;
   flowers?: { sprite: AssetId; share: number };
+  /**
+   * One picture, pinned: a species' own sprite, in place of the query's choice. A planting mix draws
+   * each species as itself — the lavender as the lavender — which a query over a family cannot say.
+   */
+  pin?: { family: AssetId; variant: number };
 }
 
 export const MATERIAL_ASSETS: Partial<Record<MaterialId, MaterialAssetSpec>> = {
@@ -96,6 +101,25 @@ export const MATERIAL_ASSETS: Partial<Record<MaterialId, MaterialAssetSpec>> = {
     sprites: { group: 'vegetation', type: 'hedge-crown' },
   },
   'ground-cover': { texture: 'tex-soil', sprites: { group: 'vegetation', type: 'ground-cover' } },
+  /*
+   * The mixes' fallbacks: what a mix bed draws where its own species do not — the flat and technical
+   * drawings, and the ground under the layers. The sunny mix stands in gravel, which is what it is.
+   */
+  'mix-shade-woodland': { texture: 'tex-soil', sprites: { group: 'vegetation', type: ['perennial', 'ground-cover'] } },
+  'mix-sunny-gravel': { texture: 'tex-gravel-paving', sprites: { group: 'vegetation', type: ['perennial', 'grass-ornamental'] } },
+  'mix-pollinator': {
+    texture: 'tex-soil',
+    sprites: { group: 'vegetation', type: 'perennial' },
+    flowers: { sprite: 'plant-flower', share: 0.25 },
+  },
+  'mix-cottage-border': {
+    texture: 'tex-soil',
+    sprites: { group: 'vegetation', type: ['perennial', 'shrub'] },
+    flowers: { sprite: 'plant-flower', share: 0.25 },
+  },
+  'mix-prairie-grasses': { texture: 'tex-soil', sprites: { group: 'vegetation', type: ['grass-ornamental', 'perennial'] } },
+  'mix-evergreen-structure': { texture: 'tex-soil', sprites: { group: 'vegetation', type: 'shrub' } },
+  'mix-low-maintenance': { texture: 'tex-soil', sprites: { group: 'vegetation', type: ['shrub', 'ground-cover'] } },
 
   /* ---- gravel-mulch ---- */
   'bark-mulch': { texture: 'tex-bark-mulch' },
@@ -157,7 +181,9 @@ export const TREE_CANOPY_QUERIES: Record<string, TaxonQuery> = {
  * no symbol at all — still gets a canopy, which is what every tree got before species existed.
  */
 export function canopiesForSymbol(symbol: string | undefined, plantId?: string): AssetId[] {
-  if (plantId === 'acer-palmatum-red') return ['tree-japanese-maple'];
+  /* A tree with a species draws that species' own family; its variant is pinned by `speciesPin`. */
+  const art = speciesById(plantId)?.art;
+  if (art && isAssetId(art.family)) return [art.family];
   const query = symbol ? TREE_CANOPY_QUERIES[symbol] : undefined;
   const found = query ? assetsMatching(query) : [];
   return found.length > 0 ? found : CANOPY_SPRITES;
@@ -191,6 +217,8 @@ export const SYMBOL_SPRITES: Partial<Record<SymbolId, AssetId>> = {
   'light-recessed': 'light-recessed',
   'light-wall': 'light-wall',
   specimen: 'plant-shrub',
+  /* Clipped, and drawn as the clipped thing it is — it fell through to a tree's canopy before. */
+  'shrub-topiary': 'plant-shrub-topiary',
   /*
    * The three structural shrubs, mapped to the families Phase D generated for them. Architectural
    * gets its own; the other two share the general shrub families, which is honest — a photograph of
@@ -274,4 +302,19 @@ export function assetsForElements(elements: { material?: string; symbol?: string
 
   // Manifest order, for the reason `assetsMatching` returns it: stable and inspectable.
   return ASSET_IDS.filter((id) => wanted.has(id));
+}
+
+function isAssetId(id: string): id is AssetId {
+  return id in ASSET_FAMILIES;
+}
+
+/**
+ * The 0-based variant a placed plant is pinned to by its species, or `null` for one with no species
+ * — which keeps the seeded choice it always had. The index is into the family's variants, which is
+ * what the canopy and sprite pickers choose between once a species has narrowed them to one family.
+ */
+export function speciesPin(plantId: string | undefined): { family: AssetId; index: number } | null {
+  const art = speciesById(plantId)?.art;
+  if (!art || !isAssetId(art.family)) return null;
+  return { family: art.family, index: art.variant - 1 };
 }

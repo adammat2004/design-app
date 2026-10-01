@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Leaf, X } from 'lucide-react';
-import { PLANT_CATALOGUE } from '@garden-studio/schema';
+import { elementMeasures, PLANT_CATALOGUE } from '@garden-studio/schema';
 import { CATEGORY_COLOURS, elementLabel } from '@/lib/concept-colours';
 import { elementArea, type DesignElement } from '@/lib/concepts';
 import type { Subject } from '@/lib/smart-suggestions';
-import { formatArea } from '@/lib/units';
+import { formatArea, formatLength } from '@/lib/units';
 import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { useAssistantStore, type AgentPhase } from '@/state/assistant-store';
 import { useBoundaryStore } from '@/state/boundary-store';
@@ -17,6 +17,7 @@ import { GardenActions } from './GardenActions';
 import { InspectorComposer } from './InspectorComposer';
 import { RecentActivity } from './RecentActivity';
 import { SelectedElementPanel } from './SelectedElementPanel';
+import { SelectionPanel } from './SelectionPanel';
 import { SmartSuggestions } from './SmartSuggestions';
 import { WorkingState } from './WorkingState';
 
@@ -41,6 +42,8 @@ const GARDEN: Subject = { kind: 'garden' };
  */
 export function EditorInspector() {
   const focus = usePlanEditorStore(selectedElement);
+  /* Several selected: the inspector is about the group, and the controls act on all of it. */
+  const count = usePlanEditorStore((state) => state.selectedIds.length);
   const phase = useAssistantStore((state) => state.phase);
   const available = useAssistantStore((state) => state.available);
   const probeAvailability = useAssistantStore((state) => state.probeAvailability);
@@ -110,6 +113,8 @@ export function EditorInspector() {
 
       {busy ? (
         <WorkingHeader phase={phase} />
+      ) : count > 1 ? (
+        <SelectionHeader count={count} />
       ) : focus ? (
         <ElementHeader focus={focus} />
       ) : (
@@ -117,7 +122,15 @@ export function EditorInspector() {
       )}
 
       <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto lg:min-h-0">
-        {busy ? <WorkingState /> : focus ? <SelectedElementPanel /> : <GardenActions noKey={noKey} />}
+        {busy ? (
+          <WorkingState />
+        ) : count > 1 ? (
+          <SelectionPanel />
+        ) : focus ? (
+          <SelectedElementPanel />
+        ) : (
+          <GardenActions noKey={noKey} />
+        )}
 
         {/*
           Mounted always, hidden when idle: `ai-activity-panel` carries the run's final state
@@ -144,6 +157,7 @@ function ElementHeader({ focus }: { focus: DesignElement }) {
   const unit = useBoundaryStore((state) => state.unit);
   const species = focus.plantId ? PLANT_CATALOGUE[focus.plantId] : undefined;
   const label = elementLabel(focus);
+  const measures = elementMeasures(focus);
 
   return (
     <header data-testid="agent-focus" className={headerClass}>
@@ -162,6 +176,26 @@ function ElementHeader({ focus }: { focus: DesignElement }) {
           <span data-testid="element-area" className="tabular-nums">
             {formatArea(elementArea(focus), unit)}
           </span>
+          {measures.length !== null ? (
+            <>
+              {' · '}
+              <span data-testid="element-length" className="tabular-nums">
+                {formatLength(measures.length, unit)} long
+              </span>
+            </>
+          ) : null}
+          {measures.perimeter !== null ? (
+            <>
+              {' · '}
+              <span
+                data-testid="element-perimeter"
+                className="tabular-nums"
+                title="Distance round the edge"
+              >
+                {formatLength(measures.perimeter, unit)} edge
+              </span>
+            </>
+          ) : null}
         </p>
       </div>
       <button
@@ -170,6 +204,27 @@ function ElementHeader({ focus }: { focus: DesignElement }) {
         onClick={() => usePlanEditorStore.getState().select(null)}
         aria-label={`Stop talking about ${label}`}
         className="relative shrink-0 rounded-full p-1.5 text-garden-muted transition-colors before:absolute before:inset-0 before:-m-1.5 before:content-[''] hover:bg-garden-sage hover:text-garden-ink focus-visible:ring-2 focus-visible:ring-garden-ai focus-visible:outline-none"
+      >
+        <X aria-hidden className="h-3.5 w-3.5" />
+      </button>
+    </header>
+  );
+}
+
+function SelectionHeader({ count }: { count: number }) {
+  return (
+    <header data-testid="selection-header" className={headerClass}>
+      <GardenMark />
+      <div className="min-w-0 flex-1">
+        <h2 className="text-sm font-semibold text-garden-ink">{count} selected</h2>
+        <p className="mt-0.5 text-xs text-garden-muted">Changes here apply to all of them.</p>
+      </div>
+      <button
+        type="button"
+        data-testid="selection-clear"
+        onClick={() => usePlanEditorStore.getState().select(null)}
+        aria-label="Clear the selection"
+        className="relative shrink-0 rounded-full p-1.5 text-garden-muted transition-colors hover:bg-garden-sage hover:text-garden-ink focus-visible:ring-2 focus-visible:ring-garden-ai focus-visible:outline-none"
       >
         <X aria-hidden className="h-3.5 w-3.5" />
       </button>

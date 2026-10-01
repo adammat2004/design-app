@@ -230,6 +230,56 @@ describe.skipIf(connection === null)('the whole assistant pipeline', () => {
     for (const refusal of unplaceable) expect(refusal.reason.length).toBeGreaterThan(10);
   });
 
+  /*
+   * The same claim for the Phase 2 additions: a mix chosen as a material, a tree added by species
+   * along a fence, and a screen laid on the fence line. The screen is the one to watch — it is judged
+   * on its centreline, and an executor asking the polygon question would refuse the very line the
+   * planner drew on the boundary.
+   */
+  it('accepts a planting mix, a named tree and a screen on the fence line', async () => {
+    const BED = element({
+      id: 'e-bed',
+      name: 'Rear border',
+      category: 'planting-bed',
+      material: 'mixed-border',
+      shape: { kind: 'rect', centre: { x: 7, y: 1.2 }, width: 12, depth: 2, rotation: 0 },
+    });
+    const document = plan([TERRACE, STORE, PATH, BED]);
+    const { changes, unplaceable } = await planner.plan(document, [
+      { kind: 'material', target: { elementIds: ['e-bed'] }, materialId: 'mix-shade-woodland' },
+      {
+        kind: 'add',
+        category: 'planting-bed',
+        name: 'Silver birch',
+        footprint: { kind: 'point', radius: 2 },
+        zone: 'back',
+        affinity: 'along-boundary',
+      },
+      {
+        kind: 'add',
+        category: 'enclosure',
+        name: 'Slatted screen',
+        footprint: { kind: 'strip', width: 0.1 } as never,
+        zone: 'back',
+        affinity: 'along-boundary',
+      },
+    ]);
+
+    expect(unplaceable.map((entry) => entry.reason)).toEqual([]);
+    expect(changes).toHaveLength(3);
+
+    const run = runFromProposal(changes, 'Plant it up and screen it', 'pipeline-phase-2')!;
+    let allocated = 0;
+    const prepared = prepareRun(run, document.layout.elements, {
+      boundary: BOUNDARY,
+      /* One id per add: two adds in one run must not share one. */
+      allocateId: () => `new-${(allocated += 1)}`,
+    });
+    expect(prepared.refused).toEqual([]);
+    expect(prepared.result.some((element) => element.category === 'enclosure')).toBe(true);
+    expect(prepared.result.find((element) => element.id === 'e-bed')?.material).toBe('mix-shade-woodland');
+  });
+
   it('carries a turn and a redraw all the way to the canvas', async () => {
     /*
      * Named operations rather than a count, because `from-proposal` derives the kind from the two

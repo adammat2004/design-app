@@ -91,6 +91,50 @@ describe('planSchedule', () => {
     ...over,
   });
 
+  it('gives a loose fill a volume at its laid depth', () => {
+    const [gravel] = planSchedule([{ ...surface(12, 'decorative-gravel'), category: 'gravel-mulch' }]);
+    // 12 m² at 50 mm is 0.6 m³, which is what a merchant sells it by.
+    expect(gravel!.volumeM3).toBeCloseTo(0.6);
+    expect(gravel!.units).toBeNull();
+  });
+
+  it('counts a bed planted from a mix, and gives a bed without one a dash', () => {
+    const lines = planSchedule([bed(10, 'mix-sunny-gravel'), bed(10, 'mixed-border')]);
+    const mixed = lines.find((line) => line.materialId === 'mix-sunny-gravel');
+    const plain = lines.find((line) => line.materialId === 'mixed-border');
+    expect(mixed!.units).toBeGreaterThan(40);
+    expect(mixed!.unitLabel).toBe('plants');
+    expect(plain!.units).toBeNull();
+  });
+
+  it('counts placed plants by species, apart from the beds of the same material', () => {
+    const tree = (id: string): DesignElement => ({
+      ...bed(0, 'shrubs', { id }),
+      id,
+      plantId: 'betula-utilis-jacquemontii',
+      shape: { kind: 'point', at: { x: 0, y: 0 }, radius: 2 },
+    });
+    const lines = planSchedule([tree('t1'), tree('t2'), bed(8, 'shrubs')]);
+    const birch = lines.find((line) => line.materialId.startsWith('plant:'));
+    expect(birch).toMatchObject({ units: 2, unitLabel: 'trees', areaSqm: 0 });
+    expect(lines.find((line) => line.materialId === 'shrubs')!.areaSqm).toBeCloseTo(8);
+  });
+
+  it('measures a proposed fence by the metre along its line', () => {
+    const [screen] = planSchedule([
+      {
+        id: 'screen',
+        category: 'enclosure',
+        role: 'feature',
+        zone: 'back',
+        material: 'slatted-screen',
+        enclosure: { kind: 'screen' },
+        shape: { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 6.2, y: 0 }], width: 0.08 },
+      },
+    ]);
+    expect(screen).toMatchObject({ lengthM: expect.closeTo(6.2), areaSqm: 0, units: 7, unitLabel: 'm' });
+  });
+
   it('groups by material and sums the areas', () => {
     const lines = planSchedule([
       surface(30, 'stone-pavers'),
@@ -164,7 +208,7 @@ describe('planSchedule', () => {
   });
 
   it('counts a tree without measuring it', () => {
-    // A point has no area, so it contributes to the count and nothing to the square metres.
+    // A point has no area, so it is ordered by the plant: one item, no square metres.
     const tree: DesignElement = {
       id: 'tree',
       category: 'planting-bed',
@@ -178,7 +222,7 @@ describe('planSchedule', () => {
 
     expect(line!.elementCount).toBe(1);
     expect(line!.areaSqm).toBe(0);
-    expect(line!.units).toBeNull();
+    expect(line!.units).toBe(1);
   });
 
   it('leaves out what the plan does not show', () => {

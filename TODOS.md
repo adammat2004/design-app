@@ -9,6 +9,49 @@ Implementation plan: `~/.claude/plans/can-you-look-at-peaceful-lemon.md`
 
 ---
 
+## Done — plants, walls and fences (Phase 2 of `docs/investigations/landscape-software-gap-analysis.md`, 30 Sep 2026)
+
+Built: a species catalogue on existing art, planting mixes as bed materials with counts and a light
+verdict, enclosures (fence, screen, wall, hedge, railing, kerb, opening) that replace the survey where
+they lie along it, kept trees and fences that keep their nature, species and mixes chosen by the
+generator, and a designer that adds all of it by name. See CLAUDE.md. What is left open:
+
+- [ ] **Review the catalogue's facts.** `docs/plants/catalogue.md` is the table: heights, spreads,
+      spacings, sun, hardiness and flowering were written by hand and nobody with a nursery list has
+      read them yet. **Effort:** S.
+- [ ] **Climbers and bulbs.** Nothing draws either, so neither is in the catalogue: a climber wants a
+      host (a fence, a pergola post), a bulb a season. **Effort:** M.
+- [ ] **A garden-wide sun map.** `sunHours` answers for points; a shaded raster over the whole plan is
+      what a designer reads first. `bedExposure` is already the sampling. **Effort:** M.
+- [ ] **A kerb in 3D, and an enclosure the structure editor can open.** The neighbourhood draws
+      proposed fences and walls as boundary solids; a kerb has no solid, and a garden wall has no
+      configurator. **Effort:** M.
+- [ ] **The generator proposes no enclosures.** A screen where `lowSides` says a seat is exposed is
+      the obvious first one; the scorer already counts it. **Effort:** M.
+- [ ] **"Back to the mix" after editing a generated bed's copy of a preset** has nowhere to go back
+      to, because the bed's material is not the mix; the preset has to be picked again. **Effort:** S.
+- [ ] **A reroute that crosses a proposed wall** is refused by obstacles, but a *path the user drew*
+      across one is not flagged by anything. **Effort:** S.
+
+## Done — the editor as a design tool (Phase 0 and 1 of `docs/investigations/landscape-software-gap-analysis.md`, 29–30 Sep 2026)
+
+Built: keyboard shortcuts from anywhere, snapping (one engine in `plan/snap/`), typed rotation, lengths
+and perimeters, view groups, the PNG title strip, lengths-and-counts takeoff, draw tools (rectangle,
+shape, path), corner editing, free shapes, multi-select with marquee and group actions, the user lock
+(honoured by the AI end to end), and dimensions and clearances. See CLAUDE.md. What is left open:
+
+- [ ] **Step 1's house alignment still reaches a fixed 0.3 m.** `moveHouseLive` pulls through
+      `snapCentreToAlignment`, which takes no zoom; steps 2 and 5 are screen-relative. **Effort:** S.
+- [ ] **Typed side lengths show no pinned-corner highlight.** Step 1's `SideLengthsPanel` rings the
+      corner that stays and dots the one that moves; the element's Sides list does not yet. **Effort:** S.
+- [ ] **A group cannot be rotated or resized**, only moved, nudged, duplicated, deleted, locked and
+      re-materialised. A group rotate needs a pivot and a legality rule for the whole set. **Effort:** M.
+- [ ] **One write path for manual and AI edits** (the gap analysis's "command convergence"). Deferred
+      on purpose: nothing in Phase 1 needed it, and it is the riskiest change. **Effort:** M.
+- [ ] **The generator's `snapTo`** (`compose.ts`) is a rect-edge closure in a local frame and was left
+      out of the shared engine. Fold it in only if a second caller wants it. **Effort:** S.
+- [ ] **A path cannot be converted from a rectangle, or a polygon to a path.** Only rect → polygon.
+
 ## In flight — the 3D structure editor (28 Sep 2026)
 
 Visualise is gone; a focused React Three Fiber editor opens a pergola or a gazebo from the inspector's
@@ -25,9 +68,43 @@ resize that keeps what the structure is against and names what is in the way.
       planner mapping it onto `mergeStructureConfig` / `height`. **Effort:** M.
 - [ ] **An absolute resize intent.** "Make the pergola 4 metres wide" can only be a `factor` today,
       which the model has to compute from an inventory it reads imprecisely. **Effort:** S.
-- [ ] **A production GLB per frame model.** `lib/structures/model-registry.ts` has the `gltf` shape,
-      keyed by `structure.model` since presets became bundles, and no entry uses it. Needs a model whose nodes are named by group, placed from the part boxes, within
-      the AR budgets. **Effort:** M, mostly sourcing.
+- [x] ~~A production GLB per frame model.~~ **Decided against (30 Sep 2026)** and recorded in the
+      registry and CLAUDE.md: frames are drawn in code (phase 3b); `gltf` is kept for fixed-size
+      attachments only.
+- [x] **Photoreal phase 1: light and post** (30 Sep 2026). A CC0 overcast HDRI checked in and fetched
+      by `tools/assets fetch:pbr`; N8AO, bloom, PBR Neutral and SMAA on the `high` tier; nothing in the
+      view suspends on a file any more (it did, and a 404 took the Canvas down). See "Towards a
+      photoreal 3D view" in CLAUDE.md.
+- [x] **Photoreal phase 3a: UVs in metres** (30 Sep 2026). `partGeometry` builds each part at its real
+      size, grain along the long side, a per-part offset; `extrudedGeometry` has metre UVs too.
+- [x] **Photoreal phase 2: PBR materials** (30 Sep 2026). Ten CC0 sets, 5.8 MB, pinned and packed by
+      `fetch:pbr`; calibrated so a textured surface averages to its swatch; floors take relief on
+      `uv1` under the plan's raster. See "Towards a photoreal 3D view" in CLAUDE.md.
+- [ ] **Decking and porcelain floors take roughness only.** Decking's grain would have to follow the
+      raster's board direction; porcelain wants a faint tile-face set if it reads too plain.
+      **Effort:** S.
+- [ ] **Shader-compile hitch when a set lands.** Dressing a material in place recompiles its program;
+      `gl.compileAsync(scene)` after the upgrade would hide it. Not measured. **Effort:** S.
+- [x] **Photoreal phase 3b: bevels and profiles** (30 Sep 2026). Eased edges by stock, top-edge
+      rafter tails, aerofoil louvres, a galvanised post shoe inside the post's box. No bolts: the
+      beams bear on the posts, so a bolt would pass through nothing.
+- [x] **Photoreal phase 4: furniture GLBs** (30 Sep 2026). Dining sets for four and six, the lounge
+      set and the bench, from Poly Haven CC0 models, composed at the shared layouts, re-skinned in the
+      user's furniture material, fitted by uniform scale with a fallback to the boxes. 269 kB.
+- [ ] **Sun lounger, barbecue, parasol and planter have no model.** No CC0 library has them
+      photographed at a usable size. The options are commissioning four models, a stylised CC0 kit
+      (Kenney / Quaternius) re-skinned, or an image-to-3D service — each is a sourcing decision, not
+      code; `model-spec.ts` takes a new entry and the rest follows. **Effort:** S per model once
+      sourced.
+- [ ] **Chairs in the surroundings are still boxes.** Furniture outside the structure is context and
+      drawn flat; giving it the models (in the muted material) would cost little once wanted.
+      **Effort:** S.
+- [ ] **Photoreal 3c, needs sign-off:** inset classic posts ~0.2 m so the rafters overhang. The biggest
+      single realism gain; changes `plan-suburban.png` and furniture fit, so `eval:generator` too.
+- [ ] **Measure the 3D chunk.** The post pass, `RGBELoader` and the loaders are behind the
+      `ssr: false` workspace by construction, but the `next build` route table was not compared (the
+      dev server shares `.next`). Expect ~150–250 KB gzip on the structure chunk and none on the
+      editor's first load.
 - [ ] **More structures — only the ones that pass the admission rule** (29 Sep 2026, see
       "What earns 3D" in CLAUDE.md). **Shed next**: door on the rect's local front (+y) pointed by
       `reexpressRect`, pent/apex roof, cladding finish, height; a definition, a `shed` parts builder,
@@ -87,26 +164,56 @@ shared scene format `packages/ar-contract` (draft v0, coordinate convention pinn
 mesh helpers), and an Expo SDK 57 skeleton in `apps/mobile` that lists and opens a hand-written
 sample garden in Expo Go. No AR view, no builder, no endpoint. The roadmap is §13 of the AR doc.
 
-- [ ] **Bind the API to localhost.** `apps/api/src/main.ts` calls `app.listen(port)` with no host,
-      so it accepts connections on every interface while its log line says localhost. There is no
-      auth, so anyone on the same Wi-Fi can read and edit every plan and spend the Anthropic key.
-      `listen(port, process.env.HOST ?? '127.0.0.1')` and a truthful log line. **Do before any phone
-      talks to the API.** Effort: XS.
+- [x] **Bind the API to localhost.** Done 1 Oct 2026: `listen(port, process.env.HOST ?? '127.0.0.1')`
+      and a truthful log line; a request to the LAN address is refused. A phone will need an explicit
+      `HOST`, and read-only share links before that.
 - [ ] **(B) AR spike.** ViroReact in a development build; place the sample garden's 3 × 3 m pergola
       and a 1 m cube on a detected plane; check with a tape measure (within 3%). Measure: custom
       `Mesh` through Viro geometry with a tiled texture, one GLB loads, 300 nodes at 30 fps, and
       Viro autolinking under the pnpm workspace. Decide whether Viro stays.
-- [ ] **(A) Move the pure structure and roof geometry into `packages/schema`.**
-      `apps/web/src/lib/materials/symbols/structures.ts` (pergola posts, shed and gazebo roofs,
-      garden-room parts) and the geometry half of `apps/web/src/lib/render/roof.ts` (`roofFor` mixes
-      it with 2D lighting). The scene builder needs both and cannot import the web app.
-- [ ] **(A) The scene builder: `PlanDocument → ARScene`.** Pure, reusing `geometryOutline`,
-      `boundaryRuns`, `levelBands`, `stepFlight`, `resolveEdges`, `heightFor`, `samplePlanting`.
-      Surfaces cut to be disjoint, meshes triangulated with upward-facing winding (`earcut`, which
-      handles holes), plant instances capped. Golden scenes for the eleven fixture plans, checked in
-      CI.
-- [ ] **(A) "Download AR scene" (`.ar.json`) on the web**, and (B) a file source on the phone:
-      real designs on a phone with no network exposure.
+- [ ] **(A) Move the pure structure geometry into `packages/schema`.**
+      `apps/web/src/lib/materials/symbols/structures.ts` (shed and gazebo roofs, garden-room parts,
+      raised beds). The scene builder needs it and cannot import the web app. **The roof half is
+      done (30 Sep 2026):** `roofFor` is `packages/schema/src/plan/roof.ts`, `ROOF_TONES` stays in
+      the web, and so is the plants split (`plantPlacements`, below).
+- [x] **(A) The scene builder: `PlanDocument → ARScene`, minimum** (30 Sep 2026).
+      `packages/ar-builder`: ground cut to be disjoint (`polygon-clipping`, snapped), triangulated
+      with upward winding (`earcut`), structures, models, plants capped per profile by one ranking.
+      Property tests over the eleven fixture plans (parse, no overlap, area conserved, everything
+      drawn or named, deterministic, phone ⊆ desktop, not mirrored). No golden scene files: the
+      properties are what matter and a golden would fail on every legitimate change.
+- [x] **The whole-garden preview, stage 3** (30 Sep 2026): "View in 3D" on the editor and the review
+      screen, drawing the `ARScene` read-only; e2e in `garden-preview.spec.ts`. See CLAUDE.md.
+- [ ] **Preview follow-ups.** A pergola click opening the configurator is wired and unit-level only —
+      the e2e does not click a 3D object; the review screen cannot open the configurator (no structure
+      editor there) and says nothing about it; furniture draws in the timber fallback material,
+      which reads oddly on a sofa. **Effort:** S each.
+- [x] **(A) The scene builder, depth** (whole-garden preview stage 4, 30 Sep 2026): the roof
+      (`roofSolid`), boundary runs and proposed enclosures as built, retaining faces, edging and
+      kerbs, flights of steps, structure floors. See CLAUDE.md.
+- [x] **Scene contract 0.0.2** (30 Sep 2026): `Mesh.uv`, `ARMaterial.tones` + per-plant `tone`,
+      `species` on plants and models, house `openings`. Additive. **Needs the partner's review**
+      before the phone relies on it (`packages/ar-contract/CHANGELOG.md`).
+- [x] **Stage 5b: the configurator's surroundings onto the builder** (30 Sep 2026). The gaps were
+      closed first — painted ground by `sourceId`, a `hedge` hint in the contract, PBR from `finish:`
+      keys, full `StructureModel`s for neighbouring structures, one group transform — then
+      `structureNeighbourhood`'s classifier was deleted. One plan→3D path now.
+- [ ] **Crowns past the fence.** A full-grown crown centred just inside a border can overhang the
+      boundary line, and in 3D it pokes out beyond the fence. The plan draws the same overhang but
+      paints the fence over it. Clip instance spread to the plot, or hold the crown's reach inside.
+      **Effort:** S.
+- [ ] **Depth follow-ups.** A shed, garden room, greenhouse or raised bed is still the block it
+      occupies — `symbols/structures.ts` moving into the schema (above) is what unblocks their real
+      parts. The house has no doors or windows (stage 5, a contract addition). Retaining and
+      flights have not been looked at in a browser because no fixture has a level change: seed one
+      with a raised terrace and a flight and screenshot it. **Effort:** S–M.
+- [x] **(A) "Download AR scene" (`.ar.json`) on the web** (30 Sep 2026): dev-only, in the editor's
+      toolbar, phone plant budget. **(B) a file source on the phone** is still to do: real designs
+      on a phone with no network exposure.
+- [ ] **(A) The API's `/ar-scene` needs the palette.** The web injects colours from
+      `lib/materials/palette/`; the API has no palette and would build neutral-coloured scenes. Move
+      the tones (not the painter) to a place both can read, or have the endpoint take an appearance
+      table. Decide before the endpoint lands. **Effort:** S.
 - [ ] **(B) Two-point alignment** on the house wall's reference points, with the measured-against-
       design length check.
 - [ ] **(A) `GET /plan-projects/:id/ar-scene`, derived on read**, then read-only share links

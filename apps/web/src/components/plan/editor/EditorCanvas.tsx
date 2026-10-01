@@ -1,12 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Group, Layer, Line, Stage } from 'react-konva';
+import type Konva from 'konva';
 import { CircleAlert, Trash2 } from 'lucide-react';
 import {
-  boundaryRuns,
+  effectiveBoundaryRuns,
+  ENCLOSURE_KINDS,
   computeZones,
+  clearances,
+  cornersOf,
   cutEdgeMasksFor,
+  elementMeasures,
+  geometryVertices,
+  isGroundLayer,
   edgePlanOf,
   freeSpanAt,
   lightDirection,
@@ -19,6 +26,10 @@ import {
   type Point,
 } from '@garden-studio/schema';
 import { EdgeEditLayer } from './EdgeEditLayer';
+import { VertexEditor } from './VertexEditor';
+import { DraftOverlay } from './DraftOverlay';
+import { DrawToolStrip } from './DrawToolStrip';
+import { DRAG_THRESHOLD_PX } from '../use-canvas-viewport';
 import { useEdgeRules } from '@/lib/edge-rules';
 import { draftPolygon, edgeLength, midpoint } from '@/lib/boundary-geometry';
 import { COLOUR } from '@/lib/canvas-colours';
@@ -29,7 +40,7 @@ import {
   type CanvasTransform,
 } from '@/lib/canvas-transform';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
-import { plotDimensionGuides } from '@/lib/guides';
+import { pathDimensionGuides, plotDimensionGuides, type DimensionGuide } from '@/lib/guides';
 import {
   describeElement,
   elementAnchor,
@@ -38,11 +49,12 @@ import {
   type DesignElement,
 } from '@/lib/concepts';
 import { housePolygon, houseSize } from '@/lib/house';
-import { formatLength } from '@/lib/units';
+import { editorShortcut, shortcutTarget } from '@/lib/editor-shortcuts';
+import { isShown } from '@/lib/view-groups';
+import { formatLength, type Unit } from '@/lib/units';
 import { useBoundaryStore } from '@/state/boundary-store';
 import {
   MIN_ELEMENT_SIDE,
-  NUDGE,
   selectedElement,
   usePlanEditorStore,
 } from '@/state/plan-editor-store';
@@ -86,6 +98,7 @@ import { isStageDrag } from '../use-canvas-viewport';
 /** Stable empties, so a canvas with no run in progress never re-memoises its element list. */
 const EMPTY_SUPPRESS: string[] = [];
 const EMPTY_MOTION: MotionEntry[] = [];
+const EMPTY_ELEMENTS: DesignElement[] = [];
 
 export function EditorCanvas() {
   const [richReady, setRichReady] = useState(false);
@@ -136,6 +149,7 @@ export function EditorCanvas() {
    * out, and the old route while its replacement is drawn along. Both need a per-element opacity,
    * which a plan has nowhere to put and should not have.
    */
+  const hiddenGroups = usePlanEditorStore((state) => state.hiddenGroups);
   const motion = aiFrame?.motion ?? EMPTY_MOTION;
   const suppressed = aiFrame?.suppress ?? EMPTY_SUPPRESS;
   const elements = useMemo(() => {
@@ -143,9 +157,11 @@ export function EditorCanvas() {
       motion.filter((entry) => entry.replacesSettled).map((entry) => [entry.element.id, entry.element]),
     );
     return allElements
-      .filter((element) => !element.hidden && !suppressed.includes(element.id))
+      .filter((element) => isShown(element, hiddenGroups) && !suppressed.includes(element.id))
       .map((element) => substitutes.get(element.id) ?? element);
-  }, [allElements, motion, suppressed]);
+  }, [allElements, motion, suppressed, hiddenGroups]);
+  /* The survey's sides as the design leaves them, and the fences and walls it proposes. */
+  const effectiveBoundary = effectiveBoundaryRuns(boundaryDraft, elements);
 
   /** Only the entries the scene could not draw for itself. */
   const overlaidMotion = useMemo(
@@ -208,13 +224,22 @@ export function EditorCanvas() {
    */
   const storedSelection = usePlanEditorStore(selectedElement);
   const selected = aiActive || comparing ? null : storedSelection;
-  const selectedId = usePlanEditorStore((state) => state.selectedId);
+  const selectedIds = usePlanEditorStore((state) => state.selectedIds);
+  /* Handles and a size badge describe one thing; with several selected there is no one to describe. */
+  const single = selectedIds.length <= 1;
+  const gesturingNow = usePlanEditorStore((state) => state.gestureSnapshot !== null);
+  const marquee = usePlanEditorStore((state) => state.marquee);
   /*
    * The selected surface's boundary, open for editing — the Edges tab in the inspector is what opens
    * it, and `edgeEdit` names the host. Resolved against the live plan rather than the settled one,
    * because a handle drag *is* the gesture and has to see its own frames.
    */
   const edgeEdit = usePlanEditorStore((state) => state.edgeEdit);
+  const vertexEdit = usePlanEditorStore((state) => state.vertexEdit);
+  /* The polygon or path whose corners are open — only while it is the selection and not the AI's. */
+  const vertexHost =
+    selected && vertexEdit?.id === selected.id && geometryVertices(selected.shape) ? selected : null;
+  const [hoveredVertexEdge, setHoveredVertexEdge] = useState<number | null>(null);
   const edgeHost = selected && edgeEdit?.hostId === selected.id ? selected : null;
   const edgeView = useMemo(() => {
     if (!edgeHost) return null;
@@ -238,7 +263,20 @@ export function EditorCanvas() {
   const dimensionsVisible = usePlanEditorStore((state) => state.dimensionsVisible);
   const placingCategory = usePlanEditorStore((state) => state.placingCategory);
   const placingSymbol = usePlanEditorStore((state) => state.placingSymbol);
+  const placingEnclosure = usePlanEditorStore((state) => state.placingEnclosure);
+  const placingTool = usePlanEditorStore((state) => state.placingTool);
+  const draftPoints = usePlanEditorStore((state) => state.draftPoints);
+  /* A plain surface is drawn with a tool; a symbol — a bench, a tree — is only ever placed. */
+  const drawingSurface = placingCategory !== null && placingSymbol === null;
+  const drawingCorners = drawingSurface && placingTool !== 'rect';
+  const [rubberBand, setRubberBand] = useState<{ start: Point; current: Point } | null>(null);
+  const [drawPointer, setDrawPointer] = useState<Point | null>(null);
+  /* The click a finished rubber-band drag ends with, which must not also drop a default-size one. */
+  const [swallowClick, setSwallowClick] = useState(false);
+  /* What the last click while drawing did — a real double click's second click is a dropped repeat. */
+  const lastDraftClick = useRef<'added' | 'closed' | 'ignored' | null>(null);
   const alignments = usePlanEditorStore((state) => state.alignments);
+  const snapMarker = usePlanEditorStore((state) => state.snapMarker);
   const measurement = usePlanEditorStore((state) => state.measurement);
   const clash = usePlanEditorStore((state) => state.clash);
 
@@ -253,6 +291,11 @@ export function EditorCanvas() {
     handleStageDragStart,
     handleStageDragEnd,
     consumePan,
+    armPan,
+    registerTap,
+    isDoubleTap,
+    handlePointerDown,
+    handlePointerUp,
     detailed,
     canRender,
     stageCentre,
@@ -288,102 +331,282 @@ export function EditorCanvas() {
 
   /* ---------------------------------------------------------------- interaction */
 
-  function handleStageClick() {
+  function handleStageMouseDown(event: Konva.KonvaEventObject<MouseEvent>) {
+    // The middle button pans on this canvas too, for the hand that never leaves the mouse.
+    if (handlePointerDown(event)) return;
+
+    const onEmpty = event.target === event.target.getStage();
+    const store = usePlanEditorStore.getState();
+
+    /*
+     * Drawing claims the press, or the stage's always-on pan would take it: dragging out a rectangle
+     * and clicking corners are both presses on empty canvas. Drawing corners, a quick second press
+     * on the spot just clicked still pans — the same double-tap step 2 draws with.
+     */
+    if (onEmpty && drawingSurface && placingTool === 'rect' && event.evt.button === 0) {
+      armPan(false);
+      const at = pointerInMetres();
+      if (at) {
+        const start = store.previewDraftPoint(at, { pxPerMetre: transform.scale });
+        setRubberBand({ start, current: start });
+      }
+      return;
+    }
+    if (onEmpty && drawingCorners) {
+      armPan(isDoubleTap(event));
+      return;
+    }
+    /*
+     * Shift-drag sweeps a selection — step 2's marquee. It starts on bare canvas *or on the ground
+     * layer*: every zone is covered by a base fill, so inside a garden there is no bare canvas, and a
+     * marquee that needed some could never be started. A feature's own press never reaches here — it
+     * claims it — so Shift-dragging a feature still moves the selection. A plain drag still pans.
+     */
+    if (!placingCategory && mode === 'select' && event.evt.shiftKey && event.evt.button === 0) {
+      armPan(false);
+      const at = pointerInMetres();
+      if (at) store.beginMarquee(at);
+      return;
+    }
+    armPan(true);
+  }
+
+  function handleStageMouseUp(event: Konva.KonvaEventObject<MouseEvent>) {
+    handlePointerUp(event);
+    const store = usePlanEditorStore.getState();
+    if (store.marquee) {
+      const { start, current } = store.marquee;
+      const moved = Math.hypot(current.x - start.x, current.y - start.y) * transform.scale;
+      /* A sweep selects; a Shift-click on bare canvas that barely moved does nothing at all. */
+      if (moved >= DRAG_THRESHOLD_PX) store.commitMarquee();
+      else usePlanEditorStore.setState({ marquee: null });
+      setSwallowClick(true);
+      return;
+    }
+    if (!rubberBand || !placingCategory) return;
+    setRubberBand(null);
+
+    const width = Math.abs(rubberBand.current.x - rubberBand.start.x);
+    const depth = Math.abs(rubberBand.current.y - rubberBand.start.y);
+    /* A press that barely moved is a click, and a click drops the default size, as it always did. */
+    if (width * transform.scale < DRAG_THRESHOLD_PX || depth * transform.scale < DRAG_THRESHOLD_PX) return;
+
+    setSwallowClick(true);
+    usePlanEditorStore.getState().addElement(
+      placingCategory,
+      {
+        x: (rubberBand.start.x + rubberBand.current.x) / 2,
+        y: (rubberBand.start.y + rubberBand.current.y) / 2,
+      },
+      {
+        keepArmed: event.evt.shiftKey,
+        size: { width: Math.max(MIN_ELEMENT_SIDE, width), depth: Math.max(MIN_ELEMENT_SIDE, depth) },
+      },
+    );
+  }
+
+  function handleStageClick(event?: Konva.KonvaEventObject<MouseEvent>) {
     // A pan that ended over empty canvas must not also clear the selection.
     if (consumePan()) return;
+    if (swallowClick) {
+      setSwallowClick(false);
+      return;
+    }
 
     const at = pointerInMetres();
     const store = usePlanEditorStore.getState();
 
     if (mode === 'measure') {
-      if (at) store.addMeasurePoint(at);
+      if (at) store.addMeasurePoint(at, { pxPerMetre: transform.scale });
       return;
     }
 
+    /* Shift keeps the item armed, so a row of trees is a row of clicks. */
+    const keepArmed = event?.evt?.shiftKey === true;
+    if (drawingCorners && at) {
+      if (event) registerTap(event);
+      lastDraftClick.current = store.addDraftPoint(at, { pxPerMetre: transform.scale, keepArmed });
+      return;
+    }
     if (placingCategory && at) {
-      store.addElement(placingCategory, at);
+      store.addElement(placingCategory, at, { keepArmed });
       return;
     }
 
     store.select(null);
   }
 
+  /*
+   * A double click finishes a path or a shape, the way it finishes a line on step 2.
+   *
+   * Konva fires `dblclick` for *any* two clicks inside its time window, however far apart, and after
+   * the second click's own handler — so two quick corners in a row finished the shape a corner early.
+   * A real double click is two clicks on one spot, and its second is dropped as a repeat of the
+   * corner the first added; that, and nothing else, is what finishes.
+   */
+  function handleStageDblClick(event: Konva.KonvaEventObject<MouseEvent>) {
+    if (!drawingCorners || lastDraftClick.current !== 'ignored') return;
+    usePlanEditorStore.getState().finishDraft({ keepArmed: event.evt.shiftKey });
+  }
+
   function handleStageMouseMove() {
-    if (mode !== 'measure') return;
     const at = pointerInMetres();
-    if (at) usePlanEditorStore.getState().trackMeasurePointer(at);
-  }
-
-  function handleKeyDown(event: React.KeyboardEvent) {
-    /*
-     * Escape stops the designer, and it is checked before everything else.
-     *
-     * Escape means "stop what is happening" everywhere else in this application, and while a
-     * redesign is playing the thing that is happening is the redesign — not the selection, which
-     * the run is moving around on its own anyway. Checked above the `aiActive` guard because that
-     * guard exists to keep the user's *edits* out while the AI has the plan, and stopping it is the
-     * one interaction that must work exactly then.
-     */
-    if (event.key === 'Escape' && aiActive) {
-      event.preventDefault();
-      useAiRunStore.getState().cancel();
-      return;
-    }
-
-    /* Delete and the arrow keys are edits like any other — see `elementsDraggable`. */
-    if (aiActive || comparing) return;
-
+    if (!at) return;
     const store = usePlanEditorStore.getState();
-    if (!store.selectedId) return;
-
-    /*
-     * While a surface's edges are open, Delete and Escape belong to them. Delete takes away the
-     * selected run and nothing else — deleting the whole patio because a run was not selected would
-     * be the most expensive keystroke in the editor. Escape steps out one level at a time: the run,
-     * then the tab.
-     */
-    if (store.edgeEdit && store.edgeEdit.hostId === store.selectedId) {
-      const { selectedRunId } = store.edgeEdit;
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        event.preventDefault();
-        if (selectedRunId) store.removeEdgeRun(store.selectedId, selectedRunId);
-        return;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (selectedRunId) store.selectEdgeRun(null);
-        else store.closeEdgeEdit();
-        return;
-      }
-    }
-
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      event.preventDefault();
-      store.deleteElement(store.selectedId);
+    if (store.marquee) {
+      store.trackMarquee(at);
       return;
     }
-
-    if (event.key === 'Escape') {
-      store.select(null);
+    if (rubberBand) {
+      setRubberBand({ ...rubberBand, current: store.previewDraftPoint(at, { pxPerMetre: transform.scale }) });
       return;
     }
-
-    // Arrow keys nudge; Shift makes it a whole metre, matching step 2.
-    const step = event.shiftKey ? 1 : NUDGE;
-    const delta: Record<string, [number, number]> = {
-      ArrowUp: [0, -step],
-      ArrowDown: [0, step],
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-    };
-    const move = delta[event.key];
-    if (!move) return;
-
-    event.preventDefault();
-    store.beginGesture();
-    store.nudgeSelection(move[0], move[1]);
-    store.endGesture();
+    if (drawingCorners) {
+      setDrawPointer(store.previewDraftPoint(at, { pxPerMetre: transform.scale }));
+      return;
+    }
+    if (mode !== 'measure') return;
+    store.trackMeasurePointer(at, { pxPerMetre: transform.scale });
   }
+
+  /*
+   * The editor's keyboard, on the window rather than on the canvas wrapper.
+   *
+   * It used to be the wrapper's own `onKeyDown`, so it worked only while that `div` had focus — and
+   * clicking a Konva shape does not focus it, and clicking a Layers row or a palette tile moves
+   * focus somewhere else. Delete after picking a row did nothing, and there was no ⌘Z at all.
+   * `editorShortcut` decides whether a key press belongs to the editor or to whatever has focus;
+   * this effect decides what the editor does with it.
+   */
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      const shortcut = editorShortcut(event, shortcutTarget(event.target));
+      if (!shortcut) return;
+
+      const run = useAiRunStore.getState();
+      const runActive = selectRunActive(run);
+      const store = usePlanEditorStore.getState();
+
+      /*
+       * Escape stops the designer, and it is checked before everything else.
+       *
+       * Escape means "stop what is happening" everywhere else in this application, and while a
+       * redesign is playing the thing that is happening is the redesign — not the selection, which
+       * the run is moving around on its own anyway. Checked above the guard below because that
+       * guard exists to keep the user's *edits* out while the AI has the plan, and stopping it is
+       * the one interaction that must work exactly then.
+       */
+      if (shortcut.kind === 'escape' && runActive) {
+        event.preventDefault();
+        run.cancel();
+        return;
+      }
+
+      /* Every other shortcut is an edit like any other — see `elementsDraggable`. */
+      if (runActive || run.compare === 'before') return;
+      /* Mid-drag, an Undo would pop the entry before the gesture and the drag would then land on it. */
+      if (store.gestureSnapshot) return;
+
+      if (shortcut.kind === 'undo' || shortcut.kind === 'redo') {
+        event.preventDefault();
+        if (shortcut.kind === 'undo') store.undo();
+        else store.redo();
+        return;
+      }
+
+      /* The 3D editor owns Escape and the selection while it is open; only history reaches past it. */
+      if (store.structureEdit) return;
+
+      if (shortcut.kind === 'selectAll') {
+        event.preventDefault();
+        store.selectAll();
+        return;
+      }
+
+      if (shortcut.kind === 'escape') {
+        /* One level at a time: what is armed, then what is being measured, then the selection. */
+        if (store.placingCategory) {
+          event.preventDefault();
+          /* The shape half-drawn goes first; a second Escape disarms. */
+          if (store.draftPoints.length > 0) store.cancelDraft();
+          else store.setPlacing(null);
+          return;
+        }
+        if (store.mode === 'measure') {
+          event.preventDefault();
+          if (store.measurement) store.clearMeasurement();
+          else store.setMode('select');
+          return;
+        }
+      }
+
+      const selectedId = store.selectedId;
+      if (!selectedId) return;
+
+      /*
+       * While a shape's corners are open, Delete takes away the picked corner and Escape steps out:
+       * the corner, then the editing. Delete with no corner picked does nothing rather than deleting
+       * the whole shape — the same care the Edges tab takes below.
+       */
+      if (store.vertexEdit && store.vertexEdit.id === selectedId) {
+        const { selectedIndex } = store.vertexEdit;
+        if (shortcut.kind === 'delete') {
+          event.preventDefault();
+          if (selectedIndex !== null) store.deleteVertex(selectedId, selectedIndex);
+          return;
+        }
+        if (shortcut.kind === 'escape') {
+          event.preventDefault();
+          if (selectedIndex !== null) store.selectVertex(null);
+          else store.closeVertexEdit();
+          return;
+        }
+      }
+
+      /*
+       * While a surface's edges are open, Delete and Escape belong to them. Delete takes away the
+       * selected run and nothing else — deleting the whole patio because a run was not selected
+       * would be the most expensive keystroke in the editor. Escape steps out one level at a time:
+       * the run, then the tab.
+       */
+      if (store.edgeEdit && store.edgeEdit.hostId === selectedId) {
+        const { selectedRunId } = store.edgeEdit;
+        if (shortcut.kind === 'delete') {
+          event.preventDefault();
+          if (selectedRunId) store.removeEdgeRun(selectedId, selectedRunId);
+          return;
+        }
+        if (shortcut.kind === 'escape') {
+          event.preventDefault();
+          if (selectedRunId) store.selectEdgeRun(null);
+          else store.closeEdgeEdit();
+          return;
+        }
+      }
+
+      event.preventDefault();
+      switch (shortcut.kind) {
+        case 'delete':
+          store.deleteSelection();
+          return;
+        case 'escape':
+          store.select(null);
+          return;
+        case 'duplicate':
+          store.duplicateSelection();
+          return;
+        case 'nudge':
+          store.beginGesture();
+          store.nudgeSelection(shortcut.dx, shortcut.dy);
+          store.endGesture();
+          return;
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   /*
    * While the AI has the plan, the user's own tools are off.
@@ -420,7 +643,6 @@ export function EditorCanvas() {
         role="application"
         aria-label="Garden plan. Select an element, then use the arrow keys to move it and Delete to remove it."
         tabIndex={0}
-        onKeyDown={handleKeyDown}
         className="absolute inset-0 focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:ring-inset focus-visible:outline-none"
         style={{
           cursor: panActive
@@ -450,6 +672,9 @@ export function EditorCanvas() {
             /* Always draggable; `handleStageDragStart` vetoes the gestures that are not pans. */
             draggable
             onClick={handleStageClick}
+            onDblClick={handleStageDblClick}
+            onMouseDown={handleStageMouseDown}
+            onMouseUp={handleStageMouseUp}
             onDragStart={handleStageDragStart}
             onMouseMove={handleStageMouseMove}
             onDragMove={(event) => {
@@ -537,8 +762,8 @@ export function EditorCanvas() {
                   cutEdge={cutEdges.get(element.id)}
                   element={element}
                   transform={transform}
-                  selected={element.id === selectedId && element.symbol !== 'pergola'}
-                  draggable={elementsDraggable && !isLocked(element)}
+                  selected={selectedIds.includes(element.id) && element.symbol !== 'pergola'}
+                  draggable={elementsDraggable && !isLocked(element) && vertexEdit?.id !== element.id}
                   listening={elementsListening}
                   light={light}
                 />
@@ -560,8 +785,8 @@ export function EditorCanvas() {
                   cutEdge={cutEdges.get(element.id)}
                   element={element}
                   transform={transform}
-                  selected={element.id === selectedId}
-                  draggable={elementsDraggable && !isLocked(element)}
+                  selected={selectedIds.includes(element.id)}
+                  draggable={elementsDraggable && !isLocked(element) && vertexEdit?.id !== element.id}
                   listening={elementsListening}
                   light={light}
                 />
@@ -587,7 +812,8 @@ export function EditorCanvas() {
               <Group listening={false} visible={!richReady}>
                 <FenceLine
                   polygon={polygon}
-                  runs={boundaryRuns(boundaryDraft)}
+                  runs={[...effectiveBoundary.survey, ...effectiveBoundary.proposed]}
+                  replaced={effectiveBoundary.replaced}
                   transform={transform}
                   light={light}
                   gaps={gateGaps(boundaryDraft)}
@@ -620,8 +846,48 @@ export function EditorCanvas() {
                 height={size.height}
               />
 
+              {/*
+                What a drag has snapped to, marked: a corner onto a corner, or a corner onto a wall.
+                A flush pull against a turned house draws no axis guide at all, so without this the
+                shape simply jumps and nothing says why.
+              */}
+              {snapMarker ? <SnapMarker at={metresToPx(snapMarker, transform)} /> : null}
+
+              {marquee ? (
+                <DraftOverlay points={[]} ghost={null} closable={false} band={marquee} transform={transform} unit={unit} />
+              ) : null}
+
+              {drawingSurface && (draftPoints.length > 0 || rubberBand) ? (
+                <DraftOverlay
+                  points={draftPoints}
+                  ghost={drawingCorners && draftPoints.length > 0 ? drawPointer : null}
+                  closable={placingTool === 'polygon' && draftPoints.length >= 3}
+                  band={rubberBand}
+                  transform={transform}
+                  unit={unit}
+                />
+              ) : null}
+
+              {/*
+                Corner editing: step 2's own vertex tools, pointed at a design element. The edges
+                insert a corner where they are clicked; a corner drags, and clicking one picks it for
+                Delete — which is the meaning Delete already has on this canvas, rather than a click
+                deleting outright on a drag that happened not to move.
+              */}
+              {vertexHost ? (
+                <VertexEditor
+                  element={vertexHost}
+                  transform={transform}
+                  hoveredEdge={hoveredVertexEdge}
+                  onHoverEdge={setHoveredVertexEdge}
+                  selectedIndex={vertexEdit?.selectedIndex ?? null}
+                  listening={!panActive}
+                  pointerInMetres={pointerInMetres}
+                />
+              ) : null}
+
               {/* Resize and rotate, the same handles the house and step 2's features use. */}
-              {selected && !edgeHost && selected.shape.kind === 'rect' && !isLocked(selected) ? (
+              {selected && single && !edgeHost && selected.shape.kind === 'rect' && !isLocked(selected) ? (
                 <ShapeHandles
                   centre={selected.shape.centre}
                   rotation={selected.shape.rotation}
@@ -693,7 +959,7 @@ export function EditorCanvas() {
                 anchor it also stays put while the shape turns, so the number is legible mid-drag,
                 which is exactly when it is wanted.
               */}
-              {selected && detailed && describeElement(selected, unit) ? (
+              {selected && single && detailed && sizeBadgeText(selected, unit) ? (
                 <Label
                   at={{
                     x: metresToPx(elementAnchor(selected), transform).x,
@@ -701,7 +967,7 @@ export function EditorCanvas() {
                       metresToPx(elementAnchor(selected), transform).y +
                       selectedBadgeOffset(selected, transform),
                   }}
-                  text={describeElement(selected, unit)!}
+                  text={sizeBadgeText(selected, unit)!}
                   tone={COLOUR.handle}
                 />
               ) : null}
@@ -717,6 +983,27 @@ export function EditorCanvas() {
               {dimensionsVisible ? (
                 <MeasurementGuides
                   guides={plotDimensionGuides(polygon, PLOT_DIMENSION_OFFSET)}
+                  transform={transform}
+                  unit={unit}
+                />
+              ) : null}
+
+              {/*
+                The selected shape's own sides, with Dimensions on or while its corners are open —
+                the figures it would be set out by. One shape only: with several selected the numbers
+                would describe nothing in particular.
+              */}
+              {selected && single && (dimensionsVisible || vertexHost) ? (
+                <MeasurementGuides guides={elementDimensionGuides(selected)} transform={transform} unit={unit} />
+              ) : null}
+
+              {/*
+                Room to spare, while it is being dragged: to the fence and to the nearest thing beside
+                it. The reading a designer takes constantly and a freeform canvas never gives.
+              */}
+              {selected && single && gesturingNow ? (
+                <MeasurementGuides
+                  guides={clearanceGuides(selected, polygon, elements)}
                   transform={transform}
                   unit={unit}
                 />
@@ -793,9 +1080,15 @@ export function EditorCanvas() {
           tool rather than the garden. The toggle exists because a user checking their own answer
           had no way to see them again on any screen; it is off, not absent.
         */}
-        {canRender && labelsVisible ? (
+        {/*
+          Zones and Labels are two switches over one label pass, so neither needs the other: the
+          Zones switch used to do nothing unless Labels was also on, while its tooltip promised it
+          would tint the gardens. One pass still lays both out, so a zone name and a feature chip
+          can never land on top of each other.
+        */}
+        {canRender && (labelsVisible || zonesVisible) ? (
           <ConceptLabels
-            elements={elements}
+            elements={labelsVisible ? elements : EMPTY_ELEMENTS}
             detailed={detailed}
             transform={transform}
             size={size}
@@ -872,28 +1165,19 @@ export function EditorCanvas() {
         ) : null}
 
         {placingCategory ? (
-          <p className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-garden-forest px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
-            Click the plan to place{' '}
-            {placingSymbol
-              ? SYMBOLS[placingSymbol].label.toLowerCase()
-              : CATEGORY_COLOURS[placingCategory].label.toLowerCase()}
-          </p>
+          <DrawToolStrip
+            category={placingCategory}
+            label={
+              placingSymbol
+                ? SYMBOLS[placingSymbol].label.toLowerCase()
+                : placingEnclosure
+                  ? ENCLOSURE_KINDS[placingEnclosure].label.toLowerCase()
+                  : CATEGORY_COLOURS[placingCategory].label.toLowerCase()
+            }
+            drawable={drawingSurface}
+          />
         ) : null}
 
-        <button
-          type="button"
-          className="absolute right-4 top-4 rounded-lg border border-garden-line bg-white px-3 py-2 text-xs text-garden-ink shadow-sm"
-          onClick={() => {
-            const features = elements.filter(
-              (element) => !element.hidden && element.role === 'feature' && element.zone === 'back',
-            );
-            fitToShape(size.width, size.height, {
-              polygon: features.length ? features.flatMap(elementOutline) : polygon,
-            });
-          }}
-        >
-          Fit garden
-        </button>
         <CanvasChrome
           transform={transform}
           unit={unit}
@@ -915,11 +1199,10 @@ export function EditorCanvas() {
             <button
               type="button"
               data-testid={`select-element-${element.id}`}
-              aria-pressed={element.id === selectedId}
+              aria-pressed={selectedIds.includes(element.id)}
               onFocus={() => usePlanEditorStore.getState().select(element.id)}
               onClick={() => usePlanEditorStore.getState().select(element.id)}
-              onKeyDown={handleKeyDown}
-            >
+                  >
               {element.name ?? CATEGORY_COLOURS[element.category].label}
             </button>
           </li>
@@ -1063,22 +1346,37 @@ function ElementShape({
       listening={listening}
       draggable={draggable}
       onMouseDown={(event) => {
+        /* A Shift-press on the ground is the start of a sweep, which belongs to the stage. */
+        if (event.evt.shiftKey && isGroundLayer(element)) return;
         event.cancelBubble = true;
       }}
+      /*
+       * Shift-click adds to the selection or takes away from it — except the ground, which is under
+       * everything and is never part of a group; a Shift-click there is the end of a sweep.
+       */
       onClick={(event) => {
         event.cancelBubble = true;
-        usePlanEditorStore.getState().select(element.id);
+        if (event.evt.shiftKey && isGroundLayer(element)) return;
+        usePlanEditorStore.getState().select(element.id, { additive: event.evt.shiftKey });
+      }}
+      /* A double-click opens a free shape's corners, as it does on step 2. */
+      onDblClick={(event) => {
+        event.cancelBubble = true;
+        if (geometryVertices(element.shape)) usePlanEditorStore.getState().openVertexEdit(element.id);
       }}
       onDragStart={() => {
         const store = usePlanEditorStore.getState();
-        store.select(element.id);
+        /* Dragging one of several selected moves them all; dragging anything else selects it alone. */
+        if (!store.selectedIds.includes(element.id)) store.select(element.id);
         store.beginGesture();
       }}
       onDragMove={(event) => {
         const node = event.target;
         usePlanEditorStore
           .getState()
-          .moveElementLive(element.id, pxToMetres({ x: node.x(), y: node.y() }, transform));
+          .moveElementLive(element.id, pxToMetres({ x: node.x(), y: node.y() }, transform), {
+            pxPerMetre: transform.scale,
+          });
       }}
       onDragEnd={(event) => {
         const store = usePlanEditorStore.getState();
@@ -1234,3 +1532,47 @@ function EdgeRunToolbar({
     </div>
   );
 }
+
+/**
+ * The size badge under the selected shape. A path says how long it is as well as how wide — the
+ * length is what it is laid and ordered by, and "1.2 m wide" alone never said it.
+ */
+function sizeBadgeText(element: DesignElement, unit: Unit): string | null {
+  const { length } = elementMeasures(element);
+  if (element.shape.kind === 'polyline' && length !== null) {
+    return `${formatLength(length, unit)} long · ${formatLength(element.shape.width, unit)} wide`;
+  }
+  return describeElement(element, unit);
+}
+
+/** A small ring on the exact point a drag has snapped to. */
+function SnapMarker({ at }: { at: Point }) {
+  return (
+    <Group x={at.x} y={at.y} listening={false}>
+      <Circle radius={6} stroke={COLOUR.alignment} strokeWidth={1.5} fill="rgba(255,255,255,0.85)" />
+      <Circle radius={2} fill={COLOUR.alignment} />
+    </Group>
+  );
+}
+
+/** A selected shape's side lengths as dimension lines, clear of its edge. */
+function elementDimensionGuides(element: DesignElement): DimensionGuide[] {
+  const shape = element.shape;
+  if (shape.kind === 'point') return [];
+  if (shape.kind === 'polyline') return pathDimensionGuides(shape.points, shape.width / 2 + 0.4);
+  return plotDimensionGuides(cornersOf(shape).points, ELEMENT_DIMENSION_OFFSET, 'element');
+}
+
+/** The dragged shape's clearances to the fence and to its nearest neighbour, as dimension lines. */
+function clearanceGuides(element: DesignElement, boundary: Point[], elements: DesignElement[]): DimensionGuide[] {
+  const obstacles = elements
+    .filter((other) => other.id !== element.id && !isGroundLayer(other))
+    .map((other) => elementOutline(other));
+  const { toBoundary, toNearest } = clearances(elementOutline(element), { boundary, obstacles });
+  return [toBoundary, toNearest]
+    .filter((gap): gap is NonNullable<typeof gap> => gap !== null && gap.distance > 0.01)
+    .map((gap, index) => ({ id: `clear-${index}` as const, from: gap.from, to: gap.to, distance: gap.distance }));
+}
+
+/** How far a selected shape's dimension lines sit off its edges, in metres. */
+const ELEMENT_DIMENSION_OFFSET = 0.45;

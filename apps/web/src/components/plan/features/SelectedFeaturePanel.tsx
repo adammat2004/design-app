@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MousePointer2, PenLine } from 'lucide-react';
+import { ENCLOSURE_KINDS, KEPT_TREE_HEIGHT, PLANT_SPECIES, speciesById } from '@garden-studio/schema';
+import { LengthInput } from '../SideLengthsPanel';
 import { STATUS_COLOURS, STATUS_ORDER } from '@/lib/feature-colours';
 import { FEATURE_DEFINITIONS, featureAnchor, featureArea, featureVertices } from '@/lib/features';
 import { formatArea } from '@/lib/units';
@@ -21,6 +23,7 @@ export function SelectedFeaturePanel() {
   const features = useFeaturesStore((state) => state.present.features);
   const editingShapeId = useFeaturesStore((state) => state.editingShapeId);
   const renameFeature = useFeaturesStore((state) => state.renameFeature);
+  const describeFeature = useFeaturesStore((state) => state.describeFeature);
   const setSelectionStatus = useFeaturesStore((state) => state.setSelectionStatus);
   const setEditingShape = useFeaturesStore((state) => state.setEditingShape);
 
@@ -117,6 +120,29 @@ export function SelectedFeaturePanel() {
           <Field label="Status">
             <StatusPill status={feature.status} testId="feature-status" />
           </Field>
+
+          {feature.kind === 'tree' ? (
+            <TreeFacts
+              plantId={feature.plantId}
+              height={feature.height}
+              spread={feature.spread}
+              drawnSpread={feature.geometry.kind === 'point' ? feature.geometry.radius * 2 : 0}
+              unit={unit}
+              onChange={(patch) => describeFeature(feature.id, patch)}
+            />
+          ) : feature.kind === 'fence' ? (
+            <Field label="Height">
+              <span className="block w-24">
+                <LengthInput
+                  testId="feature-height"
+                  label="Fence height"
+                  metres={feature.height ?? ENCLOSURE_KINDS.fence.height}
+                  unit={unit}
+                  onCommit={(metres) => describeFeature(feature.id, { height: metres })}
+                />
+              </span>
+            </Field>
+          ) : null}
 
           {feature.status === 'replace' ? (
             <Field label="Replace with">
@@ -221,5 +247,72 @@ function NameField({ name, onCommit }: { name: string; onCommit: (name: string) 
       }}
       className="min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-xs font-semibold text-garden-ink hover:border-garden-line focus-visible:border-garden-green focus-visible:outline-none"
     />
+  );
+}
+
+/**
+ * What an existing tree is: which tree, how tall, how far its crown reaches. Each field is optional
+ * and the species fills in what is not typed — "a silver birch" is enough for the plan to cast the
+ * right shadow — and the numbers shown are the ones the design will use.
+ */
+function TreeFacts({
+  plantId,
+  height,
+  spread,
+  drawnSpread,
+  unit,
+  onChange,
+}: {
+  plantId: string | undefined;
+  height: number | undefined;
+  spread: number | undefined;
+  /** The crown as drawn on this screen: what the design uses when neither a spread nor a species says. */
+  drawnSpread: number;
+  unit: Parameters<typeof formatArea>[1];
+  onChange: (patch: { height?: number | null; spread?: number | null; plantId?: string | null }) => void;
+}) {
+  const species = speciesById(plantId);
+  const trees = PLANT_SPECIES.filter((entry) => entry.form === 'tree');
+  return (
+    <>
+      <Field label="Species">
+        <select
+          data-testid="feature-species"
+          aria-label="Tree species"
+          value={plantId ?? ''}
+          onChange={(event) => onChange({ plantId: event.target.value || null })}
+          className="w-40 rounded-md border border-garden-line bg-white px-2 py-1 text-xs text-garden-ink focus-visible:border-garden-green focus-visible:outline-none"
+        >
+          <option value="">Not sure</option>
+          {trees.map((tree) => (
+            <option key={tree.id} value={tree.id}>
+              {tree.common}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Height">
+        <span className="block w-24">
+          <LengthInput
+            testId="feature-height"
+            label="Tree height"
+            metres={height ?? species?.matureHeight ?? KEPT_TREE_HEIGHT}
+            unit={unit}
+            onCommit={(metres) => onChange({ height: metres })}
+          />
+        </span>
+      </Field>
+      <Field label="Spread">
+        <span className="block w-24">
+          <LengthInput
+            testId="feature-spread"
+            label="Crown spread"
+            metres={spread ?? species?.matureSpread ?? drawnSpread}
+            unit={unit}
+            onCommit={(metres) => onChange({ spread: metres })}
+          />
+        </span>
+      </Field>
+    </>
   );
 }

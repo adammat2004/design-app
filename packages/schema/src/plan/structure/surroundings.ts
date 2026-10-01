@@ -1,7 +1,7 @@
 import type { Point } from '../../geometry/primitives.js';
 import { pointInPolygon } from '../../geometry/primitives.js';
 import { WALL_REACH } from '../boundary/graph.js';
-import { elementOutline, isLocked, type DesignElement, type ElementCategory } from '../concepts.js';
+import { elementOutline, isGroundLayer, type DesignElement, type ElementCategory } from '../concepts.js';
 
 /**
  * What lies beyond each side of a structure: the one reading the configurer and the resize both use.
@@ -98,7 +98,7 @@ const INSIDE = 0.03;
  * a pergola growing over the edge of the grass is ordinary, and a base fill is the whole zone.
  */
 export function pinsSide(element: DesignElement): boolean {
-  if (element.hidden || isLocked(element)) return false;
+  if (element.hidden || isGroundLayer(element)) return false;
   return (
     element.category === 'paved-area' ||
     element.category === 'gravel-mulch' ||

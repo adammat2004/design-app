@@ -420,6 +420,18 @@ export const MATERIAL_PATTERNS: Partial<Record<MaterialId, MaterialPattern>> = {
     lobes: 9,
   },
   shrubs: { patternType: 'scatter', density: 2.4, sizeRange: { min: 700, max: 1250 }, lobes: 9 },
+  /*
+   * The mixes. Each is drawn from its own species where the renderer lays its layers (see
+   * `plants/mixes.ts`); this is the pattern a flat or low-zoom drawing falls back to — a mixed
+   * border's, and a grass's for the two mixes that are mostly grass.
+   */
+  'mix-shade-woodland': { patternType: 'scatter', density: 5.5, sizeRange: { min: 420, max: 820 }, lobes: 9 },
+  'mix-sunny-gravel': { patternType: 'scatter', form: 'tufted', density: 12, sizeRange: { min: 300, max: 600 }, lobes: 7 },
+  'mix-pollinator': { patternType: 'scatter', density: 5.5, sizeRange: { min: 420, max: 820 }, lobes: 9 },
+  'mix-cottage-border': { patternType: 'scatter', density: 5.5, sizeRange: { min: 420, max: 820 }, lobes: 9 },
+  'mix-prairie-grasses': { patternType: 'scatter', form: 'tufted', density: 12, sizeRange: { min: 340, max: 700 }, lobes: 7 },
+  'mix-evergreen-structure': { patternType: 'scatter', density: 2.8, sizeRange: { min: 600, max: 1100 }, lobes: 9 },
+  'mix-low-maintenance': { patternType: 'scatter', density: 4, sizeRange: { min: 400, max: 900 }, lobes: 9 },
   'ornamental-grasses': {
     form: 'tufted',
     patternType: 'scatter',

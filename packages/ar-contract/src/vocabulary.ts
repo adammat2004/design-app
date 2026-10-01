@@ -102,3 +102,18 @@ export type PlantKey = z.infer<typeof PlantKeySchema>;
  */
 export const FallbackShapeSchema = z.enum(['box', 'cylinder', 'tree']);
 export type FallbackShape = z.infer<typeof FallbackShapeSchema>;
+
+/**
+ * What a door or a window in a wall is — a copy of the plan's `OpeningType`, for the reason
+ * `ModelKey` is a copy: the phone never imports the schema. `vocabulary.test.ts` checks the copy.
+ * (Added in 0.0.2.)
+ */
+export const OpeningKindSchema = z.enum([
+  'patio-door',
+  'back-door',
+  'front-door',
+  'window',
+  'upper-window',
+  'garage-door',
+]);
+export type OpeningKind = z.infer<typeof OpeningKindSchema>;

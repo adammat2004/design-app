@@ -33,6 +33,8 @@ import {
 
 /** Which stage of a redesign a change belongs to, and therefore which designer performs it. */
 function phaseFor(element: DesignElement): RunPhase {
+  /* A fence is drawn as a line and is not a way through: it is laid with the rest of the layout. */
+  if (element.category === 'enclosure') return 'layout';
   if (element.shape.kind === 'polyline') return 'circulation';
   switch (element.category) {
     case 'planting-bed':
@@ -150,6 +152,8 @@ function propertyChanges(previous: DesignElement, next: DesignElement): Record<s
     'symbol',
     'plantId',
     'plantingStyle',
+    'planting',
+    'enclosure',
     'zone',
     'hidden',
     'structure',

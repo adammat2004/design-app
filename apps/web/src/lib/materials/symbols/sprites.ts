@@ -4,7 +4,7 @@ import {
   type PlanGeometry,
   type Point,
 } from '@garden-studio/schema';
-import { SYMBOL_SPRITES } from '../assets/material-assets';
+import { SYMBOL_SPRITES, speciesPin } from '../assets/material-assets';
 import type { AssetLookup, LoadedAsset } from '../assets/registry';
 import { moduleRandom } from '../prng';
 
@@ -72,14 +72,17 @@ export function symbolSprite(
   const symbol = resolveSymbol(element);
   if (!symbol || !lookup) return null;
 
-  const family = SYMBOL_SPRITES[symbol];
+  /* A placed plant with a species draws that species' own picture; anything else its symbol's. */
+  const pin = speciesPin(element.plantId);
+  const family = pin?.family ?? SYMBOL_SPRITES[symbol];
   if (!family) return null;
 
   const variants = lookup(family);
   if (variants.length === 0) return null;
 
   const random = moduleRandom(element.id, 0, 0);
-  const asset = variants[Math.min(variants.length - 1, Math.floor(random() * variants.length))]!;
+  const chosen = Math.floor(random() * variants.length);
+  const asset = variants[Math.min(variants.length - 1, pin ? pin.index : chosen)]!;
 
   const box = spriteBox(element.shape, asset.image);
   return box ? { asset, box } : null;

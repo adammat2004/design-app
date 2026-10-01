@@ -247,6 +247,85 @@ describe('IntentService', () => {
     expect(prompt).not.toMatch(/\bcentre\b/);
   });
 
+  /*
+   * What Phase 2 told the model: a bed's mix by name, a tree's species, a fence's kind and height,
+   * and which side of the property runs beside which area — every one of them a name, none a place.
+   */
+  it('names mixes, species, fences and the sides of the property, and still no coordinates', async () => {
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
+    const document = plan();
+    document.layout.elements.push(
+      {
+        id: 'e-bed',
+        category: 'planting-bed',
+        role: 'feature',
+        name: 'Border',
+        zone: 'front',
+        material: 'mix-pollinator',
+        shape: { kind: 'rect', centre: { x: 10, y: 15 }, width: 6, depth: 1.5, rotation: 0 },
+      },
+      {
+        id: 'e-tree',
+        category: 'planting-bed',
+        role: 'feature',
+        name: 'Rowan',
+        zone: 'front',
+        symbol: 'tree-deciduous',
+        plantId: 'sorbus-aucuparia',
+        shape: { kind: 'point', at: { x: 3, y: 12 }, radius: 2 },
+      },
+      {
+        id: 'e-screen',
+        category: 'enclosure',
+        role: 'feature',
+        name: 'Slatted screen',
+        zone: 'left',
+        material: 'slatted-screen',
+        enclosure: { kind: 'screen' },
+        shape: { kind: 'polyline', points: [{ x: 0, y: 8 }, { x: 0, y: 14 }], width: 0.08 },
+      },
+    );
+
+    await service.interpret('plant it up', document);
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+
+    expect(prompt).toContain('mix=mix-pollinator');
+    expect(prompt).toContain('species=Rowan');
+    expect(prompt).toContain('kind=screen 1.8 m high');
+    expect(prompt).toMatch(/BOUNDARY/);
+    expect(prompt).toMatch(/screen id=e-screen, 1\.8 m high, 6\.0 m, beside the left garden \(proposed\)/);
+    expect(prompt).toContain('mix-shade-woodland:');
+    expect(prompt).not.toMatch(/\bx\s*[:=]/);
+    expect(prompt).not.toMatch(/\bcentre\b/);
+  });
+
+  /** Several selected is "these" — the set, named by id, and no position for any of them. */
+  it('tells the model about every element selected', async () => {
+    const create = spy();
+    const service = new IntentService({ messages: { create } } as unknown as Anthropic, config());
+    const document = plan();
+    const bed = (id: string, x: number) => ({
+      id,
+      category: 'planting-bed' as const,
+      role: 'feature' as const,
+      name: `Bed ${id}`,
+      zone: 'front' as const,
+      shape: { kind: 'rect' as const, centre: { x, y: 14 }, width: 2, depth: 1, rotation: 0 },
+    });
+    document.layout.elements.push(bed('e-2', 4), bed('e-3', 16));
+
+    await service.interpret('make these shade-tolerant', document, [], ['e-1', 'e-2', 'e-3']);
+
+    const prompt = (create.mock.calls[0]![0] as { messages: { content: string }[] }).messages[0]!
+      .content;
+    const selection = prompt.slice(prompt.indexOf('WHAT THEY HAVE SELECTED'));
+    expect(selection).toContain('"These", "them" mean this set.');
+    for (const id of ['e-1', 'e-2', 'e-3']) expect(selection).toContain(`id=${id}`);
+    expect(selection).not.toMatch(/\bx\s*[:=]/);
+  });
+
   /** The rules have to answer the selection, or the section above it is a heading nothing reads. */
   it('tells the model what a selection means', () => {
     expect(ASSISTANT_RULES).toContain('WHAT THEY HAVE SELECTED');

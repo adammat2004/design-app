@@ -11,14 +11,18 @@ apps/web               Next.js 16 App Router frontend — the plan editor
 apps/api               NestJS backend — persistence + PostGIS constraint validation
 apps/mobile            Expo SDK 57 app — the AR viewer (skeleton; no AR view yet)
 packages/schema        Zod schemas and pure geometry helpers, imported by web and api
-packages/ar-contract   The AR scene format: zod only, imported by apps/mobile (and the future builder)
+packages/ar-contract   The AR scene format: zod only, imported by apps/mobile and the builder
+packages/ar-builder    PlanDocument → ARScene, pure: the web's 3D preview and (later) the API's /ar-scene
+packages/model-pipeline  Generated GLB → library model (Node only): validate, normalise, optimise
 ```
 
 A new developer should start with `docs/onboarding.md`; the AR work is planned in
 `docs/ar/ar-architecture.md`. See "Augmented reality" below.
 
 `packages/schema` compiles to `dist/` and both apps consume the built output, so **run
-`pnpm --filter @garden-studio/schema build` after changing shared types** (or leave
+`pnpm --filter @garden-studio/schema build` after changing shared types** (and
+`pnpm --filter @garden-studio/ar-builder build` after changing the builder, which the web consumes the
+same way) (or leave
 `pnpm --filter @garden-studio/schema dev` running to rebuild on change). Type errors in the
 apps that look stale are usually this.
 
@@ -98,6 +102,10 @@ house by `computeZones`, so storing them could only create something stale.
   what the materials came to, and which requested features made it in. Every figure is derived from
   the geometry at read time; nothing is stored.
 - **a way back to a saved plan**: `/projects` lists them, and the landing page links to it.
+- **plants, mixes and new boundaries** (30 Sep 2026): about 100 UK species on existing art, seven
+  planting mixes as bed materials with counts to order and a light verdict, fences, screens, walls,
+  hedges and kerbs drawn as lines that replace the survey where they lie along it, kept trees that
+  stay trees, and a designer that can say all of it. See "Plants, walls and fences".
 
 - **the plan draws with photographs and sprites**: slab and board faces, seamless tiles of gravel,
   turf, bark and water, top-down plant and tree-canopy sprites, furniture, light fittings and the
@@ -158,9 +166,9 @@ house by `computeZones`, so storing them could only create something stale.
   what is in the way and offers checked alternatives. See "Generated structures, and resizing one".
 
 
-**Not built yet:** printing at true scale, a navigable 3D preview of the whole garden (deliberately —
-see "Structures in 3D"; the structure editor shows only a structure's neighbourhood), the **AR view** (only its scene
-format and an Expo skeleton exist; see "Augmented reality"), and the optional AI photo-render. React Three Fiber is used by the structure editor only; the plan's
+**Not built yet:** printing at true scale, a 3D *editor* for the whole garden (deliberately — the
+whole-garden 3D view is a read-only preview; see "Augmented reality"), the **AR view** (only its scene
+format, its builder and an Expo skeleton exist), and the optional AI photo-render. React Three Fiber is used by the structure editor and the garden preview; the plan's
 WebGL is PixiJS, which draws the top-down scene. There is still **no user study**: the feedback
 events below are collected but nobody has yet sat down with the table and asked it anything. The two faults the harness reports most
 are both outside the design agent's reach as it stands: too many materials in one plan is a
@@ -213,6 +221,108 @@ assistants' coordinate-free intents, applied to a renderer. `size` is authoritat
 `scale` field, because a scale only means something against one model file. Structures (pergola,
 shed, raised bed…) are `solid`s generated from their rectangle, never stretched models, for the
 reason `symbols/structures.ts` draws them from their outline.
+
+**A whole-garden 3D preview is approved, and it is drawn from this builder (30 Sep 2026).** Not a
+3D editor: the 2D editor stays the only place geometry changes. The plan is in
+`~/.claude/plans/can-you-investigate-whether-elegant-knuth.md`. The builder is to be its own package,
+`packages/ar-builder`, because `ar-contract` dev-depends on `schema` and the reverse would be a cycle.
+Stage 1 is built: **where a bed's plants stand is `plantPlacements` in the schema**
+(`plan/plant-placements.ts`, with `INSTANCE_DENSITY`, `CROWN_FILL`, the understorey and
+`plantingClusterAt`), and the web's `buildPlants` only joins it to sprites, flowers and palette from
+draws the sampler already made. **`roofFor` is `plan/roof.ts`**; `ROOF_TONES` stays in the web, and
+the web's `render/roof.ts` re-exports the rest. **Which layers a bed has is `bedPlanting`** (scheme
+or mix, size bands, `speciesLayer`) and what a bed leaves a gap for is `plantingExclusions`, both in
+the same schema module; the web's `resolveLayers` only adds sprites, flowers and soil texture. Every
+move was checked by hashing every plant and every ground layer of all eleven fixture scenes (4,873
+plants, sprites and flowers included) before and after: identical.
+
+**Stage 2 is built: `packages/ar-builder`, and a dev-only "AR scene" button in the editor's toolbar.**
+`buildArScene(input, { plants, appearance })` returns the scene plus `skipped` (every visible element
+not drawn, with a reason) and `warnings`. What it draws: the house as walls to the eaves (no roof
+yet), every ground surface **cut by everything stacked above it**, pergolas and gazebos from
+`structureParts`, other structures as the block they occupy, furniture, lights, trees and shrubs as
+models standing on the highest surface under them, and bed infill as `plants` nodes. Not yet:
+fences, walls and hedges (named in `skipped`), levels, steps, edging, the roof and structure floors —
+stage 4. Things worth knowing before touching it:
+
+- **Colour is injected, never held.** The web passes `materialAppearance` (the mean of the plan's
+  own palette tones); the builder has only neutral fallbacks. A second colour table in the builder
+  would be a second answer to "what colour is the lawn".
+- **The cut is `polygon-clipping`, snapped to a micrometre first.** It was chosen by a spike over the
+  fixtures (`polyclip-ts` threw on the courtyard; `clipper2-ts` is a prerelease with no holes in its
+  output). It is exact on clean input and throws "Unable to find segment … in SweepLine tree" on
+  near-coincident edges — and moving a plan to the door origin *makes* those (`4.4999999999999964`
+  beside `4.500000000000002`). The first fixture build failed on exactly that where the spike, in raw
+  plan coordinates, had not. `cutSurface` snaps to 1e-6 m, retries at 1e-4, and only then falls back
+  to the uncut ring with a warning.
+- **The plant budget is one ranking.** Every placed plant is ranked by an FNV hash of its id and the
+  profile keeps the lowest N (phone 300, desktop 4,000), so the phone's plants are a subset of the
+  desktop's and a bed edit never reshuffles another bed. Every fixture is under the desktop budget,
+  and `lib/ar/scene.test.ts` asserts the desktop scene plants **exactly** the plants the 2D plan
+  draws, position for position.
+- **A hand-built polygon needs `cornerRadius: 0`.** It is a Zod default, so a literal that skips
+  `.parse()` gets `undefined` and `elementOutline` returns NaN — which the builder then reports as a
+  surface "wholly covered", because a NaN mesh has no triangles.
+- 1–17 ms per fixture, 20–180 KB of JSON.
+
+**Stage 3 is built: "View in 3D", a read-only preview of the whole garden** — the editor's toolbar
+and the review screen, over either (`components/garden-3d/`, `lib/ar/preview.ts`, its own tiny
+`garden-preview-store`). It draws the `ARScene` and nothing else, so it is a check on what the phone
+will draw rather than a second drawing of the garden; the e2e compares its node counts with the
+builder's for the stored plan. A click on a pergola or a gazebo opens the configurator (editor only).
+It shares the configurator's light, sky and finish — `components/three/SceneAtmosphere.tsx`, moved
+out of `StructureViewport` verbatim — and its crowns, trunks and furniture. Three things were found
+by **looking at screenshots**, not by the tests, and each is recorded where it was fixed:
+
+- **A scene material is the colour the plan shows, not its palette.** The palette is the tint laid
+  over a photograph; the mean of it drew a lawn pale mint. `materialAppearance` multiplies the
+  photograph's catalogue mean by the tint at the painter's own strength (`MASS_TEXTURE_TINT`,
+  `FACE_TINT`, exported from the painter for this). A bed's ground is its **scheme's soil** tinted to
+  its joint colour, as `resolveLayers` lays it — its own photograph drew borders as black holes.
+- **A bed's plants ask for `foliage`, its ground for `surface`.** `BuildOptions.appearance` takes the
+  role; one colour for both drew every clump in the colour of its soil.
+- **The door view stands a metre inside the doorway.** Out on the threshold the terrace, the
+  furniture and the pergola were round the camera, not in front of it. From inside, the house's walls
+  face away and are culled, so the doorway frames the garden. The overview looks back at the house
+  from beyond the far end: from behind the house, the roofless block hid the garden.
+
+**Stage 4 is built: the garden's depth** (`packages/ar-builder/src/depth.ts`). The house has its
+roof, the boundaries are built as their kinds, raised and sunken ground has its retaining faces,
+edging stands proud, steps are a flight and a structure's floor is ground. Each is a 2D answer the
+schema already gave, stood up — and three of them had to move into the schema first so the builder
+and the web would share one rule rather than two:
+
+- **`roofSolid` (`plan/roof.ts`)** stands `roofFor` up: eaves corners at the eaves, everything else
+  at the ridge, `ROOF_PITCH_SHARE` of the roof's *own* short span. The configurator's
+  `roofGeometry` measured the span in its own frame, which over-pitched a house at an angle to the
+  structure being edited; the shared rule does not.
+- **`retainingThickness` (`plan/levels.ts`)** — the plan's band and the 3D wall are one thickness.
+  A wall stands from the lower ground to `RETAINING_LIP` (15 mm) proud of the higher, which is a
+  coping and also what stops its top flickering against the terrace it holds.
+- **`BOUNDARY_BAYS` (`plan/boundary-style.ts`)** — post, pier and baluster pitch per kind.
+  `BOUNDARY_PALETTE.postSpacing` reads it, so the plan's posts and the 3D posts stand together.
+
+**A flight's direction is derived, never stored**: the plan has a rectangle and a rise. The top is
+the end whose topmost surface is higher, probed 0.2 m past each end — the terrace a flight serves, or
+the lawn round a sunken area. A survey side's inward direction is probed off its middle the same way.
+Colours arrive through two new appearance roles, `boundary` (`fence`, `wall:cap`, `railing:detail`
+from `BOUNDARY_PALETTE`) and `roof` (`ROOF_TONES`). Edging follows the brief (`edgeRules` on the input),
+so the e2e builds its expected counts with the stored brief's rules. **No fixture has a level change**,
+so retaining and flights are pinned by builder tests and have not been looked at in a browser.
+
+**Stage 5a is built: scene contract 0.0.2, additive** (`packages/ar-contract/CHANGELOG.md`, awaiting
+the partner's review). `Mesh.uv` (`face` on every solid, so a texture runs along a wall rather than
+smearing down it), `ARMaterial.tones` with a per-plant `tone` (a bed's plants in the plan's own
+palette, one tone each — the colour the plan draws each plant in), `species` on plants and models
+(from a mix's layer and `plantId`), and `SolidNode.openings` for the house's doors and windows, with
+`OpeningKind` a checked copy of `OpeningType`. Two shared pieces came out of it: **`openingSpans`**
+(`plan/openings.ts`) resolves every opening's span, outward direction, sill and head once, for the
+neighbourhood and the builder alike; **`HouseOpening`** (`components/three/`) draws one, for the
+configurator and the preview alike.
+
+**5b is built too: the configurator draws the scene** — after the gaps that would have made it a
+step back were closed first: a `hedge` hint on solids (contract 0.0.2), a ground-painting hook and a
+full-model hook on the shared renderer, and PBR from `finish:` keys. See "Structures in 3D".
 
 **The coordinate convention is one translation and one sign.** Plan `(x, y)` with +y down maps to
 scene `(X, Z)`, Y up, right-handed and **not mirrored**. Clockwise plan degrees become
@@ -943,11 +1053,12 @@ truncates the answer rather than the reasoning.
 test suite work without a key, which they have to: this gets handed to a marker who will not have
 one.
 
-**There is no auth, so the API must stay on localhost — and today it does not.** A reachable
-deployment would hand a stranger every plan and the key's spend. `main.ts` calls `app.listen(port)`
-with **no host**, so Node binds every interface and anyone on the same network can reach it, whatever
-the "listening on http://localhost" log line says. Binding to `127.0.0.1` is at the top of TODOS.md,
-and it has to happen before the AR app is allowed to talk to the API (read-only share links, not
+**There is no auth, so the API stays on localhost — and since 1 Oct 2026 it does.** A reachable
+deployment would hand a stranger every plan and the keys' spend. `main.ts` used to call
+`app.listen(port)` with **no host**, so Node bound every interface while the log line said
+localhost; it now listens on `HOST ?? '127.0.0.1'`, and a request to the machine's LAN address is
+refused. It was done first in the model library's Phase 4, because those endpoints spend Meshy
+credits. A phone on the LAN needs an explicit `HOST`, and read-only share links before that (not
 the editing routes). `assistant.service.ts` rate-limits regardless (an in-process token
 bucket, 20/min overall and 6/min per plan → 429); if it ever leaves this machine it needs a shared
 header check first. Never log the key or full prompts.
@@ -4425,12 +4536,13 @@ containment property, add a case to `structurePlanDrawing` if it wants a distinc
 add its model entry in `lib/structures/model-registry.ts`. The button, the tabs, persistence and
 shadows follow.
 
-**To add or replace a GLB:** put it under `apps/web/public/models/`, and replace the preset's
-procedural entry in `model-registry.ts` with a `gltf` one whose `nodes` map logical groups (`post`,
-`beam`, `rafter`, `roof`, `side-left`…, `light`) to node names. Place nodes from the part boxes and
-show/hide them by group; never scale a model to its natural size — `size` comes from the rect, and
-there is no `scale` in the persisted config, for the reason the AR contract has none. Budgets as
-`docs/ar/ar-architecture.md`: ≤15k triangles, ≤1024 px textures.
+**There are no frame GLBs, and that is decided (30 Sep 2026).** A frame is cut from a rectangle of
+any size, so a model stretched into each part box brings back the texture stretch that metre UVs
+removed; the detail that reads as real — eased edges, rafter tails, aerofoil louvres, a post shoe —
+is drawn in code by `partGeometry` (see "Towards a photoreal 3D view"). The registry's `gltf` shape
+stays for **fixed-size attachments only** (a bracket, a light fitting): nodes named by logical group,
+placed from the part boxes, never scaled to the model's natural size, within the AR budgets of ≤15k
+triangles and ≤1024 px textures. Furniture models are a separate thing — see phase 4.
 
 **For AR:** the phone reads an `ARScene`, never a `PlanDocument`. The (unwritten) builder turns a
 configured structure into a `solid` node by `resolveStructure` → `structureParts` → `boxMesh` per
@@ -4439,74 +4551,192 @@ part (a pyramid is four triangles), placing the set with the element's centre, `
 `ARMaterial` one to one.
 
 **The viewport** (`components/structure-3d/StructureViewport.tsx`): the structure among its
-surroundings (below), a plain lawn beyond them, a `Lightformer` environment (no HDRI download —
-works offline), one shadow-mapped sun whose shadow camera reaches the window's edge,
-`ContactShadows`, ACES tone mapping, `frameloop="demand"`, drei `CameraControls` with presets that
-fly only when a preset or Reset is pressed, never on a resize. With the surroundings switched off it
-is the structure alone on the lawn and a stand-in paved pad. The whole workspace is `next/dynamic`
-with `ssr: false`, so three.js is not in the plan editor's bundle until Edit in 3D is pressed.
+surroundings (below), a plain lawn beyond them, one shadow-mapped sun whose shadow camera reaches the
+window's edge, `ContactShadows`, `frameloop="demand"`, drei `CameraControls` with presets that fly
+only when a preset or Reset is pressed, never on a resize. With the surroundings switched off it is
+the structure alone on the lawn and a stand-in paved pad. The whole workspace is `next/dynamic` with
+`ssr: false`, so three.js — and the post pass below — is not in the plan editor's bundle until Edit
+in 3D is pressed.
 
-**The surroundings are the structure's neighbourhood, not a 3D garden.** A pergola on an empty lawn
-could not be judged — a screen against a fence nobody could see, a width against a bed that was not
-there. `structureNeighbourhood` (`structure/neighbourhood.ts`, pure, Node-tested) cuts the plan to a
-square window `NEIGHBOURHOOD_REACH` (6 m) past the structure and returns plain data in the
-structure's **own local frame** — the frame `structureParts` draws in, which is the ar-contract's
-`planToScene` then `rotateAboutY`, so it is a first cut of the AR builder's placement:
+**The surroundings are the garden's scene, drawn round the structure (since stage 5b, 30 Sep 2026).**
+A pergola on an empty lawn could not be judged — a screen against a fence nobody could see, a width
+against a bed that was not there. The garden round it is the AR scene builder's scene of the plan
+(`packages/ar-builder`), drawn by the one 3D renderer the whole-garden preview also uses
+(`components/three/SceneNodes.tsx`), under **one group transform** into the structure's local frame:
+move the structure's centre and base to the origin, turn by its yaw (`StructureSurroundings`). So the
+fence, the house, the trees, the retaining walls and the edging round a pergola are exactly the ones
+the preview and the phone show — this used to be a second classifier (`structureNeighbourhood`,
+which cut the plan to a window and decided what to draw), and two answers drift.
 
-- ground surfaces clipped to the window, carrying their plan stacking order as `layer`;
-- solids: boundary runs clipped as segments and thickened *inward* (the plan's band), buildings with
-  no 3D definition, furniture (with its symbol), existing features;
-- plants as trunk and crown, kept when the crown reaches into the window from outside it;
-- other pergolas and gazebos, drawn by the same `StructureModel` turned by the difference in yaw;
-- the house **whole, never cut** — a sliced building reads as broken, and the fog takes its far end;
-- `ground`: everything is measured from the structure's own base, so a raised one's garden sits
-  below it.
+What `structure/neighbourhood.ts` keeps is what only the editor needs: `localFrame` (the frame both
+ways; the 3D drag needs the way back), `structureInterior` (the furniture inside, read **live**,
+because it is what is being moved), `NEIGHBOURHOOD_REACH`, and the small types those use.
 
-It also carries what the drawing needs to be good rather than merely placed: each tree's species
-`symbol`, each boundary run's cut centreline and inward direction, and the house's `openings` in the
-local frame (sill and head from `OPENING_HEIGHTS`, `STOREY_HEIGHT` for an upper floor).
-`localFrame(element)` is the one definition of the frame both ways; the 3D drag needs the way back.
+The editor draws two things better than the scene alone can, through `SceneNodes`' two hooks:
 
-The web draws it (`StructureSurroundings.tsx`) and decides nothing about where anything is:
+- **The ground within `NEIGHBOURHOOD_REACH` is painted by the plan's own surface painter**
+  (`paintGround` → `surfaceRaster`, `rasterUv` through the scene's frame), looked up by each surface's
+  `sourceId`: slabs, joints, bond, courses. Beyond the reach, the scene's flat colour, which is the
+  painted colour's mean — a raster is up to 2048 px square, and painting every zone of a garden would
+  spend hundreds of megabytes on ground the fog has taken.
+- **A neighbouring pergola or gazebo is its full `StructureModel`** (`drawSolid`), bevels and all,
+  rather than the plain boxes the scene carries for a renderer with no parts builder.
 
-- **The ground is painted by the plan's own surface painter.** `surfaceRaster`
-  (`lib/structures/surface-raster.ts`) asks `getSurfacePattern` for the same raster the plan draws —
-  slabs, joints, bond, courses — with the planting layers lifted out as `build-scene.ts` lifts them,
-  and `rasterUv` maps each local vertex back to plan metres on it. A single photograph tiled square
-  was the first attempt and it stretched every non-square unit: `surfaceTexture` used the tile's
-  width both ways, so a 3.6 × 0.145 m decking board was drawn 3.6 m square. The tiled fallback now
-  takes both sides. Paving is a 30 mm slab with an edge, not a print on the lawn.
-- **Beds are planted where the plan plants them.** `bedPlants` (`lib/structures/nature-geometry.ts`)
-  runs the plan's own `buildPlants` on the bed's whole world outline with the same exclusions and
-  seeds, turns the result into the local frame and cuts it to the window; they draw as instanced
-  crowns, one draw per form and variant, capped at `MAX_BED_PLANTS`. A hedging bed is a clipped body
-  with a lumpy top, not a flat patch.
+What the shared renderer does for both views, and why:
+
+- **Paving is a 30 mm slab with an edge**, drawn, not stated: the scene's surface is its top.
+- **A hedge is clipped growth with a lumpy top** wherever the scene says a solid is a hedge
+  (`SolidNode.hedge`, contract 0.0.2) — a hedge boundary or a hedging bed.
+- **A structure finish is its PBR material** (`finish:<id>` → `materialForFinish`), shared for the page.
 - **Crowns are welded, noise-displaced lobes with dark-to-light vertex shading**, built once per
-  species and variant from the plan's `prng` and three's own `SimplexNoise` (no new dependency). The
-  first version was faceted and black underneath — `mergeGeometries` of non-indexed spheres keeps
-  per-face normals — and read as cut gems; `mergeVertices` before the normals is the fix. A tree
-  carries its crown on a clear stem (the top ~55%), species by `treeShape`.
-- **Boundaries are built**: a fence is posts at the palette's own `postSpacing` with panels and a top
-  rail, a wall has piers and a coping, a railing balusters, a hedge clipped lumps.
-- **The house has its real doors and windows**, as frames and glass set proud of the wall rather than
-  cut into it. The roof is the plan's own `roofFor`, lifted: a plane vertex on the eaves ring stays at
-  eaves height and every other one is ridge, `ROOF_PITCH_SHARE` of the shorter span up.
-- **The sun is the plan's** (`sunInFrame`, `lib/structures/sun-3d.ts`): `presentationCast` turned into
-  the frame, so a 3D shadow falls the way the 2D plan draws it, with PCSS soft shadows (drei
-  `SoftShadows`) and a shader sky — all offline. The mute towards the sky dropped from 0.22 to 0.08:
-  once the surroundings carried their own detail, a heavy mute only washed them out.
-- **Geometry is built directly in XZ**, not through `ShapeGeometry` and a turn about X, which mirrors
-  Z. Every triangle is wound to face out; the wall winding was backwards on the first attempt and only
-  the test that probes behind each face caught it.
-- **No polygon booleans.** The plan's surfaces overlap by design, so each is lifted `LAYER_LIFT`
-  (1.5 mm) above the last in stacking order. An AR scene still needs the true cut.
-- **During a drag the surroundings are drawn from the settled plan** (`gestureSnapshot`), as the
-  editor canvas holds its neighbouring beds still: moving a chair must not re-plant every border each
-  frame. The interior is read live.
+  species and variant from the plan's `prng` and three's own `SimplexNoise`. `mergeVertices` before
+  the normals is what stops them reading as cut gems. A tree carries its crown on a clear stem.
+- **Bed plants are instanced crowns in the bed's own tones**, one per plant by its `tone`.
+- **The house's doors and windows are frames and glass set proud of the wall** (`HouseOpening`).
+- **The sun is the plan's** (`sunInFrame`): `presentationCast` turned into the frame, PCSS soft
+  shadows and a shader sky, all offline.
+- **No layer lift**: the scene's ground is cut, so nothing overlaps and nothing flickers.
+- **During a drag the scene is built from the settled plan** (`gestureSnapshot`): moving a chair must
+  not rebuild the garden each frame. The interior is read live.
 
 The toggle is a view preference in local state, like the camera. `structure-viewport` carries
 `data-surroundings`, `data-context-surfaces|solids|plants`, `data-interior`, `data-piece` and
 `data-floor`, which is what the e2e reads.
+
+## Towards a photoreal 3D view (started 30 Sep 2026)
+
+The plan is in `~/.claude/plans/can-you-look-into-robust-bumblebee.md`: CC0 assets, hero first — the
+structure and the furniture in it become photoreal, the neighbourhood stays muted context. Phases, in
+order: **1** light and post, **3a** UVs in metres, **2** PBR materials, **3b** bevels and profiles,
+**4** furniture GLBs — all built. **3c**, insetting classic posts so the rafters overhang, is waiting
+on a decision: it changes the 2D golden and furniture fit. There are to be **no frame GLBs**: a frame is cut from a rectangle of
+any size, and the detail that reads as real is exact when drawn in code.
+
+**The sky is a CC0 overcast HDRI checked in, not a download and not a sunny sky.**
+`tools/assets fetch:pbr` fetches it (pinned by Poly Haven's md5, refused if it drifts; `--audit` exits
+non-zero) into `public/assets/hdri/`, and `lib/structures/pbr/pbr-catalogue.json` records source,
+author, licence and sha256. **Overcast on purpose**: a partly cloudy sky has its own sun baked in, and
+the plan's sun is already the directional light — rotating the photograph to match could only ever
+match its bearing, never its height, and two suns is the tell. It is image-based light only
+(`background={false}`); the drei `Sky` still follows the plan's sun. Until it loads, or if the file is
+missing, the studio `Lightformer`s draw — the look this view had before.
+
+**The sky's strength is set by the sun-to-shade ratio, and the first value got it wrong.** At
+`environmentIntensity` 0.9 with the old hemisphere fill, a pergola standing in the house's shadow was
+lit nearly as brightly as the sunlit lawn beyond it, and the timber lost its form. 0.35 with a fill of
+0.12 puts shade back. Judge it on a structure *in shade*, which is where the sky is the only light.
+
+**Nothing in the 3D view may suspend on a file.** drei's `useTexture` rejects its suspense promise on
+a 404, no error boundary catches it, and the whole Canvas went down — while the comment beside it said
+a missing file was supported. `lib/structures/resource.ts` is the replacement: loaded once in the
+background, `null` until it arrives and for good if it never does, subscribers told once
+(`useSyncExternalStore`). `colourTexture(url)` is the texture form; the sky is `SKY_ENVIRONMENT`. An
+e2e blocks the sky and the lawn photograph and demands the view still draws and throws nothing.
+
+**Two render tiers, one tone curve.** `renderTier` gives a fine pointer with half-float colour
+targets the post pass (`StructurePostFX`): N8AO in metres, bloom above 1 (only the LED strip gets
+there), tone mapping, SMAA — in that order, composer multisampling off. A coarse pointer draws with the
+renderer's own tone mapping. **Both use Khronos PBR Neutral**, not ACES: a finish is a colour promise,
+and ACES shifts a swatch's hue. The composer turns the renderer's tone mapping off while it is mounted
+(`toneMappingGuard` in `@react-three/postprocessing`), so it is never applied twice. Nothing in the
+pass accumulates over frames, which is the only reason it is correct under `frameloop="demand"`; the
+controls `regress` while moving (`AdaptiveDpr`, half-resolution AO) and the settled frame is full
+quality. The viewport reports its tier and the sky's status to the wrapper as `data-render-tier` and
+`data-sky`.
+
+**Every part is its own mesh at its real size, with UVs in metres (`partGeometry`).** The first view
+scaled one shared unit box per part, which is free for flat colour and smears a texture fifty times
+along a rafter. U runs along a part's longest side — the grain — and V wraps round its four long
+faces; a per-part offset hashed from `part.id` stops twenty rafters showing the same stretch of
+photograph. A pyramid lays U along each eave. The geometry stays inside the part's box, and a test
+sweeps every configuration to say so. `extrudedGeometry` (furniture) got metre UVs for the same
+reason. The hover outline still scales the unit box, because it is flat colour.
+
+**The material library is ten CC0 sets, 5.8 MB, fetched and packed by `fetch:pbr`.** Poly Haven
+(`oak_veneer_01`, `concrete_floor_01`, `gravel_floor`) pinned by their published md5s, ambientCG
+(`Wood096`, `Plastic011`, `Wicker010A`, `Fabric030`, `Concrete012`) pinned by the zip's sha256,
+and a drawn polycarbonate rib map. Packed square: `albedo` (sRGB), `normal` (OpenGL) and `orm`
+(R occlusion, G roughness; metalness stays the finish's own number). Timber is turned a quarter at
+pack time so its grain runs along U — **and the normal map is re-swizzled with it** (R′ = G,
+G′ = 1 − R), or every grain is lit from the wrong side. The byte budget is 15 MB and a test holds it.
+
+**A finish's numbers stay the truth, and that is the calibration rule.** Each albedo is packed to a
+mean linear luminance of 0.3 and the catalogue records the mean the tool *measured*; a material's
+colour is set to `swatch ÷ mean` channel by channel (`calibratedColour`), roughness the same way. So
+the textured surface averages to the swatch the user chose, the 2D plan's tone and AR's flat colour
+still agree with it, and the photograph is only the grain. Packing to a known mean is what keeps the
+factor near one — an 8-bit texture multiplied by fifteen to reach a pale aluminium bands visibly.
+Paint, powder coat and fabric use desaturated sets for the same reason.
+
+**Which set dresses what.** Frame and roof finishes name theirs in `STRUCTURE_FINISHES.texture`
+(shaped as `ARMaterial.texture`, because AR needs it too): oak for hardwood and dark stain, pine for
+softwood, desaturated pine for paint, `Plastic011` for powder coat on both aluminiums and the steel,
+because powder coat *is* a satin orange-peel film. Furniture, cushions, floors and the polycarbonate
+ribs are the web's own choice (`pbr-library.ts`). **Materials dress themselves in place**: the cache
+hands out today's flat material at once and `dress` fills its maps when the set lands, so nothing
+waits and a missing set is simply flat; the viewport redraws on `usePbrSettled`, because nothing
+React can see changes. Neighbouring structures and surrounding cushions pass `detail: false` and stay
+flat — the surroundings are context.
+
+**A structure's floor keeps the plan's raster as its colour and takes relief on `uv1`.** A stone
+photograph would bring its own joints in the wrong places, so floors take detail-only sets (normal
+and roughness, no albedo) read through a second UV set in metres (`surfaceGeometry`'s `detailUv`,
+`secondChannel`). Porcelain and decking take a roughness and no relief: porcelain is smooth, and a
+grain laid in plan metres cannot follow the boards.
+
+**Every box part is a profile extruded along its grain, and how it was made is read off its finish.**
+`partGeometry` eases every edge — 4 mm on timber, 2 mm on metal (`stockOf`: metalness ≥ 0.5), none on
+a translucent panel or the light strip — because a knife edge is what makes a part read as a polygon;
+a chamfer only removes material, so containment holds. Three shapes are chosen from `part.group` and
+the frame model, with no schema change:
+
+- **A classic rafter's tails are cut on the top edge**, back by `RAFTER_TAIL` (90 mm) at the top and
+  nothing at the underside, because the underside bears on the beam and a traditional underside cut
+  would lift the rafter off it. The cut is linear in height, so each end stays a plane.
+- **A modern blade is an aerofoil**, a 16-segment lens with smooth normals, not a plank.
+- **A timber post stands in a galvanised shoe** (`SHOE_HEIGHT` 140 mm), drawn as geometry group 1 in
+  `hardwareMaterial`. It fits inside the post's own box because the shoe takes the full section and
+  the timber above it is inset `SHOE_INSET`; a shoe *wider* than the post would have broken the
+  footprint at every corner post, which is flush with it.
+
+**No bolts, on purpose.** The beams bear straight down on the posts, so a bolt head would pass
+through nothing — decoration pretending to be structure. The winding test takes the middle of each
+geometry group, because a post in its shoe is two solids and "outward from the part's centre" is
+wrong for the shoe's top face.
+
+**Four pieces of furniture are real models; four are still boxes, and that is the honest split.**
+`tools/assets fetch:models` composes GLBs from Poly Haven's CC0 models, pinned by the md5 Poly Haven
+publishes for each `.gltf`: the dining set for four (`wooden_table_02` and four
+`painted_wooden_chair_01`), for six (`painted_wooden_table` and six chairs), the lounge set
+(`painted_wooden_sofa` and `small_wooden_table_01`) and the bench (`painted_wooden_bench`). 269 kB
+together, each ≤5k triangles, meshopt-compressed and quantised (never Draco: its decoder is a CDN
+fetch; three's meshopt decoder is bundled). **No CC0 library has a photographed sun lounger, barbecue
+or parasol, and its pots are a quarter of a planter's size**, so those keep `furnitureParts`' boxes
+rather than become something else stretched to fit — `model-spec.ts` says so where a key would be.
+
+**The models are re-skinned: only their geometry is kept.** The Inside tab offers teak, rattan or
+powder-coated steel, and a published painted-farmhouse texture would ignore the choice. The tool lays
+texture coordinates in metres with the grain along each connected member (the `partGeometry` rule),
+drops the source textures, and ships one `finish` slot; `furnitureMaterial` dresses it at run time, so
+a teak table from a model and from the boxes are the same teak.
+
+**A set is composed where the boxes stand, from one layout.** `furniture-layout.ts` (`diningLayout`,
+`loungeLayout`) is read by both `furnitureParts` and the tool, so when a model lands nothing moves: the
+table fills the layout's table rectangle (plan proportions kept, top at `TABLE`), each chair stands at
+the layout's place turned by its `facing`, the sofa's back meets the rectangle's back edge. **Which
+way a source faces is measured**: its tall parts are its back, and a back more than 5 cm behind the
+middle is turned to −Z; the bench arrived facing −Z and was turned, the chair and the sofa were not.
+
+**`fitToFootprint` fits by one uniform scale and a turn, never a stretch or a mirror.** A set's
+natural size is the footprint it was composed for, so it draws at exactly 1 at the symbol's size; a
+single piece is its own bounds (the bench scales by 1.21). Outside `FIT_BAND` (0.75–1.33) the scale is
+saying the model is the wrong piece, and the boxes draw. The GLB is quantised, so its dequantising
+scale sits on the node: the loader bakes the node transform in and widens the attributes to floats
+once. A test decodes every GLB in Node — copying the bytes into a fresh `ArrayBuffer` first, because
+`GLTFLoader` checks `instanceof ArrayBuffer` and Node's belongs to a different realm.
+
+**The polycarbonate roof has a clear coat, not transmission.** Transmission renders the opaque scene
+a second time every frame to refract it, for a panel that diffuses rather than refracts.
 
 ## Inside a structure: its floor and its furniture
 
@@ -4640,6 +4870,268 @@ inside the bands, 87% of features drawn, the same fault counts). That is the exp
 than a missed one: the scorer reads footprints, and neither a stored configuration nor a
 re-described rect moves one. The golden images are unchanged too — the fixtures carry no
 configuration, and an unconfigured pergola resolves to `classic`.
+
+## Library models from Meshy (started 30 Sep 2026)
+
+The plan is in `~/.claude/plans/pasted-content-id-dd07-i-want-swirling-scone.md`.
+
+**The model:**
+- Meshy (image-to-3D) makes models of garden products, which are reviewed by a person and published to a checked-in library (`apps/web/public/models/library/`).
+- A model is an optional *look* for an element. The procedural parts stay the geometry of record and the fallback.
+- The live app never calls Meshy.
+- The first element is a gazebo.
+- This amends "There are no frame GLBs" above only where a model fits the element's size within about 15% on each axis.
+
+**Phase 0 (the spike) is built.** Nothing in `src/` has changed:
+- `apps/api/scripts/probe-meshy.ts` (`probe:meshy`) checks the key through `/balance`, which is free.
+- `apps/api/scripts/meshy-spike.ts` (`spike:meshy`) takes a reference image, calls image-to-3D, polls, downloads, and measures. It writes to `apps/api/storage/models/spike/`, which is gitignored.
+- `tools/assets` made the reference image with a hand-written prompt; Phase 1 replaced that with `generate:references`. `render:glb` (then `spike:render`) draws a GLB **in its own axes**, since Meshy's thumbnails are posed by Meshy's viewer and cannot tell you which way the file points.
+
+**What Meshy returns:** measured on one gazebo reference, on `meshy-6` and on `meshy-7.1`, with `should_remesh: true, target_polycount: 15000, enable_pbr: true, texture_resolution: '2k'`, `auto_size` off. The docs state none of the first three facts.
+
+- **+Y is up.** The file follows the glTF convention, and the object's sides lie along X and Z. The spike's `extremes` test settles it on a box that is nearly a cube: the vertices in the top 3% of +Y spread 0.09 (the finial), and those in the bottom 3% spread 1.73 (four posts).
+- **The origin is the bounding box's centre, not the base.** The base is at y ≈ −0.93, so the pipeline must move the pivot to the base centre.
+- **Scale is normalised: the largest extent is about 1.90**, fitted into roughly ±0.95. The help centre says "±1". **Real size is ours to apply.** The proportions survive: height over width is 0.97 against the reference's 0.93 (`SYMBOLS.gazebo` is 3 × 3 × 2.8).
+- **The file is one mesh, one material, one node, and has no transform and no extensions.** Its generator is `glTF-Transform v4.5.1`. The material is marked `doubleSided`.
+- **Remeshing lands under target.** The output was 12,383 triangles (7.1) and 13,798 (6) against 15,000.
+- **PBR comes as `metallicFactor: 1` with a metallic-roughness texture whose blue channel averages 0.002.** A wooden model is only non-metallic *because of the texture*. Drop or replace the texture without setting `metallicFactor` to 0 and the timber renders as metal.
+- **meshy-6 ships a wasted emission texture:** 2048² and entirely black. meshy-7.1 has none.
+- **The file is 9.5–9.9 MB and the textures are 2048².** The normal map is a PNG of about 4.7 MB, which is half the file.
+- **Downscaled to 1024 px with meshopt applied, the file is 2.53 MB**, under the 3 MB AR budget with no visible loss at plan distance. The normal PNG is still 2.1 MB of that, so it is the thing to squeeze.
+- **The texture atlas is fragmented into hundreds of small islands.** Downscaling bleeds across seams unless the islands keep their padding. Look at every published model at 1024 px.
+- **Timing:** Meshy took 112 s (7.1) and 231 s (6) from creation to success, with no queue on either.
+- **Cost:** 30 credits each, as priced. `expires_at − finished_at` is exactly 72 hours: that is the whole of the retention.
+
+**`meshy-7.1` is pinned.** It kept the reference's grey shingle courses where meshy-6 smoothed the roof to a brown-grey, it ran in half the time, and it adds no dead texture. Its one fault was a wavy flap on one eave, which is a review-gate question rather than a model choice. It is pinned by name, never `latest`, for the reason the image model is a dated snapshot.
+
+**Three things were confirmed that the plan assumed:**
+- Meshy's test-mode key is retired, so every test uses a fake client.
+- An image is sent as a `data:` URI, so no hosting is needed.
+- A browser cannot call Meshy (CORS 403), so the key is server-side by construction.
+
+**Phase 1 is built (1 Oct 2026): the pipeline, the format, and the first library model.**
+`gazebo-classic-dark-stained-3x3` is published in `apps/web/public/models/library/`. It is 1.17 MB
+(from 9.92), 12,383 triangles, 1024 px textures, 2.998 × 2.904 × 3.000 m, and has 0 validator errors.
+Nothing draws it yet; that is Phases 2 and 3.
+
+- **`packages/model-pipeline`** is Node only and is never imported by a browser. `processModel` runs
+  validate → normalise → optimise → validate → judge. **A defect refuses and a warning is
+  recorded.** `createIO` and `compressGeometry` are shared with `tools/assets fetch:models`, so the
+  furniture and library GLBs are written the one way. The furniture `--audit` still passes unchanged.
+  - **Normalising undoes what Phase 0 measured.** It bakes the node transforms, turns the model by
+    review-chosen quarter turns (`frontYawDeg`, never inferred), puts the base centre on the origin,
+    and scales **uniformly** to `contain` the spec's width and depth. Height is reported and never
+    forced: a roof that came out tall stays tall, and is a warning for review.
+  - **Normal maps are JPEG.** At 1024 px a PNG normal map was 2.1 MB of a 2.5 MB file. Its error shows
+    only as a faint grain in the shading.
+  - **MikkTSpace tangents are generated** (`mikktspace`) wherever a normal map arrives without
+    tangents, which is every Meshy file. Without them the validator warns "runtime-generated tangent
+    space may be non-portable": three.js copes, and the phone's renderer is not three.js. They cost
+    80 kB.
+  - **`prune` bakes a single-colour texture into its material's factor.** That is correct, and it is
+    why the pipeline's test textures are gradients. A flat test texture made the "metal map survives"
+    test fail by having the map optimised away.
+  - **The Khronos validator rejects, rather than reports, on bytes that are not a glTF.** That case is
+    caught and becomes `MalformedModelError`.
+- **`packages/schema/src/plan/models/spec.ts`** describes a model in the plan's vocabulary: a symbol,
+  the *resolved* structure facts, a material, a style and a nominal size.
+  - `specFromElement` and `specForPreset` produce a spec. `specForPreset` builds by placing and
+    resolving, so the two cannot disagree, and it refuses a choice the structure does not offer
+    before anything is bought.
+  - `canonicalSpec` gives stable JSON with lengths to the millimetre and `MODEL_SPEC_VERSION`. It does
+    no hashing, because the schema also runs in the browser; callers hash with `node:crypto`.
+  - **The reference template lives here, not in `asset-style.ts`** as the plan said. It is versioned
+    by the same `MODEL_SPEC_VERSION` as the spec it reads, and the API (which cannot import from
+    `apps/web`) can compose it.
+- **Scene contract 0.0.3** (additive, awaiting the partner's review):
+  - `AssetRef` (`id`, `position`, `yaw`, `size` — never a scale) is optional on `SolidNode` and
+    `ModelNode`.
+  - `ModelLibrarySchema` is in `model-library.ts`. An entry promises the scene convention, so a
+    renderer corrects nothing, and **an id is immutable once published**: a phone with an older
+    library must never draw a different file under the same name.
+  - `depicts` is the contract's plain-string copy of the spec, and a test checks it against
+    `ModelStructureFactsSchema` as `vocabulary.test.ts` checks `ModelKey`.
+- **`shingle-dark` ("Dark shingles") is a new roof finish, offered on the gazebo.** Meshy's gazebo has
+  grey shingles, and no finish could say so: a gazebo's roof was its frame's timber, aluminium or
+  polycarbonate. It is flat colour with no texture, like the polycarbonate. The classic preset is
+  unchanged, so a classic gazebo still has a timber roof, **and so does not match this model**. The
+  first gazebo the library draws is one whose roof is set to Dark shingles and whose frame is
+  dark-stained.
+- **`tools/assets generate:references`** composes the prompt from a spec. It writes
+  `raw/references/<hash>.png` (gitignored) with a JSON sidecar holding the spec, its canonical form
+  and the exact prompt. The same spec finds the same picture, so a second request costs nothing.
+- **`apps/api` `models:publish`** takes a `spike:meshy` folder through `processModel` and writes:
+  - `models/library/<id>.glb` and `<id>.webp` (Meshy's own render, as a thumbnail);
+  - `models/references/<id>.webp`, for provenance (keyed by asset id, not spec hash as the plan
+    said: one picture per published model, findable by name);
+  - a sorted `library.json` entry.
+
+  It refuses a defect, an id already published (`--replace` only before anything consumes it), and
+  the same bytes under a second id. `models:publish --audit` re-reads everything and exits non-zero
+  on drift, a missing file, an orphan file, a validator error or anything over budget.
+
+
+**Phase 2 is built (1 Oct 2026): a plan element is matched to a library model, purely.**
+`matchLibraryAsset(element, library, { style })` (`packages/ar-builder/src/library/match.ts`)
+answers which model draws an element, from the element every time it is read; nothing is stored.
+`buildArScene` takes the library as `BuildOptions.library`, injected like `appearance`, and a
+matched pergola or gazebo's solid carries an `AssetRef`: the same base centre and yaw the parts were
+built at, and the element's own `[width, heightFor, depth]`. **The parts stay**, so a renderer
+without the model draws exactly what it drew before, and a test holds the solid identical once
+`asset` is removed. Every fixture builds the identical scene with the library and without it, since
+none has a gazebo the library depicts.
+
+- **A match is exact, then sized.** The model must depict the symbol and every resolved hard fact:
+  frame drawing, roof kind, roof covering, frame finish, each side and the light. Each axis must then
+  be within `fit.tolerance` (0.15) either way. A model's appearance is baked in, so "close enough" in
+  the facts would be a picture of a different design. There is no fuzzy or embedding match: the
+  vocabulary is small and exact.
+- **Among what fits:** the brief's style (preferred, never required), then the least stretch (the
+  sum of `|ln ratio|`), then the id. That is a total order, so the same plan always draws the same
+  model.
+- **A model is turned a quarter only where it does not fit as it stands.** The first version turned
+  for the smaller stretch. The published gazebo is 2.998 × 3.000 m, so it was turned for every
+  near-square gazebo, a gain of a few hundredths of a per cent paid for by changing which face looks
+  out of the front. The eight-rotation test caught it.
+- **`structure.look`** is a new optional plain string with no migration. Absent or `auto` means
+  automatic, `procedural` always draws the parts, and anything else pins a model id. **A pin is a
+  preference, not a licence**: it is used only while the model still depicts the configuration and
+  fits, and otherwise the parts draw with a reason (`pin-missing`, `pin-depicts-other`,
+  `pin-does-not-fit`). Every refusal returns a `ProceduralReason` so the inspector can say why.
+  `applyStructurePreset` keeps `look` as it keeps `floor`: which drawing somebody prefers is not part
+  of a style.
+- **A default gazebo does not match the published model**, and that is correct: its roof is the
+  frame's timber, not shingles. A gazebo with a dark-stained frame and Dark shingles, 2.61–3.45 m
+  across and 2.53–3.34 m tall, does.
+- **Prettier was run over the whole of `ar-builder/src`** and reformatted six files this phase did
+  not otherwise touch (`depth.ts`, `frame.ts`, `materials.ts`, `mesh.ts`, `build.test.ts`,
+  `depth.test.ts`). The package is untracked, so there was no diff to check against. It is layout
+  only and all 170 builder tests pass. Format only the files you edit.
+
+**Phase 3 is built (1 Oct 2026): the Meshy gazebo draws in the app.** A gazebo with a dark-stained
+frame and Dark shingles, within the model's band, is drawn with the library model in "View in 3D",
+in "Edit in 3D", and as a neighbour in another structure's surroundings. **The proof of concept is
+done**: a plan element goes to a correctly scaled Meshy GLB rendered in 3D.
+
+- **`lib/structures/model-library.ts`** loads `library.json` and each GLB as non-suspending
+  resources. `MODEL_LIBRARY` and `libraryModel(id)` are the bundled `GLTFLoader` plus
+  `MeshoptDecoder`. **It keeps the model's own meshes and PBR materials**, unlike
+  `furniture-models.ts`, which keeps one mesh and re-skins it: a library model was matched exactly,
+  so its baked colour is the plan's.
+- **`components/three/LibraryModel.tsx`** is the one place a model is placed: the base centre at
+  `position`, `rotation-y` by `yaw`, scaled per axis to `size / naturalSize`. It draws `fallback`
+  (the node's own parts) until the file arrives, and for good if it never does. It asks for a redraw
+  when it swaps, because the canvases are `frameloop="demand"`.
+- **`SceneNodes` draws an asset-bearing solid through it**, rather than through `drawSolid`, so the
+  preview, which draws the scene and nothing else, shows exactly what the phone will.
+  `StructureSurroundings` swaps a neighbour the same way.
+- **`StructureWorkspace` decides the edited structure's look once** (`matchLibraryAsset` on the
+  live element) and passes it to `StructureViewport`. The viewport and `data-look` cannot disagree,
+  and a resize out of the band draws the parts at once. **The model is not pickable**: it has no parts
+  to open a tab by, and landing on an arbitrary tab would teach the wrong thing. The tabs and handles
+  still edit it, because they edit the element.
+- **`sceneOfPlan(plan, plants, library)`**. The scene is rebuilt when the library arrives, so the
+  first frame is always the parts.
+- **Test hooks:**
+  - on `garden-preview-viewport`: `data-assets`, `data-assets-drawn`, `data-library-models`, and
+    `data-asset-boxes`, the **world box each model was actually drawn in**;
+  - on `structure-viewport`: `data-look` (`model:<id>` or `parts:<reason>`).
+- **`e2e/library-model.spec.ts` measures the drawn box against the footprint: within 1 cm on every
+  axis.** It also checks that a blocked GLB draws the parts with nothing thrown, and that a 3.5 m
+  height (past the model's 3.34 m band) draws the parts and 3 m draws the model again. Height, not
+  width, because a 4.5 m wide gazebo ran into its neighbours and the editor rightly refused the
+  resize. The tests seed a chosen concept: the editor shows "Choose a concept first" without one.
+  Screenshots go to `test-results/library-model/` to be looked at.
+- **The preview's "From the door" view renders entirely grey, and that predates this phase.** It is
+  the same with the library blocked. The camera is probably inside the house looking at its inside.
+  It is not fixed here.
+
+**Phase 4 is built (1 Oct 2026): generation runs in the API, with a ledger and a lab.**
+`apps/api/src/model-assets/` and `/model-lab` in the web app, development only. **Nothing has been
+generated through it yet**: it is off by default, and every test drives a scripted Meshy.
+
+- **Off unless three things are all true**: a `MESHY_API_KEY`, `MODEL_GENERATION_ENABLED=true`, and
+  not production. A key alone is not enough on purpose: the repository's `.env` carries keys for the
+  scripts, and a key in a file must not be what decides that a running server may spend. Every
+  route answers 404 in production (a guard on the controller).
+- **`model_generation_jobs` (migration `0004`) is the ledger, not the library.** The library stays
+  the checked-in `library.json`. A partial unique index on `spec_hash` over every non-final status
+  means **one live job per spec**, so a duplicate request finds the first job instead of paying again.
+- **No queue, no worker, no timer.** A job advances one step whenever somebody asks about it (the lab
+  polls `GET /model-assets/jobs/:id` every 4 s), once at boot, and from `models:sync`. **Every step
+  is claimed with a compare-and-swap on `status` *before* the network call**: `requested →
+  submitting` before the POST, `→ downloading` before the download. Two polls can never both submit
+  (paid twice) or both download, and there are tests racing three of each.
+- **What each Meshy failure becomes** (`meshy.client.ts`):
+  - a 429 with `Retry-After` is waited out;
+  - a 429 without one is "queue full" and leaves the job `requested`;
+  - 5xx and network failures on reads are retried;
+  - **the POST that creates a task is never retried**, because it may have arrived, so a dropped
+    submission fails and says to check the dashboard;
+  - a failed Meshy task cost nothing and is retried once.
+- **A restart is recovered.** The Meshy task id is stored the moment Meshy returns it. A step claimed
+  longer than 10 minutes ago is treated as having died with its process: a download is re-fetched and
+  processing re-run, both free, and a lost submission fails honestly. Meshy's three-day retention
+  turns an unfetched result into "deleted before it was downloaded".
+- **Cost controls, all in the API:**
+  - reuse first: the library, by exact spec or by the matcher's own depicts-and-band rule, then a live
+    job;
+  - `force` passes over the library, never over a live job;
+  - `MESHY_MONTHLY_CREDIT_CEILING` (300), which counts in-flight jobs at their estimated 30;
+  - `MESHY_MAX_IN_FLIGHT` (2);
+  - `MESHY_MIN_BALANCE` (60), checked before every submit;
+  - `consumed_credits` recorded per job and shown as month-to-date.
+- **A reference is the picture `generate:references` drew *for this very spec*** (its sidecar's
+  canonical spec must match, or 400), **or an uploaded PNG or JPEG** under 10 MB, checked by its magic
+  bytes. The API never holds the OpenAI key: references stay a `tools/assets` job.
+- **Publishing** reprocesses with the turn the reviewer chose and refuses a defect (422). It writes
+  through `model-library.writer.ts`, which `models:publish` now shares, so ids stay immutable and
+  twins are refused (409).
+- **`/model-lab`** has three parts:
+  - a form built from `STRUCTURE_DEFINITIONS`, which shows the composed prompt and the
+    `generate:references` command for it;
+  - reference thumbnails and an upload;
+  - a priced Generate button, disabled while generation is off.
+
+  Each job shows status, progress, Meshy's four views and errors. A job awaiting review gets a 3D
+  preview on a half-metre grid inside its measured box, with an orange +Z arrow to turn the model's
+  front to, a suggested library id, Publish and Reject.
+- **The scripts share the service's client.** `spike:meshy` and `probe:meshy` call `MeshyClient`, so
+  a script and the lab send Meshy the same request, and `scripts/meshy-common.ts` keeps only the env
+  helpers. `model-assets.architecture.test.ts` fails if anything but the app module imports the
+  module, if anything but the client names Meshy's host, or if `plan/` reaches the model pipeline.
+- **`models:sync` boots only the modules it needs, not `AppModule`.** `tsx` (esbuild) emits no
+  decorator metadata, so services that inject by type cannot be built under it, and the first version
+  failed in `GardenIntentService`. Everything in `model-assets` injects by token for that reason.
+- **The upload needed the body limit raised** to 15 MB (`useBodyParser` in `main.ts`). Express's
+  100 kB default refuses a picture with a 413 that names nothing.
+
+**The first live run through the lab (1 Oct 2026): a modern gazebo, 30 credits, and three lessons.**
+`gazebo-modern-aluminium-dark-3x3` is published (3.00 × 2.70 × 2.95 m, 7,757 triangles, 0.9 MB, not
+turnable), the second model in the library, and a modern-preset gazebo on a plan draws with it in
+both 3D views. Its drawn box measures exactly 3 × 2.7 × 3 m.
+
+- **Meshy's height is its least reliable output.** The model came back 1.87 m tall for 2.7 m asked
+  for, 0.62 tall for its width against the reference's ~0.9. The classic gazebo in Phase 0 kept its
+  proportions, so this is per model, not a constant. As made it could never have drawn a gazebo
+  (2.4–3.6 m), because its band was 1.62–2.15 m. **`fitHeight` is the answer, and it is a reviewer's
+  choice, never a default**: the pipeline stretches the model upright to the spec's height
+  (×1.45 here), the lab previews the stretch before publishing, and the entry records it as
+  `heightStretch`. That is fine for straight posts, slats and a flat roof; braces and a pitched roof
+  need a harder look. Uniform scale stays the rule otherwise.
+- **A model with a screen has a front, and "turnable" must be unticked by a person.** The lab
+  pre-ticks it for anything square, because squareness is all it can measure. A rear screen turned a
+  quarter would screen a side.
+- **A test that cleaned up the jobs it *found* deleted a real one.** The suite shares the dev
+  database, and the helper removed every job a request returned, including an `existing` one. A test
+  asking for a plain modern gazebo matched the real job waiting in review, and its row was deleted
+  after the test. It was restored exactly from the job folder (`task.json`, `report.json`, the
+  reference's sidecar), and the helper now removes only what it `created`. **Any test sharing the
+  database removes only rows it made, never rows it matched.**
+- **`.env` is read once at boot.** `nest start --watch` restarts on a source change, not on an edit
+  to `.env`, so turning `MODEL_GENERATION_ENABLED` on needs a restart (now a comment in `main.ts`).
+  A timestamp-only touch does not restart it either, because the watcher compiles to identical output
+  and skips.
 
 ## Asset Library v2: one specification, composed prompts, a recorded lineage
 
@@ -4897,6 +5389,240 @@ inventory's `beside=[…]` lists what each surface meets, names and ids only. `p
 compiled the 7,690-byte schema against `claude-opus-5` on 22 Sep 2026; the budget test is re-pinned at
 12 branches, 15 objects, 2 optionals, 10 refs, with every new field required and honestly empty.
 `ChangeKind 'edge'` skips the geometry checks in `applyProposal`, as `material` does.
+
+## Editor precision aids (Phase 0 of the gap analysis, 29 Sep 2026)
+
+`docs/investigations/landscape-software-gap-analysis.md` is the gap analysis against landscape-design
+software and its roadmap; Phase 0 is built. What is not obvious from the code:
+
+**The keyboard is on the window, and `lib/editor-shortcuts.ts` decides whose a key press is.** The
+canvas wrapper's `onKeyDown` only fired while that `div` had focus, and clicking a Konva shape does
+not focus it — so Delete after picking a Layers row did nothing and there was no ⌘Z at all. Anything
+typed into a field is the field's (⌘Z included: a name box has its own undo), and the arrows are left
+to widgets that use them (`role="tab"`, sliders, menus). The 3D workspace owns Escape and the
+selection while it is open; only undo and redo reach past it, and nothing fires mid-gesture.
+
+**Alignment guides pull now, and a pull never carries a shape over the fence.** `moveElementLive` drew
+guides without applying them — a dashed "level with the patio" over a shed 20 cm off it. It is step
+2's rule now: snap, then check, and an alignment that would be refused is dropped for that frame so a
+shape can still be dragged flush past a guide pointing outside the plot.
+
+**A dragged size snaps to the decimetre and a typed one never snaps.** `resizeElementLive` and
+`rotateElementLive` take `{ exact }`; `setSize`, the rotation slider and the typed degrees pass it. The
+first version snapped typed sizes too and a typed 2.4 m came back 2.4000000000000004 — `snapLength`
+divides rather than multiplies back for that reason. Rotation snaps to 15° or to the house's bearing
+at any quarter turn (`snapRotation`), the house winning within 4°. A nudge is deliberately never
+grid-snapped: it is already a fixed step, and snapping would make 10 cm unreachable.
+
+**View groups are view state, the eye toggle is document state.** `hiddenGroups` has the five edit
+points every view preference has; `viewGroupOf` is derived from category and shape, never stored.
+Hidden groups filter the *input* to `buildRenderScene`, as `element.hidden` always has, so an edge
+resolves against what is shown. The toolbar's download honours them (it is a picture of the screen);
+the review screen's does not (nothing there says a group is hidden).
+
+**`plan/measure.ts` and `plan/takeoff.ts` are the first pieces of the shared measurement layer.**
+`elementMeasures` gives perimeter and path length; `describeGeometry` is untouched because the
+assistant's before/after strings go through it. `planTakeoff` sums what the resolvers already knew —
+boundary length by kind and height (the *mapped* boundary, labelled so), retaining face length and
+area, risers, fittings by type — and stores nothing.
+
+**The PNG has a title strip below the plan, never over it** (`materials/sheet-chrome.ts`): title,
+date, legend by material, scale bar, north arrow from `site.orientation`. The goldens draw through
+`drawPlan` and are unaffected.
+
+## The editor as a design tool (Phase 1 of the gap analysis, 29–30 Sep 2026)
+
+Surfaces are drawn, reshaped corner by corner, snapped to what is already there, selected several at
+a time, locked and dimensioned. What is not obvious from the code:
+
+**One snap engine, in the schema: `plan/snap/`.** `snapPointTo` for a pointer (a drawn corner, a
+dragged vertex, the tape) and `snapShapeDelta` for a whole shape. Targets come from
+`snapTargetsFor`: the authored corners, midpoints and edges of the plot, the house and every shown
+element, plus the old bounding-box axis lines. **Corners beat edges beat axis lines**, the nearest
+winning within each, the way a CAD endpoint wins over the line it ends. It was "smallest pull wins"
+for an afternoon, and a patio corner 14 cm from the house corner went onto the wall 10 cm away
+instead. A corner onto a segment is what puts a patio flush against a *rotated* wall, which no axis
+line can do. The web's `lib/grid.ts`, `lib/guides.ts` and `nextDrawPoint` re-export or wrap it, so
+no import moved.
+
+- **A base fill offers its axis lines and no corners or edges.** Its edges include the zone seams
+  `computeZones` cuts across the middle of the garden, and pulling a patio onto one feels like the
+  plan is sticky for no reason.
+- **The reach is 10 screen pixels**, from the `pxPerMetre` each canvas passes with the pointer.
+  Omitted, it is the old 0.3 m, which is what every store test gets.
+- **Targets are built once per gesture** and kept in the store's closure, not its state: nothing
+  draws them, so they need none of the five edit points.
+- **A point shape offers no corners to a move.** A tree's centre snapping onto a bed's edge feels
+  like the tree slipping.
+
+**Every corner edit goes through one path: `reshapeCorners` in the store, and `plan/vertices.ts`.**
+It refuses rather than clamps: an outline that folds through itself, a shape under 0.25 m² or a path
+under half a metre, a corner over the fence. It also resets a custom *or none* edge plan to Auto when
+the corner count changes (`edgesAfterVertexEdit`, shared with the AI's `reshape`). A `none` host
+kept stale stashed runs for a later return to Custom before this. Step 2 never checked for a bow
+tie; it does now, through the same helpers.
+
+**Rectangles stay rectangles.** A surface with no symbol can be freed with Convert to free shape
+(`canConvertToPolygon`); a structure, furniture, lighting or anything with a symbol cannot, because
+its parts, furniture, 3D model and resize rules are read off the rect. `rectToPolygon`'s corner order
+is the side-chain order, so custom edge runs survive the conversion. Paving direction comes from
+`pattern`, never from `rect.rotation`, so a converted patio's courses do not turn.
+
+**Drawing shares one reducer with step 2: `lib/draw-draft.ts`.** One `CLOSE_DISTANCE` for all three
+editors, and the close test reads the **raw** pointer. Step 2 tested the snapped one and refused to
+close exactly when the user aimed at the first corner. Three browser-only faults were found writing
+the e2e, and all three are worth knowing:
+
+- **Konva fires `dblclick` for any two clicks inside its time window, however far apart, and after
+  the second click's own handler.** Two quick corners finished a shape a corner early. A real double
+  click's second click is dropped as a repeat of the corner the first added, and `addDraftPoint`
+  reports `'ignored'`; that, and nothing else, finishes.
+- **The overlay container is `pointer-events-none`, and it is inherited.** Anything interactive in it
+  needs `pointer-events-auto`. `z-index` does not help.
+- **There is no bare canvas inside a garden.** Base fills cover every zone, so a Shift-drag marquee
+  that needed an empty press could never start. A Shift-press on the ground layer passes to the
+  stage; one on a feature still drags the selection.
+
+**`selectedId` is the primary and `selectedIds` the set.** Keeping the old field meant no reader of
+one element changed and no existing test did either. `withSelection` returns **the unchanged state**
+when nothing changed, because the AI run's controller calls `select` on every animation frame. Group
+moves are all-or-nothing, and a locked member refuses the whole move. Undo and redo select what they
+bring back and let go of what they take away, so "duplicate, undo, redo, Delete" deletes the copy.
+The AI request sends up to 8 ids, and the rules say "these" means the set.
+
+**A user's lock is `DesignElement.locked`, and "locked" used to mean something else.** `isLocked` is
+now ground layer *or* user lock; `isGroundLayer` is the old base-fill rule. Every "is this an
+obstacle / a neighbour" site moved to `isGroundLayer`, because a locked shed is still an obstacle.
+By hand the lock holds geometry and lets a name or a material change. Against the designer it holds
+everything, the material included:
+
+- `resolveOperation` refuses even `setProperty`;
+- `applyProposal` refuses every line;
+- the planner filters locked targets once, before any verb, in `lockedTargets`;
+- `reduce-cost` and a reshape that would take ground from a locked neighbour both refuse;
+- the inventory marks it `LOCKED BY USER — do not change anything about it`.
+
+No intent schema change, so no `probe:assistant`.
+
+**Dimensions:** the selected shape's sides (Dimensions on, or while its corners are open), and live
+clearances to the fence and the nearest shown neighbour while dragging (`clearances` in
+`plan/measure.ts`). A neighbour it overlaps or stands on has no clearance to report.
+
+**The Add sidebar is a rail of categories and one category at a time** (30 Sep 2026). It was one
+column of about 88 tiles under nine wrapping chips.
+
+- **`lib/catalogue.ts` is the one place anything placeable is filed.** Each entry has a category, a
+  subgroup, a search string and one fact line. `catalogue.test.ts` fails if an addable symbol,
+  species or enclosure kind is missing. A new symbol that is furniture needs a
+  `FURNITURE_SUBGROUP` entry, or it lands under Lounging.
+- **Search is the way across categories**, and clearing it returns to the category you were in.
+- **The last category and a Recent list** are kept in `localStorage`, wrapped in try/catch.
+- **The rail buttons keep the old `palette-group-${id}` test ids**, and tiles keep `palette-${id}`.
+- **Fact lines are kept short on purpose**: a tile is about 90 px wide, and "sun or part shade"
+  truncated.
+- **The search box is `type="text"` with `role="searchbox"`**, because `type="search"` adds the
+  browser's own clear button beside ours.
+
+## Plants, walls and fences (Phase 2 of the gap analysis, 30 Sep 2026)
+
+The things on the plan now carry what a designer specifies: a species, a planting mix, a new fence
+or wall, and what an existing tree really is. What is not obvious from the code:
+
+**The catalogue is `plan/plants/species.ts`: about 100 UK species, each pinned to a picture that
+already exists** (`art: { family, variant }`, checked against `ASSET_FAMILIES` by
+`species-art.test.ts`). No new art was generated. `PLANT_CATALOGUE` is now a derived view of the
+species that have a `symbol`, so its old readers compile unchanged. `docs/plants/catalogue.md` is the
+table for reviewing the facts, and **the facts are hand-authored and still want that review**.
+
+**A planting mix is a planting-bed material.** The seven `mix-…` ids are in `MaterialIdSchema`, so
+choosing one is `setMaterial`, the schedule groups by it, and the designer's `material` verb reaches
+it with nothing added to its grammar. A bed may also carry its own mix on `DesignElement.planting`,
+which wins; `bedMix` is the one resolver. Picking a preset mix clears a bed's own mix
+(`withMaterial` in the store); picking a non-mix material leaves it, because there the material is
+only the drawing base. Shares always sum to one: `withShare`, `withSpecies` and `withoutSpecies`
+give and take in proportion.
+
+**A mix bed is counted, and _this reverses_ "planting gets an area and a dash".** The dash was
+right about the *drawn* density and still is for the five older planting materials. A mix names
+species with real planting centres, so `mixCounts` (`ceil(area × share / spacing²)`) is an order,
+not a drawing convention. Placed plants are counted by species (`isPlacedPlant`), and loose fill is
+given in m³ from `Material.depthMm`. The takeoff's planting group adds the two sources together.
+
+**A species is drawn with its own picture.** `speciesPin` narrows the sprite family to the pinned
+variant; the random draws are still made, so rotation and position do not move. A mix bed's
+`resolveLayers` makes one layer per species, and the understorey is not added to a mix bed. The
+goldens carry no mixes and did not change; `render:plan` writes `05-planting-mixes.png`.
+
+**Light is `sunHours`, and it makes no claim without `site.location`.** Two days (midsummer and the
+equinox), every 30 minutes, against `shadowOccluders`; RHS bands of 6 and 3 hours. `bedExposure`
+samples a bed at five interior points against everything but itself. The Planting tab's verdict and
+the generator's choice of mix both ask it.
+
+**The generator names species after it has decided sizes.** `treePlantFor` and `shrubPlantFor`
+choose within a symbol, so the radius, and every placement made with it, is unchanged.
+`treeStamp` is called by both the preview and realisation, so they name the same tree. A generated
+bed keeps its material (the scorer reads it for upkeep and style) and gets its mix on `planting`,
+chosen by `mixForBed` from the planting style and, where located, the bed's light. `presetMatching`
+is how the Planting tab knows such a copy is a preset rather than an edit. **`eval:generator` was
+identical before and after** (recorded in `eval-generator.baseline.md`). Tree heights changed and
+the sun score did not, because the sun principle's shade comes from the site analysis.
+
+**A proposed fence, screen, wall, hedge, railing, kerb or opening is an `enclosure` element with a
+polyline for its line.** The survey (`site.boundaryStyles`) is untouched. `effectiveBoundaryRuns`
+derives, on every read, which stretch of each side a proposal lying along it replaces: parallel
+within 5° and within `WALL_REACH`. It returns the survey that remains, the stretches replaced and
+the proposed runs. With no enclosures it equals `boundaryRuns`, and a test pins that. Consequences:
+
+- **An enclosure is legal on its centreline**, as a tree is on its trunk: `legalFootprint` returns a
+  zero-width polyline, `geometryFitsInside` asks `polylineCoveredBy`, and the validator sends a
+  `LINESTRING` and asks `ST_Covers` within a millimetre. `ST_Contains` refuses a line lying exactly
+  on the boundary, which is where fences are built. It passed before the SQL was changed only because
+  a collapsed polygon happened to satisfy PostGIS; do not rely on that.
+- **A proposed run carries its own `inward`.** The painters read `run.inward ?? inwardNormal(…)`.
+  One laid along a side is drawn from the fence line inward like the survey's own band; a
+  freestanding one is shifted half its thickness so its band is centred on its line.
+- **`scenePasses` skips enclosures**, and `ElementDrawing` draws them as an invisible hit strip: the
+  fence painter draws the look. A kerb is laid by the edging painter in the concrete kerb's pattern.
+- **Only the survey's runs are shadow casters**; the enclosure casts as the element it is, or it
+  would shade twice.
+- **The generator composes none, and `analyseSite` does not read them.** It reads the stored layout,
+  so reading enclosures there would make generation depend on whatever layout was saved before. The
+  privacy principle reads them from the elements it is scoring instead, with tall trees.
+- Enclosures are measured in metres (`measure: 'length'`). A kept one is listed as kept and never
+  ordered.
+
+**A kept feature keeps its nature** (`keptElement`). A tree keeps its species, height and spread and
+carries a tree symbol, so it casts, counts as canopy and is legal on its trunk. A fence becomes an
+enclosure with `status: 'keep'`. The obstacle the generator avoids is still the outline drawn on
+step 2. Step 2's panel records height, spread and species (`describeFeature`) and never widens the
+drawn point, so saying an oak is 8 m across cannot make it illegal on that screen.
+
+**The designer:** the enums grew (mix ids, enclosure materials, the category) and nothing else did.
+`probe:assistant` compiled the 8,201-byte schema on 30 Sep 2026 and the budget pins are unchanged.
+In the planner's `add`:
+
+- a plant named for a species takes it, and a tree is placed by its trunk as the generator places
+  one;
+- `along-boundary` is honoured, by sorting candidates by distance to the fence;
+- an enclosure is laid on the side of the property bounding the named zone;
+- each `add` sees what earlier adds in the same request put down (`Context.added`), or "three
+  hornbeams" lands three on one spot.
+
+The inventory names mixes, species, enclosures and each side of the property by the zone it runs
+beside, and never a position.
+
+**Traps this phase paid for.**
+
+- **`getImageData` ignores the context's transform.** The grade in `drawPlan` graded the canvas's
+  top-left corner once per frame on any sheet that translates to its frames. It had been yellowing
+  the first frame of `04-lighting-hours.png` unnoticed. The box is now carried through
+  `getTransform()`.
+- **`prepareRun`'s `allocateId` takes no argument.** A test that wrote `(index) => \`new-${index}\``
+  gave every add `new-undefined`, and the second add was refused as already on the plan.
+- **In the planner's test fixture, "back" is the metre-wide strip behind the house** (the house
+  faces +y). A test that asked for three 4 m trees there was refused correctly.
+- **A test that found trees by the name "Tree" stopped finding any** once they were named by
+  species. Find them by symbol.
 
 ## Traps already hit
 

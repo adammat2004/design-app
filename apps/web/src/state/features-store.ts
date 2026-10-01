@@ -2,6 +2,8 @@
 
 import { create } from 'zustand';
 import {
+  reachOf,
+  SNAP_REACH_PX,
   scopeRing,
   type FeaturesSection,
   type GardenChange,
@@ -29,6 +31,7 @@ import {
   type FeatureStatus,
   type PlacedFeature,
 } from '@/lib/features';
+import { draftStep } from '@/lib/draw-draft';
 import { snapPoint } from '@/lib/grid';
 import {
   alignmentGuidesFor,
@@ -63,7 +66,8 @@ import { useBoundaryStore } from './boundary-store';
 export type FeaturesMode = 'select' | 'place' | 'measure' | 'scope';
 
 /** Clicking this close to the first point closes a polygon, in metres. Matches the boundary. */
-export const CLOSE_DISTANCE = 0.6;
+/* One close distance for every editor that draws — see `lib/draw-draft.ts`. */
+export { CLOSE_DISTANCE } from '@/lib/draw-draft';
 
 /** Deep enough to undo a session's worth of fiddling without unbounded growth. */
 const HISTORY_LIMIT = 50;
@@ -152,7 +156,8 @@ interface FeaturesState {
    */
   applyAssistantChanges: (changes: GardenChange[]) => ApplyFeaturesOutcome;
 
-  moveFeatureLive: (id: string, anchor: Point) => void;
+  /** `pxPerMetre` is the canvas's zoom, so an alignment reaches the same distance on screen at any zoom. */
+  moveFeatureLive: (id: string, anchor: Point, options?: { pxPerMetre?: number }) => void;
   nudgeSelection: (dx: number, dy: number) => void;
   deleteFeature: (id: string) => void;
   deleteSelection: () => void;
@@ -160,6 +165,15 @@ interface FeaturesState {
   setSelectionStatus: (status: FeatureStatus) => void;
   setReplaceWith: (id: string, text: string) => void;
   renameFeature: (id: string, name: string) => void;
+  /**
+   * What a kept thing is like: a tree's species, height and crown, a fence's height. `null` clears
+   * a field back to "not said". Nothing here moves the feature — the crown is applied when the tree
+   * is carried onto a design, so saying an oak is 8 m across cannot make it illegal on this screen.
+   */
+  describeFeature: (
+    id: string,
+    patch: { height?: number | null; spread?: number | null; plantId?: string | null },
+  ) => void;
 
   setEditingShape: (id: string | null) => void;
   moveVertexLive: (id: string, index: number, at: Point) => void;
@@ -383,26 +397,20 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
         mode === 'scope' ? 'polygon' : placingKind && FEATURE_DEFINITIONS[placingKind].placement;
       if (placement !== 'polygon' && placement !== 'polyline') return;
 
-      const point = snapped(raw);
-      const first = draftPoints[0];
-
-      // Clicking back onto the first point is how a polygon closes, exactly as the boundary
-      // does it.
-      if (
-        placement === 'polygon' &&
-        first &&
-        draftPoints.length >= minimumDraftPoints('polygon') &&
-        Math.hypot(point.x - first.x, point.y - first.y) <= CLOSE_DISTANCE
-      ) {
+      /*
+       * What the click means — close, add, or a double click's repeat to ignore — is the shared
+       * draft rule (`lib/draw-draft.ts`), the same one step 5 draws by. It tests closing against the
+       * raw pointer, as the boundary does: snapping first could carry the point out of range of the
+       * first corner exactly when the user aimed at it in order to close.
+       */
+      const step = draftStep(draftPoints, raw, placement, (at) => snapped(at));
+      if (step.kind === 'close') {
         if (mode === 'scope') get().finishScopeDraw();
         else get().finishDraft();
         return;
       }
-
-      // A double click — how a line says it is finished — fires two clicks first. Dropping a
-      // repeat of the last point keeps that from leaving a stray duplicate on the shape.
-      const last = draftPoints.at(-1);
-      if (last && last.x === point.x && last.y === point.y) return;
+      if (step.kind === 'ignore') return;
+      const point = step.point;
 
       set({ draftPoints: [...draftPoints, point], clash: null });
     },
@@ -551,7 +559,7 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
       return outcome;
     },
 
-    moveFeatureLive: (id, rawAnchor) => {
+    moveFeatureLive: (id, rawAnchor, options) => {
       const state = get();
       const feature = state.present.features.find((candidate) => candidate.id === id);
       if (!feature) return;
@@ -567,10 +575,11 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
       if (state.snapEnabled) {
         const targets = snapTargetsExcluding(moving);
         const proposed = featureOutline(moveFeature(feature, anchor));
-        const delta = snapDeltaToTargets(proposed, targets);
+        const reach = reachOf({ px: SNAP_REACH_PX, pxPerMetre: options?.pxPerMetre });
+        const delta = snapDeltaToTargets(proposed, targets, reach);
 
         anchor = { x: anchor.x + delta.x, y: anchor.y + delta.y };
-        alignments = alignmentGuidesFor(featureOutline(moveFeature(feature, anchor)), targets);
+        alignments = alignmentGuidesFor(featureOutline(moveFeature(feature, anchor)), targets, reach);
       }
 
       const from = moveFeature(feature, anchor);
@@ -714,6 +723,24 @@ export const useFeaturesStore = create<FeaturesState>((set, get) => {
           features: draft.features.map((candidate) =>
             candidate.id === id ? { ...candidate, name: trimmed } : candidate,
           ),
+        };
+      }),
+
+    describeFeature: (id, patch) =>
+      commit((draft) => {
+        const feature = draft.features.find((candidate) => candidate.id === id);
+        if (!feature) return null;
+        const next = { ...feature };
+        for (const key of ['height', 'spread', 'plantId'] as const) {
+          const value = patch[key];
+          if (value === undefined) continue;
+          if (value === null || (typeof value === 'number' && !(value > 0))) delete next[key];
+          else (next as Record<string, unknown>)[key] = value;
+        }
+        if (JSON.stringify(next) === JSON.stringify(feature)) return null;
+        return {
+          ...draft,
+          features: draft.features.map((candidate) => (candidate.id === id ? next : candidate)),
         };
       }),
 

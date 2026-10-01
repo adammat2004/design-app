@@ -313,6 +313,28 @@ export function polygonContainsPolygon(outer: Point[], inner: Point[]): boolean 
 }
 
 /**
+ * Whether an open line lies inside or on a polygon: every vertex in or on it, no segment crossing
+ * its edge, and every segment's midpoint in or on it — the last because a chord across a concave
+ * corner can touch the outline only at its ends and still run outside between them.
+ *
+ * The line's twin of `polygonContainsPolygon`, for what is judged on its centreline: a fence laid
+ * exactly along the boundary lies *on* it, which a polygon test would call half outside.
+ */
+export function polylineCoveredBy(outer: Point[], line: Point[]): boolean {
+  if (outer.length < 3 || line.length < 2) return false;
+  if (!line.every((point) => pointInPolygon(point, outer))) return false;
+  for (let i = 0; i + 1 < line.length; i += 1) {
+    const a1 = line[i]!;
+    const a2 = line[i + 1]!;
+    if (!pointInPolygon({ x: (a1.x + a2.x) / 2, y: (a1.y + a2.y) / 2 }, outer)) return false;
+    for (let j = 0; j < outer.length; j += 1) {
+      if (segmentsCross(a1, a2, outer[j]!, outer[(j + 1) % outer.length]!)) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Sutherland-Hodgman clip of `subject` against a single half-plane, keeping everything on the
  * side the `normal` points towards. Half-planes are convex, so a chain of these is all the
  * zone splitter needs — no boolean-geometry library.

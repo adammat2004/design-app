@@ -10,6 +10,27 @@ import {
   rotatePoint,
 } from './boundary-geometry';
 import { housePolygon, houseSize, type HouseFootprint } from './house';
+import {
+  alignmentGuidesFor,
+  cornerSnapLines,
+  snapDeltaToTargets,
+  type AlignmentGuide,
+} from '@garden-studio/schema';
+
+/*
+ * The alignment engine lives in the shared package now, beside the rest of the snapping, so all three
+ * editors pull by one rule. Re-exported so every existing import keeps working.
+ */
+export {
+  ALIGNMENT_THRESHOLD,
+  alignmentGuidesFor,
+  boxSnapLines,
+  collectSnapTargets,
+  cornerSnapLines,
+  snapDeltaToTargets,
+  type AlignmentGuide,
+  type SnapTargets,
+} from '@garden-studio/schema';
 
 /**
  * The measuring layer: how far the house sits from each fence, how big it is, and whether an
@@ -21,7 +42,15 @@ import { housePolygon, houseSize, type HouseFootprint } from './house';
  * house's four sides and its two spans, which are fixed.
  */
 export type DimensionGuideId =
-  'top' | 'right' | 'bottom' | 'left' | 'width' | 'depth' | `plot-${number}`;
+  | 'top'
+  | 'right'
+  | 'bottom'
+  | 'left'
+  | 'width'
+  | 'depth'
+  | `plot-${number}`
+  | `element-${number}`
+  | `clear-${number}`;
 
 export interface DimensionGuide {
   id: DimensionGuideId;
@@ -53,11 +82,6 @@ export function sizeAnchorAt(polygon: Point[]): Point | null {
   return { x: box.minX, y: box.minY + box.length + SIZE_ANCHOR_GAP };
 }
 
-export interface AlignmentGuide {
-  axis: 'x' | 'y';
-  /** Metres along that axis — the canvas draws a full-height or full-width line here. */
-  at: number;
-}
 
 /**
  * Each side of the house is described in its own frame, so a rotated house still reports a
@@ -140,7 +164,12 @@ export function houseSpanGuides(house: HouseFootprint | null): DimensionGuide[] 
  * Outward is decided against the centroid, so a concave plot pushes its notch edges the right way
  * instead of folding them inside itself.
  */
-export function plotDimensionGuides(polygon: Point[], offset: number): DimensionGuide[] {
+export function plotDimensionGuides(
+  polygon: Point[],
+  offset: number,
+  /* `element` for a selected shape's sides, so its guides never share a key with the plot's. */
+  prefix: 'plot' | 'element' = 'plot',
+): DimensionGuide[] {
   if (polygon.length < 3) return [];
 
   const centre = polygonCentroid(polygon);
@@ -159,102 +188,12 @@ export function plotDimensionGuides(polygon: Point[], offset: number): Dimension
     const shift = { x: normal.x * offset * outward, y: normal.y * offset * outward };
 
     return {
-      id: `plot-${edge.index}` as const,
+      id: `${prefix}-${edge.index}` as const,
       from: { x: edge.start.x + shift.x, y: edge.start.y + shift.y },
       to: { x: edge.end.x + shift.x, y: edge.end.y + shift.y },
       distance: length,
     };
   });
-}
-
-/** Within this much, an edge counts as lined up — in metres. */
-export const ALIGNMENT_THRESHOLD = 0.3;
-
-/**
- * The coordinates a shape can line itself up against, split by axis. Building the targets
- * separately from the matching is what lets one engine serve "is this wall level with that
- * fence post" on step 1 and "is this path edge level with that patio edge" on step 2.
- */
-export interface SnapTargets {
-  x: number[];
-  y: number[];
-}
-
-/** The three lines any shape offers on each axis: its two edges and its middle. */
-export function boxSnapLines(polygon: Point[]): SnapTargets {
-  if (polygon.length === 0) return { x: [], y: [] };
-
-  const box = boundingBox(polygon);
-
-  return {
-    x: [box.minX, box.minX + box.width / 2, box.minX + box.width],
-    y: [box.minY, box.minY + box.length / 2, box.minY + box.length],
-  };
-}
-
-/** Every corner of a polygon as a snap target, which is how the boundary contributes. */
-export function cornerSnapLines(polygon: Point[]): SnapTargets {
-  return { x: polygon.map((point) => point.x), y: polygon.map((point) => point.y) };
-}
-
-export function collectSnapTargets(sources: SnapTargets[]): SnapTargets {
-  return {
-    x: sources.flatMap((source) => source.x),
-    y: sources.flatMap((source) => source.y),
-  };
-}
-
-/**
- * The lines a shape has come into agreement with — what the canvas draws as a dashed guide.
- * Deduplicated per axis so two features lined up on the same coordinate flash one line.
- */
-export function alignmentGuidesFor(subject: Point[], targets: SnapTargets): AlignmentGuide[] {
-  if (subject.length === 0) return [];
-
-  const candidates = boxSnapLines(subject);
-  const guides: AlignmentGuide[] = [];
-
-  for (const axis of ['x', 'y'] as const) {
-    for (const value of candidates[axis]) {
-      const match = targets[axis].find((target) => Math.abs(target - value) <= ALIGNMENT_THRESHOLD);
-      if (match === undefined) continue;
-      if (guides.some((guide) => guide.axis === axis && Math.abs(guide.at - match) < 1e-6)) {
-        continue;
-      }
-
-      guides.push({ axis, at: match });
-    }
-  }
-
-  return guides;
-}
-
-/**
- * How far to nudge a shape so it lands on whatever it is nearly lined up with, per axis. Snap
- * uses the same threshold the guides display at, so the line the user sees is the line they get,
- * and the nearest match wins when several are in range.
- */
-export function snapDeltaToTargets(subject: Point[], targets: SnapTargets): Point {
-  if (subject.length === 0) return { x: 0, y: 0 };
-
-  const candidates = boxSnapLines(subject);
-  const delta = { x: 0, y: 0 };
-
-  for (const axis of ['x', 'y'] as const) {
-    let best: { delta: number; distance: number } | null = null;
-
-    for (const value of candidates[axis]) {
-      for (const target of targets[axis]) {
-        const distance = Math.abs(target - value);
-        if (distance > ALIGNMENT_THRESHOLD) continue;
-        if (!best || distance < best.distance) best = { delta: target - value, distance };
-      }
-    }
-
-    if (best) delta[axis] = best.delta;
-  }
-
-  return delta;
 }
 
 /**
@@ -278,4 +217,26 @@ export function snapCentreToAlignment(
   const delta = snapDeltaToTargets(housePolygon({ ...house, centre }), cornerSnapLines(boundary));
 
   return { x: centre.x + delta.x, y: centre.y + delta.y };
+}
+
+/**
+ * A path's length, leg by leg, as dimension lines offset to one side of its centreline — the figures
+ * a path is set out by. Offset by half its width plus a margin, so the line sits clear of the strip.
+ */
+export function pathDimensionGuides(points: Point[], offset: number): DimensionGuide[] {
+  const guides: DimensionGuide[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const start = points[index]!;
+    const end = points[index + 1]!;
+    const length = edgeLength(start, end);
+    if (length === 0) continue;
+    const normal = { x: -(end.y - start.y) / length, y: (end.x - start.x) / length };
+    guides.push({
+      id: `element-${index}`,
+      from: { x: start.x + normal.x * offset, y: start.y + normal.y * offset },
+      to: { x: end.x + normal.x * offset, y: end.y + normal.y * offset },
+      distance: length,
+    });
+  }
+  return guides;
 }

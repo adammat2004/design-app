@@ -4,10 +4,8 @@ import type { LocalPoint } from '@garden-studio/schema';
 import {
   extrudedGeometry,
   furnitureParts,
-  roofGeometry,
   surfaceColour,
   surfaceGeometry,
-  surfaceTexture,
   tiledUv,
 } from './surroundings-geometry';
 
@@ -146,63 +144,7 @@ describe('extrudedGeometry', () => {
   });
 });
 
-describe('roofGeometry', () => {
-  const house: LocalPoint[] = [
-    { x: -4, z: -3 },
-    { x: 4, z: -3 },
-    { x: 4, z: 3 },
-    { x: -4, z: 3 },
-  ];
-
-  it('raises the ridge above the eaves and keeps the eaves at the walls’ height', () => {
-    const { roof } = roofGeometry(house, 6)!;
-    const ys = triangles(roof)
-      .flat()
-      .map((vertex) => vertex[1]);
-    expect(Math.min(...ys)).toBeCloseTo(6);
-    expect(Math.max(...ys)).toBeCloseTo(6 + 6 * 0.35);
-    for (const triangle of triangles(roof)) expect(normalOf(triangle)[1]).toBeGreaterThan(0);
-  });
-
-  it('roofs an L-shaped house without a hole or a fold', () => {
-    const built = roofGeometry(
-      L.map((point) => ({ x: point.x * 3, z: point.z * 3 })),
-      3,
-    )!;
-    const tris = triangles(built.roof);
-    for (const triangle of tris) expect(normalOf(triangle)[1]).toBeGreaterThan(0);
-    // The roof's plan area is the house's own, so nothing is missing and nothing is doubled.
-    const planArea = tris.reduce((sum, triangle) => sum + Math.abs(normalOf(triangle)[1]) / 2, 0);
-    expect(planArea).toBeCloseTo(12 * 9, 1);
-  });
-
-  it('closes a gable’s ends with wall', () => {
-    const long: LocalPoint[] = [
-      { x: -8, z: -2 },
-      { x: 8, z: -2 },
-      { x: 8, z: 2 },
-      { x: -8, z: 2 },
-    ];
-    const built = roofGeometry(long, 3)!;
-    expect(built.gables).not.toBeNull();
-    expect(triangles(built.gables!)).toHaveLength(2);
-  });
-});
-
 describe('what a surface is drawn with', () => {
-  it('finds the plan’s own texture and its size, and says so when there is none', () => {
-    const turf = surfaceTexture('standard-turf');
-    expect(turf?.url).toMatch(/^\/assets\/.*tex-standard-turf-1\.webp$/);
-    expect(turf?.tile.u).toBeGreaterThan(0);
-    // A decking board's picture is long and thin, and says so.
-    const deck = surfaceTexture('timber-decking');
-    expect(deck!.tile.u).toBeGreaterThan(deck!.tile.v * 5);
-    expect(surfaceTexture('no-such-material')).toBeNull();
-    // A unit's face before the ground between: stepping stones are stone, not a lawn.
-    expect(surfaceTexture('stepping-stones')?.url).toMatch(/face-stepping-stone/);
-    expect(surfaceTexture(null)).toBeNull();
-  });
-
   it('falls back to the plan’s flat colour', () => {
     expect(surfaceColour('standard-turf', 'lawn')).toMatch(/^#/);
     expect(surfaceColour(null, 'paved-area')).toMatch(/^#/);
@@ -250,5 +192,47 @@ describe('furnitureParts', () => {
     expect(furnitureParts('planter', square, 0, 0.9)).toEqual([
       { ring: square, base: 0, height: 0.9 },
     ]);
+  });
+});
+
+describe('texture coordinates in metres', () => {
+  const box: LocalPoint[] = [
+    { x: 0, z: 0 },
+    { x: 2, z: 0 },
+    { x: 2, z: 1 },
+    { x: 0, z: 1 },
+  ];
+
+  it('lays a solid’s walls in metres: U round the ring, V up the wall', () => {
+    const geometry = extrudedGeometry(box, 0.2, 0.7)!;
+    const uv = geometry.getAttribute('uv');
+    const position = geometry.getAttribute('position');
+    expect(uv.count).toBe(position.count);
+    let maxU = 0;
+    for (let i = 0; i < uv.count; i += 1) {
+      if (position.getY(i) < 0.2 + 0.7 - 1e-6 || Math.abs(uv.getY(i) - position.getY(i)) < 1e-6) {
+        maxU = Math.max(maxU, uv.getX(i));
+      }
+      // Every wall vertex's V is its height, so a weave or a grain is at its real size.
+      if (position.getY(i) < 0.2 + 1e-6) expect(uv.getY(i)).toBeCloseTo(0.2, 6);
+    }
+    // Round the whole ring: 2 + 1 + 2 + 1 metres.
+    expect(maxU).toBeCloseTo(6, 6);
+  });
+
+  it('writes a second UV set in its own coordinates when a surface asks for relief', () => {
+    const plain = surfaceGeometry(box, 0.04, tiledUv(0.6, 0.6), 0.04)!;
+    expect(plain.getAttribute('uv1')).toBeUndefined();
+    const detailed = surfaceGeometry(box, 0.04, tiledUv(0.6, 0.6), 0.04, (point) => [
+      point.x,
+      -point.z,
+    ])!;
+    const uv1 = detailed.getAttribute('uv1');
+    const position = detailed.getAttribute('position');
+    expect(uv1.count).toBe(position.count);
+    for (let i = 0; i < uv1.count; i += 1) {
+      expect(uv1.getX(i)).toBeCloseTo(position.getX(i), 6);
+      expect(uv1.getY(i)).toBeCloseTo(-position.getZ(i), 6);
+    }
   });
 });

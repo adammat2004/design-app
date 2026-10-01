@@ -170,6 +170,12 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   const viewport = page.getByTestId('structure-viewport');
   await expect(viewport.locator('canvas')).toHaveCount(1);
   await expect(viewport).toHaveAttribute('data-width', '3');
+  // Lit by the sky checked in beside the app, and finished by the post pass on a desktop pointer.
+  // These are background loads of real files, so they get longer than the default to arrive.
+  await expect(viewport).toHaveAttribute('data-sky', 'ready', { timeout: 15_000 });
+  await expect(viewport).toHaveAttribute('data-render-tier', 'high');
+  // Its timber and the furniture's weave are the checked-in CC0 photographs.
+  await expect(viewport).toHaveAttribute('data-pbr', 'ready', { timeout: 15_000 });
   // It opens among its surroundings — the garden's own ground around it — which can be switched off.
   await expect(viewport).toHaveAttribute('data-surroundings', 'on');
   expect(Number(await viewport.getAttribute('data-context-surfaces'))).toBeGreaterThan(0);
@@ -211,6 +217,8 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   await expect(viewport).toHaveAttribute('data-floor', 'stone-setts');
   await page.getByTestId('structure-piece-add').selectOption('dining-set-4');
   await expect(viewport).toHaveAttribute('data-interior', '1');
+  // Drawn as the real table and chairs from the furniture library, not boxes.
+  await expect(viewport).toHaveAttribute('data-models', 'ready', { timeout: 15_000 });
   const pieceId = await viewport.getAttribute('data-piece');
   expect(pieceId).toBeTruthy();
   await page.getByTestId('structure-camera-top').click();
@@ -244,5 +252,153 @@ test('a pergola opens in 3D, and what is changed there is the plan', async ({ pa
   expect(table).toMatchObject({ category: 'furniture', symbol: 'dining-set-4' });
   expect(standsInside(element, table)).toBe(true);
   expect(table.shape.kind === 'rect' && table.shape.centre).not.toEqual(element.shape.kind === 'rect' && element.shape.centre);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * A missing file is a supported state in the 3D view as everywhere else. With the sky, the lawn
+ * photograph, the whole material library and the furniture models unreachable it draws the studio
+ * light, flat ground, flat finishes and box furniture, stays interactive, and throws nothing — the
+ * suspending loader this replaced took the whole view down on a single 404.
+ */
+test('the 3D view still draws when its sky and ground files are missing', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/assets/hdri/**', (route) => route.abort());
+  await page.route('**/assets/plan/textures/tex-standard-turf-*', (route) => route.abort());
+  await page.route('**/assets/pbr/**', (route) => route.abort());
+  await page.route('**/models/**', (route) => route.abort());
+
+  const project = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
+  const { site, layout } = project.document;
+  const boundary = boundaryPolygon(site);
+  const xs = boundary.map((point) => point.x);
+  const ys = boundary.map((point) => point.y);
+  // Clear of the pergola and table the test above leaves, or selecting it would pick those up too.
+  const occupied = layout.elements
+    .filter((element) => element.category === 'structure' || element.category === 'furniture')
+    .map((element) => polygonCentroid(elementOutline(element)));
+  const centre = [
+    { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 },
+    ...layout.elements
+      .filter((element) => element.category === 'lawn' || element.category === 'paved-area')
+      .map((element) => polygonCentroid(elementOutline(element))),
+  ].find((spot) => occupied.every((taken) => Math.hypot(taken.x - spot.x, taken.y - spot.y) > 4))!;
+  expect(centre, 'somewhere on the plan with no structure or furniture on it').toBeTruthy();
+  const pergola: DesignElement = {
+    // Well past the ids the editor hands out after the test above's `e-9001`.
+    id: 'e-9900',
+    category: 'structure',
+    role: 'feature',
+    name: 'Offline pergola',
+    symbol: 'pergola',
+    material: 'softwood',
+    height: 2.4,
+    zone: 'back',
+    shape: {
+      kind: 'rect',
+      centre,
+      width: 3,
+      depth: 3,
+      rotation: 0,
+    },
+  };
+  const saved = await request.patch(`${api}/plan-projects/${projectId}/layout`, {
+    data: { revision: project.revision, section: { ...layout, elements: [...layout.elements, pergola] } },
+  });
+  expect(saved.ok()).toBe(true);
+
+  await page.goto(`/plan/${projectId}/editor`);
+  await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+  await page.getByTestId(`placed-element-${pergola.id}`).getByRole('button').first().click();
+  await page.getByTestId('edit-in-3d').click();
+  const viewport = page.getByTestId('structure-viewport');
+  await expect(viewport.locator('canvas')).toHaveCount(1);
+  await expect(viewport).toHaveAttribute('data-sky', 'failed');
+  await expect(viewport).toHaveAttribute('data-pbr', 'failed');
+  // A table added with its model unreachable is the boxes, at the same places.
+  await page.getByTestId('structure-tab-inside').click();
+  await page.getByTestId('structure-piece-add').selectOption('dining-set-4');
+  await expect(viewport).toHaveAttribute('data-interior', '1');
+  await expect(viewport).toHaveAttribute('data-models', 'failed');
+  await page.getByTestId('structure-camera-front').click();
+  await expect(viewport).toHaveAttribute('data-camera', 'front');
+  await expect(viewport.locator('canvas')).toHaveCount(1);
+  await page.getByTestId('structure-done').click();
+  await expect(page.getByTestId('structure-workspace')).toHaveCount(0);
+
+  const current = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
+  const restored = await request.patch(`${api}/plan-projects/${projectId}/layout`, {
+    data: {
+      revision: current.revision,
+      section: { ...current.document.layout, elements: current.document.layout.elements.filter((element) => element.id !== pergola.id) },
+    },
+  });
+  expect(restored.ok()).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * The keyboard belongs to the editor wherever focus is — not only while the canvas `div` has it —
+ * and a whole group can be taken off the plan. Then the review screen measures what the schedule
+ * could not: the fences' length, and why the design is the way it is.
+ */
+test('the editor answers the keyboard from anywhere, hides a group, and the review measures lengths', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  const start = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
+  const terrace = start.document.layout.elements.find(
+    (element) => element.category === 'paved-area' && element.role === 'feature' && element.shape.kind === 'rect',
+  )!;
+  expect(terrace?.name).toBeTruthy();
+
+  await page.goto(`/plan/${projectId}/editor`);
+  await expect(page.getByTestId('editor-concept-name')).toBeVisible();
+  await page.getByTestId('editor-canvas').locator('canvas').first().waitFor();
+  await page.getByRole('tab', { name: 'Layers', exact: true }).click();
+
+  const rows = page.locator('[data-testid^="placed-element-"]');
+  const initial = await rows.count();
+
+  // Focus is on a Layers row, not the canvas: the shortcuts used to do nothing from here.
+  await page.getByTestId(`placed-element-${terrace.id}`).getByRole('button').first().click();
+  await page.keyboard.press('ControlOrMeta+d');
+  await expect(rows).toHaveCount(initial + 1);
+  await expect(page.getByTestId('element-name')).toHaveValue(`${terrace.name!.replace(/\s+\d+$/, '')} 2`);
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(rows).toHaveCount(initial);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(rows).toHaveCount(initial + 1);
+  await page.keyboard.press('Delete');
+  await expect(rows).toHaveCount(initial);
+
+  // A whole group off and on again: the beds' planting leaves the scene and comes back.
+  const scene = page.getByTestId('editor-scene');
+  const plants = Number(await scene.getAttribute('data-plants'));
+  expect(plants).toBeGreaterThan(0);
+  await page.getByTestId('view-group-lawn-beds').click();
+  await expect(page.getByTestId('view-group-lawn-beds')).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(async () => Number(await scene.getAttribute('data-plants'))).toBeLessThan(plants);
+  await page.getByTestId('view-group-lawn-beds').click();
+  await expect.poll(async () => Number(await scene.getAttribute('data-plants'))).toBe(plants);
+
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved');
+  const after = PlanProjectSchema.parse(await (await request.get(`${api}/plan-projects/${projectId}`)).json());
+  expect(after.document.layout.elements.map((element) => element.id)).toEqual(
+    start.document.layout.elements.map((element) => element.id),
+  );
+
+  await page.goto(`/plan/${projectId}/review`);
+  await expect(page.getByTestId('takeoff')).toBeVisible();
+  await expect(page.getByTestId('takeoff-boundary').first()).toBeVisible();
+  await expect(page.getByTestId('design-summary')).toBeVisible();
   expect(errors).toEqual([]);
 });

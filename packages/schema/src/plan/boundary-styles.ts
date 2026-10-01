@@ -30,8 +30,20 @@ const MIN_EDGE_LENGTH = 1e-6;
 
 /** One side of the property, ready to draw or to cast a shadow from. */
 export interface BoundaryRun {
-  /** The vertex this edge starts at — the run's identity, and what a style is keyed on. */
+  /** The vertex this edge starts at — what a style is keyed on. */
   edgeVertexId: string;
+  /**
+   * The run's own identity where a side has been cut into pieces by a proposed enclosure — see
+   * `effectiveBoundaryRuns`. Absent on a whole survey side, whose identity is its `edgeVertexId`.
+   */
+  id?: string;
+  /** The enclosure element a proposed run belongs to. Absent on the survey's own sides. */
+  sourceId?: string;
+  /**
+   * Which way the band is laid, where the run says so itself. A survey side's is worked out from the
+   * plot's winding; a proposed one in the middle of the garden has no plot to wind round.
+   */
+  inward?: Point;
   start: Point;
   end: Point;
   kind: BoundaryKind;

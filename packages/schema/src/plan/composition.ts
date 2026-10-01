@@ -90,6 +90,11 @@ const KIND_BY_CATEGORY: Record<ElementCategory, CoverKind | null> = {
    */
   lighting: null,
   'existing-feature': 'existing',
+  /*
+   * A fence or a wall is a line, not ground: counting its sliver of width as hard cover would move
+   * the bands by the length of fencing a plan proposed.
+   */
+  enclosure: null,
 };
 
 export const DEFAULT_SAMPLE_STEP = 0.25;

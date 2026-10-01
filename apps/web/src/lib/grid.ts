@@ -1,4 +1,3 @@
-import type { Point } from '@garden-studio/schema';
 import { fromDisplay, toDisplay, type Unit } from './units';
 
 /**
@@ -52,18 +51,17 @@ export function formatViewportSpan(metres: number, unit: Unit): string {
   return `${rounded} ${unit} across`;
 }
 
-/**
- * Snapping is deliberately *not* tied to the grid. The grid changes as you zoom, and a snap
- * step that shifted under the user mid-drag would be maddening; half a unit is fine enough
- * that a measured 12.6 m is still reachable and coarse enough to tidy a hand-drawn plot.
+/*
+ * The snapping steps live in the shared package now, so all three editors and the server agree on
+ * what a tidy number is. Re-exported here so every existing import keeps working.
  */
-export const SNAP_STEP = 0.5;
-
-export function snapToStep(metres: number, unit: Unit): number {
-  const display = toDisplay(metres, unit);
-  return fromDisplay(Math.round(display / SNAP_STEP) * SNAP_STEP, unit);
-}
-
-export function snapPoint(point: Point, unit: Unit): Point {
-  return { x: snapToStep(point.x, unit), y: snapToStep(point.y, unit) };
-}
+export {
+  ROTATION_SNAP_REACH,
+  ROTATION_SNAP_STEP,
+  SIZE_SNAP_STEP,
+  SNAP_STEP,
+  snapLength,
+  snapPoint,
+  snapRotation,
+  snapToStep,
+} from '@garden-studio/schema';

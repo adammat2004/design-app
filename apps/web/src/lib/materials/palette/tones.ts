@@ -234,6 +234,38 @@ export const MATERIAL_TONES: Partial<Record<MaterialId, MaterialTones>> = {
     palette: ['#7ba169', '#88ad76', '#6d9459', '#93b881'],
     jointColour: '#7d8f6c',
   },
+  /*
+   * The mixes. Their plants are drawn from each species' own sprite; these are the ground and the
+   * low-zoom mass. The woodland and evergreen mixes read darker, the sunny and prairie ones straw.
+   */
+  'mix-shade-woodland': {
+    palette: ['#5f8a4c', '#6f9a5a', '#527d42', '#7a9e63'],
+    jointColour: '#6f5f4c',
+  },
+  'mix-sunny-gravel': {
+    palette: ['#b9b98d', '#a8b27e', '#c7c29a', '#98a872'],
+    jointColour: '#b8ad98',
+  },
+  'mix-pollinator': {
+    palette: ['#77a060', '#86ad6c', '#6a9155', '#94b37a'],
+    jointColour: '#8a7963',
+  },
+  'mix-cottage-border': {
+    palette: ['#6f9c58', '#87b06d', '#5c8a48', '#9cb474'],
+    jointColour: '#8a7963',
+  },
+  'mix-prairie-grasses': {
+    palette: ['#c3c495', '#b8b989', '#a9b27e', '#cfcda4'],
+    jointColour: '#8a7963',
+  },
+  'mix-evergreen-structure': {
+    palette: ['#4d7a42', '#5b884d', '#436e39', '#668f56'],
+    jointColour: '#6f5f4c',
+  },
+  'mix-low-maintenance': {
+    palette: ['#6d9459', '#7ba169', '#5f8a4c', '#88ad76'],
+    jointColour: '#7d8f6c',
+  },
 
   /* ---- gravel-mulch: background from the middle of the palette, as above ---- */
   /*

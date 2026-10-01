@@ -1,4 +1,4 @@
-import { distanceToSegment } from '@garden-studio/schema';
+import { distanceToSegment, elementOutline, heightFor, isTreeSymbol, polygonCentroid, resolveSymbol } from '@garden-studio/schema';
 import {
   clamp01,
   meanOf,
@@ -134,6 +134,22 @@ function screenBetween(
   const blockers = [
     ...subject.beds.filter((bed) => bed.area >= SCREEN_DEPTH * SCREEN_DEPTH * 2),
     ...subject.items.filter((item) => item.category === 'structure' && item.id !== seat.id),
+    /*
+     * What the design puts up to screen a seat: a proposed fence, screen, wall or hedge, and a tree,
+     * each only where it is tall enough to screen somebody sitting down — a 1.8 m slatted screen
+     * beside the sofa is the designer's whole answer to an exposed seat, and a kerb is not.
+     */
+    ...subject.elements
+      .filter((element) => {
+        if (element.hidden || element.id === seat.id) return false;
+        if (element.category === 'enclosure') return heightFor(element) >= SCREENING_HEIGHT;
+        const symbol = resolveSymbol(element);
+        return Boolean(symbol && isTreeSymbol(symbol)) && heightFor(element) >= SCREENING_HEIGHT;
+      })
+      .map((element) => {
+        const ring = elementOutline(element);
+        return { ring, centre: polygonCentroid(ring) };
+      }),
   ];
 
   return blockers.some((blocker) => {

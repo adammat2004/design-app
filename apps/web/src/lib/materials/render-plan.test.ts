@@ -131,6 +131,22 @@ describe('drawPlan', () => {
     expect(Buffer.from(a.pixels)).toEqual(Buffer.from(b.pixels));
   });
 
+  it('grades the plot where it was drawn, whatever the context was translated by', () => {
+    const direct = render(scene([lawn, patio, tree, path]));
+
+    // Drawn a margin in from the corner, as a judging sheet draws each of its frames.
+    const margin = 40;
+    const width = 20 * PX;
+    const height = 14 * PX;
+    const canvas = createCanvas(width + margin, height + margin);
+    const context = canvas.getContext('2d');
+    context.translate(margin, margin);
+    drawPlan(context as unknown as PlanContext, scene([lawn, patio, tree, path]), { pxPerMetre: PX, makeCanvas }, { x: 0, y: 0 });
+    const shifted = context.getImageData(margin, margin, width, height).data;
+
+    expect(Buffer.from(shifted)).toEqual(Buffer.from(direct.pixels));
+  });
+
   it('draws features over fills', () => {
     const image = render(scene([lawn, patio]));
 

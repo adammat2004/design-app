@@ -1,17 +1,27 @@
 'use client';
 
-import { Box, Copy, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Box, Copy, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import {
   heightFor,
+  ENCLOSURE_KIND_IDS,
+  ENCLOSURE_KINDS,
   MIN_LEVEL_CHANGE,
-  PLANT_CATALOGUE,
+  PLANT_SPECIES,
+  type EnclosureKind,
   PLANT_SYMBOLS,
+  speciesById,
   SYMBOLS,
   structureDefinitionFor,
   type SymbolId,
 } from '@garden-studio/schema';
-import { elementAnchor, isLocked, type DesignElement } from '@/lib/concepts';
+import {
+  elementAnchor,
+  isGroundLayer,
+  isLocked,
+  isUserLocked,
+  type DesignElement,
+} from '@/lib/concepts';
 import {
   canBeEdged,
   MATERIAL_FILLS,
@@ -27,6 +37,8 @@ import { selectedElement, usePlanEditorStore } from '@/state/plan-editor-store';
 import { LengthInput } from '../SideLengthsPanel';
 import { CatalogueThumbnail } from './CatalogueThumbnail';
 import { EdgesTab } from './EdgesTab';
+import { FreeShapeControls } from './FreeShapeControls';
+import { PlantingTab } from './PlantingTab';
 import { Caption, Pill } from './Pill';
 import { StructureResizeNotice, type BlockedResize } from '../../structure-3d/StructureResizeNotice';
 
@@ -60,10 +72,11 @@ export function SelectedElementPanel() {
   );
 }
 
-type SheetTab = 'style' | 'shape' | 'edges' | 'details';
+type SheetTab = 'style' | 'planting' | 'shape' | 'edges' | 'details';
 
 const TAB_LABELS: Record<SheetTab, string> = {
   style: 'Style',
+  planting: 'Planting',
   shape: 'Size & Shape',
   edges: 'Edges',
   details: 'Details',
@@ -93,9 +106,12 @@ function ElementSheet({
    * Which tabs this element has. A locked ground layer has no size to change — its outline follows
    * the zone — so it has no Size & Shape tab rather than an empty one; a plant has no edges.
    */
-  const hasShape = sizedByCanopy || sizedByRect || !locked;
+  const userLocked = isUserLocked(element);
+  /* A user's lock holds the geometry still, so there is no size to change until it is unlocked. */
+  const hasShape = !userLocked && (sizedByCanopy || sizedByRect || !locked);
   const edgeable = !plant && canBeEdged(element.category);
-  const tabs: SheetTab[] = ['style', ...(hasShape ? (['shape'] as const) : []), ...(edgeable ? (['edges'] as const) : []), 'details'];
+  const bed = element.category === 'planting-bed' && element.shape.kind !== 'point';
+  const tabs: SheetTab[] = ['style', ...(bed ? (['planting'] as const) : []), ...(hasShape ? (['shape'] as const) : []), ...(edgeable ? (['edges'] as const) : []), 'details'];
 
   /*
    * The Edges tab's open state lives in the store, not here: it is what tells the canvas to draw the
@@ -106,7 +122,12 @@ function ElementSheet({
   // A structure's refused size, with what is in the way. The sheet is keyed by element, so it resets.
   const [blocked, setBlocked] = useState<BlockedResize | null>(null);
   const structure = structureDefinitionFor(element) !== null;
-  const active: SheetTab = edgesOpen ? 'edges' : chosen === 'edges' ? 'style' : chosen;
+  /* A tab that went away under the user — the Shape tab when the element was locked — falls back to Style. */
+  const active: SheetTab = edgesOpen
+    ? 'edges'
+    : chosen === 'edges' || !tabs.includes(chosen)
+      ? 'style'
+      : chosen;
 
   const choose = (tab: SheetTab) => {
     if (tab === 'edges') store.getState().openEdgeEdit(element.id);
@@ -116,10 +137,23 @@ function ElementSheet({
 
   return (
     <div className="space-y-3">
-      {locked ? (
+      {isGroundLayer(element) ? (
         <p data-testid="locked-reason" className="text-[11px] leading-relaxed text-garden-muted">
           Ground layer. Change its material here; its boundary follows the garden.
         </p>
+      ) : userLocked ? (
+        <div className="flex items-start gap-2">
+          <p data-testid="locked-reason" className="flex-1 text-[11px] leading-relaxed text-garden-muted">
+            Locked. Its shape and place are held, and the designer will not change it.
+          </p>
+          <Pill
+            testId="element-unlock"
+            icon={<LockOpen aria-hidden className="h-3.5 w-3.5" />}
+            onClick={() => store.getState().toggleLocked([element.id])}
+          >
+            Unlock
+          </Pill>
+        </div>
       ) : null}
 
       {/*
@@ -173,7 +207,7 @@ function ElementSheet({
         hidden={active !== 'style'}
         className="space-y-3"
       >
-        {plant ? (
+        {element.category === 'enclosure' ? <EnclosureControls element={element} /> : plant ? (
           <Row label="Plant">
             <select
               aria-label="Plant type or species"
@@ -181,13 +215,13 @@ function ElementSheet({
               className={inputClass}
               value={element.plantId ?? element.symbol ?? 'tree-deciduous'}
               onChange={(event) => {
-                const choice = PLANT_CATALOGUE[event.target.value];
+                const species = speciesById(event.target.value);
                 store
                   .getState()
                   .replaceSymbol(
                     element.id,
-                    choice?.symbol ?? (event.target.value as SymbolId),
-                    choice ? event.target.value : undefined,
+                    (species?.symbol as SymbolId | undefined) ?? (event.target.value as SymbolId),
+                    species ? species.id : undefined,
                   );
               }}
             >
@@ -198,13 +232,16 @@ function ElementSheet({
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Named species">
-                {Object.entries(PLANT_CATALOGUE).map(([id, p]) => (
-                  <option key={id} value={id}>
-                    {p.name} ({p.botanicalName})
-                  </option>
-                ))}
-              </optgroup>
+              {/* By form, because a tree is never swapped for a shrub by somebody who meant it. */}
+              {(['tree', 'shrub'] as const).map((form) => (
+                <optgroup key={form} label={form === 'tree' ? 'Trees' : 'Shrubs'}>
+                  {PLANT_SPECIES.filter((species) => species.symbol && species.form === form).map((species) => (
+                    <option key={species.id} value={species.id}>
+                      {species.common} ({species.botanical})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </Row>
         ) : (
@@ -252,6 +289,18 @@ function ElementSheet({
         ) : null}
       </div>
 
+      {bed ? (
+        <div
+          role="tabpanel"
+          id="element-panel-planting"
+          aria-labelledby="element-tab-planting"
+          hidden={active !== 'planting'}
+        >
+          {/* Mounted only while open: the light verdict samples the sun across two days of shadows. */}
+          {active === 'planting' ? <PlantingTab element={element} /> : null}
+        </div>
+      ) : null}
+
       {hasShape ? (
         <div
           role="tabpanel"
@@ -260,6 +309,8 @@ function ElementSheet({
           hidden={active !== 'shape'}
           className="space-y-3"
         >
+          <FreeShapeControls element={element} unit={unit} />
+
           {sizedByCanopy ? (
             <Row label="Canopy">
               <LengthInput
@@ -329,7 +380,9 @@ function ElementSheet({
                   max={359}
                   value={Math.round(rect.rotation) % 360}
                   onChange={(event) =>
-                    store.getState().rotateElementLive(element.id, Number(event.target.value))
+                    store
+                      .getState()
+                      .rotateElementLive(element.id, Number(event.target.value), { exact: true })
                   }
                   onPointerDown={() => store.getState().beginGesture()}
                   onPointerUp={() => store.getState().endGesture()}
@@ -339,7 +392,15 @@ function ElementSheet({
                   onKeyUp={() => store.getState().endGesture()}
                   className="min-w-0 flex-1 accent-garden-green"
                 />
-                <span className="w-8 text-right text-xs tabular-nums">{Math.round(rect.rotation)}°</span>
+                <DegreesInput
+                  degrees={rect.rotation}
+                  onCommit={(degrees) => {
+                    const editor = store.getState();
+                    editor.beginGesture();
+                    editor.rotateElementLive(element.id, degrees, { exact: true });
+                    editor.endGesture();
+                  }}
+                />
               </div>
             </Row>
           ) : null}
@@ -389,6 +450,31 @@ function ElementSheet({
         hidden={active !== 'details'}
         className="space-y-3"
       >
+        {!isGroundLayer(element) ? (
+          <Row label="Lock" hint="Hold it still: no drags by hand, and the designer will not touch it.">
+            <button
+              type="button"
+              data-testid="element-lock"
+              aria-pressed={userLocked}
+              onClick={() => store.getState().toggleLocked([element.id])}
+              className={[
+                'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
+                'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
+                userLocked
+                  ? 'border-garden-forest bg-garden-forest text-white'
+                  : 'border-garden-line bg-white text-garden-ink hover:border-garden-green',
+              ].join(' ')}
+            >
+              {userLocked ? (
+                <Lock aria-hidden className="h-3.5 w-3.5" />
+              ) : (
+                <LockOpen aria-hidden className="h-3.5 w-3.5" />
+              )}
+              {userLocked ? 'Locked' : 'Unlocked'}
+            </button>
+          </Row>
+        ) : null}
+
         <Row label="Height">
           <LengthInput
             testId="element-height"
@@ -569,5 +655,134 @@ export function Row({ label, hint, children }: { label: string; hint?: string; c
       </span>
       {hint ? <span className="pl-16 text-[10px] text-garden-muted">{hint}</span> : null}
     </label>
+  );
+}
+
+/**
+ * A typed rotation, beside the slider.
+ *
+ * The slider alone could not say 22.5°, and a rotation that has to match a house turned 23° is
+ * exactly the number somebody reads off a drawing and wants to type. Held as text while focused,
+ * like `LengthInput`, so "2" on the way to "22" never turns the patio; committed on Enter or blur,
+ * and never when untouched, so tabbing through the panel does not push a no-op onto the history.
+ */
+function DegreesInput({ degrees, onCommit }: { degrees: number; onCommit: (degrees: number) => void }) {
+  const format = (value: number) => String(Math.round(value * 10) / 10);
+  const [text, setText] = useState(() => format(degrees));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setText(format(degrees));
+  }, [degrees]);
+
+  function commit() {
+    const typed = Number(text);
+    if (text.trim() === '' || !Number.isFinite(typed)) {
+      setText(format(degrees));
+      return;
+    }
+    if (text === format(degrees)) return;
+    onCommit(((typed % 360) + 360) % 360);
+  }
+
+  return (
+    <span className="flex w-[4.5rem] shrink-0 items-center gap-0.5 rounded-md border border-garden-line bg-white px-1.5 py-1 focus-within:border-garden-green">
+      <input
+        type="number"
+        inputMode="decimal"
+        step={1}
+        aria-label="Rotation in degrees"
+        data-testid="element-rotation-degrees"
+        value={text}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit();
+          }
+        }}
+        className="w-full min-w-0 bg-transparent text-right text-xs tabular-nums text-garden-ink focus-visible:outline-none"
+      />
+      <span className="shrink-0 text-[11px] text-garden-muted">°</span>
+    </span>
+  );
+}
+
+/**
+ * What a proposed boundary is: its kind, what it is built of, and a hedge's species. The height is
+ * the Details tab's, as every element's is; the thickness is its line's width, under Size & Shape.
+ */
+function EnclosureControls({ element }: { element: DesignElement }) {
+  const store = usePlanEditorStore.getState;
+  const kind = element.enclosure?.kind ?? 'fence';
+  const spec = ENCLOSURE_KINDS[kind];
+  const hedges = PLANT_SPECIES.filter((species) => species.form === 'hedge');
+  return (
+    <div className="space-y-1.5">
+      <Row label="Kind">
+        <select
+          data-testid="enclosure-kind"
+          aria-label="Kind of boundary"
+          value={kind}
+          className={inputClass}
+          onChange={(event) => store().setEnclosure(element.id, { kind: event.target.value as EnclosureKind })}
+        >
+          {ENCLOSURE_KIND_IDS.map((id) => (
+            <option key={id} value={id}>
+              {ENCLOSURE_KINDS[id].label}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {spec.materials.length > 1 ? (
+        <Row label="Material">
+          <select
+            data-testid="element-material"
+            aria-label="Material"
+            value={element.material ?? spec.material}
+            className={inputClass}
+            onChange={(event) => store().setMaterial(element.id, event.target.value)}
+          >
+            {materialsFor('enclosure')
+              .filter((material) => spec.materials.includes(material.id))
+              .map((material) => (
+                <option key={material.id} value={material.id}>
+                  {material.label}
+                </option>
+              ))}
+          </select>
+        </Row>
+      ) : null}
+      {kind === 'hedge' ? (
+        <Row label="Species">
+          <select
+            data-testid="enclosure-species"
+            aria-label="Hedge species"
+            value={element.plantId ?? ''}
+            className={inputClass}
+            onChange={(event) => store().setEnclosure(element.id, { plantId: event.target.value || null })}
+          >
+            <option value="">Not chosen</option>
+            {hedges.map((species) => (
+              <option key={species.id} value={species.id}>
+                {species.common} ({species.botanical})
+              </option>
+            ))}
+          </select>
+        </Row>
+      ) : null}
+      <p className="text-[11px] leading-relaxed text-garden-muted">
+        {kind === 'open'
+          ? 'Laid along the boundary, this takes away what is there.'
+          : 'Laid along the boundary, this replaces what is there; the old line shows dashed beneath it.'}
+      </p>
+    </div>
   );
 }

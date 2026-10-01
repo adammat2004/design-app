@@ -24,41 +24,89 @@ export interface StructureFinish {
   emissive?: string;
   /** 0–1, for a translucent panel. Absent means opaque. */
   opacity?: number;
+  /**
+   * The material photograph that gives the finish its grain, weave or orange peel, and how many
+   * metres one repeat covers. Exactly `ARMaterial.texture`'s shape, so the AR builder maps it with
+   * `finish.texture ?? null`. `key` names a set in the 3D library (`pbr-spec.ts` in the web app),
+   * never a file: which file draws a key is the renderer's business.
+   *
+   * **The finish's numbers stay the truth.** A renderer that uses the texture scales it so its
+   * average is `baseColor` and `roughness` — the photograph is the variation round the swatch, not a
+   * second answer to what colour the finish is. Absent, the finish is flat, as every finish was.
+   */
+  texture?: { key: string; tileSizeM: number };
 }
+
+/** The timber and metal sets. Tile sizes are the photographs' measured size; see `pbr-spec.ts`. */
+const OAK = { key: 'timber-oak', tileSizeM: 1.83 } as const;
+const PINE = { key: 'timber-pine', tileSizeM: 1.2 } as const;
+const PAINTED = { key: 'timber-painted', tileSizeM: 1.2 } as const;
+const POWDER_COAT = { key: 'powder-coat', tileSizeM: 1 } as const;
 
 export const STRUCTURE_FINISHES = {
   /* ---- frames: the `MaterialId`s in `MATERIALS.structure` ---- */
-  softwood: { label: 'Treated softwood', baseColor: '#b58e5f', roughness: 0.8, metalness: 0 },
+  softwood: {
+    label: 'Treated softwood',
+    baseColor: '#b58e5f',
+    roughness: 0.8,
+    metalness: 0,
+    texture: PINE,
+  },
   'painted-timber': {
     label: 'Painted timber',
     baseColor: '#7d8b83',
     roughness: 0.65,
     metalness: 0,
+    texture: PAINTED,
   },
   'dark-stained-timber': {
     label: 'Dark-stained timber',
     baseColor: '#4a3a2c',
     roughness: 0.7,
     metalness: 0,
+    texture: OAK,
   },
-  hardwood: { label: 'Natural timber', baseColor: '#9a6b43', roughness: 0.7, metalness: 0 },
+  hardwood: {
+    label: 'Natural timber',
+    baseColor: '#9a6b43',
+    roughness: 0.7,
+    metalness: 0,
+    texture: OAK,
+  },
   'powder-coated-steel': {
     label: 'Powder-coated steel',
     baseColor: '#3b3f42',
     roughness: 0.5,
     metalness: 0.6,
+    texture: POWDER_COAT,
   },
   'aluminium-dark': {
     label: 'Dark aluminium',
     baseColor: '#34373a',
     roughness: 0.42,
     metalness: 0.75,
+    texture: POWDER_COAT,
   },
   'aluminium-light': {
     label: 'Light aluminium',
     baseColor: '#c9cbc8',
     roughness: 0.38,
     metalness: 0.8,
+    texture: POWDER_COAT,
+  },
+  /* ---- roof coverings ---- */
+  /*
+   * The covering a timber gazebo is actually sold with: bitumen shingles over a boarded hipped
+   * roof. Added for the model library (see CLAUDE.md, "Library models from Meshy"): a model has its
+   * covering baked in, and a gazebo roofed in grey shingles could not be described while the only
+   * coverings were the frame's own timber, aluminium and polycarbonate. Flat colour with no texture,
+   * like the polycarbonate below, until a shingle set earns a place in the PBR library.
+   */
+  'shingle-dark': {
+    label: 'Dark shingles',
+    baseColor: '#45484b',
+    roughness: 0.9,
+    metalness: 0,
   },
   /* ---- roof panels ---- */
   'polycarbonate-opal': {

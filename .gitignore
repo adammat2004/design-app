@@ -55,3 +55,5 @@ apps/web/public/assets-v1/
 
 
 design_handoff_ai_redesign/
+# Meshy generations, downloads and processed candidates (apps/api/scripts/meshy-spike.ts, later the model-assets service)
+apps/api/storage/

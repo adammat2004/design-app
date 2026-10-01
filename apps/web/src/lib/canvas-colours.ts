@@ -21,6 +21,8 @@ export const COLOUR = {
   houseWall: '#4d565d',
   /** The fence's shade, at the alpha `FENCE_SHADE_OPACITY` gives it. */
   fenceShade: '#4a5a63',
+  /** A survey boundary a proposal replaces: the draughtsman's dashed "to be removed". */
+  replacedBoundary: '#8b6a4a',
   /** The boundary drawn as an enclosure rather than an outline: rail and posts. */
   fenceRail: '#9a8460',
   fencePost: '#7a6747',

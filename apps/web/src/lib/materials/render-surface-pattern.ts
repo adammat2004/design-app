@@ -643,7 +643,13 @@ function resolveAssets(
      * of very nearly the same green — see `sprite-tint.ts`. Done here, once per surface, rather
      * than in the unit loop, which draws thousands of them.
      */
-    sprites: tintSprites(all(wanted.sprites), material.palette, makeCanvas),
+    sprites: tintSprites(
+      spec?.pin
+        ? lookup(spec.pin.family).filter((loaded) => loaded.entry.variant === spec.pin!.variant)
+        : all(wanted.sprites),
+      material.palette,
+      makeCanvas,
+    ),
     flowers:
       wanted.flowers && flowerSprites.length > 0
         ? // Flowers are the accent *against* the foliage, so they keep their own colour.
@@ -1288,7 +1294,7 @@ interface ModuleDraw {
  * a multiply by a tone pre-blended towards white, so there is nothing to gain by writing it that
  * way instead.)
  */
-const FACE_TINT = 0.16;
+export const FACE_TINT = 0.16;
 
 /**
  * How far a mass texture — an aggregate, whose photograph *is* the surface — is carried towards its
@@ -1298,7 +1304,7 @@ const FACE_TINT = 0.16;
  * that decide how it looks; an aggregate has nothing else at all, so this is the only place its
  * palette is heard, and at a slab's strength the four aggregates stayed four photographs.
  */
-const MASS_TEXTURE_TINT = 0.34;
+export const MASS_TEXTURE_TINT = 0.34;
 
 function drawModule(context: PatternContext, module: ModuleDraw): void {
   const random = moduleRandom(module.seed, module.col, module.row);

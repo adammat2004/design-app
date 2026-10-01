@@ -134,7 +134,13 @@ export const STRUCTURE_DEFINITIONS: Partial<Record<SymbolId, StructureDefinition
         { id: 'hipped', label: 'Hipped' },
         { id: 'solid', label: 'Flat' },
       ],
-      finishes: ['aluminium-dark', 'aluminium-light', 'hardwood', 'polycarbonate-opal'],
+      finishes: [
+        'shingle-dark',
+        'aluminium-dark',
+        'aluminium-light',
+        'hardwood',
+        'polycarbonate-opal',
+      ],
     },
     sides: { options: SIDE_OPTIONS },
     lighting: true,
@@ -292,6 +298,8 @@ export function applyStructurePreset(element: DesignElement, presetId: string): 
       lighting: preset.lighting,
       // A floor is what is inside it, not how it looks: a style never takes it away.
       ...(element.structure?.floor ? { floor: element.structure.floor } : {}),
+      // Nor which drawing the user prefers: a pin that no longer suits draws the parts by itself.
+      ...(element.structure?.look ? { look: element.structure.look } : {}),
     },
   };
 }

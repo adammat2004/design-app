@@ -156,7 +156,8 @@ export function buildSubject(
 
     if (element.role === 'feature') {
       const centreline = elementCentreline(element);
-      if (centreline && element.shape.kind === 'polyline') {
+      /* A fence or a wall is drawn as a line and is not a way through. */
+      if (centreline && element.shape.kind === 'polyline' && element.category !== 'enclosure') {
         const ends = [centreline[0]!, centreline[centreline.length - 1]!];
         routes.push({
           id: element.id,

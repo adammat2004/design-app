@@ -5,6 +5,8 @@ import {
   niceStep,
   SNAP_STEP,
   snapPoint,
+  snapLength,
+  snapRotation,
   snapToStep,
   viewportSpan,
 } from './grid';
@@ -115,5 +117,32 @@ describe('snapPoint', () => {
 
     expect(snapped.x).toBeCloseTo(4);
     expect(snapped.y).toBeCloseTo(10);
+  });
+});
+
+describe('snapLength', () => {
+  it('tidies to the decimetre in metres', () => {
+    expect(snapLength(3.1847, 'm')).toBeCloseTo(3.2, 10);
+    expect(snapLength(2.04, 'm')).toBeCloseTo(2.0, 10);
+  });
+
+  it('tidies to a tenth of a foot in feet', () => {
+    const snapped = snapLength(1, 'ft');
+    expect((snapped / 0.3048) * 10).toBeCloseTo(Math.round((snapped / 0.3048) * 10), 6);
+  });
+});
+
+describe('snapRotation', () => {
+  it('lands on a 15° step', () => {
+    expect(snapRotation(31.7)).toBe(30);
+    expect(snapRotation(-10)).toBe(345);
+    expect(snapRotation(452)).toBe(90);
+  });
+
+  /** A patio square to a house turned 23° is at 23°, 113°, 203° or 293°. */
+  it('prefers a nearby reference bearing, at every quarter turn', () => {
+    expect(snapRotation(25, [23])).toBe(23);
+    expect(snapRotation(110, [23])).toBe(113);
+    expect(snapRotation(40, [23])).toBe(45);
   });
 });

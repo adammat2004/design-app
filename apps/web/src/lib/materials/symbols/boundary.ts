@@ -1,4 +1,4 @@
-import type { BoundaryKind, BoundaryRun, Point } from '@garden-studio/schema';
+import { BOUNDARY_BAYS, type BoundaryKind, type BoundaryRun, type Point } from '@garden-studio/schema';
 
 /**
  * How each kind of boundary is drawn.
@@ -31,30 +31,36 @@ export interface BoundaryPalette {
 
 export const BOUNDARY_PALETTE: Record<BoundaryKind, BoundaryPalette> = {
   /** What every plot had before there was a choice, kept exactly. */
-  fence: { body: '#9a8460', detail: '#7a6747', postSpacing: 1.8, cap: null, dashed: false },
+  fence: { body: '#9a8460', detail: '#7a6747', postSpacing: BOUNDARY_BAYS.fence, cap: null, dashed: false },
   /*
    * Piers at 2.4 m rather than posts at 1.8: a garden wall is built in bays, and the pier is what
    * says masonry rather than timber at a glance. The coping is the light line along the top, and
    * it is most of what distinguishes a wall from a very thick fence at plan scale.
    */
-  wall: { body: '#9a8f81', detail: '#847a6d', postSpacing: 2.4, cap: '#bcb3a8', dashed: false },
+  wall: { body: '#9a8f81', detail: '#847a6d', postSpacing: BOUNDARY_BAYS.wall, cap: '#bcb3a8', dashed: false },
   /*
    * Drawn by the same crown-and-mass logic a garden hedge uses, so a boundary hedge and a hedge
    * across the middle of the garden are the same plant. `postSpacing` is the crown pitch.
    */
-  hedge: { body: '#385a31', detail: '#47703e', postSpacing: 0.5, cap: null, dashed: false },
+  hedge: { body: '#385a31', detail: '#47703e', postSpacing: BOUNDARY_BAYS.hedge, cap: null, dashed: false },
   /*
    * You can see through a railing, so the plan should too: a thin band, closely spaced balusters,
    * and no cap. Drawing it like a solid fence would tell the user their view is blocked when the
    * whole point of choosing railings is that it is not.
    */
-  railing: { body: '#5c6168', detail: '#484d53', postSpacing: 0.3, cap: null, dashed: false },
+  railing: { body: '#5c6168', detail: '#484d53', postSpacing: BOUNDARY_BAYS.railing, cap: null, dashed: false },
+  /*
+   * Cedar slats: warmer and a little redder than a close-board fence, with posts further apart —
+   * a screen is built in wider bays — and a rail along the top, which is what reads as slats rather
+   * than boards at plan scale.
+   */
+  screen: { body: '#8a6a4c', detail: '#6b5038', postSpacing: BOUNDARY_BAYS.screen, cap: '#a98664', dashed: false },
   /*
    * Nothing is built here, and that is a statement rather than an absence — which is why it is a
    * dashed cadastral line rather than no mark at all. "There is no fence on this side" and "we
    * never asked about this side" must not look the same on the drawing.
    */
-  open: { body: '#8a938c', detail: null, postSpacing: null, cap: null, dashed: true },
+  open: { body: '#8a938c', detail: null, postSpacing: BOUNDARY_BAYS.open, cap: null, dashed: true },
 };
 
 /** How thin a run is allowed to draw before it is stroked as a line instead of filled as a band. */

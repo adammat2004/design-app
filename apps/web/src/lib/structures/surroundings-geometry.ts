@@ -1,15 +1,11 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
-import type { ElementCategory, LocalPoint, MaterialId, RoofMaterial } from '@garden-studio/schema';
+import type { ElementCategory, LocalPoint, MaterialId } from '@garden-studio/schema';
 import { CATEGORY_COLOURS } from '../concept-colours';
 import { MATERIAL_FILLS } from '../material-colours';
-import { ASSET_FAMILIES } from '../materials/assets/asset-spec';
-import { ASSET_BASE_URL } from '../materials/assets/browser-loader';
-import { catalogueVariants } from '../materials/assets/catalogue';
-import { materialAssets } from '../materials/assets/material-assets';
-import { roofFor } from '../render/roof';
+import { diningLayout, loungeLayout, SEAT, TABLE } from './furniture-layout';
 
 /**
- * Geometry for the structure's surroundings, built from what `structureNeighbourhood` decided.
+ * Geometry the 3D views build in the web: a structure's floor, extruded solids and furniture parts.
  *
  * Pure three.js data — `BufferGeometry` needs no WebGL — so it is tested in jsdom. Everything is in
  * the structure's local frame (X across, Y up, Z towards the front) and is built **directly in XZ**
@@ -98,12 +94,16 @@ export function tiledUv(u: number, v: number): SurfaceUv {
  * raster for the surface, which keeps two patios that meet in one course, or a tile repeated in
  * metres. With `thickness`, it is a slab whose top is at `y`, so paving has an edge where it meets
  * the lawn rather than being printed on it.
+ *
+ * `detailUv` writes a second UV set, `uv1`, for relief laid in its own coordinates under the
+ * colour — a floor's colour is the plan's raster, its relief a material set tiled in metres.
  */
 export function surfaceGeometry(
   ring: LocalPoint[],
   y: number,
   uv: SurfaceUv,
   thickness = 0,
+  detailUv?: SurfaceUv,
 ): BufferGeometry | null {
   const points = clean(ring);
   if (points.length < 3 || Math.abs(signedArea(points)) < 1e-6) return null;
@@ -128,7 +128,17 @@ export function surfaceGeometry(
       }
     }
   }
-  return geometryOf(vertices, uvs);
+  const geometry = geometryOf(vertices, uvs);
+  if (detailUv) {
+    geometry.setAttribute(
+      'uv1',
+      new Float32BufferAttribute(
+        vertices.flatMap(([x, , z]) => detailUv({ x, z })),
+        2,
+      ),
+    );
+  }
+  return geometry;
 }
 
 /** A footprint stood up from `base` to `base + height`: walls facing out and a cap. */
@@ -141,7 +151,14 @@ export function extrudedGeometry(
   if (points.length < 3 || height <= 0 || Math.abs(signedArea(points)) < 1e-6) return null;
   const top = base + height;
   const vertices: Vec3[] = capTriangles(points, top);
+  /*
+   * Texture coordinates in metres, so a material photograph lays at its real size: the top in plan
+   * metres, each wall with U running along the ring (continued from wall to wall, so a grain or a
+   * weave carries round a corner) and V up the wall.
+   */
+  const uvs: [number, number][] = vertices.map(([x, , z]) => [x, -z]);
   const positive = signedArea(points) > 0;
+  let along = 0;
   for (let i = 0; i < points.length; i += 1) {
     const a = points[i]!;
     const b = points[(i + 1) % points.length]!;
@@ -149,107 +166,20 @@ export function extrudedGeometry(
     const dx = b.x - a.x;
     const dz = b.z - a.z;
     const out: Vec3 = positive ? [-dz, 0, dx] : [dz, 0, -dx];
-    pushFacing(vertices, [a.x, base, a.z], [b.x, base, b.z], [b.x, top, b.z], out);
-    pushFacing(vertices, [a.x, base, a.z], [b.x, top, b.z], [a.x, top, a.z], out);
-  }
-  return geometryOf(vertices);
-}
-
-/** How steep a house's roof is drawn: its rise as a share of the shorter span. */
-export const ROOF_PITCH_SHARE = 0.35;
-
-/**
- * The house's roof, lifted from the plan's own `roofFor` so the 3D roof is the same hip or gable
- * the plan draws. A plane vertex that is on the eaves ring stays at eaves height; every other one is
- * the ridge and goes up by the rise. A gable's end walls come back separately, to be drawn as wall.
- */
-export function roofGeometry(
-  ring: LocalPoint[],
-  eaves: number,
-  material?: RoofMaterial,
-): { roof: BufferGeometry; gables: BufferGeometry | null } | null {
-  const points = clean(ring);
-  if (points.length < 3) return null;
-  const plan = points.map((point) => ({ x: point.x, y: point.z }));
-  const roof = roofFor(plan, { x: -1, y: -1 }, material ? { material } : {});
-  if (!roof) return null;
-
-  const xs = points.map((point) => point.x);
-  const zs = points.map((point) => point.z);
-  const span = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-  const rise = roof.form === 'flat' ? 0 : span * ROOF_PITCH_SHARE;
-  const onEaves = (p: { x: number; y: number }) =>
-    roof.eaves.some((corner) => Math.hypot(corner.x - p.x, corner.y - p.y) < 1e-6);
-  const lift = (p: { x: number; y: number }): Vec3 => [p.x, onEaves(p) ? eaves : eaves + rise, p.y];
-
-  const vertices: Vec3[] = [];
-  for (const plane of roof.planes) {
-    const lifted = plane.outline.map(lift);
-    if (lifted.length <= 4) {
-      // A slope is a triangle or a quad: a fan is exact.
-      for (let i = 1; i + 1 < lifted.length; i += 1) {
-        pushFacing(vertices, lifted[0]!, lifted[i]!, lifted[i + 1]!, [0, 1, 0]);
-      }
-      continue;
+    const length = Math.hypot(dx, dz);
+    const wall: Vec3[] = [];
+    pushFacing(wall, [a.x, base, a.z], [b.x, base, b.z], [b.x, top, b.z], out);
+    pushFacing(wall, [a.x, base, a.z], [b.x, top, b.z], [a.x, top, a.z], out);
+    for (const vertex of wall) {
+      const fromA = Math.hypot(vertex[0] - a.x, vertex[2] - a.z);
+      uvs.push([along + Math.min(fromA, length), vertex[1]]);
     }
-    // The ridge cap on an irregular house is the inset ring, which can be concave.
-    const contour = plane.outline.map((point) => new Vector2(point.x, point.y));
-    for (const [i, j, k] of ShapeUtils.triangulateShape(contour, [])) {
-      pushFacing(vertices, lifted[i!]!, lifted[j!]!, lifted[k!]!, [0, 1, 0]);
-    }
+    vertices.push(...wall);
+    along += length;
   }
-
-  let gables: BufferGeometry | null = null;
-  if (roof.form === 'gable' && roof.eaves.length === 4 && roof.ridge[0]) {
-    const [r0, r1] = roof.ridge[0];
-    const corners = roof.eaves;
-    const centre: Vec3 = [(r0.x + r1.x) / 2, eaves, (r0.y + r1.y) / 2];
-    const end = (
-      a: { x: number; y: number },
-      b: { x: number; y: number },
-      ridge: { x: number; y: number },
-    ) => {
-      const out: Vec3 = [ridge.x - centre[0], 0, ridge.y - centre[2]];
-      const triangle: Vec3[] = [];
-      pushFacing(
-        triangle,
-        [a.x, eaves, a.y],
-        [b.x, eaves, b.y],
-        [ridge.x, eaves + rise, ridge.y],
-        out,
-      );
-      return triangle;
-    };
-    gables = geometryOf([
-      ...end(corners[3]!, corners[0]!, r0),
-      ...end(corners[1]!, corners[2]!, r1),
-    ]);
-  }
-
-  return { roof: geometryOf(vertices), gables };
+  return geometryOf(vertices, uvs);
 }
 
-/**
- * The picture a ground material is drawn with where the plan's painter has none, and how many metres
- * one copy covers each way. The plan's own library: a unit's face where it has one, else its
- * texture. `null` when there is no file — a supported state everywhere in this app, drawn as the
- * flat colour instead.
- */
-export function surfaceTexture(
-  materialId: string | null,
-): { url: string; tile: { u: number; v: number } } | null {
-  const assets = materialAssets(materialId ?? undefined);
-  // The face first: it is the material itself. A texture beside a face is what lies *between* the
-  // units — the grass round stepping stones — and tiled on its own would draw a lawn.
-  const asset = assets?.face ?? assets?.texture;
-  if (!asset) return null;
-  const entry = catalogueVariants(asset)[0];
-  if (!entry) return null;
-  // Both sides of the picture, not its width twice: a decking board is 3.6 × 0.145 m, and drawn
-  // square it would be a 3.6 m plank of wood grain.
-  const { w, h } = ASSET_FAMILIES[asset].metres;
-  return { url: `${ASSET_BASE_URL}${entry.file}`, tile: { u: w, v: h } };
-}
 
 /** The flat colour a surface falls back to: the plan's own fill for the material, else its category. */
 export function surfaceColour(materialId: string | null, category: ElementCategory): string {
@@ -267,8 +197,6 @@ export interface SolidPart {
   cushion?: boolean;
 }
 
-const SEAT = 0.44;
-const TABLE = 0.74;
 const TOP = 0.04;
 
 /**
@@ -300,49 +228,36 @@ export function furnitureParts(
 
   if (symbol === 'dining-set-4' || symbol === 'dining-set-6') {
     const parts: SolidPart[] = [];
-    const inset = 0.6;
-    // The table: a top on four legs, with the chairs round it.
-    parts.push(box.part(inset, w - inset, inset, d - inset, TABLE - TOP, TOP));
+    // The table: a top on four legs, with the chairs round it (`diningLayout`, shared with the models).
+    const { table, chairs } = diningLayout(symbol, w, d);
+    parts.push(box.part(table.a0, table.a1, table.b0, table.b1, TABLE - TOP, TOP));
     for (const [a, b] of [
-      [inset + 0.08, inset + 0.08],
-      [w - inset - 0.14, inset + 0.08],
-      [w - inset - 0.14, d - inset - 0.14],
-      [inset + 0.08, d - inset - 0.14],
+      [table.a0 + 0.08, table.b0 + 0.08],
+      [table.a1 - 0.14, table.b0 + 0.08],
+      [table.a1 - 0.14, table.b1 - 0.14],
+      [table.a0 + 0.08, table.b1 - 0.14],
     ] as const) {
       parts.push(box.part(a, a + 0.06, b, b + 0.06, 0, TABLE - TOP));
     }
-    const chairs: { a: number; b: number; facing: 'a-' | 'a+' | 'b-' | 'b+' }[] =
-      symbol === 'dining-set-4'
-        ? [
-            { a: w / 2, b: 0.3, facing: 'b+' },
-            { a: w / 2, b: d - 0.3, facing: 'b-' },
-            { a: 0.3, b: d / 2, facing: 'a+' },
-            { a: w - 0.3, b: d / 2, facing: 'a-' },
-          ]
-        : [
-            { a: w / 3, b: 0.3, facing: 'b+' },
-            { a: (2 * w) / 3, b: 0.3, facing: 'b+' },
-            { a: w / 3, b: d - 0.3, facing: 'b-' },
-            { a: (2 * w) / 3, b: d - 0.3, facing: 'b-' },
-            { a: 0.3, b: d / 2, facing: 'a+' },
-            { a: w - 0.3, b: d / 2, facing: 'a-' },
-          ];
     for (const chair of chairs) parts.push(...box.chair(chair.a, chair.b, chair.facing));
     return parts;
   }
 
   if (symbol === 'sofa-set') {
-    const deep = Math.min(0.85, d * 0.4);
+    const { sofa, table } = loungeLayout(w, d);
     return [
       // The sofa along the back, on its frame, with a back and two arms.
-      box.part(0.1, w - 0.1, d - deep, d - 0.05, 0, SEAT - 0.1),
-      { ...box.part(0.25, w - 0.25, d - deep, d - 0.2, SEAT - 0.1, 0.12), cushion: true },
-      { ...box.part(0.1, w - 0.1, d - 0.2, d - 0.05, SEAT - 0.1, 0.42), cushion: true },
-      box.part(0.1, 0.25, d - deep, d - 0.05, SEAT - 0.1, 0.24),
-      box.part(w - 0.25, w - 0.1, d - deep, d - 0.05, SEAT - 0.1, 0.24),
+      box.part(sofa.a0, sofa.a1, sofa.b0, sofa.b1, 0, SEAT - 0.1),
+      {
+        ...box.part(sofa.a0 + 0.15, sofa.a1 - 0.15, sofa.b0, d - 0.2, SEAT - 0.1, 0.12),
+        cushion: true,
+      },
+      { ...box.part(sofa.a0, sofa.a1, d - 0.2, sofa.b1, SEAT - 0.1, 0.42), cushion: true },
+      box.part(sofa.a0, sofa.a0 + 0.15, sofa.b0, sofa.b1, SEAT - 0.1, 0.24),
+      box.part(sofa.a1 - 0.15, sofa.a1, sofa.b0, sofa.b1, SEAT - 0.1, 0.24),
       // A low table in front of it.
-      box.part(w / 2 - 0.5, w / 2 + 0.5, 0.45, 1.05, 0.34, 0.06),
-      box.part(w / 2 - 0.45, w / 2 + 0.45, 0.5, 1.0, 0, 0.34),
+      box.part(table.a0, table.a1, table.b0, table.b1, 0.34, 0.06),
+      box.part(table.a0 + 0.05, table.a1 - 0.05, table.b0 + 0.05, table.b1 - 0.05, 0, 0.34),
     ];
   }
 

@@ -84,9 +84,15 @@ export function canopySpriteBox(
   seed: string,
   variants: number,
   opaqueRadiusRatio: (variant: number) => number,
+  /*
+   * The variant a species pins, 0-based. The draw is still made, so the crown turns exactly as it
+   * did before the tree had a species — only which picture it is changes.
+   */
+  pinned?: number | null,
 ): { variant: number; rotation: number; halfWidth: number } {
   const random = moduleRandom(seed, Math.round(centre.x * 100), Math.round(centre.y * 100));
-  const variant = Math.min(variants - 1, Math.floor(random() * variants));
+  const drawn = Math.floor(random() * variants);
+  const variant = Math.min(variants - 1, pinned ?? drawn);
   const rotation = random() * Math.PI * 2;
 
   // A ratio under a half would mean the model drew a dot in a big frame; treat that as the frame.

@@ -1,15 +1,13 @@
 import {
-  isStructuralRole,
-  MM_PER_METRE,
-  schemeFor,
+  bedPlanting,
+  type BedLayer,
   type DesignElement,
   type PlantingLayer,
-  type PlantingScheme,
+  type PlantSpecies,
 } from '@garden-studio/schema';
-import type { AssetId } from './assets/asset-spec';
+import { ASSET_FAMILIES as MATERIAL_ASSETS_FAMILIES, type AssetId } from './assets/asset-spec';
 import { materialAssets, MATERIAL_ASSETS, type MaterialAssetSpec } from './assets/material-assets';
 import type { MaterialManifestEntry } from './palette';
-import { cellSize } from './planting/sample';
 
 /**
  * What a surface is made of, in the order it is painted.
@@ -86,17 +84,22 @@ export interface SurfaceLayer {
  * shrubs and edging, which is a description of a completely different thing. It keeps the
  * `clipped-mass` painter it already had, and Phase F's hedge run is what actually improves it.
  */
-const LAYERED_MATERIALS = new Set(['mixed-border', 'shrubs', 'ornamental-grasses', 'ground-cover']);
-
 export function resolveLayers(
   material: MaterialManifestEntry,
-  element?: Pick<DesignElement, 'plantingStyle' | 'category'>,
+  element?: Pick<DesignElement, 'plantingStyle' | 'category'> & Partial<Pick<DesignElement, 'planting'>>,
 ): SurfaceLayer[] {
-  if (material.category !== 'planting-bed' || !LAYERED_MATERIALS.has(material.id)) {
-    return [{ entry: material }];
-  }
-
-  return plantingLayers(material, schemeFor(element?.plantingStyle, material.id));
+  /*
+   * Which planting layers a bed carries, and the size band each is drawn within, is geometry and
+   * is decided in the schema (`bedPlanting`), so the AR builder places the very same plants. A bed
+   * with a mix — its own, or its material's — draws its species, each as itself; that is checked
+   * first, so a bed of an older material given a mix by hand draws the mix too. What is added here
+   * is only what each layer looks like.
+   */
+  const planting = bedPlanting(material.id, element);
+  if (!planting) return [{ entry: material }];
+  return planting.source === 'mix'
+    ? mixLayers(material, planting.layers)
+    : plantingLayers(material, planting.base, planting.layers);
 }
 
 /**
@@ -117,7 +120,11 @@ export function resolveLayers(
  * units. That is exactly a bed's ground. Every later layer carries sprites and no texture, so it
  * skips the ground branch and draws only plants. Neither case needed a special path.
  */
-function plantingLayers(material: MaterialManifestEntry, scheme: PlantingScheme): SurfaceLayer[] {
+function plantingLayers(
+  material: MaterialManifestEntry,
+  base: string | null,
+  planted: BedLayer[],
+): SurfaceLayer[] {
   const ground: SurfaceLayer = {
     entry: {
       ...material,
@@ -130,67 +137,39 @@ function plantingLayers(material: MaterialManifestEntry, scheme: PlantingScheme)
       pattern: { patternType: 'scatter', density: 1, sizeRange: { min: 20, max: 40 }, lobes: 5 },
       palette: [material.jointColour],
     },
-    assets: { texture: soilTextureFor(scheme.base) },
+    assets: { texture: base ? soilTextureFor(base) : undefined },
   };
 
   /*
-   * The infill only. `backdrop` and `specimen` are placed as real elements on top of the bed — see
-   * `STRUCTURAL_ROLES` — so painting them here as well would draw every structural shrub twice: a
-   * texture blob under a sprite, half a metre off it, which reads as a rendering fault rather than
-   * as two plants.
+   * The infill only: `bedPlanting` has already left out `backdrop` and `specimen`, which are placed
+   * as real elements on top of the bed — see `STRUCTURAL_ROLES` — so painting them here as well
+   * would draw every structural shrub twice. Its density is the layer's *natural* density, with no
+   * share term: `share` thins the layer in `samplePlanting` by refusing cells, which is what lets it
+   * drift, and multiplying it in as well once thinned a cottage border twice over.
    */
-  const layers = scheme.layers
-    .filter((layer) => !isStructuralRole(layer.role))
-    .map((layer): SurfaceLayer => {
-      const spacing = cellSize(layer);
-
-      return {
-        entry: {
-          ...material,
-          pattern: {
-            patternType: 'scatter',
-            /*
-             * Units per square metre from the layer's own spacing, scaled by its share — which is
-             * the same number the sampler accepts on, so the drawn density and the sampled density
-             * cannot drift apart.
-             */
-            /*
-             * The layer's *natural* density, with no share term. `share` thins the layer in
-             * `samplePlanting`, by refusing cells — which is what lets it drift. Multiplying it in
-             * here as well thinned it twice, once by rejection and once by spacing the grid further
-             * apart, and a cottage border came out as scattered plants on a field of bark.
-             */
-            density: 1 / (spacing * spacing),
-            sizeRange: {
-              min: layer.spread.min * MM_PER_METRE,
-              max: layer.spread.max * MM_PER_METRE,
-            },
-            lobes: layer.role === 'edge' ? 7 : 9,
-            form: layer.taxon.type === 'grass-ornamental' ? 'tufted' : 'blob',
-          },
-        },
-        assets: {
-          sprites: {
-            group: 'vegetation',
-            type: layer.taxon.type,
-            ...(layer.taxon.tags ? { tags: layer.taxon.tags } : {}),
-          },
-          /*
-           * The flowers, on the layer that is *about* flowers.
-           *
-           * The material carries one accent spec — `mixed-border` names `plant-flower` — and the
-           * layered path dropped it, because a layer's spec replaces the material's wholesale. So a
-           * mixed border had no flowers in it at all: the one thing every photograph of a border
-           * has, and the reason ours read as a bank of foliage. Only the flowering layer gets it,
-           * or a bed of ground cover comes out in bloom.
-           */
-          ...(flowering(layer) && MATERIAL_ASSETS[material.id]?.flowers
-            ? { flowers: MATERIAL_ASSETS[material.id]!.flowers }
-            : {}),
-        },
-        planting: layer,
-      };
-    });
+  const layers = planted.map(({ planting: layer, pattern }): SurfaceLayer => ({
+    entry: { ...material, pattern },
+    assets: {
+      sprites: {
+        group: 'vegetation',
+        type: layer.taxon.type,
+        ...(layer.taxon.tags ? { tags: layer.taxon.tags } : {}),
+      },
+      /*
+       * The flowers, on the layer that is *about* flowers.
+       *
+       * The material carries one accent spec — `mixed-border` names `plant-flower` — and the
+       * layered path dropped it, because a layer's spec replaces the material's wholesale. So a
+       * mixed border had no flowers in it at all: the one thing every photograph of a border
+       * has, and the reason ours read as a bank of foliage. Only the flowering layer gets it,
+       * or a bed of ground cover comes out in bloom.
+       */
+      ...(flowering(layer) && MATERIAL_ASSETS[material.id]?.flowers
+        ? { flowers: MATERIAL_ASSETS[material.id]!.flowers }
+        : {}),
+    },
+    planting: layer,
+  }));
 
   return [ground, ...layers];
 }
@@ -223,4 +202,46 @@ function soilTextureFor(base: string): AssetId | undefined {
  */
 export function layerSeed(seed: string, index: number): string {
   return index === 0 ? seed : `${seed}#${index}`;
+}
+
+/* ---------------------------------------------------------------- planting mixes */
+
+/**
+ * A mix as a ground and one layer per species.
+ *
+ * Each species is an ordinary scheme layer — a taxon, a height band and a spread from its own mature
+ * size, a share from the mix — so the sampler and both painters draw it with no new code, and its
+ * picture is pinned to the species' own sprite. Structural roles are never used: a mix is infill,
+ * and the shrubs in it are drawn, not placed.
+ */
+function mixLayers(material: MaterialManifestEntry, planted: BedLayer[]): SurfaceLayer[] {
+  const ground: SurfaceLayer = {
+    entry: {
+      ...material,
+      pattern: { patternType: 'scatter', density: 1, sizeRange: { min: 20, max: 40 }, lobes: 5 },
+      palette: [material.jointColour],
+    },
+    assets: { texture: MATERIAL_ASSETS[material.id]?.texture ?? 'tex-soil' },
+  };
+
+  const layers = planted.map(({ planting, pattern, species }): SurfaceLayer => {
+    const pin = species ? speciesArt(species) : null;
+    return {
+      entry: { ...material, pattern },
+      assets: {
+        sprites: { group: 'vegetation', type: planting.taxon.type },
+        ...(pin ? { pin } : {}),
+      },
+      planting,
+    };
+  });
+
+  return [ground, ...layers];
+}
+
+/** A species as a planting layer is geometry, and lives in the schema. */
+export { speciesLayer } from '@garden-studio/schema';
+
+function speciesArt(species: PlantSpecies): { family: AssetId; variant: number } | null {
+  return species.art.family in MATERIAL_ASSETS_FAMILIES ? { family: species.art.family as AssetId, variant: species.art.variant } : null;
 }

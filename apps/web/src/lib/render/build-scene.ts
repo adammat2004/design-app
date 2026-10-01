@@ -1,5 +1,6 @@
 import {
-  boundaryRuns,
+  effectiveBoundaryRuns,
+  kerbLines,
   boundingBox,
   cutEdgeMasksFor,
   resolveEdges,
@@ -18,6 +19,7 @@ import {
   nightFraction,
   patternAnchor,
   polylineStrip,
+  retainingThickness,
   resolveSymbol,
   shadowOccluders,
   type DesignElement,
@@ -157,9 +159,23 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
   }));
 
   const house = resolveHouse(scene.house, light);
-  const runs = boundaryRuns(scene.site);
+  /*
+   * The property's sides as the design leaves them: the survey less what a proposed fence or wall
+   * replaces, and the proposals themselves. Only the survey's runs cast here — a proposal is an
+   * element, and every element already casts below, so adding its run would shade it twice.
+   */
+  const boundary = effectiveBoundaryRuns(scene.site, elements);
+  const runs = boundary.survey;
   const levels = buildLevels(elements, scene);
-  const edging = buildEdging(edgeResolution.runs);
+  /* A kerb is a course on the ground: laid by the edging painter, in the concrete kerb's pattern. */
+  const kerbs = kerbLines(elements).map((kerb) => ({
+    id: `kerb:${kerb.id}`,
+    materialId: 'concrete-kerb',
+    points: kerb.points,
+    widthM: kerb.width,
+    heightM: 0.1,
+  }));
+  const edging = buildEdging([...edgeResolution.runs, ...kerbs]);
   const casters = [
     ...shadowOccluders([], scene.house).map((occluder) => ({ sourceId: 'house', occluder })),
     ...runs.flatMap((run) => shadowOccluders([], null, [run]).map((occluder) => ({ sourceId: `boundary:${run.edgeVertexId}`, occluder }))),
@@ -194,7 +210,8 @@ export function buildRenderScene(scene: PlanScene, options: BuildOptions = {}): 
     lights: buildLights(elements, night),
     edging,
     levels,
-    boundaryRuns: runs,
+    boundaryRuns: [...runs, ...boundary.proposed],
+    replacedRuns: boundary.replaced,
     /*
      * The stack holds the plants and nothing else. The v2 renderer draws standing things from it
      * rather than from `plants`, so Pixi and the composer draw the planting from one list.
@@ -242,18 +259,6 @@ function plantNodes(plants: RenderPlant[]): RenderNode[] {
       plant,
     };
   });
-}
-
-/**
- * How thick a retaining wall is drawn, in metres, for the height it holds back.
- *
- * A proportion rather than a constant, because the two ends of the range are genuinely different
- * structures: a 150 mm step up is held by an edging board, and a metre of ground needs a wall you
- * could sit on. Clamped at both ends so neither becomes silly — below 100 mm it is a line nobody
- * sees, above 300 mm it starts eating the terrace it supports.
- */
-function retainingThickness(rise: number): number {
-  return Math.max(0.1, Math.min(0.3, rise * 0.4));
 }
 
 /** How much darker than its own paving a wall top is drawn, so the change of level reads. */
@@ -340,7 +345,7 @@ function buildLevels(elements: DesignElement[], scene: PlanScene): RenderLevel[]
  * side and either the stored run's id or where the automatic stretch starts. A course keeps its
  * raster cache entry and its seeded tones while the bed it follows is merely selected or renamed.
  */
-function buildEdging(runs: ResolvedEdgeRun[]): RenderSurface[] {
+function buildEdging(runs: Pick<ResolvedEdgeRun, 'id' | 'materialId' | 'points' | 'widthM' | 'heightM'>[]): RenderSurface[] {
   return runs.flatMap((run): RenderSurface[] => {
     const element: DesignElement = {
       id: run.id,

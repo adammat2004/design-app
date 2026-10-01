@@ -112,7 +112,10 @@ export interface RenderScene {
    * plans and every plan that existed before this.
    */
   levels: RenderLevel[];
+  /** The survey's sides as the design leaves them, then the proposed fences, walls and screens. */
   boundaryRuns: BoundaryRun[];
+  /** The survey's stretches a proposal replaces: drawn faintly under the new, never cast or counted. */
+  replacedRuns: BoundaryRun[];
   /**
    * The instanced plants, one node each, in the order the standing pass draws them.
    *

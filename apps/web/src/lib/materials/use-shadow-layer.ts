@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import {
-  boundaryRuns,
+  effectiveBoundaryRuns,
   lightDirection,
   shadowOccluders,
   type DesignElement,
@@ -67,7 +67,8 @@ export function useShadowLayer(
 
     if (boundary.length < 3) return null;
 
-    const occluders = shadowOccluders(elements, house, boundaryRuns(site));
+    /* The survey's sides less what a proposal replaces: the proposal casts as the element it is. */
+    const occluders = shadowOccluders(elements, house, effectiveBoundaryRuns(site, elements).survey);
     if (occluders.length === 0) return null;
 
     const raster = getShadowLayer(

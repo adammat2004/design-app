@@ -3,6 +3,7 @@ import {
   ARCategorySchema,
   FallbackShapeSchema,
   ModelKeySchema,
+  OpeningKindSchema,
   PlantKeySchema,
 } from './vocabulary.js';
 
@@ -50,6 +51,17 @@ export const MeshSchema = z.object({
   normals: z.array(z.number()),
   uvs: z.array(z.number()),
   indices: z.array(z.number().int().nonnegative()),
+  /**
+   * How `uvs` are measured. **Absent means `world`**, which is every mesh a v0 builder wrote.
+   *
+   * - `world`: `(X, Z) / tileSizeM`, as above — right for ground, and why two abutting patios share
+   *   one pattern.
+   * - `face`: metres across each face and up it, over `tileSizeM` — a wall's courses run along the
+   *   wall and a post's grain up the post. World XZ degenerates on a vertical face (every point up a
+   *   wall has the same X and Z), which is what this exists for. A horizontal face in a `face` mesh
+   *   still uses world XZ, so a box's top tiles like the ground beside it. (Added in 0.0.2.)
+   */
+  uv: z.enum(['world', 'face']).optional(),
 });
 export type Mesh = z.infer<typeof MeshSchema>;
 
@@ -106,6 +118,12 @@ export const ARMaterialSchema = z.object({
    * obvious source) is the renderer's business.
    */
   texture: z.object({ key: z.string(), tileSizeM: z.number().positive() }).nullable(),
+  /**
+   * A few related colours for things drawn many times in one material — the plants in a bed — so
+   * they are not all one flat green. An instance picks one by its `tone`. Absent: `baseColor` only.
+   * (Added in 0.0.2.)
+   */
+  tones: z.array(HexColourSchema).min(1).optional(),
 });
 export type ARMaterial = z.infer<typeof ARMaterialSchema>;
 
@@ -141,9 +159,57 @@ export const SurfaceNodeSchema = NodeBaseSchema.extend({
  * walls and hedges, retaining faces, edging, steps, and the structures that are whatever rectangle
  * the placer gave them — pergolas, sheds, raised beds. Arrives already triangulated.
  */
+/**
+ * A door or a window in a solid's wall — on the house, so the garden door can be found and the
+ * house reads as a house. Its span along the wall at ground level, which way is out, and the sill
+ * and head heights. A renderer draws a frame and glass or a door leaf there, set proud of the wall;
+ * it cuts nothing. (Added in 0.0.2.)
+ */
+export const OpeningSchema = z.object({
+  kind: OpeningKindSchema,
+  a: Vec2Schema,
+  b: Vec2Schema,
+  outward: Vec2Schema,
+  bottom: z.number(),
+  top: z.number(),
+});
+export type SceneOpening = z.infer<typeof OpeningSchema>;
+
+/**
+ * A library model that may draw this node instead of its own geometry. (Added in 0.0.3.)
+ *
+ * `id` is looked up in the model library (`model-library.ts`); the scene still names no file. The
+ * model's base centre goes at `position`, it is turned by `yaw` exactly as a `model` node is (its
+ * front, +Z, towards plan +y at yaw 0), and it is **scaled per axis to exactly `size`** — width,
+ * height, depth in metres, the element's own. `size` is the geometry of record; there is no scale.
+ *
+ * The builder has already decided the model fits: it only names one whose natural size is within
+ * the entry's `fit.tolerance` of `size`, so a renderer does not judge again. A renderer without
+ * the library, without this id, or still loading the file draws the node's own geometry, which
+ * is complete on its own — `asset` is only ever a better drawing of what is already there.
+ */
+export const AssetRefSchema = z.object({
+  id: z.string(),
+  position: Vec3Schema,
+  yaw: z.number(),
+  size: Vec3Schema,
+});
+export type AssetRef = z.infer<typeof AssetRefSchema>;
+
 export const SolidNodeSchema = NodeBaseSchema.extend({
   kind: z.literal('solid'),
   parts: z.array(z.object({ material: z.string(), mesh: MeshSchema })).min(1),
+  openings: z.array(OpeningSchema).optional(),
+  /**
+   * This solid is a clipped hedge — a hedge boundary, or a bed planted as hedging — standing on
+   * `outline` from `base` to `base + height`. A renderer that can draw foliage may draw it as clipped
+   * growth with a lumpy top instead; `parts` is the plain block for one that cannot. (Added in 0.0.2.)
+   */
+  hedge: z
+    .object({ outline: RingSchema, base: z.number(), height: z.number().positive() })
+    .optional(),
+  /** A library model that may draw this solid instead of `parts`. (Added in 0.0.3.) */
+  asset: AssetRefSchema.optional(),
 });
 
 /**
@@ -169,6 +235,14 @@ export const ModelNodeSchema = NodeBaseSchema.extend({
   size: Vec3Schema,
   fit: z.enum(['contain', 'stretch']),
   fallback: FallbackShapeSchema,
+  /**
+   * The plant species, for a tree or a shrub the plan names one for (a `PlantSpecies` id, e.g.
+   * `betula-utilis`). `model` stays the form to draw; this is what it is, for a label or a better
+   * model where the renderer has one. (Added in 0.0.2.)
+   */
+  species: z.string().optional(),
+  /** A library model that may draw this instead of the manifest's `model`. (Added in 0.0.3.) */
+  asset: AssetRefSchema.optional(),
 });
 
 /**
@@ -180,12 +254,16 @@ export const PlantsNodeSchema = NodeBaseSchema.extend({
   kind: z.literal('plants'),
   plant: PlantKeySchema,
   material: z.string(),
+  /** The species these are, where the bed names species (a planting mix). (Added in 0.0.2.) */
+  species: z.string().optional(),
   instances: z.array(
     z.object({
       at: Vec3Schema,
       yaw: z.number(),
       spread: z.number().positive(),
       height: z.number().positive(),
+      /** Which of the material's `tones` this plant is, 0 to 1. (Added in 0.0.2.) */
+      tone: z.number().min(0).max(1).optional(),
     }),
   ),
 });

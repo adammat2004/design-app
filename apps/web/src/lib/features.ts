@@ -2,9 +2,12 @@ import {
   boundingBox,
   featureAnchor,
   featureOutline,
+  geometryVertices,
+  minimumGeometryVertices,
   translateGeometry,
-  MAX_CORNER_RADIUS,
   MIN_FEATURE_SIDE,
+  withCornerRadius,
+  withGeometryVertices,
   type FeatureKind,
   type PlacedFeature,
   type Point,
@@ -82,29 +85,23 @@ export function translateFeature(feature: PlacedFeature, dx: number, dy: number)
   return { ...feature, geometry: translateGeometry(feature.geometry, dx, dy) };
 }
 
-/**
- * The corner points a user can drag, for the shapes that have them. Points and rectangles return
- * null — a rectangle is reshaped by its handles, not vertex by vertex.
- *
- * These are the raw, pre-rounding points: rounding is a property of the shape, not something the
- * user edits corner by corner.
+/*
+ * Corner editing is shared with step 5 now — `packages/schema/src/plan/vertices.ts` holds the rules
+ * (minimum corners, no outline folding through itself, nothing smaller than a shape). These wrap it
+ * for a `PlacedFeature`.
  */
 export function featureVertices(feature: PlacedFeature): Point[] | null {
-  const { geometry } = feature;
-  if (geometry.kind === 'polygon' || geometry.kind === 'polyline') return geometry.points;
-  return null;
+  return geometryVertices(feature.geometry);
 }
 
 export function withVertices(feature: PlacedFeature, points: Point[]): PlacedFeature {
-  const { geometry } = feature;
-  if (geometry.kind !== 'polygon' && geometry.kind !== 'polyline') return feature;
-
-  return { ...feature, geometry: { ...geometry, points } };
+  const geometry = withGeometryVertices(feature.geometry, points);
+  return geometry === feature.geometry ? feature : { ...feature, geometry };
 }
 
 /** Below this a polygon is no longer an area and a line is no longer a line. */
 export function minimumVertices(feature: PlacedFeature): number {
-  return feature.geometry.kind === 'polygon' ? 3 : 2;
+  return minimumGeometryVertices(feature.geometry);
 }
 
 export function resizeFeature(
@@ -137,13 +134,8 @@ export function rotateFeature(feature: PlacedFeature, degrees: number): PlacedFe
 }
 
 export function setCornerRadius(feature: PlacedFeature, radius: number): PlacedFeature {
-  const { geometry } = feature;
-  if (geometry.kind !== 'polygon') return feature;
-
-  const clamped = Math.min(MAX_CORNER_RADIUS, Math.max(0, radius));
-  if (clamped === geometry.cornerRadius) return feature;
-
-  return { ...feature, geometry: { ...geometry, cornerRadius: clamped } };
+  const geometry = withCornerRadius(feature.geometry, radius);
+  return geometry === feature.geometry ? feature : { ...feature, geometry };
 }
 
 /** The axis-aligned box a feature occupies — for marquee hit-testing and snap targets. */

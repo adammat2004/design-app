@@ -4,9 +4,13 @@ import type { EdgeRuleContext } from './edges/rules.js';
 import type { Point } from '../geometry/primitives.js';
 import type { ElementCategory } from './concepts.js';
 import type { BudgetBand } from './brief.js';
-import { findMaterial, materialLabel, MATERIALS } from './materials.js';
+import { findMaterial, materialLabel, MATERIALS, measureOf } from './materials.js';
 import { isCountable, materialPattern, unitsPerSquareMetre } from './material-patterns.js';
 import { structureFloor } from './structure/floor.js';
+import { polylineLength } from '../geometry/shapes.js';
+import { bedMix, mixCounts } from './plants/mixes.js';
+import { speciesById } from './plants/species.js';
+import { isTreeSymbol, resolveSymbol } from './symbols.js';
 
 /**
  * What a plan is made of, counted.
@@ -62,6 +66,19 @@ export interface ScheduleLine {
    */
   units: number | null;
   unitLabel: string | null;
+  /**
+   * Cubic metres, for a loose fill — gravel, bark, chippings — which a merchant sells by volume:
+   * the area times the material's typical laid depth. `null` for everything else.
+   */
+  volumeM3: number | null;
+}
+
+/**
+ * A plant placed on its own — a tree, a specimen shrub — rather than a bed: a point with no ground.
+ * It is counted, never measured, which is what a planting plan's schedule does with a tree.
+ */
+export function isPlacedPlant(element: DesignElement): boolean {
+  return element.category === 'planting-bed' && element.shape.kind === 'point' && elementArea(element) === 0;
 }
 
 /**
@@ -96,6 +113,9 @@ export function planSchedule(
 ): ScheduleLine[] {
   const lines = new Map<string, ScheduleLine>();
 
+  /* Plants to order per line, from each bed's mix. `null` once any bed on the line has no mix. */
+  const plants = new Map<string, number | null>();
+
   for (const stored of elements) {
     if (stored.hidden) continue;
     /*
@@ -103,6 +123,11 @@ export function planSchedule(
      * the square metre, and counting the footprint as the frame as well would count it twice.
      */
     const element = structureFloor(stored) ?? stored;
+
+    if (isPlacedPlant(element)) {
+      countPlacedPlant(lines, element);
+      continue;
+    }
 
     const material = findMaterial(element.material) ?? MATERIALS[element.category][0];
     if (!material) continue;
@@ -119,6 +144,7 @@ export function planSchedule(
       lengthM: null,
       units: null,
       unitLabel: null,
+      volumeM3: null,
     };
 
     /*
@@ -126,16 +152,56 @@ export function planSchedule(
      * and selecting it, but "2.4 m² of teak" is not a quantity anyone orders — the honest line is
      * "1 item". A bollard is the same argument at a twentieth of the size.
      */
-    if (!isCounted(element.category)) line.areaSqm += elementArea(element);
+    /*
+     * A fence, a wall or a screen is bought by the metre along its line, never by the sliver of
+     * ground its thickness covers — "0.6 m² of slatted screen" is not an order anybody places.
+     */
+    if (measureOf(material, element.category) === 'length' && element.shape.kind === 'polyline') {
+      /* A fence kept from step 2 is already there: nothing to order. */
+      if (element.status === 'keep') continue;
+      line.lengthM = (line.lengthM ?? 0) + polylineLength(element.shape.points);
+      line.elementCount += 1;
+      lines.set(material.id, line);
+      continue;
+    }
+
+    const area = isCounted(element.category) ? 0 : elementArea(element);
+    line.areaSqm += area;
     line.elementCount += 1;
+
+    /*
+     * A bed planted from a mix can be counted, and this is not the drawn density the note above
+     * refuses: each species carries its real planting centres, so the number is the one a nursery
+     * order is written from. A bed without a mix makes the whole line a dash.
+     */
+    if (element.category === 'planting-bed') {
+      const mix = bedMix(element);
+      const sofar = plants.has(material.id) ? plants.get(material.id)! : 0;
+      plants.set(
+        material.id,
+        mix && sofar !== null ? sofar + mixCounts(mix, area).reduce((sum, entry) => sum + entry.count, 0) : null,
+      );
+    }
 
     lines.set(material.id, line);
   }
 
   for (const line of lines.values()) {
+    if (line.materialId.startsWith(PLANT_KEY) || line.lengthM !== null) continue;
     if (isCounted(line.category)) {
       line.units = line.elementCount;
       line.unitLabel = line.elementCount === 1 ? 'item' : 'items';
+      continue;
+    }
+    const planted = plants.get(line.materialId);
+    if (planted !== undefined && planted !== null && planted > 0) {
+      line.units = planted;
+      line.unitLabel = planted === 1 ? 'plant' : 'plants';
+      continue;
+    }
+    const material = findMaterial(line.materialId);
+    if (measureOf(material ?? undefined, line.category) === 'volume' && material?.depthMm) {
+      line.volumeM3 = (line.areaSqm * material.depthMm) / 1000;
       continue;
     }
     const counted = countUnits(line.materialId, line.areaSqm);
@@ -167,6 +233,7 @@ export function planSchedule(
       lengthM: 0,
       units: null,
       unitLabel: null,
+      volumeM3: null,
     };
 
     line.lengthM = (line.lengthM ?? 0) + run.length;
@@ -190,6 +257,36 @@ export function planSchedule(
       b.areaSqm - a.areaSqm ||
       a.label.localeCompare(b.label),
   );
+}
+
+/** Placed plants are keyed apart from materials, so a specimen shrub is never summed into a bed. */
+const PLANT_KEY = 'plant:';
+
+/**
+ * One line per species (or, for a plant with none, per material): trees and specimen shrubs are
+ * ordered by the plant, and "3 × Hornbeam" is the line a planting schedule carries.
+ */
+function countPlacedPlant(lines: Map<string, ScheduleLine>, element: DesignElement): void {
+  const species = speciesById(element.plantId);
+  const symbol = resolveSymbol(element);
+  const tree = species ? species.form === 'tree' : symbol ? isTreeSymbol(symbol) : false;
+  const key = `${PLANT_KEY}${species?.id ?? element.material ?? 'plant'}`;
+  const line = lines.get(key) ?? {
+    layer: 'over' as const,
+    materialId: key,
+    label: species ? species.common : `${tree ? 'Tree' : 'Plant'} — ${materialLabel(element.material ?? 'shrubs')}`,
+    category: element.category,
+    areaSqm: 0,
+    elementCount: 0,
+    lengthM: null,
+    units: 0,
+    unitLabel: null,
+    volumeM3: null,
+  };
+  line.elementCount += 1;
+  line.units = line.elementCount;
+  line.unitLabel = tree ? (line.elementCount === 1 ? 'tree' : 'trees') : line.elementCount === 1 ? 'plant' : 'plants';
+  lines.set(key, line);
 }
 
 function countUnits(materialId: string, areaSqm: number): { units: number; label: string } | null {

@@ -690,3 +690,23 @@ SUMMARY over 117 concepts (3 seeds)
     l-shape                   298 m²      628 ms
     suburban                  405 m²     1498 ms
 ```
+
+## Phase 2 of the gap analysis: species, mixes, enclosures, kept features (30 Sep 2026)
+
+Taken before M5 (kept features) and again after M6 (the generator chooses species and mixes), on
+the same machine the same afternoon. **Every row is identical**: mean 0.903, min 0.758, 72% inside
+the bands, 87% of requested features drawn, sun 0.656, canopy 0.769, privacy 1.000, the same fault
+counts and the same variety lines. That is the answer the design asked for, not a missed effect:
+
+- a tree's species is chosen **after** its symbol, so its radius — and every placement made with
+  it — is unchanged, and the canopy principle reads radii;
+- a bed's mix goes on `planting`, not `material`, so upkeep and style (which read the material)
+  are unchanged;
+- the sun principle's shade comes from the site analysis (house and boundary), so a species'
+  mature height changes the drawn shadow and not the score;
+- privacy now also counts proposed enclosures and trees over `SCREENING_HEIGHT` between a seat and
+  a low boundary, and every generated plan was already at 1.000 behind a 1.8 m fence.
+
+Latency moved within its own noise (suburban 1441 → 1593 ms; the committed run above has
+natural-twin at 1255 ms against 739 ms here before any change). The new cost is `bedExposure` for
+each bed on a located plan, which samples two days of shadows at five points.

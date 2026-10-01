@@ -81,6 +81,7 @@ import { snapPoint } from '@/lib/grid';
 import { computeZones, ZONE_ORDER, type GardenZone, type ZoneId } from '@/lib/zones';
 import { highestId } from '@/lib/hydration';
 import type { Unit } from '@/lib/units';
+import { CLOSE_DISTANCE } from '@/lib/draw-draft';
 
 /**
  * Boundary mode draws the plot and House mode places the building inside it — the two creation
@@ -113,7 +114,8 @@ export type Selection =
   | null;
 
 /** Clicking this close to the first point closes the polygon, in metres. */
-export const CLOSE_DISTANCE = 0.6;
+/* One close distance for every editor that draws — see `lib/draw-draft.ts`. */
+export { CLOSE_DISTANCE };
 
 /** A polygon needs three corners; below that there is nothing to enclose. */
 const MIN_VERTICES = 3;

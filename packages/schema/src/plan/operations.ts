@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { PointSchema, polygonIsSimple, type Point } from '../geometry/primitives.js';
-import { DesignElementSchema, isLocked, type DesignElement } from './concepts.js';
+import { DesignElementSchema, isLocked, isUserLocked, type DesignElement } from './concepts.js';
 import { MIN_FEATURE_SIDE, moveGeometry, type PlanGeometry } from './features.js';
 import { elementIsLegal } from './footprint.js';
+import { edgesAfterVertexEdit } from './edges/edit.js';
 import { structureLimitRefusal } from './structure/resize.js';
 
 /**
@@ -115,6 +116,8 @@ const PropertyChangesSchema = DesignElementSchema.pick({
   symbol: true,
   plantId: true,
   plantingStyle: true,
+  planting: true,
+  enclosure: true,
   zone: true,
   hidden: true,
   structure: true,
@@ -285,6 +288,12 @@ export function durationOf(operation: DesignOperation): number {
 export const FENCE_REFUSAL = 'That goes over the property boundary.';
 export const LOCKED_REFUSAL =
   'That is the ground layer for its zone — change its material instead.';
+export const USER_LOCKED_REFUSAL = 'That is locked — unlock it in its Details to change it.';
+
+/** Why an element may not change shape: the ground layer's reason, or the user's lock. */
+export function lockRefusal(element: DesignElement): string {
+  return isUserLocked(element) ? USER_LOCKED_REFUSAL : LOCKED_REFUSAL;
+}
 export const MISSING_REFUSAL = 'That element is no longer on the plan.';
 
 /* ---------------------------------------------------------------- resolution */
@@ -307,12 +316,6 @@ export interface ResolveContext {
 export function resolveRef(ref: string, bindings: Record<string, string>): string | null {
   if (!ref.startsWith('$')) return ref;
   return bindings[ref] ?? null;
-}
-
-/** The element with its per-side edging choice removed — back to the automatic answer. */
-/** The element with its custom edge runs dropped — back to the automatic answer. */
-function withAutomaticEdges(element: DesignElement): DesignElement {
-  return { ...element, edges: { mode: 'auto', runs: [] } };
 }
 
 function find(ref: string, context: ResolveContext): DesignElement | null {
@@ -357,7 +360,7 @@ export function resolveOperation(
     shape: PlanGeometry,
     options: { resizing?: boolean } = {},
   ): ResolvedOperation => {
-    if (isLocked(before)) return { ok: false, reason: LOCKED_REFUSAL };
+    if (isLocked(before)) return { ok: false, reason: lockRefusal(before) };
     if (options.resizing && tooSmallToResize(shape))
       return { ok: false, reason: `${before.name ?? 'That'} would be too small.` };
     if (shape.kind === 'polygon' && !polygonIsSimple(shape.points))
@@ -427,13 +430,15 @@ export function resolveOperation(
        * A per-side edging choice is keyed on the authored corner index, and a new corner count
        * renumbers every side after the change. Keeping the list would silently move a course onto a
        * side the user never pointed at, so it goes back to automatic instead — the same refusal
-       * `pruneBoundaryStyles` makes when a boundary corner disappears.
+       * `pruneBoundaryStyles` makes when a boundary corner disappears. `edgesAfterVertexEdit` is the
+       * one rule, shared with the editor's corner handles, and it resets a `none` host too.
        */
-      const host =
-        before.edges?.mode === 'custom' &&
-        operation.to.points.length !== before.shape.points.length
-          ? withAutomaticEdges(before)
-          : before;
+      const reset = edgesAfterVertexEdit(before, {
+        ...before,
+        shape: { ...before.shape, points: operation.to.points },
+      });
+      /* Only the edge plan carries over: `before` has to stay the element as it was, outline and all. */
+      const host = reset.edges === before.edges ? before : { ...before, edges: reset.edges };
       return geometryChange(host, {
         ...before.shape,
         points: operation.to.points,
@@ -457,10 +462,16 @@ export function resolveOperation(
       const before = find(operation.elementId, context);
       if (!before) return { ok: false, reason: MISSING_REFUSAL };
       /*
-       * No locked check and no legality check, matching `commitElement(..., {checkGeometry: false})`:
-       * none of these fields can move anything, and turning the lawn to gravel is exactly the edit a
-       * base fill is meant to accept.
+       * No ground-layer check and no legality check, matching `commitElement(..., {checkGeometry:
+       * false})`: none of these fields can move anything, and turning the lawn to gravel is exactly
+       * the edit a base fill is meant to accept.
+       *
+       * A user's lock is the exception, and it is the whole of the lock's meaning for the designer:
+       * the designer changes nothing about a locked element, its material included. Operations only
+       * ever come from the designer — a person's own edits go through the store — so this is where
+       * that rule lives.
        */
+      if (isUserLocked(before)) return { ok: false, reason: USER_LOCKED_REFUSAL };
       return { ok: true, effect: 'replace', before, after: { ...before, ...operation.changes } };
     }
 
@@ -479,7 +490,7 @@ export function resolveOperation(
     case 'remove': {
       const before = find(operation.elementId, context);
       if (!before) return { ok: false, reason: MISSING_REFUSAL };
-      if (isLocked(before)) return { ok: false, reason: LOCKED_REFUSAL };
+      if (isLocked(before)) return { ok: false, reason: lockRefusal(before) };
       return { ok: true, effect: 'delete', before };
     }
   }

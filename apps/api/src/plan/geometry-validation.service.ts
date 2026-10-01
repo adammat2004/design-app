@@ -140,10 +140,19 @@ export class GeometryValidationService {
         ),
       );
 
+      /*
+       * A polygon must be contained; a line — a fence judged on its centreline — must be covered,
+       * because a line lying exactly along the boundary has no interior point inside it and
+       * `ST_Contains` would call it outside. Covered within a millimetre, so a corner the editor
+       * snapped onto a fence is not refused for a rounding error. Polygons are asked exactly what
+       * they always were.
+       */
       branches.push(
         sql`SELECT 'element_outside_boundary'::text, ARRAY[e.id]
             FROM elements e, boundary b
-            WHERE NOT ST_Contains(b.geom, e.geom)`,
+            WHERE CASE WHEN GeometryType(e.geom) = 'LINESTRING'
+                       THEN NOT ST_Covers(ST_Buffer(b.geom, 0.001), e.geom)
+                       ELSE NOT ST_Contains(b.geom, e.geom) END`,
       );
     }
 
@@ -185,6 +194,15 @@ export class GeometryValidationService {
 
 /** `(id, geom)` row for a VALUES-backed CTE. */
 function shapeRow(id: string, geometry: PlanGeometry): SQL {
+  /*
+   * A line of no width is a centreline — an enclosure's, from `legalFootprint` — and is sent as the
+   * line it is. Tessellated, it would be a polygon with no area, which PostGIS answers about by
+   * accident rather than by rule.
+   */
+  if (geometry.kind === 'polyline' && geometry.width === 0) {
+    const points = geometry.points.map((point) => `${point.x} ${point.y}`).join(', ');
+    return sql`(${id}::text, ST_GeomFromText(${`LINESTRING(${points})`}::text))`;
+  }
   return sql`(${id}::text, ST_GeomFromText(${polygonToWkt(geometryOutline(geometry))}::text))`;
 }
 

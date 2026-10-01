@@ -3,6 +3,11 @@ import {
   computeZones,
   effectiveZoneIds,
   featureOutline,
+  keptElement,
+  treeStamp,
+  mixForBed,
+  bedExposure,
+  PLANTING_MIXES,
   gardenDirection,
   gardenDoors,
   gateThresholdDepth,
@@ -455,25 +460,22 @@ export class ConceptsService {
         purpose,
         zone: zoneId ?? zoneOf(crown, allZones.length > 0 ? allZones : zones),
         material: materialFor('planting-bed', constraints, index),
-        ...(symbol === 'tree-ornamental'
-          ? { plantId: 'acer-palmatum-red', name: 'Japanese maple', height: 3 }
-          : {}),
+        /* Its species, chosen after the symbol so the radius — and every placement — is unchanged. */
+        ...treeStamp(brief.style, symbol, trees.filter((tree) => tree.symbol === symbol).length),
       });
       obstacles.push(stem);
       return true;
     };
 
+    /*
+     * What was kept keeps its nature — a tree its species, height and crown, a fence its line — see
+     * `keptElement`. The obstacle is still the whole outline it was drawn as: a kept tree's crown is
+     * not something the generator plants under until the user has said how big it really is.
+     */
     for (const feature of document.features.features.filter((f) => f.status === 'keep')) {
       const outline = featureOutline(feature);
       obstacles.push(outline);
-      featureLayer.push({
-        id: `${conceptId}-keep-${feature.id}`,
-        category: 'existing-feature',
-        role: 'feature',
-        name: feature.name,
-        shape: feature.geometry,
-        zone: zoneOf(outline, zones),
-      });
+      featureLayer.push(keptElement(feature, `${conceptId}-keep-${feature.id}`, zoneOf(outline, zones)));
     }
 
     /*
@@ -1466,7 +1468,7 @@ export class ConceptsService {
      * generator being arbitrary.
      */
     const stamped = stampEdging(
-      this.stampPlanting(elements, constraints, brief.style),
+      this.stampPlanting(elements, constraints, brief.style, document.site),
       constraints,
     );
     const lights = lightingScheme(stamped, {
@@ -1635,22 +1637,39 @@ export class ConceptsService {
     elements: DesignElement[],
     constraints: DesignConstraints,
     style: GardenBrief['style'],
+    site: PlanDocument['site'],
   ): DesignElement[] {
     let tree = 0;
+    const perSymbol = new Map<string, number>();
 
     return elements.map((element) => {
       if (element.category !== 'planting-bed') return element;
 
       const isTree = element.shape.kind === 'point' && element.symbol === undefined;
       const symbol = isTree ? treeSpeciesFor(style, tree++) : element.symbol;
+      const nth = isTree && symbol ? (perSymbol.get(symbol) ?? 0) : 0;
+      if (isTree && symbol) perSymbol.set(symbol, nth + 1);
+
+      /*
+       * A bed is planted from a mix: by its planting style, and by the light where the plan knows it,
+       * so a border in the shade of the house gets the woodland mix. On `planting`, not `material` —
+       * the material is what the scorer reads for upkeep and style, and it is kept.
+       */
+      const mix =
+        element.shape.kind !== 'point' && !element.planting && element.fillKind !== 'base'
+          ? mixForBed(
+              constraints.plantingStyle,
+              element.material,
+              site.location ? (bedExposure(site, element, elements)?.light ?? null) : null,
+            )
+          : null;
 
       return {
         ...element,
         plantingStyle: constraints.plantingStyle,
         symbol,
-        ...(isTree && symbol === 'tree-ornamental'
-          ? { plantId: 'acer-palmatum-red', name: 'Japanese maple', height: 3 }
-          : {}),
+        ...(isTree && symbol ? treeStamp(style, symbol, nth) : {}),
+        ...(mix ? { planting: { mix: PLANTING_MIXES[mix]!.mix } } : {}),
       };
     });
   }

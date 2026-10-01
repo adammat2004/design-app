@@ -48,6 +48,9 @@ export function layerForElement(element: DesignElement): VisualLayer {
       return 'structure';
     case 'furniture':
       return 'furniture';
+    /* Stands up like a building; drawn by the boundary painter, but stacked with the structures. */
+    case 'enclosure':
+      return 'structure';
     case 'lighting':
       return 'lighting';
     case 'existing-feature':

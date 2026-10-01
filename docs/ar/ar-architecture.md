@@ -24,7 +24,7 @@ recommendation you are free to improve on, ideally writing down why.
 ```text
                  web / API side (developer A)                  |      mobile side (developer B)
                                                                |
-PlanDocument ──► buildARScene()  (not written yet) ──► ARScene ──► SceneSource ──► AR renderer ──► camera
+PlanDocument ──► buildArScene()  (ar-builder)      ──► ARScene ──► SceneSource ──► AR renderer ──► camera
 (stored plan)    pure TS, reuses packages/schema               |    (fixture, file,      (Viro, in
                  decides every position, size, mesh            |     or API)             ar/engine/)
                                                                |
@@ -79,6 +79,25 @@ The four node kinds are the whole vocabulary a renderer has to understand:
   indices), so the renderer draws triangles and never runs polygon maths itself.
   Counter-clockwise triangles are the front face (the glTF rule). UVs are in world metres divided
   by the material's `tileSizeM`, so texture tiling comes from the data, not from engine settings.
+- **Four furniture models exist, with a manifest in `ModelSpec`'s shape (30 Sep 2026).**
+  `apps/web/src/lib/structures/furniture/furniture-models.json` records, per `ModelKey`, the GLB
+  (`apps/web/public/models/furniture/<key>.glb`), its natural size, `pivot: 'base-centre'`,
+  `front: '+z'`, triangles (all ≤5k), licence (CC0) and source. They are meshopt-compressed and
+  quantised, so the phone's loader needs `EXT_meshopt_compression` and `KHR_mesh_quantization`, and
+  **untextured**: one `finish` slot, with texture coordinates in metres, which the web dresses in the
+  piece's own material (teak, rattan, steel) from the CC0 library. `dining-set-4`, `dining-set-6`,
+  `sofa-set` and `bench` have one; `lounger`, `bbq`, `parasol` and `planter` do not yet.
+- **A structure finish names its texture (30 Sep 2026).** `STRUCTURE_FINISHES` in
+  `packages/schema` gives the timber and metal finishes an optional `texture: { key, tileSizeM }`,
+  which is `ARMaterial.texture` exactly, so the builder maps it as `finish.texture ?? null`. The key
+  names a set in the web app's CC0 library (`apps/web/src/lib/structures/pbr/`: albedo, normal and
+  packed ORM, square, at most 1024 px, checked in under `public/assets/pbr/`). Two things for the
+  phone. The albedos were packed to a known mean and the web multiplies the colour by
+  `baseColor ÷ measured mean`, so the surface averages to the swatch; a renderer that just sets the
+  texture and `baseColor` will come out darker or lighter than the plan. And timber sets are packed
+  with the grain along U, which the web lays along each part's length; a builder that takes UVs from
+  world X/Z will run the grain across the posts. A `grainAxis` field is the obvious addition if AR
+  wants it, and it is additive.
 - **Surfaces never overlap.** The plan stacks them on purpose (a lawn covers a whole zone and a
   patio is drawn on top). In a 3D engine that causes z-fighting, a flicker where two surfaces sit at
   the same height. The builder cuts each surface by everything above it, so the renderer needs no
@@ -378,7 +397,7 @@ Things to watch from the start:
 
 |        | Developer A (web, API, geometry)                                                                                                                  | Developer B (mobile, AR)                                                                                                                            |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Owns   | `packages/schema`, `apps/api`, `apps/web`; the future scene builder, the `/ar-scene` endpoint and share links, the web "Download AR scene" button | `apps/mobile`: Expo and EAS setup, the Viro adapter, placement, rendering, performance; 3D model files and their manifest; the hand-written fixture |
+| Owns   | `packages/schema`, `apps/api`, `apps/web`; the scene builder (`packages/ar-builder`, minimum built 30 Sep 2026), the `/ar-scene` endpoint and share links, the web "Download AR scene" button (built, dev-only) | `apps/mobile`: Expo and EAS setup, the Viro adapter, placement, rendering, performance; 3D model files and their manifest; the hand-written fixture |
 | Shares | `packages/ar-contract` and `docs/ar/`                                                                                                             | the same                                                                                                                                            |
 
 **How to avoid treading on each other:**
@@ -396,7 +415,7 @@ Things to watch from the start:
 
 | Phase            | Mobile (B)                                                                                                                                                       | Web/API (A)                                                                                                  | Done when                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| **1. Spike**     | §5: Viro, dev build, pergola + cube at true scale, the four measurements                                                                                         | Fix the API's host binding; ~~move the pure structure geometry into `packages/schema`~~ (done for pergola/gazebo: `plan/structure/parts.ts`); move the roof geometry | Scale within 3%, and a decision on Viro                 |
+| **1. Spike**     | §5: Viro, dev build, pergola + cube at true scale, the four measurements                                                                                         | Fix the API's host binding; ~~move the pure structure geometry into `packages/schema`~~ (done for pergola/gazebo: `plan/structure/parts.ts`); ~~move the roof geometry~~ (done: `plan/roof.ts`) | Scale within 3%, and a decision on Viro                 |
 | **2. Renderer**  | Draw every node kind from the sample garden; fallbacks for models; tap-and-turn; tabletop mode                                                                   | Start the builder (`PlanDocument → ARScene`) and generate scenes for the eleven fixture plans                | The sample and the generated scenes render on the phone |
 | **3. Placement** | Two-point house-wall alignment, nudge, confirm; test on the second platform                                                                                      | "Download AR scene" from the web; the phone opens `.ar.json` files                                           | A real design lined up in a real garden                 |
 | **4. Surfaces**  | Textures, translucency toggle, merged meshes                                                                                                                     | Levels, steps, edging, boundary kinds, house and roof in the builder                                         | Paths, patios and lawn read correctly outdoors          |

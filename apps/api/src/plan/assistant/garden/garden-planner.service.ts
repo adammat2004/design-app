@@ -19,6 +19,7 @@ import {
   type PlanDocument,
   type PlanGeometry,
   type Point,
+  speciesNamed,
 } from '@garden-studio/schema';
 import { PlacementService } from '../../generation/placement.service.js';
 import { anchorPoint, buildAnchorContext, type AnchorContext } from './anchors.js';
@@ -124,6 +125,12 @@ export class GardenPlannerService {
             continue;
           }
 
+          /*
+           * "An old apple tree by the back fence": a tree named for what it is takes its species, so
+           * the plan casts and counts it as that tree. Matched against the catalogue, never guessed —
+           * a name that matches nothing leaves the tree unnamed, as the user can then say on the panel.
+           */
+          const species = action.feature === 'tree' ? speciesNamed(action.name ?? '', ['tree']) : undefined;
           const feature: PlacedFeature = {
             id: nextId(),
             kind: action.feature,
@@ -132,6 +139,7 @@ export class GardenPlannerService {
             // Almost everything already in a garden is staying; Remove is said on purpose.
             status: 'keep',
             replaceWith: null,
+            ...(species ? { plantId: species.id } : {}),
           };
 
           features = [...features, feature];

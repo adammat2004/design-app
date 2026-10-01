@@ -694,7 +694,7 @@ The codebase suggests a slightly different order from the brief's:
 - **Snapping must come before drawing tools**, because drawing without snapping produces imprecise
   shapes that then need fixing.
 
-### Phase 0: quick wins (about a week in total; each is S and independent)
+### Phase 0: quick wins (about a week in total; each is S and independent) — **built 29 Sep 2026**
 
 | Quick win | Where |
 |---|---|
@@ -714,7 +714,7 @@ The codebase suggests a slightly different order from the brief's:
 **Definition of done:** every item has a unit or e2e test; goldens are unchanged except the PNG
 sheet chrome.
 
-### Phase 1: professional editor foundations
+### Phase 1: professional editor foundations — **built 29–30 Sep 2026** (command convergence deferred; see TODOS)
 
 - **Objective:** a user can build a whole garden precisely without the AI.
 - **Tasks:**
@@ -745,7 +745,7 @@ sheet chrome.
   gate, and a bed, types a rotation, multi-selects and duplicates, and undoes everything by keyboard.
   The snap service has property tests (snapping is idempotent; it never snaps into illegality).
 
-### Phase 2: garden-domain intelligence
+### Phase 2: garden-domain intelligence — **built 30 Sep 2026** (catalogue review and the leftovers in TODOS)
 
 - **Objective:** objects carry the data a landscape designer specifies.
 - **Tasks:**

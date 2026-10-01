@@ -260,6 +260,549 @@ describe('direct manipulation', () => {
   });
 });
 
+describe('precision aids', () => {
+  /**
+   * The guides used to be drawn and not applied: a dashed line saying "level with the house" over a
+   * patio 20 cm off it. A guide that is shown has to be true.
+   */
+  it('pulls a dragged shape onto an alignment it has come close to', () => {
+    seed();
+    // The house's left wall is at x = 6. A 3 m patio centred at 7.35 has its left edge at 5.85.
+    store().moveElementLive('p1', { x: 7.35, y: 3 });
+
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre.x).toBeCloseTo(7.5, 5);
+    expect(store().alignments.length).toBeGreaterThan(0);
+  });
+
+  it('pulls flush to the fence, never past it', () => {
+    seed();
+    // A 3 m patio centred at 18.4 has its right edge at 19.9, a tenth short of the fence at x = 20.
+    store().moveElementLive('p1', { x: 18.4, y: 3 });
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre.x + shape.width / 2).toBeLessThanOrEqual(20);
+  });
+
+  it('leaves a drag alone when snapping is off', () => {
+    seed();
+    store().toggleSnap();
+    store().moveElementLive('p1', { x: 7.35, y: 3 });
+
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre.x).toBeCloseTo(7.35, 5);
+  });
+
+  it('tidies a dragged side to the decimetre, and only the side being changed', () => {
+    seed([element({ id: 'p1', shape: { kind: 'rect', centre: { x: 3, y: 3 }, width: 3, depth: 2.137, rotation: 0 } })]);
+    store().resizeElementLive('p1', { width: 3.1847, depth: 2.137 });
+
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.width).toBeCloseTo(3.2, 5);
+    expect(shape.kind === 'rect' && shape.depth).toBeCloseTo(2.137, 5);
+  });
+
+  it('snaps a dragged rotation to a step, and keeps a typed one exact', () => {
+    seed();
+    store().rotateElementLive('p1', 31.7);
+    let shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.rotation).toBe(30);
+
+    store().rotateElementLive('p1', 22.5, { exact: true });
+    shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.rotation).toBe(22.5);
+  });
+
+  it('keeps the thing armed when asked, so several can be placed', () => {
+    seed([]);
+    store().setPlacing('planting-bed');
+    store().addElement('planting-bed', { x: 3, y: 14 }, { keepArmed: true });
+    expect(store().placingCategory).toBe('planting-bed');
+
+    store().addElement('planting-bed', { x: 3, y: 10 });
+    expect(store().present.elements).toHaveLength(2);
+    expect(store().placingCategory).toBeNull();
+  });
+
+  it('names a copy after the original, counting on from a number', () => {
+    seed([element({ id: 'p1', category: 'furniture', name: 'Lounger' })]);
+    store().duplicateElement('p1');
+    const first = store().present.elements.at(-1)!;
+    expect(first.name).toBe('Lounger 2');
+
+    store().duplicateElement(first.id);
+    expect(store().present.elements.at(-1)!.name).toBe('Lounger 3');
+  });
+
+  it('puts a copy on the other side when the first place is over the fence', () => {
+    seed([
+      element({
+        id: 'p1',
+        shape: { kind: 'rect', centre: { x: 18.4, y: 14.5 }, width: 3, depth: 2, rotation: 0 },
+      }),
+    ]);
+    store().duplicateElement('p1');
+
+    expect(store().present.elements).toHaveLength(2);
+    const copy = store().present.elements.at(-1)!;
+    expect(copy.shape.kind === 'rect' && copy.shape.centre).toEqual({ x: 17.4, y: 13.5 });
+  });
+});
+
+describe('snapping to the plan', () => {
+  /** The house is 8 × 6 centred on (10, 8), so its top-left corner is at (6, 5). */
+  it('pulls a corner onto the house corner, and marks what it snapped to', () => {
+    seed([element({ id: 'p1', shape: { kind: 'rect', centre: { x: 3, y: 3 }, width: 3.3, depth: 2, rotation: 0 } })]);
+    store().beginGesture();
+    // Grid-snapped to (4.5, 4), the patio's bottom-right corner is at (6.15, 5): 15 cm off the house.
+    store().moveElementLive('p1', { x: 4.52, y: 4.03 });
+
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre.x).toBeCloseTo(4.35, 9);
+    expect(store().snapMarker).toEqual({ x: 6, y: 5 });
+
+    store().endGesture();
+    expect(store().snapMarker).toBeNull();
+  });
+
+  it('reaches a fixed distance on screen whatever the zoom', () => {
+    seed([element({ id: 'p1', shape: { kind: 'rect', centre: { x: 3, y: 3 }, width: 3.3, depth: 2, rotation: 0 } })]);
+    // Zoomed right in, ten pixels is a couple of centimetres: 15 cm is too far to pull.
+    store().moveElementLive('p1', { x: 4.52, y: 4.03 }, { pxPerMetre: 400 });
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre.x).toBeCloseTo(4.5, 9);
+  });
+
+  it('snaps the tape to a corner', () => {
+    seed();
+    store().setMode('measure');
+    store().addMeasurePoint({ x: 6.1, y: 5.1 });
+    expect(store().measurement?.from).toEqual({ x: 6, y: 5 });
+  });
+
+  it('squares a rotation to the thing beside it, not only to the house', () => {
+    seed([
+      element({ id: 'p1' }),
+      element({
+        id: 'b1',
+        category: 'planting-bed',
+        shape: { kind: 'rect', centre: { x: 4, y: 7 }, width: 3, depth: 1, rotation: 23 },
+      }),
+    ]);
+    store().rotateElementLive('p1', 25);
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.rotation).toBe(23);
+  });
+});
+
+describe('corner editing', () => {
+  const BED = element({
+    id: 'b1',
+    category: 'planting-bed',
+    name: 'Border',
+    shape: {
+      kind: 'polygon',
+      points: [
+        { x: 2, y: 10 },
+        { x: 6, y: 10 },
+        { x: 6, y: 13 },
+        { x: 2, y: 13 },
+      ],
+      cornerRadius: 0,
+    },
+  });
+
+  const points = () => {
+    const shape = store().present.elements[0].shape;
+    return shape.kind === 'polygon' ? shape.points : [];
+  };
+
+  it('drags a corner, snapped, as one undo entry', () => {
+    seed([BED]);
+    store().toggleSnap();
+    const before = store().past.length;
+    store().beginGesture();
+    store().moveVertexLive('b1', 2, { x: 7.2, y: 13.4 });
+    store().endGesture();
+
+    expect(points()[2]).toEqual({ x: 7.2, y: 13.4 });
+    expect(store().past.length).toBe(before + 1);
+  });
+
+  /** A bow tie has an ordinary vertex list and a quietly wrong area; nothing downstream would say. */
+  it('refuses a corner dragged through the outline, and says why', () => {
+    seed([BED]);
+    store().toggleSnap();
+    store().moveVertexLive('b1', 2, { x: 6, y: 9 });
+    expect(points()[2]).toEqual({ x: 6, y: 13 });
+    expect(store().clash).toBe('That outline would cross itself.');
+  });
+
+  it('refuses a corner over the fence', () => {
+    seed([BED]);
+    store().toggleSnap();
+    store().moveVertexLive('b1', 1, { x: 21, y: 10 });
+    expect(points()[1]).toEqual({ x: 6, y: 10 });
+    expect(store().clash).toContain('boundary');
+  });
+
+  it('adds a corner on an edge and removes it again, never below three', () => {
+    seed([BED]);
+    store().insertVertex('b1', 0, { x: 4, y: 9.5 });
+    expect(points()).toHaveLength(5);
+    store().deleteVertex('b1', 1);
+    expect(points()).toHaveLength(4);
+    store().deleteVertex('b1', 0);
+    store().deleteVertex('b1', 0);
+    expect(points()).toHaveLength(3);
+    expect(store().clash).toMatch(/three corners/);
+  });
+
+  /** Side indices renumber when a corner is added, so a custom edge plan cannot stay where it was. */
+  it('sends custom edging back to automatic when the corner count changes', () => {
+    seed([{ ...BED, edges: { mode: 'custom', runs: [] } }]);
+    store().insertVertex('b1', 0, { x: 4, y: 9.5 });
+    expect(store().present.elements[0].edges).toEqual({ mode: 'auto', runs: [] });
+  });
+
+  it('sets a side’s length by moving one corner', () => {
+    seed([BED]);
+    store().setSideLength('b1', 0, 5);
+    expect(points()[1]).toEqual({ x: 7, y: 10 });
+    expect(points()[0]).toEqual({ x: 2, y: 10 });
+  });
+
+  it('turns a rectangular surface into a free shape with the same corners', () => {
+    seed([element({ id: 'p1', shape: { kind: 'rect', centre: { x: 4, y: 4 }, width: 4, depth: 2, rotation: 0 } })]);
+    store().convertToPolygon('p1');
+    expect(store().present.elements[0].shape).toEqual({
+      kind: 'polygon',
+      cornerRadius: 0,
+      points: [
+        { x: 2, y: 3 },
+        { x: 6, y: 3 },
+        { x: 6, y: 5 },
+        { x: 2, y: 5 },
+      ],
+    });
+  });
+
+  /** A pergola or a table *is* its rectangle — its parts, furniture and 3D model are read off it. */
+  it('never frees a structure, a piece of furniture or a locked surface', () => {
+    for (const over of [
+      { category: 'structure' as const, symbol: 'pergola' },
+      { category: 'furniture' as const, symbol: 'bench' },
+      { locked: true },
+    ]) {
+      seed([element({ id: 'p1', ...over })]);
+      store().convertToPolygon('p1');
+      expect(store().present.elements[0].shape.kind).toBe('rect');
+    }
+  });
+
+  it('opens only on a free shape, and ends when something else is selected', () => {
+    seed([BED, element({ id: 'p1' })]);
+    store().openVertexEdit('p1');
+    expect(store().vertexEdit).toBeNull();
+    store().openVertexEdit('b1');
+    expect(store().vertexEdit).toEqual({ id: 'b1', selectedIndex: null });
+    store().select('p1');
+    expect(store().vertexEdit).toBeNull();
+  });
+});
+
+describe('drawing a surface', () => {
+  it('draws a shape corner by corner and closes it on the first', () => {
+    seed([]);
+    store().toggleSnap();
+    store().setPlacing('paved-area');
+    store().setPlacingTool('polygon');
+    for (const at of [
+      { x: 2, y: 10 },
+      { x: 6, y: 10 },
+      { x: 6, y: 13 },
+      { x: 4, y: 14 },
+    ]) {
+      store().addDraftPoint(at);
+    }
+    store().addDraftPoint({ x: 2.2, y: 10.1 });
+
+    const [drawn] = store().present.elements;
+    expect(drawn?.shape.kind === 'polygon' && drawn.shape.points).toHaveLength(4);
+    expect(drawn?.category).toBe('paved-area');
+    expect(store().placingCategory).toBeNull();
+    expect(store().draftPoints).toEqual([]);
+  });
+
+  it('squares each corner to the side before it', () => {
+    seed([]);
+    store().setPlacing('lawn');
+    store().setPlacingTool('polygon');
+    // Clear of the house, whose wall would otherwise claim the click before the right angle does.
+    store().addDraftPoint({ x: 2, y: 12.6 });
+    store().addDraftPoint({ x: 4.1, y: 12.9 });
+    store().addDraftPoint({ x: 4.3, y: 14.8 });
+    expect(store().draftPoints[2]!.x).toBeCloseTo(store().draftPoints[1]!.x, 9);
+  });
+
+  it('draws a path and finishes it, at the default width', () => {
+    seed([]);
+    store().toggleSnap();
+    store().setPlacing('gravel-mulch');
+    store().setPlacingTool('polyline');
+    store().addDraftPoint({ x: 2, y: 12 });
+    store().addDraftPoint({ x: 8, y: 12 });
+    store().finishDraft();
+
+    const [path] = store().present.elements;
+    expect(path?.shape).toEqual({ kind: 'polyline', points: [{ x: 2, y: 12 }, { x: 8, y: 12 }], width: 1 });
+  });
+
+  it('draws a screen along the fence line, on the line, at the screen’s own thickness', () => {
+    seed([]);
+    store().toggleSnap();
+    store().setPlacingEnclosure('screen');
+    expect(store().placingTool).toBe('polyline');
+    store().addDraftPoint({ x: 0, y: 4 });
+    store().addDraftPoint({ x: 0, y: 12 });
+    store().finishDraft();
+
+    const [screen] = store().present.elements;
+    expect(screen).toMatchObject({
+      category: 'enclosure',
+      material: 'slatted-screen',
+      enclosure: { kind: 'screen' },
+      shape: { kind: 'polyline', width: 0.08 },
+    });
+    // It stands on the boundary, which its band straddles: judged on its line, it is legal.
+    expect(store().clash).toBeNull();
+    expect(store().placingEnclosure).toBeNull();
+  });
+
+  it('turns a fence into a wall with the wall’s thickness and material, and back in one undo', () => {
+    seed([]);
+    store().toggleSnap();
+    store().setPlacingEnclosure('fence');
+    store().addDraftPoint({ x: 3, y: 12 });
+    store().addDraftPoint({ x: 9, y: 12 });
+    store().finishDraft();
+    const id = store().present.elements[0]!.id;
+
+    store().setEnclosure(id, { kind: 'wall' });
+    expect(store().present.elements[0]).toMatchObject({
+      material: 'brick-garden-wall',
+      enclosure: { kind: 'wall' },
+      shape: { width: 0.22 },
+    });
+    store().undo();
+    expect(store().present.elements[0]).toMatchObject({ enclosure: { kind: 'fence' } });
+  });
+
+  it('refuses to finish what is not yet a shape, and keeps the drawing', () => {
+    seed([]);
+    store().setPlacing('paved-area');
+    store().setPlacingTool('polygon');
+    store().addDraftPoint({ x: 2, y: 10 });
+    store().finishDraft();
+    expect(store().present.elements).toEqual([]);
+    expect(store().draftPoints).toHaveLength(1);
+    expect(store().clash).toMatch(/three corners/);
+  });
+
+  it('drops a dragged-out rectangle at the size it was dragged', () => {
+    seed([]);
+    store().setPlacing('planting-bed');
+    store().addElement('planting-bed', { x: 5, y: 12 }, { size: { width: 4.2, depth: 1.8 } });
+    expect(store().present.elements[0]?.shape).toMatchObject({ kind: 'rect', width: 4.2, depth: 1.8, centre: { x: 5, y: 12 } });
+  });
+
+  it('offers a path only for paving and gravel', () => {
+    seed([]);
+    store().setPlacing('paved-area');
+    store().setPlacingTool('polyline');
+    store().setPlacing('lawn');
+    expect(store().placingTool).toBe('rect');
+  });
+});
+
+describe('selecting several', () => {
+  const two = () => [
+    element({ id: 'p1' }),
+    element({ id: 'p2', name: 'Bench pad', shape: { kind: 'rect', centre: { x: 3, y: 7 }, width: 2, depth: 1, rotation: 0 } }),
+    BASE_FILL,
+  ];
+
+  it('adds with Shift and takes away again, the last one primary', () => {
+    seed(two());
+    store().select('p1');
+    store().select('p2', { additive: true });
+    expect(store().selectedIds).toEqual(['p1', 'p2']);
+    expect(store().selectedId).toBe('p2');
+    store().select('p2', { additive: true });
+    expect(store().selectedIds).toEqual(['p1']);
+    expect(store().selectedId).toBe('p1');
+  });
+
+  /** The AI run selects on every animation frame; a fresh array each time re-renders at frame rate. */
+  it('does not change state when the selection did not change', () => {
+    seed(two());
+    store().select('p1');
+    const before = store();
+    store().select('p1');
+    expect(store()).toBe(before);
+  });
+
+  it('moves the whole selection by the dragged one, as one undo entry', () => {
+    seed(two());
+    store().select('p1');
+    store().select('p2', { additive: true });
+    store().toggleSnap();
+    const undo = store().past.length;
+    store().beginGesture();
+    store().moveElementLive('p1', { x: 5, y: 3 });
+    store().endGesture();
+
+    const [p1, p2] = store().present.elements;
+    expect(p1!.shape.kind === 'rect' && p1!.shape.centre).toEqual({ x: 5, y: 3 });
+    expect(p2!.shape.kind === 'rect' && p2!.shape.centre).toEqual({ x: 5, y: 7 });
+    expect(store().past.length).toBe(undo + 1);
+  });
+
+  it('refuses the whole move when one member would cross the fence', () => {
+    seed(two());
+    store().selectMany(['p1', 'p2']);
+    store().toggleSnap();
+    // p2 is 4 m below p1; taking p1 to y = 13 would put p2 at 17, past the fence at 16.
+    store().moveElementLive('p1', { x: 3, y: 13 });
+    const [p1, p2] = store().present.elements;
+    expect(p1!.shape.kind === 'rect' && p1!.shape.centre).toEqual({ x: 3, y: 3 });
+    expect(p2!.shape.kind === 'rect' && p2!.shape.centre).toEqual({ x: 3, y: 7 });
+    expect(store().clash).toContain('boundary');
+  });
+
+  it('sweeps a selection with the marquee, touching counts, and never the ground', () => {
+    seed(two());
+    store().beginMarquee({ x: 0.5, y: 2.5 });
+    store().trackMarquee({ x: 2.5, y: 7 });
+    expect(store().commitMarquee()).toBe(true);
+    expect(store().selectedIds).toEqual(['p1', 'p2']);
+  });
+
+  it('deletes and duplicates the group as one undo entry each', () => {
+    seed(two());
+    store().selectMany(['p1', 'p2']);
+    const undo = store().past.length;
+    store().duplicateSelection();
+    expect(store().present.elements).toHaveLength(5);
+    expect(store().selectedIds).toHaveLength(2);
+    expect(store().past.length).toBe(undo + 1);
+
+    store().deleteSelection();
+    expect(store().present.elements.map((entry) => entry.id)).toEqual(['p1', 'p2', 'g1']);
+    expect(store().selectedIds).toEqual([]);
+  });
+
+  it('gives a material to a group of one kind, and not to a mixed one', () => {
+    seed([...two(), element({ id: 'b1', category: 'planting-bed' })]);
+    store().selectMany(['p1', 'p2']);
+    store().setMaterialForSelection('porcelain');
+    expect(store().present.elements.filter((entry) => entry.material === 'porcelain')).toHaveLength(2);
+
+    store().selectMany(['p1', 'b1']);
+    store().setMaterialForSelection('concrete');
+    expect(store().present.elements.some((entry) => entry.material === 'concrete')).toBe(false);
+  });
+
+  it('lets go of what an undo took off the plan, and selects what a redo brings back', () => {
+    seed(two());
+    store().select('p1');
+    store().duplicateElement('p1');
+    const copy = store().selectedId!;
+    store().undo();
+    expect(store().selectedIds).not.toContain(copy);
+    expect(store().selectedId).toBeNull();
+
+    store().redo();
+    expect(store().selectedIds).toEqual([copy]);
+  });
+
+  it('selects what an undone delete puts back', () => {
+    seed(two());
+    store().selectMany(['p1', 'p2']);
+    store().deleteSelection();
+    store().undo();
+    expect(store().selectedIds).toEqual(['p1', 'p2']);
+  });
+});
+
+describe('the user lock', () => {
+  it('holds an element still by hand, and says why', () => {
+    seed();
+    store().toggleLocked(['p1']);
+    expect(store().present.elements[0].locked).toBe(true);
+
+    store().moveElementLive('p1', { x: 8, y: 3 });
+    const shape = store().present.elements[0].shape;
+    expect(shape.kind === 'rect' && shape.centre).toEqual({ x: 3, y: 3 });
+
+    store().resizeElementLive('p1', { width: 5 });
+    expect(store().clash).toMatch(/locked/i);
+    store().deleteElement('p1');
+    expect(store().present.elements.map((entry) => entry.id)).toContain('p1');
+  });
+
+  /** The lock is on geometry by hand: a name or a material still changes. */
+  it('still lets a person change what does not move anything', () => {
+    seed();
+    store().toggleLocked(['p1']);
+    store().setMaterial('p1', 'porcelain');
+    store().renameElement('p1', 'Quoted terrace');
+    expect(store().present.elements[0]).toMatchObject({ material: 'porcelain', name: 'Quoted terrace' });
+  });
+
+  /** Against the designer it holds everything, its material included. */
+  it('refuses every line of a proposal about a locked element', () => {
+    seed([element({ id: 'p1', material: 'stone-pavers' }), BASE_FILL]);
+    store().toggleLocked(['p1']);
+    const changes = materialSwaps({ p1: 'concrete' });
+    const outcome = store().applyProposal(changes, changes.map((change) => change.id));
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.refused[0]?.reason).toMatch(/locked/i);
+    expect(store().present.elements[0].material).toBe('stone-pavers');
+  });
+
+  it('unlocks all when every one is locked, locks all otherwise, as one undo', () => {
+    seed([element({ id: 'p1' }), element({ id: 'p2', shape: { kind: 'rect', centre: { x: 8, y: 3 }, width: 2, depth: 2, rotation: 0 } }), BASE_FILL]);
+    const before = store().past.length;
+    store().toggleLocked(['p1', 'p2', 'g1']);
+    expect(store().present.elements.filter((entry) => entry.locked).map((entry) => entry.id)).toEqual(['p1', 'p2']);
+    expect(store().past.length).toBe(before + 1);
+
+    store().toggleLocked(['p1', 'p2']);
+    expect(store().present.elements.some((entry) => entry.locked)).toBe(false);
+  });
+});
+
+describe('view groups', () => {
+  it('hides a whole group from what is drawn, and lets go of a selection inside it', () => {
+    seed([element({ id: 'p1' }), element({ id: 'f1', category: 'furniture', name: 'Bench' })]);
+    store().select('f1');
+    store().toggleGroup('furniture');
+
+    expect(store().hiddenGroups).toEqual(['furniture']);
+    expect(store().selectedId).toBeNull();
+
+    store().toggleGroup('furniture');
+    expect(store().hiddenGroups).toEqual([]);
+  });
+
+  it('is a view preference, not an edit', () => {
+    seed();
+    const before = store().past.length;
+    store().toggleGroup('hardscape');
+    expect(store().past.length).toBe(before);
+  });
+});
+
 /**
  * Base fills are what keeps step 4's promise that no chosen zone shows bare grid. If the editor
  * could shrink or delete one, that promise would last exactly as long as the user's restraint.
@@ -787,6 +1330,33 @@ describe('plant properties and bed membership', () => {
     hydratePlanEditorStore(layout, Date.now());
     expect(store().present.elements.find((e) => e.id === 'tree')).toMatchObject(planted);
   });
+  it('gives a tree its new species’ height and spread, not the old one’s', () => {
+    seed([bed, { ...tree, height: 12 }]);
+    store().replaceSymbol('tree', 'tree-deciduous', 'sorbus-aucuparia');
+    const rowan = store().present.elements.find((e) => e.id === 'tree')!;
+    expect(rowan.height).toBeLessThan(12);
+    expect(rowan.shape).toMatchObject({ radius: expect.any(Number) });
+    expect((rowan.shape as { radius: number }).radius).not.toBe(0.6);
+  });
+
+  it('plants a bed with a mix of its own, and a chosen mix replaces it in one undo step each', () => {
+    seed([{ ...bed, material: 'mix-sunny-gravel' }, tree]);
+    store().setPlanting('bed', { mix: [{ speciesId: 'festuca-glauca', share: 3 }, { speciesId: 'thymus-serpyllum', share: 1 }] });
+    const own = store().present.elements.find((e) => e.id === 'bed')!;
+    expect(own.planting?.mix.map((entry) => entry.share)).toEqual([0.75, 0.25]);
+
+    store().setMaterial('bed', 'mix-shade-woodland');
+    const chosen = store().present.elements.find((e) => e.id === 'bed')!;
+    expect(chosen.material).toBe('mix-shade-woodland');
+    expect(chosen.planting).toBeUndefined();
+
+    store().undo();
+    expect(store().present.elements.find((e) => e.id === 'bed')!.planting).toBeDefined();
+    // A material that is not a mix is only the drawing base: the bed's own mix stays.
+    store().setMaterial('bed', 'mixed-border');
+    expect(store().present.elements.find((e) => e.id === 'bed')!.planting).toBeDefined();
+  });
+
   it('detaches a plant moved out of its bed, and lets a canopy grow past the fence', () => {
     seed([bed, tree]);
     store().setPosition('tree', { x: 3, y: 7 });

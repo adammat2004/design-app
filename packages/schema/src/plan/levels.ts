@@ -166,6 +166,19 @@ export function stepFlight(rise: number): StepFlight | null {
   return { risers, riserHeight: climb / risers };
 }
 
+/**
+ * How thick a retaining wall is, in metres, for the height it holds back.
+ *
+ * A proportion rather than a constant, because the two ends of the range are genuinely different
+ * structures: a 150 mm step up is held by an edging board, and a metre of ground needs a wall you
+ * could sit on. Clamped at both ends so neither becomes silly — below 100 mm it is a line nobody
+ * sees, above 300 mm it starts eating the terrace it supports. The plan draws the band this thick
+ * and the 3D scene builds the wall this thick, from this one function.
+ */
+export function retainingThickness(rise: number): number {
+  return Math.max(0.1, Math.min(0.3, rise * 0.4));
+}
+
 /* ---------------------------------------------------------------- geometry */
 
 /*

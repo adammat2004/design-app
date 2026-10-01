@@ -31,7 +31,9 @@ import {
   geometryIsLegal,
   geometryOutline,
   housePolygon,
+  isGroundLayer,
   isLocked,
+  isUserLocked,
   materialLabel,
   pointInPolygon,
   polygonArea,
@@ -48,13 +50,18 @@ import {
   type Unit,
   structureSymbolNamed,
   SYMBOLS,
-} from '@garden-studio/schema';
-import {
   bearingOfElement,
   nearestEdgeBearing,
   offBearing,
   squareTo,
-} from '../generation/design/bearing.js';
+  speciesNamed,
+  enclosureKindNamed,
+  ENCLOSURE_KINDS,
+  boundaryRuns,
+  type ZoneId,
+  MIN_TRUNK_RADIUS,
+  TRUNK_FOOTPRINT_RATIO,
+} from '@garden-studio/schema';
 import {
   PATH_STANDOFF,
   routeCandidates,
@@ -124,6 +131,11 @@ interface Context {
    * intents do not touch each other.
    */
   pending: Map<string, DesignElement>;
+  /**
+   * What earlier `add`s in this request have put down. "Three hornbeams along the back" is three
+   * intents, and each has to see the ones before it or all three land on the same spot.
+   */
+  added: DesignElement[];
 }
 
 @Injectable()
@@ -154,6 +166,7 @@ export class PlannerService {
       /* So a later `attach` can see where the move it belongs to actually put things. */
       for (const produce of produced.changes) {
         if (produce.elementId) context.pending.set(produce.elementId, produce.next);
+        else if (produce.kind === 'add' && produce.next) context.added.push(produce.next);
       }
     }
 
@@ -161,6 +174,27 @@ export class PlannerService {
   }
 
   private async one(
+    requested: DesignIntent,
+    context: Context,
+    nextId: () => string,
+  ): Promise<PlannedChanges> {
+    /*
+     * A user's lock, honoured once, before any verb sees the intent.
+     *
+     * The designer changes nothing about an element the user has locked — not its place, not its
+     * material, not its edging — and the reason is the whole value of a lock: somebody who has put
+     * the terrace exactly where the builder quoted for it can ask for a redesign without the redesign
+     * moving it. Filtering the targets here rather than in each verb means a verb added later cannot
+     * forget, and the refusal is said once in the same words whatever was asked.
+     */
+    const held = lockedTargets(requested, context);
+    const intent = held.intent;
+    if (!intent) return { changes: [], unplaceable: held.unplaceable };
+    const produced = await this.dispatch(intent, context, nextId);
+    return { changes: produced.changes, unplaceable: [...held.unplaceable, ...produced.unplaceable] };
+  }
+
+  private async dispatch(
     intent: DesignIntent,
     context: Context,
     nextId: () => string,
@@ -309,10 +343,13 @@ export class PlannerService {
 
     for (const element of resolve(intent.target.elementIds, context)) {
       const shape = element.shape;
-      if (shape.kind !== 'polyline' || shape.points.length < 2) {
+      if (shape.kind !== 'polyline' || shape.points.length < 2 || element.category === 'enclosure') {
         result.unplaceable.push({
           description: `Redraw ${label(element)}`,
-          reason: 'It is not a path, so there is no route to redraw.',
+          reason:
+            element.category === 'enclosure'
+              ? 'It is a fence or a wall, not a path — move it or reshape it instead.'
+              : 'It is not a path, so there is no route to redraw.',
         });
         continue;
       }
@@ -335,7 +372,8 @@ export class PlannerService {
             other.id !== element.id &&
             !other.hidden &&
             other.role !== 'fill' &&
-            other.shape.kind !== 'polyline',
+            /* Other paths may be crossed; a fence or a wall may not. */
+            (other.shape.kind !== 'polyline' || other.category === 'enclosure'),
         )
         .map((other) => geometryOutline(other.shape));
 
@@ -664,7 +702,7 @@ export class PlannerService {
         (other) =>
           other.id !== element.id &&
           !other.hidden &&
-          !isLocked(other) &&
+          !isGroundLayer(other) &&
           other.shape.kind === 'polygon' &&
           boxesOverlap(grown, geometryOutline(other.shape)),
       );
@@ -683,6 +721,15 @@ export class PlannerService {
 
         /* It was near enough to ask about but the reshape took nothing off it. Leave it alone. */
         if (Math.abs(polygonArea(remaining) - polygonArea(before)) < TOOK_NOTHING) continue;
+
+        /*
+         * A locked neighbour cannot give up ground: the reshape is refused rather than left to
+         * overlap it, which would be two elements claiming one strip with the bed drawn over the top.
+         */
+        if (isUserLocked(neighbour)) {
+          blocked = `${label(neighbour)} beside it is locked, so it cannot give up that strip.`;
+          break;
+        }
 
         const trimmed: DesignElement = {
           ...neighbour,
@@ -1005,8 +1052,9 @@ export class PlannerService {
      * terrace is worth more than swapping it on a stepping stone, and the user asked for a cheaper
      * garden rather than a cheaper list of things.
      */
+    /* A locked element is not the designer's to cheapen, whatever it would save. */
     const candidates = context.document.layout.elements
-      .filter((element) => !element.hidden)
+      .filter((element) => !element.hidden && !isUserLocked(element))
       .map((element) => {
         const current =
           findMaterial(element.material) ?? findMaterial(defaultMaterial(element.category));
@@ -1052,7 +1100,6 @@ export class PlannerService {
     nextId: () => string,
   ): Promise<PlannedChanges> {
     const result: PlannedChanges = { changes: [], unplaceable: [] };
-    const size = footprintSize(intent.footprint);
 
     const zones = intent.zone
       ? context.inScope.filter((zone) => zone.id === intent.zone)
@@ -1068,6 +1115,33 @@ export class PlannerService {
       return result;
     }
 
+    /* A fence, a screen or a wall is a line, laid along a side or across the garden — never a box. */
+    if (intent.category === 'enclosure') return this.addEnclosure(intent, context, zones, nextId);
+
+    /*
+     * A plant named for what it is — "a hornbeam", "three silver birches" — takes that species: its
+     * symbol, its height, and its spread as the crown the placement is sized by. Resolved by name
+     * against the catalogue, as `structureSymbolNamed` resolves a pergola, so the grammar is unchanged.
+     */
+    const species =
+      intent.category === 'planting-bed' && intent.footprint.kind === 'point'
+        ? speciesNamed(intent.name, ['tree', 'shrub'])
+        : undefined;
+    const footprint =
+      species && intent.footprint.kind === 'point'
+        ? { ...intent.footprint, radius: species.matureSpread / 2 }
+        : intent.footprint;
+    /*
+     * A tree is placed by its trunk, as the generator places one: the trunk is what occupies the
+     * ground and must be inside the fence; the crown may reach over a bed, a path or the fence
+     * itself. Sampled at the crown's size, a 4 m hornbeam could never stand along the back of a
+     * garden that has anything else in it.
+     */
+    const byTrunk = species?.form === 'tree' && footprint.kind === 'point';
+    const size = byTrunk
+      ? { inradius: Math.max(MIN_TRUNK_RADIUS, footprint.radius * TRUNK_FOOTPRINT_RATIO) }
+      : footprintSize(footprint);
+
     /*
      * Everything already on the plan is an obstacle, plus the house — except, for furniture, the
      * surfaces it is allowed to stand on. A dining set placed with every patio treated as an
@@ -1075,9 +1149,11 @@ export class PlannerService {
      * wants it.
      */
     const standsOn = new Set(['paved-area', 'gravel-mulch', 'structure', 'lawn']);
-    const obstacles = context.document.layout.elements
-      .filter((element) => !element.hidden && !isLocked(element))
+    const obstacles = [...context.document.layout.elements, ...context.added]
+      .filter((element) => !element.hidden && !isGroundLayer(element))
       .filter((element) => intent.category !== 'furniture' || !standsOn.has(element.category))
+      /* A planting bed does not keep a tree out of it: a tree stands in a bed as often as not. */
+      .filter((element) => !species || element.category !== 'planting-bed' || element.shape.kind === 'point')
       .map((element) => geometryOutline(element.shape));
     if (context.house) obstacles.push(context.house);
 
@@ -1094,21 +1170,37 @@ export class PlannerService {
       });
 
       /*
+       * "Along the back": the candidates nearest the fence first. The placer has already kept each
+       * one its own inradius clear of the zone's edge, so nearest is as close as it may stand.
+       */
+      if (intent.affinity === 'along-boundary') {
+        const toFence = (point: Point) =>
+          Math.min(
+            ...context.boundary.map((corner, index) =>
+              distanceToSegment(point, corner, context.boundary[(index + 1) % context.boundary.length]!),
+            ),
+          );
+        candidates.sort((a, b) => toFence(a) - toFence(b));
+      }
+
+      /*
        * The house is not part of `geometryIsLegal` any more — a patio may be attached to the
        * wall — but a *new* element is still sampled clear of it: `obstacles` carries the house
        * above, and `geometryClearsHouse` is the TypeScript half of the same rule. Growing or
        * moving an existing element towards the wall is allowed; conjuring one under the
        * building is not something a sentence ever meant.
        */
-      const at = candidates.find(
-        (point) =>
-          geometryIsLegal(geometryFor(intent.footprint, point), context.boundary) &&
-          geometryClearsHouse(geometryFor(intent.footprint, point), context.house),
-      );
+      const at = candidates.find((point) => {
+        const shape = geometryFor(footprint, point);
+        const legal = byTrunk
+          ? elementIsLegal({ ...placeholderTree, shape, symbol: species!.symbol }, context.boundary)
+          : geometryIsLegal(shape, context.boundary);
+        return legal && geometryClearsHouse(shape, context.house);
+      });
 
       if (!at) continue;
 
-      const shape = geometryFor(intent.footprint, at);
+      const shape = geometryFor(footprint, at);
       /*
        * "Add a pergola" is a pergola, not a box that happens to be called one: the symbol is what
        * gives it rafters on the plan, a shadow of the right height and a way into the 3D editor.
@@ -1125,6 +1217,9 @@ export class PlannerService {
         zone: zone.id,
         material: defaultMaterial(intent.category),
         ...(symbol ? { symbol, height: SYMBOLS[symbol].height } : {}),
+        ...(species?.symbol
+          ? { symbol: species.symbol, plantId: species.id, height: species.matureHeight }
+          : {}),
       };
 
       result.changes.push({
@@ -1143,13 +1238,149 @@ export class PlannerService {
 
     result.unplaceable.push({
       description: `Add ${intent.name}`,
-      reason: `There is no clear ${describeFootprint(intent.footprint, context.unit)} space left${
+      reason: `There is no clear ${describeFootprint(footprint, context.unit)} space left${
         intent.zone ? ` in the ${intent.zone} garden` : ''
       }.`,
     });
 
     return result;
   }
+
+  /**
+   * A fence, a screen, a wall, a hedge, a kerb or an opening, from its name.
+   *
+   * **Along the boundary** it is laid on the side of the property that bounds the named area, over
+   * the whole stretch beside it — "a screen along the left side" is the left fence, from where the
+   * left garden starts to where it ends — on the fence line itself, so it replaces what the survey
+   * has there. The side is found by walking each one just inside the fence and counting how much of
+   * it lies in the area; the most wins. **Anywhere else** it is a freestanding line where the placer
+   * finds room, centred on its own line. Its kind comes from the name and never from a guess: a name
+   * that says nothing about what it is builds a fence, which is what "a new boundary" means.
+   */
+  private async addEnclosure(
+    intent: Extract<DesignIntent, { kind: 'add' }>,
+    context: Context,
+    zones: GardenZone[],
+    nextId: () => string,
+  ): Promise<PlannedChanges> {
+    const result: PlannedChanges = { changes: [], unplaceable: [] };
+    const kind = enclosureKindNamed(intent.name) ?? 'fence';
+    const spec = ENCLOSURE_KINDS[kind];
+    const hedge = kind === 'hedge' ? speciesNamed(intent.name, ['hedge']) : undefined;
+
+    let line: Point[] | null = null;
+    let zoneId = zones[0]!.id;
+
+    if (intent.affinity === 'along-boundary') {
+      let best: { length: number; points: Point[]; zone: ZoneId } | null = null;
+      const clockwise = ringArea(context.boundary) > 0;
+      for (const zone of zones) {
+        for (const run of boundaryRuns(context.document.site)) {
+          const dx = (run.end.x - run.start.x) / run.length;
+          const dy = (run.end.y - run.start.y) / run.length;
+          const inward = clockwise ? { x: -dy, y: dx } : { x: dy, y: -dx };
+          const inside: number[] = [];
+          for (let along = 0.1; along < run.length - 0.05; along += 0.25) {
+            const probe = { x: run.start.x + dx * along + inward.x * 0.3, y: run.start.y + dy * along + inward.y * 0.3 };
+            if (pointInPolygon(probe, zone.polygon)) inside.push(along);
+          }
+          if (inside.length < 2) continue;
+          const from = Math.max(0, inside[0]! - 0.1);
+          const to = Math.min(run.length, inside.at(-1)! + 0.1);
+          if (!best || to - from > best.length) {
+            best = {
+              length: to - from,
+              zone: zone.id,
+              points: [
+                { x: run.start.x + dx * from, y: run.start.y + dy * from },
+                { x: run.start.x + dx * to, y: run.start.y + dy * to },
+              ],
+            };
+          }
+        }
+      }
+      if (best) {
+        line = best.points;
+        zoneId = best.zone;
+      }
+    } else {
+      for (const zone of zones) {
+        const candidates = await this.placement.candidates({
+          zone: zone.polygon,
+          obstacles: context.house ? [context.house] : [],
+          inradius: 1.6,
+          houseCentre: context.houseCentre,
+          affinity: intent.affinity,
+          seed: 7,
+        });
+        const at = candidates[0];
+        if (!at) continue;
+        line = [
+          { x: at.x - 1.5, y: at.y },
+          { x: at.x + 1.5, y: at.y },
+        ];
+        zoneId = zone.id;
+        break;
+      }
+    }
+
+    const next: DesignElement | null = line
+      ? {
+          id: `ai-${nextId()}`,
+          category: 'enclosure',
+          role: 'feature',
+          name: intent.name,
+          shape: { kind: 'polyline', points: line, width: spec.thickness },
+          zone: zoneId,
+          material: spec.material,
+          enclosure: { kind },
+          ...(hedge ? { plantId: hedge.id } : {}),
+        }
+      : null;
+
+    if (!next || !elementIsLegal(next, context.boundary)) {
+      result.unplaceable.push({
+        description: `Add ${intent.name}`,
+        reason:
+          intent.affinity === 'along-boundary'
+            ? `No side of the property runs along ${intent.zone ? `the ${intent.zone} garden` : 'the areas being designed'}.`
+            : 'There is no clear run of ground to put it on.',
+      });
+      return result;
+    }
+
+    result.changes.push({
+      id: nextId(),
+      kind: 'add',
+      elementId: null,
+      label: intent.name,
+      before: 'Not on the plan',
+      after: describeElement(next, context.unit) ?? `${spec.label}`,
+      next,
+      previous: null,
+    });
+    return result;
+  }
+}
+
+/** Enough of an element for `elementIsLegal` to ask a tree about its trunk. */
+const placeholderTree: DesignElement = {
+  id: 'probe',
+  category: 'planting-bed',
+  role: 'feature',
+  zone: 'back',
+  shape: { kind: 'point', at: { x: 0, y: 0 }, radius: 1 },
+};
+
+/** Signed shoelace area: positive for a ring that runs clockwise in this y-down frame. */
+function ringArea(ring: Point[]): number {
+  let twice = 0;
+  for (let index = 0; index < ring.length; index += 1) {
+    const a = ring[index]!;
+    const b = ring[(index + 1) % ring.length]!;
+    twice += a.x * b.y - b.x * a.y;
+  }
+  return twice / 2;
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -1168,6 +1399,7 @@ function buildContext(document: PlanDocument): Context {
     zones,
     inScope: zones.filter((zone) => inScopeIds.includes(zone.id)),
     pending: new Map(),
+    added: [],
   };
 }
 
@@ -1266,6 +1498,32 @@ function samePoints(
     (point, i) =>
       Math.hypot(point.x - before.points[i]!.x, point.y - before.points[i]!.y) <= SAME_ROUTE,
   );
+}
+
+/**
+ * An intent with the user's locked elements taken out of its targets, and a sentence for each.
+ *
+ * `null` for the intent when every target was locked — there is nothing left to plan. An intent
+ * with no target (`add`, `reduce-cost`) passes through: an addition changes nothing already there,
+ * and `reduceCost` leaves locked elements out of its own candidates.
+ */
+function lockedTargets(
+  intent: DesignIntent,
+  context: Context,
+): { intent: DesignIntent | null; unplaceable: PlannedChanges['unplaceable'] } {
+  if (!('target' in intent)) return { intent, unplaceable: [] };
+
+  const locked = resolve(intent.target.elementIds, context).filter(isUserLocked);
+  if (locked.length === 0) return { intent, unplaceable: [] };
+
+  const unplaceable = locked.map((element) => ({
+    description: `Change ${label(element)}`,
+    reason: `The ${label(element).toLowerCase()} is locked, so it stays exactly as it is. Unlock it to change it.`,
+  }));
+  const remaining = intent.target.elementIds.filter((id) => !locked.some((element) => element.id === id));
+  if (remaining.length === 0) return { intent: null, unplaceable };
+
+  return { intent: { ...intent, target: { ...intent.target, elementIds: remaining } }, unplaceable };
 }
 
 /** Ids the model named, kept only where they name something real. */
@@ -1508,7 +1766,7 @@ function clearOfOthers(
   const host = geometryOutline(original.shape);
 
   return context.document.layout.elements.every((other) => {
-    if (other.id === original.id || other.hidden || isLocked(other)) return true;
+    if (other.id === original.id || other.hidden || isGroundLayer(other)) return true;
     if (other.role === 'fill') return true;
     if (polygonContainsPolygon(host, geometryOutline(other.shape))) return true;
 
@@ -1601,7 +1859,8 @@ function meets(
   }
   if (neighbour.kind !== 'element') return false;
 
-  const isRoute = byId.get(neighbour.id)?.shape.kind === 'polyline';
+  const neighbourElement = byId.get(neighbour.id);
+  const isRoute = neighbourElement?.shape.kind === 'polyline' && neighbourElement.category !== 'enclosure';
   switch (relation) {
     case 'lawn':
       return neighbour.category === 'lawn';

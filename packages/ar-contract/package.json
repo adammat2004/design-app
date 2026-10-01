@@ -1,6 +1,6 @@
 {
   "name": "@garden-studio/ar-contract",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "private": true,
   "description": "The AR scene format shared by the web/API side (which builds scenes) and apps/mobile (which draws them). Draft v0.",
   "type": "module",

@@ -13,6 +13,8 @@ import {
   isTreeSymbol,
   openingCentre,
   openingNormal,
+  PLANTING_MIXES,
+  PLANTING_MIX_IDS,
   polygonCentroid,
   resolveSymbol,
   lightDirection,
@@ -585,6 +587,143 @@ function lightingHours(document: PlanDocument): Buffer {
   return canvas.toBuffer('image/png');
 }
 
+/**
+ * The same garden with every bed planted from each mix in turn, which is the sheet the mixes are
+ * judged by. The first frame is the plan as generated, so a mix is compared with the planting it
+ * would replace rather than with the one beside it.
+ *
+ * Only beds with ground change: a tree or a specimen shrub is a placed plant with its own species,
+ * and replanting it as a woodland mix would describe a bed of ferns one point wide.
+ */
+function plantingMixes(document: PlanDocument): Buffer {
+  const px = 22;
+  const pad = 10;
+  const caption = 18;
+  const cols = 4;
+
+  const base = sceneOf(document);
+  const frames: [string, DesignElement[]][] = [
+    ['As generated', base.elements],
+    ...PLANTING_MIX_IDS.map((id): [string, DesignElement[]] => [
+      PLANTING_MIXES[id]!.label,
+      base.elements.map((element) =>
+        element.category === 'planting-bed' && element.shape.kind !== 'point'
+          ? { ...element, material: id }
+          : element,
+      ),
+    ]),
+  ];
+  const rows = Math.ceil(frames.length / cols);
+
+  const box = boundingBox(base.boundary);
+  const plotW = Math.ceil(box.width * px);
+  const plotH = Math.ceil(box.length * px);
+
+  const width = cols * plotW + (cols + 1) * pad;
+  const height = rows * (plotH + caption) + (rows + 1) * pad;
+
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d');
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, width, height);
+
+  frames.forEach(([label, elements], index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const ox = pad + col * (plotW + pad);
+    const oy = pad + row * (plotH + caption + pad) + caption;
+
+    context.save();
+    context.translate(ox, oy);
+    drawPlan(
+      context as unknown as PlanContext,
+      { ...base, elements },
+      {
+        pxPerMetre: px,
+        light: lightDirection(base.site) ?? undefined,
+        makeCanvas,
+        assets: getAssetVariants,
+      },
+      { x: box.minX, y: box.minY },
+    );
+    context.restore();
+
+    context.fillStyle = '#1a231c';
+    context.font = 'bold 13px sans-serif';
+    context.fillText(label, ox, oy - 6);
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
+/**
+ * The same garden before and after the design proposes its boundaries: a slatted screen along part
+ * of the left fence, a brick wall across the garden, beech hedging along the right, a kerb, and the
+ * bottom corner opened. The sheet the enclosure painter is judged by — the replaced stretches of the
+ * survey should read as dashed under what replaces them, and the freestanding wall as centred on
+ * its line.
+ */
+function enclosures(document: PlanDocument): Buffer {
+  const px = 26;
+  const pad = 10;
+  const caption = 18;
+  const base = sceneOf(document);
+  const line = (
+    id: string,
+    kind: 'screen' | 'wall' | 'hedge' | 'kerb' | 'open',
+    material: string,
+    width: number,
+    points: Point[],
+  ): DesignElement => ({
+    id,
+    category: 'enclosure',
+    role: 'feature',
+    zone: 'back',
+    name: kind,
+    material,
+    enclosure: { kind },
+    shape: { kind: 'polyline', points, width },
+  });
+  const proposed = [
+    line('x-screen', 'screen', 'slatted-screen', 0.08, [{ x: 0, y: 12 }, { x: 0, y: 20 }]),
+    line('x-wall', 'wall', 'brick-garden-wall', 0.22, [{ x: 4, y: 21 }, { x: 12, y: 21 }]),
+    line('x-hedge', 'hedge', 'hedge-planting', 0.6, [{ x: 18, y: 14 }, { x: 18, y: 24 }]),
+    line('x-kerb', 'kerb', 'kerb-line', 0.15, [{ x: 13, y: 17 }, { x: 16, y: 17 }]),
+    line('x-open', 'open', 'open-boundary', 0.1, [{ x: 12, y: 26 }, { x: 18, y: 26 }]),
+  ];
+  const frames: [string, DesignElement[]][] = [
+    ['As surveyed', base.elements],
+    ['With proposed boundaries', [...base.elements, ...proposed]],
+  ];
+
+  const box = boundingBox(base.boundary);
+  const plotW = Math.ceil((box.width + 2 * MARGIN_METRES) * px);
+  const plotH = Math.ceil((box.length + 2 * MARGIN_METRES) * px);
+  const canvas = createCanvas(frames.length * plotW + (frames.length + 1) * pad, plotH + caption + 2 * pad);
+  const context = canvas.getContext('2d');
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  frames.forEach(([label, elements], index) => {
+    const ox = pad + index * (plotW + pad);
+    const oy = pad + caption;
+    context.save();
+    context.translate(ox, oy);
+    drawPlan(
+      context as unknown as PlanContext,
+      { ...base, elements },
+      { pxPerMetre: px, light: lightDirection(base.site) ?? undefined, makeCanvas, assets: getAssetVariants },
+      { x: box.minX - MARGIN_METRES, y: box.minY - MARGIN_METRES },
+    );
+    context.restore();
+    context.fillStyle = '#1a231c';
+    context.font = 'bold 13px sans-serif';
+    context.fillText(label, ox, oy - 6);
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
 async function main(): Promise<void> {
 
   await preloadAssets(nodeAssetLoader(PUBLIC_ASSETS));
@@ -612,6 +751,8 @@ async function main(): Promise<void> {
   write('12-levels', levelsSheet(loadFixture('reference')));
   write('04-shadow-hours', shadowHours(loadFixture('suburban')));
   write('04-lighting-hours', lightingHours(loadFixture('suburban')));
+  write('05-planting-mixes', plantingMixes(loadFixture('suburban')));
+  write('06-enclosures', enclosures(loadFixture('suburban')));
   write('00-composition-sheet', await compositionSheet());
   write('00-schematic-sheet', await schematicSheet());
 

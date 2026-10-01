@@ -166,7 +166,7 @@ export class DesignRepairService {
           .map((id) => ({ kind: 'remove', target: { elementIds: [id] } }));
 
       case 'reroute':
-        return target.shape.kind === 'polyline' ? this.routes(guidance, to) : [];
+        return target.shape.kind === 'polyline' && target.category !== 'enclosure' ? this.routes(guidance, to) : [];
 
       case 'align':
         return [{ kind: 'rotate', target: to, to: guidance.alignTo ?? 'house' }];

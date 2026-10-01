@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
-import { BackSide, BoxGeometry, ConeGeometry, MeshBasicMaterial } from 'three';
+import { BackSide, BoxGeometry, ConeGeometry, MeshBasicMaterial, type BufferGeometry } from 'three';
 import type { ResolvedStructure, StructurePart, StructurePartGroup } from '@garden-studio/schema';
-import { materialForFinish } from '@/lib/structures/materials-3d';
+import { hardwareMaterial, materialForFinish } from '@/lib/structures/materials-3d';
 import { modelFor } from '@/lib/structures/model-registry';
+import { partGeometry } from '@/lib/structures/part-geometry';
 
 /**
  * One structure, drawn from its parts in its own local frame.
@@ -16,8 +17,10 @@ import { modelFor } from '@/lib/structures/model-registry';
  * Its size is: every part was sized from the element's rect, so what is on screen is exactly the
  * footprint the plan holds.
  *
- * One shared unit box and one unit pyramid, scaled per part, so a pergola with forty rafters builds
- * two geometries rather than forty. Materials are shared the same way (`materialForFinish`).
+ * Each part is its own mesh at its real size (`partGeometry`), with texture coordinates in metres and
+ * the grain along its length — a shared unit box scaled per part was cheaper and smeared any texture
+ * fifty times along a rafter. Materials are still shared per finish (`materialForFinish`). The hover
+ * outline keeps the scaled unit shapes: it is a flat colour, so there is nothing to smear.
  */
 const UNIT_BOX = new BoxGeometry(1, 1, 1);
 /*
@@ -53,12 +56,26 @@ const CLICK_TRAVEL_PX = 4;
 export function StructureModel({
   structure,
   onPick,
+  detail = true,
 }: {
   structure: ResolvedStructure;
   /** A part was clicked. Absent, the model is only a picture. */
   onPick?: (group: StructurePartGroup) => void;
+  /**
+   * Whether it is drawn in its full materials. A neighbouring structure is context, and context in
+   * this view is flat and muted so the one being edited is the thing that reads.
+   */
+  detail?: boolean;
 }) {
   const parts = useMemo(() => modelFor(structure).build(structure), [structure]);
+  const geometries = useMemo(
+    () =>
+      new Map(
+        parts.map((part) => [part.id, partGeometry(part, { model: structure.model })] as const),
+      ),
+    [parts, structure.model],
+  );
+  useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries]);
   const [hovered, setHovered] = useState<StructurePartGroup | null>(null);
   const [flashed, setFlashed] = useState<StructurePartGroup | null>(null);
   useEffect(() => {
@@ -95,6 +112,8 @@ export function StructureModel({
         <PartMesh
           key={part.id}
           part={part}
+          geometry={geometries.get(part.id)!}
+          detail={detail}
           outlined={part.group === hovered || part.group === flashed}
           pick={pick}
         />
@@ -111,14 +130,20 @@ type Pick = {
 
 function PartMesh({
   part,
+  geometry,
+  detail,
   outlined,
   pick,
 }: {
   part: StructurePart;
+  geometry: BufferGeometry;
+  detail: boolean;
   outlined: boolean;
   pick: Pick | null;
 }) {
-  const material = materialForFinish(part.finish);
+  const finish = materialForFinish(part.finish, { detail });
+  // A part with hardware — a timber post in its shoe — draws its second group in galvanised steel.
+  const material = geometry.groups.length > 0 ? [finish, hardwareMaterial({ detail })] : finish;
   const { shape } = part;
   // A light strip gives light rather than blocking it.
   const casts = part.group !== 'light';
@@ -135,10 +160,9 @@ function PartMesh({
     return (
       <>
         <mesh
-          geometry={UNIT_BOX}
+          geometry={geometry}
           material={material}
           position={shape.centre}
-          scale={shape.size}
           castShadow={casts}
           receiveShadow
           {...handlers}
@@ -159,10 +183,9 @@ function PartMesh({
   return (
     <>
       <mesh
-        geometry={UNIT_PYRAMID}
+        geometry={geometry}
         material={material}
         position={shape.centre}
-        scale={[shape.base[0], shape.rise, shape.base[1]]}
         castShadow
         receiveShadow
         {...handlers}

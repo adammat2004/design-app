@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "hdri": {
+    "id": "sky-overcast",
+    "source": "polyhaven",
+    "asset": "kloofendal_overcast_puresky",
+    "resolution": "1k",
+    "licence": "CC0-1.0",
+    "author": "Greg Zaal",
+    "page": "https://polyhaven.com/a/kloofendal_overcast_puresky",
+    "file": "hdri/kloofendal_overcast_puresky_1k.hdr",
+    "bytes": 1174053,
+    "sha256": "5f98aa01d43a49cd899299751a978b3e5559a76300198b5dd2d9c68ecc4ad130",
+    "fetchedAt": "2026-09-30T18:17:47.906Z"
+  },
+  "sets": {
+    "timber-oak": {
+      "id": "timber-oak",
+      "source": "polyhaven",
+      "asset": "oak_veneer_01",
+      "author": "Jenelle van Heerden",
+      "page": "https://polyhaven.com/a/oak_veneer_01",
+      "licence": "CC0-1.0",
+      "tileSizeM": 1.83,
+      "fetchedAt": "2026-09-30T18:17:47.907Z",
+      "px": 1024,
+      "files": {
+        "albedo": {
+          "file": "pbr/timber-oak/albedo.webp",
+          "bytes": 134086,
+          "sha256": "e96c2eeac0f4dd7d4dbc8afd182186382216193d7328c0cff8f5d5b90abec672"
+        },
+        "normal": {
+          "file": "pbr/timber-oak/normal.webp",
+          "bytes": 61630,
+          "sha256": "10f311c4f45a71ed8125ccd16b0df42fcd828e8377708a062d30bc05f49b31b4"
+        },
+        "orm": {
+          "file": "pbr/timber-oak/orm.webp",
+          "bytes": 341904,
+          "sha256": "aa26a6528aa02f6d74a999e07a4e286b089312cf3b77003a6aaddbb8fd88dd55"
+        }
+      },
+      "meanLinearColour": [
+        0.46008,
+        0.27002,
+        0.12576
+      ],
+      "meanRoughness": 0.53042
+    },
+    "timber-pine": {
+      "id": "timber-pine",
+      "source": "ambientcg",
+      "asset": "Wood096",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Wood096",
+      "licence": "CC0-1.0",
+      "tileSizeM": 1.2,
+      "fetchedAt": "2026-09-30T18:17:48.930Z",
+      "px": 1024,
+      "files": {
+        "albedo": {
+          "file": "pbr/timber-pine/albedo.webp",
+          "bytes": 47250,
+          "sha256": "0f29a2f1ac1cdeb22b3c270469d1a789e8eec4b01fb41524feaff816859db348"
+        },
+        "normal": {
+          "file": "pbr/timber-pine/normal.webp",
+          "bytes": 50730,
+          "sha256": "ac119afaa7c57e764f1217986884da79f056e4ebfd75b91f323ef7bbdbb92057"
+        },
+        "orm": {
+          "file": "pbr/timber-pine/orm.webp",
+          "bytes": 172416,
+          "sha256": "3a43e74fc1ad0598400f89d816002a01d8b325e357ec628c3f8da52181639d79"
+        }
+      },
+      "meanLinearColour": [
+        0.38228,
+        0.286,
+        0.19706
+      ],
+      "meanRoughness": 0.66987
+    },
+    "timber-painted": {
+      "id": "timber-painted",
+      "source": "ambientcg",
+      "asset": "Wood096",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Wood096",
+      "licence": "CC0-1.0",
+      "tileSizeM": 1.2,
+      "fetchedAt": "2026-09-30T18:17:49.299Z",
+      "px": 1024,
+      "files": {
+        "albedo": {
+          "file": "pbr/timber-painted/albedo.webp",
+          "bytes": 40032,
+          "sha256": "5923b03894a35fe449caff6bbd1be43729213b6974cab6141bc1981219fdc6a5"
+        },
+        "normal": {
+          "file": "pbr/timber-painted/normal.webp",
+          "bytes": 50730,
+          "sha256": "ac119afaa7c57e764f1217986884da79f056e4ebfd75b91f323ef7bbdbb92057"
+        },
+        "orm": {
+          "file": "pbr/timber-painted/orm.webp",
+          "bytes": 172416,
+          "sha256": "3a43e74fc1ad0598400f89d816002a01d8b325e357ec628c3f8da52181639d79"
+        }
+      },
+      "meanLinearColour": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "meanRoughness": 0.66987
+    },
+    "powder-coat": {
+      "id": "powder-coat",
+      "source": "ambientcg",
+      "asset": "Plastic011",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Plastic011",
+      "licence": "CC0-1.0",
+      "tileSizeM": 1,
+      "fetchedAt": "2026-09-30T18:17:49.663Z",
+      "px": 1024,
+      "files": {
+        "albedo": {
+          "file": "pbr/powder-coat/albedo.webp",
+          "bytes": 226514,
+          "sha256": "107ddb09d00a9de363250286471beeca0aa61363142ff30b8bd4d6478716551c"
+        },
+        "normal": {
+          "file": "pbr/powder-coat/normal.webp",
+          "bytes": 6184,
+          "sha256": "f42ceca035557a255560cc0b27b443e3aad00fda1d957c997a778f7b794defe2"
+        },
+        "orm": {
+          "file": "pbr/powder-coat/orm.webp",
+          "bytes": 71534,
+          "sha256": "df23de04be2380266ecebe9b79fc8a0bbc6cc40894266c60ca965c50366db97d"
+        }
+      },
+      "meanLinearColour": [
+        0.29972,
+        0.29972,
+        0.29972
+      ],
+      "meanRoughness": 0.36631
+    },
+    "wicker": {
+      "id": "wicker",
+      "source": "ambientcg",
+      "asset": "Wicker010A",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Wicker010A",
+      "licence": "CC0-1.0",
+      "tileSizeM": 0.35,
+      "fetchedAt": "2026-09-30T18:17:49.975Z",
+      "px": 1024,
+      "files": {
+        "albedo": {
+          "file": "pbr/wicker/albedo.webp",
+          "bytes": 89468,
+          "sha256": "2b832e3e66b84db452ad62aa4542f47023d6dea9b63cc771139188eb5e875b55"
+        },
+        "normal": {
+          "file": "pbr/wicker/normal.webp",
+          "bytes": 234168,
+          "sha256": "0a1987a725e216b2726c5d576e270aa25aec7d7c120094b3e8fc02d3b8934c41"
+        },
+        "orm": {
+          "file": "pbr/wicker/orm.webp",
+          "bytes": 94336,
+          "sha256": "383c17b1bc9054f8214574d19f16eef47974012374d903074a49aa0c3e85781e"
+        }
+      },
+      "meanLinearColour": [
+        0.46001,
+        0.2692,
+        0.13494
+      ],
+      "meanRoughness": 0.61157
+    },
+    "fabric": {
+      "id": "fabric",
+      "source": "ambientcg",
+      "asset": "Fabric030",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Fabric030",
+      "licence": "CC0-1.0",
+      "tileSizeM": 0.3,
+      "fetchedAt": "2026-09-30T18:18:56.013Z",
+      "px": 512,
+      "files": {
+        "albedo": {
+          "file": "pbr/fabric/albedo.webp",
+          "bytes": 99718,
+          "sha256": "b6c60e2532e7bab354e2c01f8f0d8b567d8ea4eac70914885c2c3d5594605714"
+        },
+        "normal": {
+          "file": "pbr/fabric/normal.webp",
+          "bytes": 164726,
+          "sha256": "828c07d25ab7235a8283b978133305badbbdf536391755b816c74f30dea903d4"
+        },
+        "orm": {
+          "file": "pbr/fabric/orm.webp",
+          "bytes": 89936,
+          "sha256": "8a5268047bc3741445ca7dca9afb85856dd3d31f0a15d23eceedb415ef48b3bf"
+        }
+      },
+      "meanLinearColour": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "meanRoughness": 0.7283
+    },
+    "stone": {
+      "id": "stone",
+      "source": "ambientcg",
+      "asset": "Concrete012",
+      "author": "ambientCG (Lennart Demes)",
+      "page": "https://ambientcg.com/view?id=Concrete012",
+      "licence": "CC0-1.0",
+      "tileSizeM": 2,
+      "fetchedAt": "2026-09-30T18:17:50.941Z",
+      "px": 1024,
+      "files": {
+        "albedo": null,
+        "normal": {
+          "file": "pbr/stone/normal.webp",
+          "bytes": 497776,
+          "sha256": "4a54a10fe8dcd772a1c4d5244e1499ba8313bc2f8f0e24b6c2a1f0dcdda6b13e"
+        },
+        "orm": {
+          "file": "pbr/stone/orm.webp",
+          "bytes": 353736,
+          "sha256": "cc212e9ee7be5dad19826a8e43b8243cbf54dee2424a8b79f9b1f3bf769cb939"
+        }
+      },
+      "meanLinearColour": null,
+      "meanRoughness": 0.57893
+    },
+    "concrete": {
+      "id": "concrete",
+      "source": "polyhaven",
+      "asset": "concrete_floor_01",
+      "author": "Rob Tuytel",
+      "page": "https://polyhaven.com/a/concrete_floor_01",
+      "licence": "CC0-1.0",
+      "tileSizeM": 2,
+      "fetchedAt": "2026-09-30T18:17:51.168Z",
+      "px": 1024,
+      "files": {
+        "albedo": null,
+        "normal": {
+          "file": "pbr/concrete/normal.webp",
+          "bytes": 432690,
+          "sha256": "4978ce492dd0e5a39c0e06e54febc338cdb68b30af0bd07d9439c805a8116552"
+        },
+        "orm": {
+          "file": "pbr/concrete/orm.webp",
+          "bytes": 155306,
+          "sha256": "fda06efed5a4c1cd1540f8fc1d9f8aabba0d8fffb9bbf077ceb2a4b2a5a23ca9"
+        }
+      },
+      "meanLinearColour": null,
+      "meanRoughness": 0.52544
+    },
+    "gravel": {
+      "id": "gravel",
+      "source": "polyhaven",
+      "asset": "gravel_floor",
+      "author": "Jenelle van Heerden, Matterfield",
+      "page": "https://polyhaven.com/a/gravel_floor",
+      "licence": "CC0-1.0",
+      "tileSizeM": 2.25,
+      "fetchedAt": "2026-09-30T18:17:52.071Z",
+      "px": 1024,
+      "files": {
+        "albedo": null,
+        "normal": {
+          "file": "pbr/gravel/normal.webp",
+          "bytes": 682998,
+          "sha256": "f56f1fb571a7a57bb99db2de2d94fdbe291b4d0a4a0e0c0c6fa22e6f12d1b267"
+        },
+        "orm": {
+          "file": "pbr/gravel/orm.webp",
+          "bytes": 376194,
+          "sha256": "1f5d9f90c9529f5c4bda18af08fa555123e3bdf13332d65e328e1ffbe2438376"
+        }
+      },
+      "meanLinearColour": null,
+      "meanRoughness": 0.50641
+    },
+    "polycarbonate-flutes": {
+      "id": "polycarbonate-flutes",
+      "source": "generated",
+      "asset": null,
+      "author": "Garden Studio",
+      "page": null,
+      "licence": "CC0-1.0",
+      "tileSizeM": 0.1,
+      "fetchedAt": "2026-09-30T18:18:56.436Z",
+      "px": 512,
+      "files": {
+        "albedo": null,
+        "normal": {
+          "file": "pbr/polycarbonate-flutes/normal.webp",
+          "bytes": 4438,
+          "sha256": "c9e5f10dde7b8ef6e584e2abe6f61a123ff27c8dc2602a05d18c9ba65c4671da"
+        },
+        "orm": {
+          "file": "pbr/polycarbonate-flutes/orm.webp",
+          "bytes": 554,
+          "sha256": "3ab2dae8c7acb51277171e750befc38ba6411d156dcc03059986f1e93b7c2509"
+        }
+      },
+      "meanLinearColour": null,
+      "meanRoughness": 0.3
+    }
+  }
+}

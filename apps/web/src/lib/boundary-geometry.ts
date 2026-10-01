@@ -1,5 +1,12 @@
-import { polygonEdges, rotatePoint, type BoundaryVertex, type Point } from '@garden-studio/schema';
-import { snapPoint, snapToStep } from './grid';
+import {
+  drawReference,
+  polygonEdges,
+  rightAnglePoint,
+  rotatePoint,
+  type BoundaryVertex,
+  type Point,
+} from '@garden-studio/schema';
+import { snapPoint } from './grid';
 import type { Unit } from './units';
 
 /**
@@ -121,26 +128,13 @@ export function rayPolygonIntersection(
  * whole shape's anchor and silently change edge A->B as well; there we move the start vertex
  * instead.
  */
-/**
- * The direction the next side is measured against: the previous side's own direction, or due
- * east for the very first one.
- *
- * Relative to the previous side rather than to the world axes because that is how a site is
- * actually walked — "twelve metres, turn right, eight metres" — and because it keeps snapping
- * useful on a plot that is not square to the screen. A plot drawn at 20° off axis still has right
- * angles, and world-axis snapping would fight every one of them.
+/*
+ * `drawReference` and the right-angle rule live in the shared snapping module now
+ * (`packages/schema/src/plan/snap/snap.ts`), so step 1's boundary, the other editors' drawing tools
+ * and anything on the server square a corner by one rule. Re-exported and wrapped here so every
+ * caller keeps its name.
  */
-export function drawReference(vertices: Point[]): Point {
-  if (vertices.length < 2) return { x: 1, y: 0 };
-
-  const from = vertices[vertices.length - 2]!;
-  const to = vertices[vertices.length - 1]!;
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
-
-  if (length < 1e-9) return { x: 1, y: 0 };
-
-  return { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-}
+export { drawReference };
 
 /**
  * Where the next corner lands, given where the pointer is.
@@ -148,44 +142,16 @@ export function drawReference(vertices: Point[]): Point {
  * The canvas calls this to draw the ghost and the store calls it to place the corner, so the
  * preview cannot promise a position the click then fails to deliver — the same rule the
  * tessellation layer follows for the canvas and the validator.
- *
- * With right angles on, the pointer is projected onto whichever of the four square directions it
- * is closest to, and only the *distance* along that direction is grid-snapped. Snapping the point
- * itself to the grid afterwards would knock it back off the axis, which is the obvious way to
- * write this and quietly undoes the whole feature on a plot that is not square to the screen.
  */
 export function nextDrawPoint(
   vertices: Point[],
   raw: Point,
   options: { gridSnap: boolean; rightAngle: boolean; unit: Unit },
 ): Point {
-  const previous = vertices[vertices.length - 1];
-
-  if (!options.rightAngle || !previous) {
+  if (!options.rightAngle || vertices.length === 0) {
     return options.gridSnap ? snapPoint(raw, options.unit) : raw;
   }
-
-  const reference = drawReference(vertices);
-  const dx = raw.x - previous.x;
-  const dy = raw.y - previous.y;
-
-  let best = reference;
-  let bestReach = -Infinity;
-
-  // Straight on, both right turns, and back the way we came.
-  for (const turn of [0, 90, 180, 270]) {
-    const direction = rotatePoint(reference, { x: 0, y: 0 }, turn);
-    const reach = dx * direction.x + dy * direction.y;
-
-    if (reach > bestReach) {
-      bestReach = reach;
-      best = direction;
-    }
-  }
-
-  const distance = options.gridSnap ? snapToStep(Math.max(0, bestReach), options.unit) : bestReach;
-
-  return { x: previous.x + best.x * distance, y: previous.y + best.y * distance };
+  return rightAnglePoint(vertices, raw, { grid: options.gridSnap, unit: options.unit });
 }
 
 /** A corner placed by measurement rather than by pointing — length, then turn. */

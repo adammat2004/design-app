@@ -15,6 +15,7 @@ import {
 } from '@garden-studio/schema';
 import { FEATURE_SPECS, inradius, scaledSpec } from '../archetypes.js';
 import { treeSpeciesFor } from '../constraints.js';
+import { treeStamp } from '@garden-studio/schema';
 import type { DesignConstraints } from '../constraints.js';
 import type { LayoutArchetype } from '../knowledge/archetypes/types.js';
 import { FEATURE_LIBRARY, placementLadder, roomSpec } from '../knowledge/feature-library.js';
@@ -87,6 +88,11 @@ export interface PreviewTree {
   symbol: SymbolId;
   /** Why it stands there. */
   purpose?: string;
+  /**
+   * Its species, name and height, chosen after the symbol exactly as realisation chooses them — the
+   * height is what it casts from, and the sun principle scores the preview.
+   */
+  stamp: ReturnType<typeof treeStamp>;
 }
 
 /** A previewed tree as the geometry everything else in this file speaks. */
@@ -392,7 +398,10 @@ export function previewLayout(request: PreviewRequest): LayoutPreview {
     if (trees.length >= treeCap) break;
     const { symbol, radius } = nextTree();
     const at = candidate.points.find((point) => treeFits(point, radius));
-    if (at) trees.push({ at, radius, symbol, purpose: candidate.purpose });
+    if (at) {
+      const nth = trees.filter((tree) => tree.symbol === symbol).length;
+      trees.push({ at, radius, symbol, purpose: candidate.purpose, stamp: treeStamp(constraints.style, symbol, nth) });
+    }
   }
 
   return {

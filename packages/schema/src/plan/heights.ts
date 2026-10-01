@@ -50,6 +50,8 @@ export const CATEGORY_HEIGHTS: Record<ElementCategory, number> = {
   lighting: 0.3,
   /** Unknown by definition — it is whatever was already there. A conservative middle. */
   'existing-feature': 1,
+  /** A fence. Every enclosure has a material, and the material says more — see below. */
+  enclosure: 1.8,
 };
 
 /**
@@ -67,6 +69,25 @@ export const MATERIAL_HEIGHTS: Partial<Record<MaterialId, number>> = {
   'ornamental-grasses': 1.1,
   shrubs: 1.3,
   hedging: 1.8,
+  /* The mixes, at about the height their tallest common plants stand. */
+  'mix-shade-woodland': 0.9,
+  'mix-sunny-gravel': 0.6,
+  'mix-pollinator': 0.9,
+  'mix-cottage-border': 1.1,
+  'mix-prairie-grasses': 1.4,
+  'mix-evergreen-structure': 1.4,
+  'mix-low-maintenance': 0.7,
+  /* Enclosures: the kind's ordinary height, read from what it is built of. */
+  'closeboard-fence': 1.8,
+  'hit-and-miss-fence': 1.8,
+  'slatted-screen': 1.8,
+  'brick-garden-wall': 1.2,
+  'rendered-garden-wall': 1.2,
+  'stone-garden-wall': 1.2,
+  'hedge-planting': 1.5,
+  'metal-railing': 1.1,
+  'kerb-line': 0.1,
+  'open-boundary': 0,
 };
 
 /**

@@ -61,6 +61,8 @@ export const CATEGORY_EDGES: Record<ElementCategory, EdgeSpec | null> = {
   /** The same, and a 120 mm fitting has no edge to cut anyway. */
   lighting: null,
   'existing-feature': null,
+  /* A fence or a wall is a line drawn by the boundary painter, not a surface with a cut edge. */
+  enclosure: null,
 };
 
 export function edgeFor(category: ElementCategory): EdgeSpec | null {

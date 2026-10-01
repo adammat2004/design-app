@@ -856,7 +856,9 @@ function FeatureShape({
         const node = event.target;
         useFeaturesStore
           .getState()
-          .moveFeatureLive(feature.id, pxToMetres({ x: node.x(), y: node.y() }, transform));
+          .moveFeatureLive(feature.id, pxToMetres({ x: node.x(), y: node.y() }, transform), {
+            pxPerMetre: transform.scale,
+          });
       }}
       onDragEnd={(event) => {
         const state = useFeaturesStore.getState();

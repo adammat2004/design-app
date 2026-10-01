@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Armchair,
-  Columns3,
-  Droplets,
-  Grid2x2,
-  Lightbulb,
-  Sprout,
-  Square,
-  Trees,
-  type LucideIcon,
-} from 'lucide-react';
+import { Armchair, Columns3, Droplets, Fence, Grid2x2, Lightbulb, Sprout, Square, Trees, type LucideIcon } from 'lucide-react';
 import type { ElementCategory } from '@/lib/concepts';
 
 /**
@@ -31,6 +21,7 @@ const ICONS: Record<ElementCategory, LucideIcon> = {
   furniture: Armchair,
   lighting: Lightbulb,
   'existing-feature': Trees,
+  enclosure: Fence,
 };
 
 export function EditorIcon({

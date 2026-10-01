@@ -6,6 +6,8 @@ import {
   samplePlanting,
   schemeFor,
   symbolForLayer,
+  shrubPlantFor,
+  speciesById,
   polygonContainsPolygon,
   polygonsIntersect,
   SYMBOLS,
@@ -99,6 +101,7 @@ export async function plantStructure(
         // The plant's own variant picks its species, so a backdrop is a few kinds and not one.
         const symbol = symbolForLayer(layer, placement.variant) as SymbolId;
         const spec = SYMBOLS[symbol];
+        const species = speciesById(shrubPlantFor(symbol, placement.variant));
         const radius = spec.footprint.kind === 'point' ? spec.footprint.radius : 0.6;
 
         /*
@@ -127,13 +130,15 @@ export async function plantStructure(
           id: context.nextId(),
           category: 'planting-bed',
           role: 'feature',
-          name: spec.label,
+          name: species?.common ?? spec.label,
           shape,
           zone: bed.zone,
           material: 'shrubs',
           bedId: bed.id,
           symbol,
+          /* The symbol's height and radius stay: a species names the shrub, it does not move it. */
           height: spec.height,
+          ...(species ? { plantId: species.id } : {}),
         });
       }
     }

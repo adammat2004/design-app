@@ -1,24 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import {
-  CameraControls,
-  ContactShadows,
-  Environment,
-  Lightformer,
-  Sky,
-  SoftShadows,
-  useTexture,
-} from '@react-three/drei';
-import { ACESFilmicToneMapping, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
+import { AdaptiveDpr, CameraControls, ContactShadows, Sky, SoftShadows } from '@react-three/drei';
+import { NeutralToneMapping, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
 import type {
   DesignElement,
   LocalFrame,
   NeighbourhoodSolid,
   Point,
   ResolvedStructure,
-  StructureNeighbourhood,
   StructurePartGroup,
   StructureResizeResult,
 } from '@garden-studio/schema';
@@ -26,37 +17,49 @@ import { StructureFloor, StructureInterior, FLOOR_THICKNESS } from './StructureI
 import { StructureHandles } from './StructureHandles';
 import { StructureModel } from './StructureModel';
 import { StructureSurroundings } from './StructureSurroundings';
+import type { ARScene } from '@garden-studio/ar-contract';
+import type { LibraryOutcome } from '@garden-studio/ar-builder';
+import { LibraryModel } from '../three/LibraryModel';
+import { NEIGHBOURHOOD_REACH } from '@garden-studio/schema';
+import { Finish, HAZE, SkyLight, type ViewportReport } from '../three/SceneAtmosphere';
+import { useResource } from '@/lib/structures/resource';
+import { colourTexture } from '@/lib/structures/textures';
 
 /**
  * The 3D view of one structure: the structure is the hero, and the setting is its neighbourhood.
  *
- * **Its neighbourhood, not the garden.** With the surroundings on, the garden a few metres round the
- * structure is drawn from `structureNeighbourhood` — the terrace it stands on, the beds planted as the
- * plan plants them, the fence, the house with its doors, the trees — cut to a window and fading into
- * the haze, so a size or a screen is judged against the place. Beyond the window is a plain lawn. Off,
- * it is the structure alone on that lawn. Rebuilding the whole garden here would be the retired
- * Visualise view in a new engine, and the plan is where the garden is judged.
+ * **In its garden.** With the surroundings on, the garden is the AR scene builder's scene of the plan,
+ * drawn by the renderer the whole-garden preview uses (`StructureSurroundings` → `SceneNodes`): the
+ * terrace it stands on, the beds planted as the plan plants them, the fence, the house with its doors,
+ * the trees, the retaining walls and the edging. Within `NEIGHBOURHOOD_REACH` it is painted in full
+ * and in the clear; beyond, it fades into the haze. Off, it is the structure alone on a plain lawn.
+ * This is a configurator, never a place to move things: the plan is where the garden is changed.
  *
  * - **What is inside it** — its floor and the furniture standing in it — is always drawn, and the
  *   furniture can be picked up and moved (`StructureInterior`).
  * - **Light**: the plan's own sun (`sunInFrame`), so a shadow falls the way the plan draws it, with
- *   percentage-closer soft shadows whose penumbra widens with distance from the caster; a procedural
- *   sky and a `Lightformer` environment rather than a downloaded HDRI — the app works offline.
+ *   percentage-closer soft shadows whose penumbra widens with distance from the caster. The sky light
+ *   is a CC0 overcast HDRI checked in beside the app (`SKY_ENVIRONMENT`) — image-based light with no
+ *   sun of its own, so there is still one sun — and the studio `Lightformer`s while it loads or if it
+ *   is missing. Either way nothing is fetched from outside: the app works offline.
+ * - **Finish**: on the `high` render tier (`renderTier`), ambient occlusion, bloom on the LED strip,
+ *   tone mapping and SMAA in one post pass (`StructurePostFX`); on `low`, the renderer's own.
  * - **Cost**: `frameloop="demand"` — nothing is drawn unless the camera moves or the plan changes.
- *   Device pixel ratio is capped at 2.
- * - **Tone**: ACES filmic with sRGB output, stated so they are not lost to a later default change.
+ *   Device pixel ratio is capped at 2 and drops while the camera moves.
+ * - **Tone**: Khronos PBR Neutral with sRGB output on both tiers. A finish is a colour promise, and
+ *   ACES filmic, which this view used first, shifts a swatch's hue on the way to the screen.
  */
 export type CameraPreset = 'orbit' | 'front' | 'side' | 'top';
 
-/** The haze the far garden fades into, matched to the sky's horizon. */
-const HAZE = '#dfe6e6';
+export type { ViewportReport };
 
 export function StructureViewport({
   structure,
   element,
+  look = null,
   elements,
   frame,
-  neighbourhood = null,
+  scene = null,
   interior,
   pieceId,
   sun,
@@ -67,14 +70,21 @@ export function StructureViewport({
   onPick,
   handles = false,
   onBlocked,
+  coarse = false,
+  onReport,
 }: {
   structure: ResolvedStructure;
   element: DesignElement;
+  /**
+   * How it is drawn: a library model (`matchLibraryAsset`) or its own parts. Decided by the
+   * workspace, once, so the viewport and its test hook cannot disagree.
+   */
+  look?: LibraryOutcome | null;
   /** The plan as it stands when no gesture is open: what the surroundings are drawn from. */
   elements: DesignElement[];
   frame: LocalFrame;
   /** The garden around it, in its own frame, or `null` to show it alone on a plain lawn. */
-  neighbourhood?: StructureNeighbourhood | null;
+  scene?: ARScene | null;
   /** The furniture standing inside it, live. */
   interior: NeighbourhoodSolid[];
   pieceId: string | null;
@@ -93,10 +103,17 @@ export function StructureViewport({
   handles?: boolean;
   /** A handle drag ended on a size that would not fit. */
   onBlocked?: (result: Extract<StructureResizeResult, { status: 'blocked' }>) => void;
+  /** A touch device: the post pass is not attempted (`renderTier`). */
+  coarse?: boolean;
+  /** Told the render tier and how the sky loaded, whenever either changes. */
+  onReport?: (report: ViewportReport) => void;
 }) {
   const { width, depth, height } = structure;
-  const reach = neighbourhood ? neighbourhood.half : Math.max(width, depth);
-  const near = neighbourhood ? orbitDistance(width, depth, height) + neighbourhood.half * 0.6 : 22;
+  // How far the garden is drawn in full detail round the structure: the fog's clear range and the sun's
+  // shadow reach. The scene beyond is still there, fading into the haze.
+  const half = Math.max(width, depth) / 2 + NEIGHBOURHOOD_REACH;
+  const reach = scene ? half : Math.max(width, depth);
+  const near = scene ? orbitDistance(width, depth, height) + half * 0.6 : 22;
   const floored = structure.floor !== null;
   const floorTop = floored ? FLOOR_THICKNESS : 0;
   return (
@@ -104,7 +121,8 @@ export function StructureViewport({
       shadows
       dpr={[1, 2]}
       frameloop="demand"
-      gl={{ antialias: true, toneMapping: ACESFilmicToneMapping, outputColorSpace: SRGBColorSpace }}
+      gl={{ antialias: true, toneMapping: NeutralToneMapping, outputColorSpace: SRGBColorSpace }}
+      performance={{ min: 0.5 }}
       camera={{ fov: 38, near: 0.1, far: 200, position: orbitPosition(width, depth, height) }}
       onPointerMissed={onMissed}
     >
@@ -120,43 +138,14 @@ export function StructureViewport({
       />
       <SoftShadows size={22} samples={12} focus={0.6} />
 
-      <Lighting span={reach} sun={sun} />
-      <Environment resolution={256} frames={1}>
-        <Lightformer
-          form="rect"
-          intensity={2.2}
-          position={[0, 8, 0]}
-          rotation-x={Math.PI / 2}
-          scale={[12, 12, 1]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={0.9}
-          color="#fff4e2"
-          position={[-8, 3, 6]}
-          scale={[8, 4, 1]}
-          target={[0, 1, 0]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={0.5}
-          color="#dfe8ff"
-          position={[8, 3, -6]}
-          scale={[8, 4, 1]}
-          target={[0, 1, 0]}
-        />
-      </Environment>
+      <SkyLight span={reach} sun={sun} />
 
-      <Suspense
-        fallback={<PlainGround width={width} depth={depth} pad={!neighbourhood && !floored} />}
-      >
-        <TexturedGround width={width} depth={depth} pad={!neighbourhood && !floored} />
-      </Suspense>
-      {neighbourhood ? (
+      <Ground width={width} depth={depth} pad={!scene && !floored} />
+      {scene ? (
         <StructureSurroundings
-          neighbourhood={neighbourhood}
+          scene={scene}
+          element={element}
           elements={elements}
-          frame={frame}
           light={light}
         />
       ) : null}
@@ -165,13 +154,31 @@ export function StructureViewport({
         scale={Math.max(width, depth) * 2.4}
         blur={2.4}
         far={3}
-        opacity={0.45}
+        opacity={0.3}
         resolution={512}
       />
 
       <StructureFloor element={element} elements={elements} frame={frame} light={light} />
       <StructureInterior pieces={interior} frame={frame} floor={floorTop} pieceId={pieceId} />
-      <StructureModel structure={structure} onPick={onPick} />
+      {look?.kind === 'model' ? (
+        /*
+         * The library model, on the structure's own origin and scaled to exactly its size. Not
+         * pickable: a model has no parts to open a tab by, and clicking it to land on an arbitrary
+         * tab would teach the wrong thing. The tabs and the handles still edit it, because they edit
+         * the element.
+         */
+        <LibraryModel
+          asset={{
+            id: look.match.entry.id,
+            position: [0, 0, 0],
+            yaw: look.match.turned ? Math.PI / 2 : 0,
+            size: look.match.size,
+          }}
+          fallback={<StructureModel structure={structure} onPick={onPick} />}
+        />
+      ) : (
+        <StructureModel structure={structure} onPick={onPick} />
+      )}
       {handles && onBlocked ? (
         <StructureHandles elementId={element.id} structure={structure} onBlocked={onBlocked} />
       ) : null}
@@ -186,37 +193,9 @@ export function StructureViewport({
       ) : null}
 
       <Camera structure={structure} preset={preset} presetKey={presetKey} />
+      <AdaptiveDpr />
+      <Finish coarse={coarse} onReport={onReport} />
     </Canvas>
-  );
-}
-
-/**
- * The sun, where the plan puts it. Its shadow camera is fitted to the window: every shadow in view
- * is cast, and none of the map's resolution is spent on garden the fog has already taken.
- */
-function Lighting({ span, sun }: { span: number; sun: [number, number, number] }) {
-  const reach = Math.max(4, span);
-  const distance = reach * 3;
-  return (
-    <>
-      {/* Fill from the sky: enough that the side away from the sun is shade, not a hole. */}
-      <hemisphereLight args={['#eef3ff', '#8a9670', 0.95]} />
-      <directionalLight
-        castShadow
-        position={[sun[0] * distance, sun[1] * distance, sun[2] * distance]}
-        intensity={2.6}
-        color="#fff4e3"
-        shadow-mapSize={[4096, 4096]}
-        shadow-bias={-0.0003}
-        shadow-normalBias={0.03}
-        shadow-camera-left={-reach * 1.2}
-        shadow-camera-right={reach * 1.2}
-        shadow-camera-top={reach * 1.2}
-        shadow-camera-bottom={-reach * 1.2}
-        shadow-camera-near={0.5}
-        shadow-camera-far={distance * 2.5}
-      />
-    </>
   );
 }
 
@@ -242,31 +221,42 @@ function PlainGround({ width, depth, pad }: { width: number; depth: number; pad:
   );
 }
 
+const TURF = colourTexture('/assets/plan/textures/tex-standard-turf-1.webp');
+const PAVER = colourTexture('/assets/plan/textures/face-stone-paver-1.webp');
+
 /**
  * The lawn and the paving pad, in the plan library's own photographs.
  *
  * The same tiles the 2D plan draws with, at their real sizes (turf 1.5 m, a paving slab 0.6 m), so
- * the ground reads at the scale the structure does. Wrapped in Suspense with the flat version as the
- * fallback: a missing file is a supported state everywhere in this app.
+ * the ground reads at the scale the structure does. Flat until both files have arrived, and flat
+ * for good if either is missing: a missing file is a supported state everywhere in this app, and
+ * with the suspending loader this replaced a 404 here took the whole view down with it.
  */
+function Ground({ width, depth, pad }: { width: number; depth: number; pad: boolean }) {
+  const turf = useResource(TURF);
+  const paver = useResource(PAVER);
+  if (!turf || !paver) return <PlainGround width={width} depth={depth} pad={pad} />;
+  return <TexturedGround width={width} depth={depth} pad={pad} turf={turf} paver={paver} />;
+}
+
 function TexturedGround({
   width,
   depth,
   pad: showPad,
+  turf,
+  paver,
 }: {
   width: number;
   depth: number;
   pad: boolean;
+  turf: Texture;
+  paver: Texture;
 }) {
-  const [turf, paver] = useTexture([
-    '/assets/plan/textures/tex-standard-turf-1.webp',
-    '/assets/plan/textures/face-stone-paver-1.webp',
-  ]);
   const padW = width + PAD_MARGIN * 2;
   const padD = depth + PAD_MARGIN * 2;
-  // Clones, because `useTexture` caches one texture per URL for the whole page.
-  const lawn = useMemo(() => tiled(turf!, 60 / 1.5, 60 / 1.5), [turf]);
-  const pad = useMemo(() => tiled(paver!, padW / 0.6, padD / 0.6), [paver, padW, padD]);
+  // Clones, because one texture per URL is shared by the whole page.
+  const lawn = useMemo(() => tiled(turf, 60 / 1.5, 60 / 1.5), [turf]);
+  const pad = useMemo(() => tiled(paver, padW / 0.6, padD / 0.6), [paver, padW, padD]);
   useEffect(() => () => lawn.dispose(), [lawn]);
   useEffect(() => () => pad.dispose(), [pad]);
 
@@ -360,6 +350,7 @@ function Camera({
     <CameraControls
       ref={controls}
       makeDefault
+      regress
       minDistance={size * 0.6}
       maxDistance={size * 5 + 6}
       minPolarAngle={0}

@@ -105,3 +105,60 @@ describe('readARScene', () => {
     expect(() => readARScene(scene)).toThrow();
   });
 });
+
+describe('0.0.2 additions', () => {
+  it('reads a scene that uses every one of them, and one that uses none', () => {
+    const bare = minimalScene();
+    expect(() => readARScene(bare)).not.toThrow();
+
+    const rich = minimalScene();
+    const material = Object.keys(rich.materials)[0]!;
+    rich.materials[material] = { ...rich.materials[material]!, tones: ['#556b2f', '#6b8e23'] };
+    rich.nodes.push(
+      {
+        kind: 'solid',
+        id: 'house',
+        sourceId: 'house',
+        category: 'house',
+        existing: true,
+        visibleByDefault: true,
+        parts: [{ material, mesh: { ...flatPolygonMesh([[0, 0], [1, 0], [1, 1]], 0), uv: 'face' } }],
+        openings: [{ kind: 'patio-door', a: [0, 0], b: [1.8, 0], outward: [0, 1], bottom: 0, top: 2.1 }],
+      },
+      {
+        kind: 'plants',
+        id: 'bed:plants',
+        sourceId: 'bed',
+        category: 'planting',
+        existing: false,
+        visibleByDefault: true,
+        plant: 'perennial',
+        material,
+        species: 'geranium-rozanne',
+        instances: [{ at: [1, 0, 1], yaw: 0, spread: 0.6, height: 0.4, tone: 0.5 }],
+      },
+    );
+    expect(() => readARScene(rich)).not.toThrow();
+  });
+
+  it('refuses a tone outside 0 to 1 and an opening of a kind it does not know', () => {
+    const scene = minimalScene();
+    const material = Object.keys(scene.materials)[0]!;
+    const plants = {
+      kind: 'plants' as const,
+      id: 'p',
+      sourceId: null,
+      category: 'planting' as const,
+      existing: false,
+      visibleByDefault: true,
+      plant: 'perennial' as const,
+      material,
+      instances: [{ at: [0, 0, 0] as [number, number, number], yaw: 0, spread: 1, height: 1, tone: 1.5 }],
+    };
+    expect(() => readARScene({ ...scene, nodes: [plants] })).toThrow();
+    const door = { kind: 'cat-flap', a: [0, 0], b: [1, 0], outward: [0, 1], bottom: 0, top: 1 };
+    const solid = { kind: 'solid', id: 's', sourceId: null, category: 'house', existing: true, visibleByDefault: true,
+      parts: [{ material, mesh: flatPolygonMesh([[0, 0], [1, 0], [1, 1]], 0) }], openings: [door] };
+    expect(() => readARScene({ ...scene, nodes: [solid] })).toThrow();
+  });
+});

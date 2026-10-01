@@ -15,9 +15,12 @@ import { EditorCanvasLoader } from './EditorCanvasLoader';
 import { EditorInspector } from './EditorInspector';
 import { EditorToolbar } from './EditorToolbar';
 import { PlacedElementsList } from './PlacedElementsList';
+import { ViewGroupsPanel } from './ViewGroupsPanel';
 import { structureDefinitionFor } from '@garden-studio/schema';
 import { StructureWorkspaceLoader } from '../../structure-3d/StructureWorkspaceLoader';
 import { StructurePlacedNotice } from './StructurePlacedNotice';
+import { GardenPreviewLoader } from '../../garden-3d/GardenPreviewLoader';
+import { useGardenPreviewStore } from '@/state/garden-preview-store';
 
 export function EditorScreen() {
   const planHref = usePlanHref();
@@ -43,6 +46,11 @@ export function EditorScreen() {
   useEffect(() => {
     if (concept && seededFrom !== concept.id) seedFrom(concept);
   }, [concept, seededFrom, seedFrom]);
+
+  const previewOpen = useGardenPreviewStore((state) => state.open);
+  const openStructureEdit = usePlanEditorStore((state) => state.openStructureEdit);
+  // A view state of this screen: leaving the screen closes it, so the next screen does not open on it.
+  useEffect(() => () => useGardenPreviewStore.getState().closePreview(), []);
 
   const runActive = useAiRunStore(selectRunActive);
   const agentPhase = useAssistantStore((state) => state.phase);
@@ -82,13 +90,14 @@ export function EditorScreen() {
         <Link href={planHref('concepts')} className="ml-auto shrink-0 text-xs text-garden-muted lg:hidden">Concepts</Link>
       </header>
       {structureId ? <StructureWorkspaceLoader elementId={structureId} /> : null}
+      {previewOpen && concept ? <GardenPreviewLoader onOpenStructure={openStructureEdit} /> : null}
       {/*
         The plan stays mounted while the 3D editor is open, hidden rather than unmounted: the canvas
         measures itself on mount and eases its zoom to fit, so unmounting it would throw away wherever
         the user had panned to, and the assistant's session and the gesture-gated autosave live here.
       */}
       <div className={`${structureId ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col overflow-y-auto bg-white lg:flex-row lg:overflow-hidden`}>
-        <aside data-testid="editor-catalogue" className="border-b border-garden-line lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-64">
+        <aside data-testid="editor-catalogue" className="border-b border-garden-line lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0 xl:w-72">
           <div
             className="flex border-b border-garden-line"
             role="tablist"
@@ -112,13 +121,22 @@ export function EditorScreen() {
             id={`sidebar-panel-${sidebar}`}
             role="tabpanel"
             aria-labelledby={`sidebar-${sidebar}`}
-            className="max-h-80 space-y-5 overflow-y-auto p-4 lg:max-h-none lg:flex-1"
+            /*
+             * The Add panel lays out its own rail and scroll, so the rail stays put while the tiles
+             * scroll; Layers is an ordinary padded list.
+             */
+            className={
+              sidebar === 'add'
+                ? 'h-96 overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1'
+                : 'max-h-80 space-y-5 overflow-y-auto p-4 lg:max-h-none lg:flex-1'
+            }
           >
             {concept ? (
               sidebar === 'add' ? (
                 <AddFeaturePalette />
               ) : (
                 <>
+                  <ViewGroupsPanel />
                   <PlacedElementsList />
                   <AreaSummaryPanel />
                 </>

@@ -32,6 +32,8 @@ import {
   type GardenBrief,
   type GeneratedConcept,
   type PlanDocument,
+  isTreeSymbol,
+  resolveSymbol,
 } from '@garden-studio/schema';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -1301,8 +1303,12 @@ describe.skipIf(connection === null)('ConceptsService', { timeout: GENERATION_TI
     const boundary = document.site.vertices.map((v) => ({ x: v.x, y: v.y }));
     const [concept] = await service.generate(document, 12);
 
-    const trees = concept!.elements.filter((element) => element.name === 'Tree');
+    /* By what they are, not what they are called: a tree is named for its species now. */
+    const trees = concept!.elements.filter(
+      (element) => element.shape.kind === 'point' && isTreeSymbol(resolveSymbol(element) ?? 'shed'),
+    );
     expect(trees.length).toBeGreaterThan(0);
+    expect(trees.every((tree) => tree.plantId && tree.name !== 'Tree')).toBe(true);
 
     for (const tree of trees) {
       expect(tree.shape.kind).toBe('point');

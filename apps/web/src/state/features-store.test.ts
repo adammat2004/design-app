@@ -332,6 +332,23 @@ describe('renaming', () => {
   });
 });
 
+describe('describing an existing tree', () => {
+  it('records its species, height and crown without moving it, as one undo step each', () => {
+    const id = placeTree();
+    const geometry = store().present.features[0]!.geometry;
+    store().describeFeature(id, { plantId: 'betula-pendula' });
+    store().describeFeature(id, { height: 9, spread: 5 });
+
+    expect(store().present.features[0]).toMatchObject({ plantId: 'betula-pendula', height: 9, spread: 5 });
+    expect(store().present.features[0]!.geometry).toEqual(geometry);
+
+    store().undo();
+    expect(store().present.features[0]!.height).toBeUndefined();
+    store().describeFeature(id, { plantId: null });
+    expect(store().present.features[0]!.plantId).toBeUndefined();
+  });
+});
+
 describe('the summary', () => {
   it('counts what is actually placed', () => {
     const tree = placeTree();

@@ -20,10 +20,11 @@ import { useEdgeRules } from '@/lib/edge-rules';
  * generated picture, and this table is the first place in the app where the argument pays.
  *
  * **Units appear only where a count is honest.** Paving and decking are modular products with real
- * quoted dimensions, so slabs and boards can be counted. Planting cannot: `material-patterns.ts`
- * says plainly that scatter densities are *drawn* densities, chosen so a bed reads as planting at a
- * glance, and a border really planted at one would close up in a season. So a bed gets its area and
- * a dash, and the dash is the honest answer rather than a gap in the work.
+ * quoted dimensions, so slabs and boards can be counted. A bed planted from a mix can be too, because
+ * each species in it carries its real planting centres; a bed of one of the older materials cannot,
+ * because `material-patterns.ts` says plainly that scatter densities are *drawn* densities, and a
+ * border really planted at one would close up in a season. That bed gets its area and a dash, and the
+ * dash is the honest answer rather than a gap in the work. Loose fill is given by the cubic metre.
  */
 export function ScheduleTable({
   elements,
@@ -114,17 +115,21 @@ function ScheduleRow({ line, unit }: { line: ScheduleLine; unit: Unit }) {
             ? line.elementCount === 1
               ? '1 run'
               : `${line.elementCount} runs`
-            : line.elementCount === 1
-              ? '1 area'
-              : `${line.elementCount} areas`}
+            : line.materialId.startsWith('plant:')
+              ? 'placed'
+              : line.elementCount === 1
+                ? '1 area'
+                : `${line.elementCount} areas`}
         </span>
       </td>
       <td className="py-1.5 pr-3 text-right text-xs whitespace-nowrap text-garden-ink">
         {line.areaSqm > 0 ? formatArea(line.areaSqm, unit) : '\u2014'}
       </td>
       <td className="py-1.5 text-right text-xs whitespace-nowrap text-garden-muted">
-        {line.units === null ? (
-          <span title="Planting is drawn at a density chosen to read well, not to be ordered from">
+        {line.volumeM3 !== null ? (
+          `${line.volumeM3.toFixed(line.volumeM3 < 10 ? 2 : 1)} m\u00b3`
+        ) : line.units === null ? (
+          <span title="A bed without a planting mix has no species to count — give it one on the plan">
             {'\u2014'}
           </span>
         ) : (

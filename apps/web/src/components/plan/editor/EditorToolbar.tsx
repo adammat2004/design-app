@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   Grid3x3,
   Hand,
@@ -20,9 +20,25 @@ import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import { ADDABLE_CATEGORIES } from '@/lib/element-groups';
 import { selectRunActive, useAiRunStore } from '@/state/ai-run-store';
 import { usePlanEditorStore, type PlanEditorMode } from '@/state/plan-editor-store';
+import { ViewInThreeDButton } from '../../garden-3d/ViewInThreeDButton';
+import { DownloadArSceneButton } from '../DownloadArSceneButton';
 import { DownloadPlanButton } from '../DownloadPlanButton';
 import { ToolbarButton, ToolbarGroup } from '../ToolbarButton';
 import { EditorIcon } from './EditorIcon';
+
+/** What the keyboard does, said once where somebody would look for it. `⌘` reads as Ctrl on Windows. */
+const SHORTCUT_HELP: [string, string][] = [
+  ['⌘Z / ⇧⌘Z', 'Undo / redo'],
+  ['⌘D', 'Duplicate'],
+  ['⌘A', 'Select everything'],
+  ['Shift-click', 'Add to the selection'],
+  ['Shift-drag', 'Select an area'],
+  ['Delete', 'Remove the selection'],
+  ['Arrows', 'Nudge 10 cm (Shift: 1 m)'],
+  ['Shift while placing', 'Place several'],
+  ['Esc', 'Stop placing, measuring, or deselect'],
+  ['Space-drag', 'Pan'],
+];
 
 /**
  * The bar above the plan.
@@ -125,7 +141,7 @@ export function EditorToolbar() {
     {
       id: 'zones',
       label: 'Zones',
-      title: 'Tint the front, back and side gardens',
+      title: 'Name the front, back and side gardens on the plan',
       icon: <LayoutGrid aria-hidden className="h-4 w-4" />,
       on: zonesVisible,
       onClick: toggleZones,
@@ -178,6 +194,7 @@ export function EditorToolbar() {
             <ToolbarButton
               testId="editor-undo"
               label="Undo"
+              title="Undo (⌘Z)"
               icon={<Undo2 aria-hidden className="h-4 w-4" />}
               disabled={!canUndo || aiActive}
               onClick={undo}
@@ -185,6 +202,7 @@ export function EditorToolbar() {
             <ToolbarButton
               testId="editor-redo"
               label="Redo"
+              title="Redo (⇧⌘Z)"
               icon={<Redo2 aria-hidden className="h-4 w-4" />}
               disabled={!canRedo || aiActive}
               onClick={redo}
@@ -198,6 +216,7 @@ export function EditorToolbar() {
               onClick={resetToConcept}
             />
             <DownloadPlanButton />
+            <DownloadArSceneButton />
           </ToolbarGroup>
         </div>
       </details>
@@ -273,6 +292,11 @@ export function EditorToolbar() {
         </div>
       </details>
 
+      {/* Looking at the design, not changing it: out in the open rather than under Edit actions. */}
+      <ToolbarGroup>
+        <ViewInThreeDButton disabled={aiActive} />
+      </ToolbarGroup>
+
       <div className="relative ml-auto">
         <button
           type="button"
@@ -292,9 +316,20 @@ export function EditorToolbar() {
           >
             <p className="text-[11px] leading-relaxed text-garden-muted">
               Drag anything on the plan to move it, or select it to resize and change what it is
-              made of. Nothing can overlap the house or cross the boundary — an edit that would is
-              refused rather than nudged.
+              made of. Nothing can cross the property boundary — an edit that would is refused
+              rather than nudged. A patio or a path may run up to and under the house.
             </p>
+            <dl
+              data-testid="editor-shortcuts"
+              className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-garden-muted"
+            >
+              {SHORTCUT_HELP.map(([keys, action]) => (
+                <Fragment key={keys}>
+                  <dt className="font-medium whitespace-nowrap text-garden-ink">{keys}</dt>
+                  <dd>{action}</dd>
+                </Fragment>
+              ))}
+            </dl>
             <p className="mt-2 text-[11px] leading-relaxed text-garden-muted">
               The ground layer under each zone keeps the garden fully covered, so its shape is
               fixed. Its material is not.

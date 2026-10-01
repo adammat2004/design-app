@@ -754,3 +754,41 @@ describe('a well-composed garden outscores a badly composed one', () => {
     expect(codes(worse)).toContain('play-not-visible');
   });
 });
+
+describe('privacy reads what the design puts up', () => {
+  /* One described side, made low: a 0.9 m railing somebody can see over from next door. */
+  const edge = { ...ANALYSIS.edges[0]!, exposure: 'neighbour' as const, height: 0.9 };
+  const analysis = { ...ANALYSIS, edges: [edge] };
+  const along = { x: edge.end.x - edge.start.x, y: edge.end.y - edge.start.y };
+  const unit = Math.hypot(along.x, along.y);
+  const mid = { x: (edge.start.x + edge.end.x) / 2, y: (edge.start.y + edge.end.y) / 2 };
+  const at = (inward: number, sideways = 0) => ({
+    x: mid.x + edge.inward.x * inward + (along.x / unit) * sideways,
+    y: mid.y + edge.inward.y * inward + (along.y / unit) * sideways,
+  });
+  const seat = feature('Seating patio', { ...rect(at(3.5).x, at(3.5).y, 2, 2) });
+
+  function privacy(elements: DesignElement[]) {
+    return evaluateDesign({
+      elements,
+      analysis,
+      brief: briefFor(),
+      featureOf: new Map([[seat.id, 'seating' as DesiredFeature]]),
+      tier: 'realised',
+    }).categories.privacy;
+  }
+
+  it('counts a proposed 1.8 m screen between the seat and the railing, and not a kerb', () => {
+    const line = [at(1, -2), at(1, 2)];
+    const screen = feature('Screen', { kind: 'polyline', points: line, width: 0.08 }, {
+      category: 'enclosure',
+      material: 'slatted-screen',
+      enclosure: { kind: 'screen' },
+    });
+    const kerb = { ...screen, material: 'kerb-line', enclosure: { kind: 'kerb' as const } };
+
+    expect(privacy([seat])).toBeLessThan(1);
+    expect(privacy([seat, screen])).toBe(1);
+    expect(privacy([seat, kerb])).toBeLessThan(1);
+  });
+});

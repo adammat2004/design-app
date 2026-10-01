@@ -10,6 +10,7 @@ import {
 import { edgePlanOf, type EdgeResolution } from './resolve.js';
 import { MIN_EDGE_RUN_LENGTH, treatmentSpec, type EdgeDimension, type EdgeTreatment } from './treatments.js';
 import type { DesignElement } from '../concepts.js';
+import { authoredCornerCount } from '../vertices.js';
 
 /**
  * Every way a boundary treatment can be changed, as pure functions of an element.
@@ -331,4 +332,24 @@ function storedSpans(element: DesignElement, chain: SideChain): { from: number; 
 function startOf(chains: SideChain[], run: EdgeRun): number {
   const chain = chains[run.side];
   return chain ? (spanOfRun(chain, run)?.from ?? 0) : 0;
+}
+
+/* ---------------------------------------------------------------- after a shape edit */
+
+/**
+ * The element's edge plan after its outline was edited, given what it was before.
+ *
+ * A run is keyed on its side's index, and a side's index is its authored corner's — so an edit that
+ * adds or removes a corner renumbers every side after it, and a stored run would silently move onto
+ * a side nobody pointed at. Such an edit sends the host back to `auto`, **whatever its mode**: `none`
+ * keeps its stashed runs for a later return to Custom, and those are exactly as stale. An edit that
+ * keeps the corner count — a dragged vertex, a changed radius — keeps the plan, because every run is
+ * measured in metres from its side's own end and resolves afresh on the next read.
+ *
+ * One rule for the editor's corner handles and the AI's `reshape`, which is why it lives here.
+ */
+export function edgesAfterVertexEdit(before: DesignElement, after: DesignElement): DesignElement {
+  if (!after.edges || after.edges.mode === 'auto') return after;
+  if (authoredCornerCount(before.shape) === authoredCornerCount(after.shape)) return after;
+  return { ...after, edges: { mode: 'auto', runs: [] } };
 }

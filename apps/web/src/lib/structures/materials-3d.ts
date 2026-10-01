@@ -4,12 +4,81 @@ import {
   DoubleSide,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
-  RepeatWrapping,
   SRGBColorSpace,
   type Material,
   type Texture,
 } from 'three';
 import { structureFinish, type StructureFinishId } from '@garden-studio/schema';
+import { CUSHION_SET, FLOOR_DETAIL, FURNITURE_SETS, NORMAL_SCALE, PANEL_SET } from './pbr-library';
+import { pbrSet, secondChannel, type PbrSet } from './pbr-textures';
+import type { PbrSetId } from './pbr/pbr-spec';
+
+/**
+ * The colour a textured material is multiplied by so its average is the swatch: the finish's linear
+ * colour over the albedo's measured mean, channel by channel. Capped at 4, so a set far darker than
+ * its finish brightens and does not blow out.
+ */
+export function calibratedColour(swatch: Color, mean: readonly [number, number, number]): Color {
+  return new Color().setRGB(
+    Math.min(swatch.r / Math.max(mean[0], 1e-3), 4),
+    Math.min(swatch.g / Math.max(mean[1], 1e-3), 4),
+    Math.min(swatch.b / Math.max(mean[2], 1e-3), 4),
+  );
+}
+
+/** The roughness a textured material is set to so the map's average is the finish's roughness. */
+export function calibratedRoughness(roughness: number, meanRoughness: number): number {
+  return Math.min(roughness / Math.max(meanRoughness, 1e-3), 2);
+}
+
+/**
+ * Dresses a flat material in a set from the 3D library once the set has loaded, in place — the same
+ * object every mesh already holds, so nothing re-renders and nothing waits. A set that never arrives
+ * leaves the material exactly as it was.
+ *
+ * **The finish's numbers stay the truth.** The albedo was packed to a known mean and the catalogue
+ * records the mean it measured, so the colour is set to `swatch ÷ mean` channel by channel: the
+ * textured surface *averages* to the swatch the user chose, and the photograph is only the grain round
+ * it. Roughness the same way, through the ORM's green channel. Metalness is left as the finish's own
+ * number, because every finish here is uniformly metal or not; ambient occlusion comes from the red.
+ *
+ * `detailOnly` skips the colour even where the set has one; `channel` 1 reads the maps through the
+ * mesh's second UV set, which is how a floor takes relief under the plan painter's raster.
+ */
+function dress(
+  material: MeshStandardMaterial,
+  key: PbrSetId,
+  {
+    colour,
+    roughness,
+    detailOnly = false,
+    channel = 0,
+  }: {
+    colour: Color;
+    roughness: number;
+    detailOnly?: boolean;
+    channel?: 0 | 1;
+  },
+): void {
+  void pbrSet(key)
+    .start()
+    .then((set: PbrSet | null) => {
+      if (!set) return;
+      const read = (texture: Texture) => (channel === 1 ? secondChannel(texture) : texture);
+      const mean = set.entry.meanLinearColour;
+      if (!detailOnly && set.albedo && mean) {
+        material.map = read(set.albedo);
+        material.color.copy(calibratedColour(colour, mean));
+      }
+      material.normalMap = read(set.normal);
+      const scale = NORMAL_SCALE[key];
+      material.normalScale.set(scale, scale);
+      material.roughnessMap = read(set.orm);
+      material.roughness = calibratedRoughness(roughness, set.entry.meanRoughness);
+      material.aoMap = read(set.orm);
+      material.needsUpdate = true;
+    });
+}
 
 /**
  * A structure finish as a physically based three.js material — the only place renderer values are
@@ -26,21 +95,28 @@ import { structureFinish, type StructureFinishId } from '@garden-studio/schema';
  * material rather than thirty; three.js batches state changes by material, and a cache miss per frame
  * would allocate. Never disposed, because there are about ten of them for the life of the page.
  */
-const cache = new Map<StructureFinishId, Material>();
+const cache = new Map<string, Material>();
 
-export function materialForFinish(id: StructureFinishId): Material {
-  const cached = cache.get(id);
+export function materialForFinish(
+  id: StructureFinishId,
+  { detail = true }: { detail?: boolean } = {},
+): Material {
+  const key = `${id}:${detail ? 'detail' : 'flat'}`;
+  const cached = cache.get(key);
   if (cached) return cached;
 
   const finish = structureFinish(id);
   const color = new Color(finish.baseColor);
-  let material: Material;
+  let material: MeshStandardMaterial;
 
   if (finish.opacity !== undefined) {
     /*
-     * A translucent roof panel: physical rather than standard so it can transmit a little light
-     * rather than only fading. Double-sided, because it is seen from underneath at least as often
-     * as from above, and depth-write off so the frame behind it is not punched out.
+     * A translucent roof panel: physical rather than standard for the clear coat, which gives the
+     * sheet the sheen of the sky that says "polycarbonate" rather than "frosted plastic". Not
+     * transmission: that renders the whole opaque scene a second time every frame to refract it, for
+     * a panel that is diffusing rather than clear, and plain transparency reads the same. Double-sided,
+     * because it is seen from underneath at least as often as from above, and depth-write off so the
+     * frame behind it is not punched out.
      */
     material = new MeshPhysicalMaterial({
       color,
@@ -48,10 +124,14 @@ export function materialForFinish(id: StructureFinishId): Material {
       metalness: finish.metalness,
       transparent: true,
       opacity: finish.opacity,
-      transmission: 0.25,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.15,
       side: DoubleSide,
       depthWrite: false,
     });
+    // The ribs through a twin-wall sheet: relief only, the sheet's colour is its own.
+    if (detail)
+      dress(material, PANEL_SET, { colour: color, roughness: finish.roughness, detailOnly: true });
   } else {
     material = new MeshStandardMaterial({
       color,
@@ -61,9 +141,36 @@ export function materialForFinish(id: StructureFinishId): Material {
         ? { emissive: new Color(finish.emissive), emissiveIntensity: 2.2, toneMapped: false }
         : {}),
     });
+    if (detail && finish.texture) {
+      dress(material, finish.texture.key as PbrSetId, {
+        colour: color,
+        roughness: finish.roughness,
+      });
+    }
   }
 
-  cache.set(id, material);
+  cache.set(key, material);
+  return material;
+}
+
+/**
+ * Galvanised steel: the post shoe a timber post stands in (`partGeometry`'s second geometry group).
+ * Not a finish anyone chooses — it is what the frame is fixed with — so it lives here rather than in
+ * `STRUCTURE_FINISHES`. Its satin film is the powder-coat set's orange peel turned down, which is near
+ * enough to galvanising's spangle at the size a shoe is seen.
+ */
+export function hardwareMaterial({ detail = true }: { detail?: boolean } = {}): Material {
+  const cacheKey = detail ? 'hardware' : 'hardware:flat';
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const colour = new Color('#9ea2a3');
+  const material = new MeshStandardMaterial({
+    color: colour.clone(),
+    roughness: 0.42,
+    metalness: 0.85,
+  });
+  if (detail) dress(material, 'powder-coat', { colour, roughness: 0.42 });
+  cache.set(cacheKey, material);
   return material;
 }
 
@@ -84,36 +191,6 @@ const CONTEXT_MUTE = 0.08;
 const CONTEXT_TINT = new Color('#ffffff').lerp(new Color(CONTEXT_BACKGROUND), CONTEXT_MUTE * 1.4);
 
 const contextCache = new Map<string, Material>();
-
-/**
- * A ground surface around the structure: the plan's own texture where it has one, tiled in world
- * metres (the geometry's UVs are metres over the tile size, so the texture repeats once per UV unit),
- * or its flat colour; softly muted either way, and matt.
- *
- * Cached per material and texture for the life of the page, like the finishes: a garden has a
- * dozen ground materials, not a thousand.
- */
-export function contextSurfaceMaterial(key: string, texture: Texture | null, colour: string): Material {
-  const cacheKey = `surface:${key}:${texture ? texture.uuid : 'flat'}`;
-  const cached = contextCache.get(cacheKey);
-  if (cached) return cached;
-
-  let material: MeshStandardMaterial;
-  if (texture) {
-    // A clone, because `useTexture` hands one texture per URL to the whole page.
-    const map = texture.clone();
-    map.wrapS = RepeatWrapping;
-    map.wrapT = RepeatWrapping;
-    map.colorSpace = SRGBColorSpace;
-    map.anisotropy = 8;
-    map.needsUpdate = true;
-    material = new MeshStandardMaterial({ map, color: CONTEXT_TINT.clone(), roughness: 1 });
-  } else {
-    material = new MeshStandardMaterial({ color: muted(colour), roughness: 1 });
-  }
-  contextCache.set(cacheKey, material);
-  return material;
-}
 
 /** A solid around the structure — a fence, a wall, a shed, a canopy — in a muted flat tone. */
 export function contextSolidMaterial(colour: string, roughness = 0.9): Material {
@@ -145,7 +222,11 @@ export function rasterSurfaceMaterial(canvas: HTMLCanvasElement): {
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 8;
   texture.needsUpdate = true;
-  const material = new MeshStandardMaterial({ map: texture, color: CONTEXT_TINT.clone(), roughness: 0.95 });
+  const material = new MeshStandardMaterial({
+    map: texture,
+    color: CONTEXT_TINT.clone(),
+    roughness: 0.95,
+  });
   return { material, texture };
 }
 
@@ -198,11 +279,14 @@ export function furnitureMaterial(materialId: string | undefined): Material {
   const cacheKey = `furniture:${materialId ?? 'teak-furniture'}`;
   const cached = contextCache.get(cacheKey);
   if (cached) return cached;
+  const colour = new Color(tone.colour);
   const material = new MeshStandardMaterial({
-    color: new Color(tone.colour),
+    color: colour.clone(),
     roughness: tone.roughness,
     metalness: tone.metalness,
   });
+  const set = FURNITURE_SETS[materialId ?? 'teak-furniture'];
+  if (set) dress(material, set, { colour, roughness: tone.roughness });
   contextCache.set(cacheKey, material);
   return material;
 }
@@ -210,11 +294,38 @@ export function furnitureMaterial(materialId: string | undefined): Material {
 /** The colour a picked-up piece is outlined in: the editor's own selection green. */
 export const PIECE_OUTLINE = '#2f7a4f';
 
-/** Seat pads and cushions: an outdoor fabric, the same on every piece so a set reads as a set. */
-export function cushionMaterial(): Material {
-  const cached = contextCache.get('cushion');
+/**
+ * Seat pads and cushions: an outdoor fabric, the same on every piece so a set reads as a set. Woven
+ * in the pieces inside the structure being edited; plain on furniture in the surroundings, which
+ * are context and stay flat.
+ */
+export function cushionMaterial({ detail = true }: { detail?: boolean } = {}): Material {
+  const cacheKey = detail ? 'cushion' : 'cushion:flat';
+  const cached = contextCache.get(cacheKey);
   if (cached) return cached;
-  const material = new MeshStandardMaterial({ color: new Color('#ddd6c8'), roughness: 0.95 });
-  contextCache.set('cushion', material);
+  const colour = new Color('#ddd6c8');
+  const material = new MeshStandardMaterial({ color: colour.clone(), roughness: 0.95 });
+  if (detail) dress(material, CUSHION_SET, { colour, roughness: 0.95 });
+  contextCache.set(cacheKey, material);
   return material;
+}
+
+/**
+ * The floor laid inside a structure: the plan painter's raster for its colour and joints, and the
+ * floor's own roughness — porcelain is not stone — with relief from the library under it, read
+ * through the mesh's `uv1` in metres. The raster material is the caller's (it disposes it with the
+ * surface); this only dresses it.
+ */
+export function dressFloor(material: MeshStandardMaterial, floor: string): void {
+  const detail = FLOOR_DETAIL[floor];
+  if (!detail) return;
+  material.roughness = detail.roughness;
+  if (detail.set) {
+    dress(material, detail.set, {
+      colour: material.color.clone(),
+      roughness: detail.roughness,
+      detailOnly: true,
+      channel: 1,
+    });
+  }
 }

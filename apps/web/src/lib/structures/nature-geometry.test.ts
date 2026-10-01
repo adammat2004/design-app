@@ -1,19 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { BufferGeometry } from 'three';
+import { localFrame, type DesignElement, type SiteSection } from '@garden-studio/schema';
 import {
-  elementOutline,
-  localFrame,
-  type DesignElement,
-  type SiteSection,
-} from '@garden-studio/schema';
-import { resolveLayers } from '../materials/layers';
-import { resolvePattern } from '../materials/palette';
-import { buildPlants } from '../render/plants';
-import {
-  bedPlants,
   broadleafCrown,
   coniferCrown,
-  postsAlong,
   shrubCrown,
   treeShape,
   tuftGeometry,
@@ -28,25 +18,6 @@ const pergola = (rotation = 0): DesignElement => ({
   zone: 'back',
   shape: { kind: 'rect', centre: { x: 10, y: 10 }, width: 3, depth: 3, rotation },
 });
-
-const border: DesignElement = {
-  id: 'bed-1',
-  category: 'planting-bed',
-  role: 'fill',
-  fillKind: 'accent',
-  zone: 'back',
-  material: 'mixed-border',
-  shape: {
-    kind: 'polygon',
-    cornerRadius: 0,
-    points: [
-      { x: 12, y: 8 },
-      { x: 15, y: 8 },
-      { x: 15, y: 13 },
-      { x: 12, y: 13 },
-    ],
-  },
-};
 
 function extent(geometry: BufferGeometry) {
   geometry.computeBoundingBox();
@@ -78,52 +49,6 @@ describe('crowns', () => {
     expect(shape.stems[0]!.height).toBeGreaterThan(shape.crown.y - shape.crown.up);
     expect(treeShape('yew', 'tree-evergreen', 1.6, 6, 0.2).form).toBe('conifer');
     expect(treeShape('birch', 'tree-multistem', 1.75, 4, 0.2).stems).toHaveLength(3);
-  });
-});
-
-describe('the plants in a bed', () => {
-  /** A bed in 3D is planted exactly as the plan plants it. */
-  it('stand where the plan’s own planting puts them, turned into the structure’s frame', () => {
-    for (const rotation of [0, 30]) {
-      const frame = localFrame(pergola(rotation))!;
-      const found = bedPlants(border, [border], frame, 50);
-      const material = resolvePattern(border.material)!;
-      const planned = buildPlants(
-        border,
-        resolveLayers(material, border),
-        elementOutline(border),
-        [],
-      );
-      expect(found.length).toBe(planned.length);
-      const first = planned[0]!;
-      const local = frame.toLocal(first.at);
-      const match = found.find((plant) => plant.id === first.id)!;
-      expect(match.at.x).toBeCloseTo(local.x);
-      expect(match.at.z).toBeCloseTo(local.z);
-      expect(match.spread).toBe(first.spread);
-    }
-  });
-
-  it('are cut to the window', () => {
-    const frame = localFrame(pergola())!;
-    const all = bedPlants(border, [border], frame, 50);
-    const near = bedPlants(border, [border], frame, 3);
-    expect(near.length).toBeGreaterThan(0);
-    expect(near.length).toBeLessThan(all.length);
-    for (const plant of near)
-      expect(Math.abs(plant.at.x) - plant.spread / 2).toBeLessThanOrEqual(3);
-  });
-});
-
-describe('a boundary’s posts', () => {
-  it('stand at both ends and no further apart than the spacing', () => {
-    const posts = postsAlong(
-      { start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, inward: { x: 0, z: 1 } },
-      1.8,
-    );
-    expect(posts[0]).toEqual({ x: 0, z: 0 });
-    expect(posts.at(-1)).toEqual({ x: 5, z: 0 });
-    expect(posts).toHaveLength(4);
   });
 });
 

@@ -4,7 +4,12 @@ import { PLAN_DOCUMENT_VERSION, readPlanDocument } from '../document.js';
 import { heightFor } from '../heights.js';
 import { mergeStructureConfig, STRUCTURE_SIDES } from './config.js';
 import { resolveStructure, STRUCTURE_DEFINITIONS, structureDefinitionFor } from './definitions.js';
-import { isStructureFinish, STRUCTURE_FINISHES } from './finishes.js';
+import {
+  isStructureFinish,
+  STRUCTURE_FINISHES,
+  structureFinish,
+  type StructureFinishId,
+} from './finishes.js';
 import { partHeights, partPlanOutline, structureParts, type StructurePart } from './parts.js';
 import { structureSymbolNamed } from '../symbols.js';
 
@@ -321,7 +326,22 @@ describe('finishes', () => {
       expect(finish.roughness, id).toBeLessThanOrEqual(1);
       expect(finish.metalness, id).toBeGreaterThanOrEqual(0);
       expect(finish.metalness, id).toBeLessThanOrEqual(1);
+      const texture = structureFinish(id as StructureFinishId).texture;
+      if (texture) {
+        // `ARMaterial.texture`'s shape exactly: a key naming a set, never a file, and a real size.
+        expect(Object.keys(texture).sort(), id).toEqual(['key', 'tileSizeM']);
+        expect(texture.key, id).toMatch(/^[a-z-]+$/);
+        expect(texture.tileSizeM, id).toBeGreaterThan(0);
+      }
     }
+  });
+
+  it('gives every timber and metal frame a texture, and the translucent roof and the light none', () => {
+    for (const id of ['softwood', 'painted-timber', 'dark-stained-timber', 'hardwood', 'aluminium-dark'] as const) {
+      expect(structureFinish(id).texture, id).toBeDefined();
+    }
+    expect(structureFinish('polycarbonate-opal').texture).toBeUndefined();
+    expect(structureFinish('warm-led').texture).toBeUndefined();
   });
 });
 

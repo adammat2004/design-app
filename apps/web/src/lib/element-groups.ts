@@ -21,6 +21,7 @@ export const GROUP_OF: Record<ElementCategory, ElementGroup> = {
   furniture: 'feature',
   lighting: 'feature',
   'existing-feature': 'feature',
+  enclosure: 'hardscape',
 };
 
 export const GROUP_LABELS: Record<ElementGroup, string> = {

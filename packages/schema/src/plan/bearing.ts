@@ -2,9 +2,9 @@ import {
   distanceToSegment,
   normaliseDegrees,
   polygonEdges,
-  type DesignElement,
   type Point,
-} from '@garden-studio/schema';
+} from '../geometry/primitives.js';
+import type { DesignElement } from './concepts.js';
 
 /**
  * Which way a thing runs, in degrees clockwise.
@@ -13,6 +13,9 @@ import {
  * and it is computed inside the generator's design frame, which the assistant's planner does not
  * have. So "square it to the house" and "line it up with the fence" were questions nothing could
  * answer, and `align` is unperformable in both repair layers because of it.
+ *
+ * Lives in the shared package, having moved from the API's design layer, because the editor's
+ * rotation snap asks the same question: which way does the nearest wall run.
  *
  * Everything here is pure and takes rings the caller already has. It reads *what is nearest*, which
  * is the honest reading of the request: "square to the house" on an L-shaped building means square

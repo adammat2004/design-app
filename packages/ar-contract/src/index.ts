@@ -6,3 +6,4 @@ export * from './coordinates.js';
 export * from './vocabulary.js';
 export * from './scene.js';
 export * from './mesh-helpers.js';
+export * from './model-library.js';

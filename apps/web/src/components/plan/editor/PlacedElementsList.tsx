@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react';
 import { associatePlants } from '@garden-studio/schema';
-import { Eye, EyeOff, Lock } from 'lucide-react';
+import { Eye, EyeOff, Lock, LockOpen } from 'lucide-react';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
-import { elementArea, isLocked, type DesignElement } from '@/lib/concepts';
+import { elementArea, isGroundLayer, isLocked, isUserLocked, type DesignElement } from '@/lib/concepts';
 import { groupElements } from '@/lib/element-groups';
 import { formatArea } from '@/lib/units';
 import { useBoundaryStore } from '@/state/boundary-store';
@@ -21,7 +21,7 @@ import { EditorIcon } from './EditorIcon';
  */
 export function PlacedElementsList() {
   const elements = usePlanEditorStore((state) => state.present.elements);
-  const selectedId = usePlanEditorStore((state) => state.selectedId);
+  const selectedIds = usePlanEditorStore((state) => state.selectedIds);
   const unit = useBoundaryStore((state) => state.unit);
 
   const associated = useMemo(() => associatePlants(elements), [elements]);
@@ -57,7 +57,7 @@ export function PlacedElementsList() {
                   <ul>
                     <ElementRow
                       element={element}
-                      selected={element.id === selectedId}
+                      selected={selectedIds.includes(element.id)}
                       unit={unit}
                     />
                   </ul>
@@ -73,7 +73,7 @@ export function PlacedElementsList() {
                             <ElementRow
                               key={plant.id}
                               element={plant}
-                              selected={plant.id === selectedId}
+                              selected={selectedIds.includes(plant.id)}
                               unit={unit}
                             />
                           ))}
@@ -123,6 +123,8 @@ function ElementRow({
 }) {
   const select = usePlanEditorStore((state) => state.select);
   const toggleHidden = usePlanEditorStore((state) => state.toggleHidden);
+  const toggleLocked = usePlanEditorStore((state) => state.toggleLocked);
+  const userLocked = isUserLocked(element);
 
   const area = elementArea(element);
   const locked = isLocked(element);
@@ -141,7 +143,8 @@ function ElementRow({
       <button
         type="button"
         aria-pressed={selected}
-        onClick={() => select(element.id)}
+        /* Shift-click adds a row to the selection, as it does on the plan. */
+        onClick={(event) => select(element.id, { additive: event.shiftKey })}
         className={[
           'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left',
           'focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
@@ -155,13 +158,38 @@ function ElementRow({
             {formatArea(area, unit)}
           </span>
         ) : null}
-        {locked ? (
+        {locked && isGroundLayer(element) ? (
           <Lock
             aria-label="Ground layer — material only"
             className="h-3 w-3 shrink-0 text-garden-muted"
           />
         ) : null}
       </button>
+
+      {/*
+        The user's own lock, beside the eye. Shown dimmed when off so it can be found, and solid when
+        on, because a locked terrace is something to be able to see at a glance in a long list.
+      */}
+      {!isGroundLayer(element) ? (
+        <button
+          type="button"
+          data-testid={`toggle-lock-${element.id}`}
+          aria-pressed={userLocked}
+          aria-label={userLocked ? `Unlock ${rowLabel(element)}` : `Lock ${rowLabel(element)}`}
+          title={userLocked ? 'Locked — click to unlock' : 'Lock: hold it still, and keep the designer off it'}
+          onClick={() => toggleLocked([element.id])}
+          className={[
+            'shrink-0 rounded-md p-1 hover:bg-garden-sage hover:text-garden-forest focus-visible:ring-2 focus-visible:ring-garden-green focus-visible:outline-none',
+            userLocked ? 'text-garden-forest' : 'text-garden-muted/50',
+          ].join(' ')}
+        >
+          {userLocked ? (
+            <Lock aria-hidden className="h-3.5 w-3.5" />
+          ) : (
+            <LockOpen aria-hidden className="h-3.5 w-3.5" />
+          )}
+        </button>
+      ) : null}
 
       <button
         type="button"

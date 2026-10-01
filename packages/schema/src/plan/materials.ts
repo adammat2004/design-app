@@ -34,6 +34,14 @@ export const MaterialIdSchema = z.enum([
   'ornamental-grasses',
   'hedging',
   'ground-cover',
+  // planting-bed: named mixes of species — see `plants/mixes.ts`
+  'mix-shade-woodland',
+  'mix-sunny-gravel',
+  'mix-pollinator',
+  'mix-cottage-border',
+  'mix-prairie-grasses',
+  'mix-evergreen-structure',
+  'mix-low-maintenance',
   // gravel-mulch
   'bark-mulch',
   'decorative-gravel',
@@ -72,6 +80,17 @@ export const MaterialIdSchema = z.enum([
   'steel-furniture',
   // existing-feature
   'existing',
+  // enclosure
+  'closeboard-fence',
+  'hit-and-miss-fence',
+  'slatted-screen',
+  'brick-garden-wall',
+  'rendered-garden-wall',
+  'stone-garden-wall',
+  'hedge-planting',
+  'metal-railing',
+  'kerb-line',
+  'open-boundary',
 ]);
 export type MaterialId = z.infer<typeof MaterialIdSchema>;
 
@@ -80,7 +99,20 @@ export interface Material {
   label: string;
   /** Rough relative cost, 1 (cheapest) to 4. Drives "make it cheaper" and, later, costing. */
   cost: 1 | 2 | 3 | 4;
+  /**
+   * How it is bought, where the category alone does not say: by the square metre (the default for
+   * a surface), the metre, the item or the cubic metre. `measureOf` resolves the absent case.
+   */
+  measure?: MaterialMeasure;
+  /**
+   * How deep a loose fill is laid, in millimetres — what turns 12 m² of gravel into the 0.6 m³ a
+   * builders' merchant sells it by. A typical depth for the material, not the user's; nothing here
+   * is a specification.
+   */
+  depthMm?: number;
 }
+
+export type MaterialMeasure = 'area' | 'length' | 'count' | 'volume';
 
 /**
  * The first entry in each list is that category's default — `defaultMaterial` reads it from here
@@ -92,7 +124,7 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'concrete', label: 'Concrete', cost: 2 },
     { id: 'porcelain', label: 'Porcelain tiles', cost: 4 },
     { id: 'stone-setts', label: 'Stone setts', cost: 3 },
-    { id: 'gravel-paving', label: 'Gravel', cost: 1 },
+    { id: 'gravel-paving', label: 'Gravel', cost: 1, measure: 'volume', depthMm: 50 },
     { id: 'timber-decking', label: 'Timber decking', cost: 3 },
     { id: 'stepping-stones', label: 'Stepping stones', cost: 2 },
   ],
@@ -108,12 +140,20 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'ornamental-grasses', label: 'Ornamental grasses', cost: 2 },
     { id: 'hedging', label: 'Hedging', cost: 3 },
     { id: 'ground-cover', label: 'Ground cover', cost: 1 },
+    { id: 'mix-shade-woodland', label: 'Shade woodland mix', cost: 3 },
+    { id: 'mix-sunny-gravel', label: 'Sunny gravel mix', cost: 2 },
+    { id: 'mix-pollinator', label: 'Pollinator mix', cost: 2 },
+    { id: 'mix-cottage-border', label: 'Cottage border mix', cost: 3 },
+    { id: 'mix-prairie-grasses', label: 'Prairie grasses mix', cost: 2 },
+    { id: 'mix-evergreen-structure', label: 'Evergreen structure mix', cost: 3 },
+    { id: 'mix-low-maintenance', label: 'Low-maintenance mix', cost: 2 },
   ],
   'gravel-mulch': [
-    { id: 'bark-mulch', label: 'Bark mulch', cost: 1 },
-    { id: 'decorative-gravel', label: 'Decorative gravel', cost: 2 },
-    { id: 'play-bark', label: 'Play-grade bark', cost: 2 },
-    { id: 'slate-chippings', label: 'Slate chippings', cost: 3 },
+    /* Loose fill, bought by the cubic metre at a laid depth. Play bark is deep for a soft landing. */
+    { id: 'bark-mulch', label: 'Bark mulch', cost: 1, measure: 'volume', depthMm: 75 },
+    { id: 'decorative-gravel', label: 'Decorative gravel', cost: 2, measure: 'volume', depthMm: 50 },
+    { id: 'play-bark', label: 'Play-grade bark', cost: 2, measure: 'volume', depthMm: 300 },
+    { id: 'slate-chippings', label: 'Slate chippings', cost: 3, measure: 'volume', depthMm: 50 },
   ],
   structure: [
     { id: 'softwood', label: 'Treated softwood', cost: 1 },
@@ -158,6 +198,23 @@ export const MATERIALS: Record<ElementCategory, Material[]> = {
     { id: 'black-aluminium', label: 'Powder-coated black', cost: 2 },
     { id: 'brushed-steel', label: 'Brushed stainless steel', cost: 3 },
     { id: 'antique-brass', label: 'Solid brass', cost: 4 },
+  ],
+  /*
+   * Bought by the metre, and each named for what is built rather than for the product family, so a
+   * schedule line reads "Close-board fence — 14.2 m". A kind's `materials` list says which of these
+   * each kind may be; `open-boundary` is the taking-away of what was there and costs nothing to buy.
+   */
+  enclosure: [
+    { id: 'closeboard-fence', label: 'Close-board fence', cost: 2, measure: 'length' },
+    { id: 'hit-and-miss-fence', label: 'Hit-and-miss fence', cost: 2, measure: 'length' },
+    { id: 'slatted-screen', label: 'Slatted cedar screen', cost: 3, measure: 'length' },
+    { id: 'brick-garden-wall', label: 'Brick garden wall', cost: 4, measure: 'length' },
+    { id: 'rendered-garden-wall', label: 'Rendered block wall', cost: 3, measure: 'length' },
+    { id: 'stone-garden-wall', label: 'Stone garden wall', cost: 4, measure: 'length' },
+    { id: 'hedge-planting', label: 'Hedging', cost: 1, measure: 'length' },
+    { id: 'metal-railing', label: 'Metal railing', cost: 3, measure: 'length' },
+    { id: 'kerb-line', label: 'Concrete kerb', cost: 2, measure: 'length' },
+    { id: 'open-boundary', label: 'Opened boundary', cost: 1, measure: 'length' },
   ],
   'water-feature': [
     { id: 'naturalistic-pond', label: 'Naturalistic pond', cost: 2 },
@@ -276,4 +333,16 @@ export function cheaperAlternative(element: DesignElement): Material | null {
 
   // The dearest of the cheaper options — a saving, not a race to the bottom.
   return cheaper.at(-1) ?? null;
+}
+
+/**
+ * How a material is bought: its own `measure` where it states one, else what its category is
+ * measured in — items for things counted (furniture, lighting), square metres for everything else.
+ * Edging is by the metre and is resolved through its runs, not here.
+ */
+export function measureOf(material: Material | undefined, category: ElementCategory): MaterialMeasure {
+  if (material?.measure) return material.measure;
+  if (category === 'furniture' || category === 'lighting') return 'count';
+  if (category === 'enclosure') return 'length';
+  return 'area';
 }

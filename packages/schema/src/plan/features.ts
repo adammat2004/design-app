@@ -5,6 +5,7 @@ import {
   polygonCentroid,
   polygonContainsPolygon,
   polygonsIntersect,
+  polylineCoveredBy,
   PointSchema,
   type Point,
 } from '../geometry/primitives.js';
@@ -98,6 +99,18 @@ export const PlacedFeatureSchema = z.object({
   status: FeatureStatusSchema,
   /** Only meaningful while `status` is 'replace'. Free text, e.g. "Deck". */
   replaceWith: z.string().nullable().default(null),
+  /*
+   * What a kept thing is like, where the user says. A 7 m oak and a 1 m shrub are both a "tree"
+   * dropped on step 2, and without a height the plan casts, screens and counts canopy for neither —
+   * the oak became a metre-high disc. All optional: a feature nobody described is carried over as
+   * it always was.
+   */
+  /** Metres. What it stands to — a tree's crown, a fence's top. */
+  height: z.number().positive().max(40).optional(),
+  /** Metres across, for a tree or a shrub: its crown. Drawn as the point's radius when given. */
+  spread: z.number().positive().max(40).optional(),
+  /** A tree's species, from `PLANT_SPECIES`, which supplies a height and a spread when none is typed. */
+  plantId: z.string().optional(),
 });
 export type PlacedFeature = z.infer<typeof PlacedFeatureSchema>;
 
@@ -283,6 +296,9 @@ export function geometryClearsHouse(geometry: PlanGeometry, housePolygon: Point[
  */
 export function geometryFitsInside(geometry: PlanGeometry, boundary: Point[]): boolean {
   if (boundary.length < 3) return true;
+
+  /* A line with no width is a centreline — an enclosure's — and is judged as a line. */
+  if (geometry.kind === 'polyline' && geometry.width === 0) return polylineCoveredBy(boundary, geometry.points);
 
   return polygonContainsPolygon(boundary, geometryOutline(geometry));
 }

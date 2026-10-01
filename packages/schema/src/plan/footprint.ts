@@ -73,6 +73,15 @@ export function trunkFootprint(canopy: PlanGeometry): PlanGeometry {
 }
 
 export function legalFootprint(element: DesignElement): PlanGeometry {
+  /*
+   * An enclosure is judged on its centreline, the way a tree is judged on its trunk. A fence laid on
+   * the fence line straddles it by half its thickness — which is where fences are built — and a
+   * test of its band would call every one of them half outside the plot. A line of no width is what
+   * `geometryFitsInside` and the server's validator both read as a line.
+   */
+  if (element.category === 'enclosure' && element.shape.kind === 'polyline') {
+    return { ...element.shape, width: 0 };
+  }
   if (!isCanopy(element)) return element.shape;
 
   return trunkFootprint(element.shape);

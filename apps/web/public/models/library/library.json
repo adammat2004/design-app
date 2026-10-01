@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "gazebo-classic-dark-stained-3x3",
+      "file": "models/library/gazebo-classic-dark-stained-3x3.glb",
+      "thumbnail": "models/library/gazebo-classic-dark-stained-3x3.webp",
+      "bytes": 1231500,
+      "sha256": "d3b33ca33e37b9996d0777cd19d6ad3ff98e3e4afb6e6bf2062ca4fbaf308c6a",
+      "triangles": 12383,
+      "maxTexturePx": 1024,
+      "depicts": {
+        "symbol": "gazebo",
+        "structure": {
+          "model": "classic",
+          "roofKind": "hipped",
+          "roofFinish": "shingle-dark",
+          "frame": "dark-stained-timber",
+          "sides": {
+            "left": "open",
+            "right": "open",
+            "rear": "open"
+          },
+          "lighting": false
+        },
+        "material": null,
+        "style": null
+      },
+      "naturalSize": [
+        2.9976,
+        2.9044,
+        3
+      ],
+      "pivot": "base-centre",
+      "up": "+y",
+      "front": "+z",
+      "fit": {
+        "tolerance": 0.15,
+        "turnable": true
+      },
+      "familyId": "gazebo-classic-3x3",
+      "source": {
+        "provider": "meshy",
+        "endpoint": "image-to-3d",
+        "taskId": "01a0f435-721c-713c-85c2-bef09aade630",
+        "aiModel": "meshy-7.1",
+        "credits": 30,
+        "specHash": "6b5de0fc48676c032c0ee48100f1fb0970ffe6d6b4c67c9ee38944f877856e0e",
+        "specVersion": "1.0",
+        "referenceSha256": "af29429e8dab1ed3b3e9549e1ade3835a0e11a285a721ad1295467bd2403ea19",
+        "generatedAt": "2026-09-30T21:27:32.139Z"
+      },
+      "licence": "meshy-paid-private",
+      "approvedAt": "2026-10-01T07:36:47.507Z"
+    },
+    {
+      "id": "gazebo-modern-aluminium-dark-3x3",
+      "file": "models/library/gazebo-modern-aluminium-dark-3x3.glb",
+      "thumbnail": "models/library/gazebo-modern-aluminium-dark-3x3.webp",
+      "bytes": 898792,
+      "sha256": "4fbb96dd0ab7ce5a6c3b6e77d07facc538a019ed9fa002bda3238b7fbfaf4c63",
+      "triangles": 7757,
+      "maxTexturePx": 1024,
+      "depicts": {
+        "symbol": "gazebo",
+        "structure": {
+          "model": "modern",
+          "roofKind": "solid",
+          "roofFinish": "aluminium-dark",
+          "frame": "aluminium-dark",
+          "sides": {
+            "left": "open",
+            "right": "open",
+            "rear": "slatted"
+          },
+          "lighting": true
+        },
+        "material": null,
+        "style": null
+      },
+      "naturalSize": [
+        3,
+        2.7,
+        2.946
+      ],
+      "pivot": "base-centre",
+      "up": "+y",
+      "front": "+z",
+      "fit": {
+        "tolerance": 0.15,
+        "turnable": false
+      },
+      "familyId": "gazebo-modern-aluminium-dark-3x3",
+      "heightStretch": 1.4466,
+      "source": {
+        "provider": "meshy",
+        "endpoint": "image-to-3d",
+        "taskId": "01a0f81b-7eb1-7553-865c-3b9d73ec20aa",
+        "aiModel": "meshy-7.1",
+        "credits": 30,
+        "specHash": "946f92cb3836090cc6aec4fb21dc4e0f10919fdfc7be7bf0f22e17b700cc28da",
+        "specVersion": "1.0",
+        "referenceSha256": "632a2c8f602ea3fd82f089e9a2e304a63a226b6f68ac40dd77eb4fe4408fe8f3",
+        "generatedAt": "2026-10-01T15:43:50.859Z"
+      },
+      "licence": "meshy-paid-private",
+      "approvedAt": "2026-10-01T15:43:50.877Z"
+    }
+  ]
+}

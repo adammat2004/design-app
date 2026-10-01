@@ -6,6 +6,7 @@ import { isPlantSymbol, type DesignElement } from '@garden-studio/schema';
 import {
   canopiesForSymbol,
   materialAssets,
+  speciesPin,
   SYMBOL_SPRITES,
 } from '@/lib/materials/assets/material-assets';
 import { catalogueEntry } from '@/lib/materials/assets/catalogue';
@@ -21,7 +22,13 @@ export function CatalogueThumbnail({
 }) {
   const gradientId = useId();
   let family: AssetId | undefined;
-  if (element.plantId || (element.symbol && isPlantSymbol(element.symbol))) {
+  let variant = 1;
+  /* A species is shown by its own picture — the one the plan draws it with. */
+  const pin = speciesPin(element.plantId);
+  if (pin) {
+    family = pin.family;
+    variant = pin.index + 1;
+  } else if (element.plantId || (element.symbol && isPlantSymbol(element.symbol))) {
     family =
       SYMBOL_SPRITES[element.symbol as keyof typeof SYMBOL_SPRITES] ??
       canopiesForSymbol(element.symbol, element.plantId)[0];
@@ -30,7 +37,7 @@ export function CatalogueThumbnail({
   }
   const material = element.material ? materialAssets(element.material) : undefined;
   if (!family && element.category !== 'structure') family = material?.face ?? material?.texture;
-  const asset = family ? catalogueEntry(family, 1) : null;
+  const asset = family ? (catalogueEntry(family, variant) ?? catalogueEntry(family, 1)) : null;
   if (asset)
     return (
       <Image

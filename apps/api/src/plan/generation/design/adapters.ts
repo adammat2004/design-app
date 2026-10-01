@@ -218,6 +218,7 @@ export function elementsFromPreview(
       shape: { kind: 'point', at: tree.at, radius: tree.radius },
       zone: zoneAt([tree.at]),
       symbol: tree.symbol,
+      ...tree.stamp,
       ...(tree.purpose ? { purpose: tree.purpose } : {}),
     });
   }

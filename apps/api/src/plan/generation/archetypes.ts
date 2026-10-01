@@ -359,6 +359,7 @@ export function fillPalette(
     furniture: ['lawn', 'planting-bed'],
     lighting: ['lawn', 'planting-bed'],
     'existing-feature': ['lawn', 'planting-bed'],
+    enclosure: ['lawn', 'planting-bed'],
   };
 
   /*
@@ -470,6 +471,11 @@ export function materialFor(
 
       case 'existing-feature':
         return 'existing';
+
+      /* The generator proposes no enclosures; asked anyway, a fence is the ordinary answer. */
+      case 'enclosure':
+        if (dear) return formal ? 'slatted-screen' : 'brick-garden-wall';
+        return 'closeboard-fence';
     }
   })();
 

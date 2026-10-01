@@ -36,8 +36,7 @@ import {
   CONTACT_SHADOW_SPRITE,
   LIGHT_POOL_SPRITE,
   materialAssets,
-  SYMBOL_SPRITES,
-} from './assets/material-assets';
+  SYMBOL_SPRITES, speciesPin } from './assets/material-assets';
 import type { AssetImage, LoadedAsset } from './assets/registry';
 import { isRecolourable } from './assets/taxonomy';
 import { SPRITE_TINT, tintSprite } from './sprite-tint';
@@ -295,9 +294,22 @@ export function drawScene(
    * constants and `grade.test.ts` pins the two applications to each other.
    */
   if (pass.grade !== false) {
+    /*
+     * Pixel reads ignore the context's transform, so the box is carried through it by hand. A sheet
+     * that translates to each frame and then draws would otherwise grade the canvas's top-left
+     * corner once per frame — the first frame of the lighting sheet came out black and yellow.
+     */
+    const matrix = (context as { getTransform?: () => DOMMatrix2DInit }).getTransform?.();
+    const device = (point: Point): Point =>
+      matrix
+        ? {
+            x: (matrix.a ?? 1) * point.x + (matrix.c ?? 0) * point.y + (matrix.e ?? 0),
+            y: (matrix.b ?? 0) * point.x + (matrix.d ?? 1) * point.y + (matrix.f ?? 0),
+          }
+        : point;
     const box = boundingBox(boundary);
-    const topLeft = toPx({ x: box.minX, y: box.minY });
-    const bottomRight = toPx({ x: box.minX + box.width, y: box.minY + box.length });
+    const topLeft = device(toPx({ x: box.minX, y: box.minY }));
+    const bottomRight = device(toPx({ x: box.minX + box.width, y: box.minY + box.length }));
     const x = Math.max(0, Math.floor(topLeft.x));
     const y = Math.max(0, Math.floor(topLeft.y));
 
@@ -497,7 +509,7 @@ export function drawOverlay(
   /* The house sits above the planting so a bed can run right up to the wall. */
   if (rendered.house) drawHouse(context, rendered.house, pass, pxPerMetre, toPx);
 
-  drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx);
+  drawFence(context, boundary, rendered.boundaryRuns, pxPerMetre, light, toPx, rendered.replacedRuns);
 
   drawAccess(context, site, pxPerMetre, toPx);
 
@@ -1077,6 +1089,7 @@ function drawCanopySprite(
     element.id,
     canopies.length,
     (variant) => canopies[variant]?.entry.opaqueRadiusRatio ?? 1,
+    speciesPin(element.plantId)?.index ?? null,
   );
   const sprite = canopies[box.variant]!;
 
@@ -1834,6 +1847,8 @@ function drawFence(
   pxPerMetre: number,
   light: Point,
   toPx: (point: Point) => Point,
+  /* The survey's stretches a proposal replaces, drawn as the dashed "to be removed" line. */
+  replaced: BoundaryRun[] = [],
 ): void {
   // The shade under the panels the sun is behind, clipped to the plot like everything else.
   context.save();
@@ -1855,9 +1870,24 @@ function drawFence(
    */
   const clockwise = ringIsClockwise(boundary);
 
+  context.save();
+  context.setLineDash?.([4, 3]);
+  context.lineWidth = 1;
+  context.strokeStyle = COLOUR.replacedBoundary;
+  for (const run of replaced) {
+    const from = toPx(run.start);
+    const to = toPx(run.end);
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  }
+  context.restore();
+
   for (const run of runs) {
     const palette = BOUNDARY_PALETTE[run.kind];
-    const inward = inwardNormal(run, clockwise);
+    /* A proposed run says which way it is laid; a survey side is worked out from the plot. */
+    const inward = run.inward ?? inwardNormal(run, clockwise);
     const bandPx = run.thickness * pxPerMetre;
     const asLine = palette.dashed || bandPx < MIN_BAND_PX;
 

@@ -228,7 +228,24 @@ export const useAssistantStore = create<AgentState>((set, get) => {
     const element = editor.present.elements.find((candidate) => candidate.id === id);
     if (!element) return null;
 
-    return { id, label: elementLabel(element) };
+    /*
+     * With several selected the message is about all of them, and the tag says so — "Patio and 2
+     * others" — while keeping the primary's id, which is what re-selecting from the tag selects.
+     */
+    const others = selectionIds().filter((candidate) => candidate !== id).length;
+    const label = others > 0 ? `${elementLabel(element)} and ${others} ${others === 1 ? 'other' : 'others'}` : elementLabel(element);
+    return { id, label };
+  }
+
+  /**
+   * Every selected id that still names something, the primary last, capped at the eight the request
+   * accepts. The server already resolves several, and tells the model "these" means this set.
+   */
+  function selectionIds(): string[] {
+    const editor = usePlanEditorStore.getState();
+    return editor.selectedIds
+      .filter((candidate) => editor.present.elements.some((element) => element.id === candidate))
+      .slice(-8);
   }
 
   /**
@@ -417,7 +434,7 @@ export const useAssistantStore = create<AgentState>((set, get) => {
        * selection could change under a slow save.
        */
       const about = focus();
-      const selection = about ? [about.id] : [];
+      const selection = about ? selectionIds() : [];
 
       const id = nextMessageId();
       set((state) => ({

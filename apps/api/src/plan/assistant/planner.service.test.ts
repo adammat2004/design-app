@@ -12,8 +12,10 @@ import {
   type PlanDocument,
   type PlanGeometry,
   structureDefinitionFor,
+  effectiveBoundaryRuns,
+  elementIsLegal,
 } from '@garden-studio/schema';
-import { offBearing } from '../generation/design/bearing.js';
+import { offBearing } from '@garden-studio/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlannerService } from './planner.service.js';
 import { FillService } from '../generation/fill.service.js';
@@ -182,6 +184,46 @@ describe.skipIf(connection === null)('PlannerService', () => {
    * A pergola is resized by the same rule the editor's size fields use: it keeps the side it is
    * against, and it names what is in the way rather than saying there is "no room".
    */
+  /**
+   * A user's lock holds against the designer entirely. One guard in the planner covers every verb, so
+   * this asks one of each family: a geometry change, a material, a removal, and the wholesale one.
+   */
+  describe('the user lock', () => {
+    const held = { ...patio, locked: true };
+
+    it('refuses to move, re-materialise or remove a locked element, and says why', async () => {
+      const intents: DesignIntent[] = [
+        { kind: 'move', target: { elementIds: ['e-1'] }, towards: 'house', away: false },
+        { kind: 'material', target: { elementIds: ['e-1'] }, materialId: 'gravel-paving' },
+        { kind: 'remove', target: { elementIds: ['e-1'] } },
+      ];
+      for (const intent of intents) {
+        const { changes, unplaceable } = await planner.plan(plan([held]), [intent]);
+        expect(changes).toEqual([]);
+        expect(unplaceable[0]!.reason).toContain('locked');
+      }
+    });
+
+    it('still acts on the unlocked elements named alongside it', async () => {
+      const other = element({
+        id: 'e-2',
+        name: 'Side path',
+        material: 'stone-pavers',
+        shape: { kind: 'rect', centre: { x: 3, y: 12 }, width: 2, depth: 2, rotation: 0 },
+      });
+      const { changes, unplaceable } = await planner.plan(plan([held, other]), [
+        { kind: 'material', target: { elementIds: ['e-1', 'e-2'] }, materialId: 'gravel-paving' },
+      ]);
+      expect(changes.map((change) => change.elementId)).toEqual(['e-2']);
+      expect(unplaceable).toHaveLength(1);
+    });
+
+    it('leaves a locked element out of a cheaper garden', async () => {
+      const { changes } = await planner.plan(plan([held]), [{ kind: 'reduce-cost', maxChanges: 5 }]);
+      expect(changes.some((change) => change.elementId === 'e-1')).toBe(false);
+    });
+  });
+
   describe('resizing a structure', () => {
     const pergola = (centre: { x: number; y: number }) =>
       element({
@@ -401,6 +443,77 @@ describe.skipIf(connection === null)('PlannerService', () => {
    * The honest refusal. A garden with no room left has to produce a reason the user can read, not a
    * silently missing change — and certainly not an invented position.
    */
+  // "Back" in this fixture is the metre-wide strip behind the house; the side is where trees fit.
+  it('adds trees by species name along a side, each in its own place', async () => {
+    const { changes, unplaceable } = await planner.plan(
+      plan([patio]),
+      [1, 2, 3].map(() => ({
+        kind: 'add' as const,
+        category: 'planting-bed' as const,
+        name: 'Hornbeam',
+        footprint: { kind: 'point' as const, radius: 1.5 },
+        zone: 'right' as const,
+        affinity: 'along-boundary' as const,
+      })),
+    );
+
+    expect(unplaceable.map((entry) => entry.reason)).toEqual([]);
+    expect(changes).toHaveLength(3);
+    for (const change of changes) {
+      expect(change.next).toMatchObject({ plantId: 'carpinus-betulus-fastigiata', symbol: 'tree-deciduous' });
+    }
+    // Three trees, three places: each add sees the ones before it.
+    const at = changes.map((change) => (change.next.shape.kind === 'point' ? change.next.shape.at : null)!);
+    for (let i = 0; i < at.length; i += 1)
+      for (let j = i + 1; j < at.length; j += 1)
+        expect(Math.hypot(at[i]!.x - at[j]!.x, at[i]!.y - at[j]!.y)).toBeGreaterThan(1);
+  });
+
+  it('lays a slatted screen on the fence beside the named area, as a screen', async () => {
+    const document = plan([patio]);
+    const { changes, unplaceable } = await planner.plan(document, [
+      {
+        kind: 'add',
+        category: 'enclosure',
+        name: 'Slatted screen',
+        footprint: { kind: 'strip', width: 0.1, depth: 0, radius: 0 } as never,
+        zone: 'left',
+        affinity: 'along-boundary',
+      },
+    ]);
+
+    expect(unplaceable).toEqual([]);
+    const screen = changes[0]!.next;
+    expect(screen).toMatchObject({
+      category: 'enclosure',
+      material: 'slatted-screen',
+      enclosure: { kind: 'screen' },
+      zone: 'left',
+      shape: { kind: 'polyline', width: 0.08 },
+    });
+    // On the fence line itself, so it replaces what the survey has there.
+    const ring = document.site.vertices.map(({ x, y }) => ({ x, y }));
+    const points = screen.shape.kind === 'polyline' ? screen.shape.points : [];
+    for (const point of points) expect(nearestOn(ring, point)).toBeLessThan(1e-6);
+    expect(elementIsLegal(screen, ring)).toBe(true);
+    expect(effectiveBoundaryRuns(document.site, [screen]).replaced.length).toBeGreaterThan(0);
+  });
+
+  it('plants a named hedge with its species', async () => {
+    const { changes } = await planner.plan(plan([patio]), [
+      {
+        kind: 'add',
+        category: 'enclosure',
+        name: 'Beech hedge',
+        footprint: { kind: 'strip', width: 0.6, depth: 0, radius: 0 } as never,
+        zone: 'back',
+        affinity: 'along-boundary',
+      },
+    ]);
+    expect(changes[0]!.next).toMatchObject({ enclosure: { kind: 'hedge' }, material: 'hedge-planting' });
+    expect(changes[0]!.next.plantId).toMatch(/fagus/);
+  });
+
   it('declines to add something that will not fit, and says why', async () => {
     const { changes, unplaceable } = await planner.plan(plan([patio]), [
       {

@@ -37,6 +37,11 @@ export const BoundaryKindSchema = z.enum([
   /** Metal railings or estate fencing: you can see through it, so the plan should too. */
   'railing',
   /**
+   * Horizontal slats with gaps — the modern garden's fence. Added with proposed enclosures, which
+   * draw through the same painter, and open to the survey too: somebody's side may be one already.
+   */
+  'screen',
+  /**
    * No enclosure at all — an open frontage, or a side that runs into a neighbour's lawn.
    *
    * Drawn as a dashed cadastral line rather than as nothing, because "the boundary is here and
@@ -77,7 +82,22 @@ export const BOUNDARY_HEIGHTS: Record<BoundaryKind, number> = {
   wall: 1.8,
   hedge: 1.9,
   railing: 1.1,
+  screen: 1.8,
   open: 0,
+};
+
+/**
+ * Metres between the uprights each kind is built with: a fence's posts, a wall's piers, a screen's
+ * wider bays, a railing's balusters, a hedge's crowns. `null` where nothing stands at intervals.
+ * The plan draws its posts at this pitch and the 3D scene stands them there, so the two agree.
+ */
+export const BOUNDARY_BAYS: Record<BoundaryKind, number | null> = {
+  fence: 1.8,
+  wall: 2.4,
+  hedge: 0.5,
+  railing: 0.3,
+  screen: 2.4,
+  open: null,
 };
 
 /** How thick each kind is on the ground, in metres — what the plan actually draws a band of. */
@@ -87,6 +107,7 @@ export const BOUNDARY_THICKNESS: Record<BoundaryKind, number> = {
   /** A boundary hedge is the one that takes real space, and users are always surprised by it. */
   hedge: 0.7,
   railing: 0.05,
+  screen: 0.08,
   open: 0,
 };
 

@@ -10,6 +10,7 @@ import type { Unit } from '../units';
 import type { RendererVersion } from '../render/primitives';
 import { getAssetVariants } from './assets/registry';
 import { drawPlan, type PlanContext, type PlanScene } from './render-plan';
+import { drawSheetFooter, FOOTER_HEIGHT_PX, legendEntries } from './sheet-chrome';
 import type { MakeCanvas, PatternCanvas } from './render-surface-pattern';
 
 /**
@@ -71,15 +72,21 @@ export interface ExportOptions {
   /** The editor's own shadows toggle, for the reason `labels` is here. */
   shadows?: boolean;
   rendererVersion?: RendererVersion;
+  /** The name in the title strip — the project's. */
+  title?: string;
+  /** The date in the title strip, already formatted. Defaults to today, in British order. */
+  date?: string;
 }
 
 /** Draws the scene into a fresh canvas and resolves to its PNG. */
 export async function exportPlanPng(scene: PlanScene, options: ExportOptions): Promise<Blob> {
   const box = boundingBox(scene.boundary);
   const width = Math.ceil(EXPORT_WIDTH_PX);
-  const height = Math.ceil(
+  const planHeight = Math.ceil(
     ((box.length + MARGIN_METRES * 2) / (box.width + MARGIN_METRES * 2)) * width,
   );
+  /* The plan, then the title strip under it — never over it, so it covers no corner of the garden. */
+  const height = planHeight + FOOTER_HEIGHT_PX;
 
   /* Drawn large, delivered small. See `SUPERSAMPLE`. */
   const pxPerMetre = (width * SUPERSAMPLE) / (box.width + MARGIN_METRES * 2);
@@ -114,6 +121,25 @@ export async function exportPlanPng(scene: PlanScene, options: ExportOptions): P
   if (options.labels) {
     drawLabels(context, scene.elements, options.unit, pxPerMetre, rasterOrigin);
   }
+
+  drawSheetFooter(
+    context,
+    {
+      left: 0,
+      top: planHeight * SUPERSAMPLE,
+      width: bigWidth,
+      height: FOOTER_HEIGHT_PX * SUPERSAMPLE,
+    },
+    {
+      title: options.title?.trim() || 'Garden plan',
+      date: options.date ?? new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      unit: options.unit,
+      pxPerMetre,
+      orientation: scene.site?.orientation ?? 0,
+      legend: legendEntries(scene.elements),
+    },
+    SUPERSAMPLE,
+  );
 
   /*
    * The downsample. One `drawImage` with smoothing on, which is the browser's own resampler and
@@ -221,12 +247,16 @@ function roundedRect(
 
 /** A file name the browser will accept, from the project's name. */
 export function planFileName(projectName: string): string {
-  const stem = projectName
+  return `${fileStem(projectName) || 'garden-plan'}.png`;
+}
+
+/** A plan's name as a file name: lower case, hyphens, nothing else. Empty when nothing is left. */
+export function fileStem(projectName: string): string {
+  return projectName
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `${stem || 'garden-plan'}.png`;
 }
 
 /** Exports and hands the PNG to the browser as a download. */
@@ -234,13 +264,17 @@ export async function downloadPlanPng(
   scene: PlanScene,
   options: ExportOptions & { fileName: string },
 ): Promise<void> {
-  const blob = await exportPlanPng(scene, options);
+  downloadBlob(await exportPlanPng(scene, options), options.fileName);
+}
+
+/** Hands a file to the browser as a download. */
+export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
 
   try {
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = options.fileName;
+    anchor.download = fileName;
     anchor.rel = 'noopener';
     document.body.append(anchor);
     anchor.click();

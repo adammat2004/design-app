@@ -1,21 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, RotateCcw, Trees, Undo2 } from 'lucide-react';
+import { matchLibraryAsset } from '@garden-studio/ar-builder';
 import {
   lightDirection,
   localFrame,
   resolveStructure,
-  structureNeighbourhood,
+  structureInterior,
+  PLAN_DOCUMENT_VERSION,
 } from '@garden-studio/schema';
 import { sunInFrame } from '@/lib/structures/sun-3d';
+import { previewCounts } from '@/lib/ar/preview';
+import { sceneOfPlan } from '@/lib/ar/scene';
+import { useEdgeRules } from '@/lib/edge-rules';
 import { webglAvailable } from '@/lib/structures/webgl';
+import { useLibraryModelsStatus, useModelLibrary } from '@/lib/structures/model-library';
+import { useCoarsePointer } from '@/lib/structures/coarse-pointer';
 import { tabForPart } from '@/lib/structures/part-tabs';
 import { formatLengthValue } from '@/lib/units';
 import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { StructureInspector, structureTabs, type InspectorRequest } from './StructureInspector';
-import { StructureViewport, type CameraPreset } from './StructureViewport';
+import { StructureViewport, type CameraPreset, type ViewportReport } from './StructureViewport';
 
 /**
  * The focused 3D editor for one structure: a large viewport and its settings, and nothing else.
@@ -36,19 +43,9 @@ const PRESETS: { id: CameraPreset; label: string }[] = [
 ];
 
 /*
- * A finger has one gesture and the orbit already has it, so on a coarse pointer the resize handles are
- * not drawn at all: the Size tab is the whole path there, as it is for a keyboard. A tap on a part
- * still opens its tab, because a tap is not a drag.
+ * On a coarse pointer the resize handles are not drawn at all: the Size tab is the whole path there,
+ * as it is for a keyboard. A tap on a part still opens its tab, because a tap is not a drag.
  */
-const COARSE = '(pointer: coarse)';
-function subscribeCoarse(onChange: () => void) {
-  const query = window.matchMedia?.(COARSE);
-  query?.addEventListener('change', onChange);
-  return () => query?.removeEventListener('change', onChange);
-}
-const coarseNow = () => window.matchMedia?.(COARSE).matches ?? false;
-const coarseOnServer = () => false;
-
 export function StructureWorkspace({ elementId }: { elementId: string }) {
   const element = usePlanEditorStore(
     (state) => state.present.elements.find((item) => item.id === elementId) ?? null,
@@ -75,29 +72,59 @@ export function StructureWorkspace({ elementId }: { elementId: string }) {
   const gestureSnapshot = usePlanEditorStore((state) => state.gestureSnapshot);
   const settled = gestureSnapshot?.elements ?? elements;
   const [surroundings, setSurroundings] = useState(true);
-  const neighbourhood = useMemo(
-    () => (element ? structureNeighbourhood(element, { elements: settled, site }) : null),
-    [element, settled, site],
+  const projectName = useBoundaryStore((state) => state.projectName);
+  const edgeRules = useEdgeRules();
+  const library = useModelLibrary();
+  const libraryModels = useLibraryModelsStatus();
+  /*
+   * How the structure being edited is drawn: a library model where one depicts exactly this
+   * configuration and fits its size (`matchLibraryAsset`, the builder's own rule), its parts
+   * otherwise. Read from the live element, so a resize that leaves the model's band draws the parts
+   * at once, and one back inside it draws the model again.
+   */
+  const look = useMemo(
+    () => (element ? matchLibraryAsset(element, library, { style: edgeRules?.style ?? null }) : null),
+    [element, library, edgeRules],
   );
-  const interior = useMemo(
+  /*
+   * The garden round it is the AR scene builder's scene of the plan — the same scene the whole-garden
+   * preview and the phone draw — built from the settled plan, so it is rebuilt when an edit lands
+   * rather than on every frame of a drag. Only while the surroundings are on.
+   */
+  const scene = useMemo(
     () =>
-      element
-        ? (structureNeighbourhood(element, { elements, site }, { reach: 0 })?.interior ?? [])
-        : [],
-    [element, elements, site],
+      surroundings
+        ? sceneOfPlan(
+            {
+              site,
+              elements: settled,
+              edgeRules,
+              projectName,
+              projectId: null,
+              revision: null,
+              documentVersion: PLAN_DOCUMENT_VERSION,
+            },
+            'desktop',
+            library,
+          ).scene
+        : null,
+    [surroundings, site, settled, edgeRules, projectName, library],
   );
+  const context = useMemo(() => (scene ? previewCounts(scene) : null), [scene]);
+  const interior = useMemo(() => (element ? (structureInterior(element, elements) ?? []) : []), [element, elements]);
   const frame = useMemo(() => (element ? localFrame(element) : null), [element]);
   const sun = useMemo(() => (frame ? sunInFrame(site, frame) : null), [site, frame]);
   const light = useMemo(() => lightDirection(site) ?? undefined, [site]);
-  const shown = surroundings ? neighbourhood : null;
   // Asked once: a browser either has WebGL or it does not, and the answer decides what is mounted.
   const [webgl] = useState(webglAvailable);
-  const coarse = useSyncExternalStore(subscribeCoarse, coarseNow, coarseOnServer);
+  const coarse = useCoarsePointer();
   const [request, setRequest] = useState<InspectorRequest | null>(null);
   // Taught once and then out of the way: the first click on a part shows the idea has landed.
   const [hinted, setHinted] = useState(false);
   const [preset, setPreset] = useState<CameraPreset>('orbit');
   const [presetKey, setPresetKey] = useState(0);
+  /** What the viewport drew with — its render tier and how the sky loaded — for the test hooks. */
+  const [report, setReport] = useState<ViewportReport | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -182,23 +209,32 @@ export function StructureWorkspace({ elementId }: { elementId: string }) {
           data-roof={structure.roof.kind}
           data-lighting={String(structure.lighting)}
           data-camera={preset}
-          data-surroundings={shown ? 'on' : 'off'}
-          data-context-surfaces={shown?.surfaces.length ?? 0}
-          data-context-solids={(shown?.solids.length ?? 0) + (shown?.house ? 1 : 0)}
-          data-context-plants={shown?.plants.length ?? 0}
+          data-surroundings={scene ? 'on' : 'off'}
+          data-context-surfaces={context?.surfaces ?? 0}
+          data-context-solids={context?.solids ?? 0}
+          data-context-plants={context?.plants ?? 0}
           data-interior={interior.length}
           data-piece={pieceId ?? ''}
           data-floor={structure.floor ?? ''}
           data-webgl={String(webgl)}
+          data-render-tier={report?.tier ?? ''}
+          data-sky={report?.sky ?? ''}
+          data-pbr={report?.pbr ?? ''}
+          data-models={report?.models ?? ''}
+          data-look={
+            look?.kind === 'model' ? `model:${look.match.entry.id}` : `parts:${look?.reason ?? ''}`
+          }
+          data-library-models={libraryModels}
           className="relative min-h-0 flex-1 bg-slate-100"
         >
           {webgl ? (
             <StructureViewport
               structure={structure}
               element={element}
+              look={look}
               elements={settled}
               frame={frame}
-              neighbourhood={shown}
+              scene={scene}
               interior={interior}
               pieceId={pieceId}
               sun={sun}
@@ -212,6 +248,8 @@ export function StructureWorkspace({ elementId }: { elementId: string }) {
                 if (tab) setRequest({ key: Date.now(), kind: 'tab', tab });
               }}
               handles={!coarse}
+              coarse={coarse}
+              onReport={setReport}
               onBlocked={(result) => setRequest({ key: Date.now(), kind: 'refused', result })}
             />
           ) : (

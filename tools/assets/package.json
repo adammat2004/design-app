@@ -3,16 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Generates the plan renderer's textures and sprites into apps/web/public/assets, and the brief screen's card artwork into apps/web/public/brief. Dev-time only; the app never imports this package.",
+  "description": "Generates the plan renderer's textures and sprites into apps/web/public/assets and the brief screen's card artwork into apps/web/public/brief, fetches the 3D view's CC0 sky, materials and furniture models, and draws the reference images library models are generated from (raw/references). Dev-time only; the app never imports this package.",
   "scripts": {
     "generate": "tsx src/generate.ts",
-    "generate:brief": "tsx src/generate-brief.ts"
+    "generate:brief": "tsx src/generate-brief.ts",
+    "fetch:pbr": "tsx src/fetch-pbr.ts",
+    "fetch:models": "tsx src/fetch-models.ts",
+    "generate:references": "tsx src/generate-references.ts",
+    "render:glb": "tsx src/render-glb.ts"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@napi-rs/canvas": "^1.0.8",
     "@types/node": "^20",
+    "fflate": "^0.8.3",
+    "meshoptimizer": "^0.22.0",
     "sharp": "^0.35.3",
     "tsx": "^4.23.13",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@garden-studio/model-pipeline": "workspace:*"
   }
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DbModule } from './db/db.module.js';
 import { HealthController } from './health/health.controller.js';
+import { ModelAssetsModule } from './model-assets/model-assets.module.js';
 import { PlanModule } from './plan/plan.module.js';
 
 @Module({
@@ -11,6 +12,7 @@ import { PlanModule } from './plan/plan.module.js';
     }),
     DbModule,
     PlanModule,
+    ModelAssetsModule,
   ],
   controllers: [HealthController],
 })

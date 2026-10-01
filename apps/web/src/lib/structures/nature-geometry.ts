@@ -1,6 +1,5 @@
 import {
   BufferGeometry,
-  Color,
   ConeGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -9,29 +8,16 @@ import {
 } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
-import {
-  elementOutline,
-  hashString,
-  mulberry32,
-  type DesignElement,
-  type LocalFrame,
-  type LocalPoint,
-  type NeighbourhoodSolid,
-} from '@garden-studio/schema';
-import { resolveLayers } from '../materials/layers';
-import { resolvePattern } from '../materials/palette';
-import { plantingExclusions } from '../materials/scene-passes';
-import { buildPlants } from '../render/plants';
+import { hashString, mulberry32 } from '@garden-studio/schema';
 
 /**
- * Plants, trees and the repeated parts of boundaries, as three.js geometry: the part of the 3D
- * surroundings that has to look like a garden rather than like a model of one.
+ * Plants and trees as three.js geometry: the crowns, tufts, clipped masses and trunks every 3D view
+ * draws a garden's planting with. Where each plant stands is the scene's (`plantPlacements`, through
+ * the AR scene builder); this is only what it looks like.
  *
  * Pure and deterministic — every random choice is seeded from an id with the plan's own `prng`, so
- * the same garden draws the same crowns every time, and the same bed puts its plants exactly where
- * the 2D plan does. `BufferGeometry` needs no WebGL, so all of it is tested in jsdom.
- *
- * Everything is in the structure's local frame (X across, Y up, Z towards the front).
+ * the same garden draws the same crowns every time. `BufferGeometry` needs no WebGL, so all of it is
+ * tested in jsdom. Each crown spans one unit each way and is scaled to its plant.
  */
 
 /* ---------------------------------------------------------------- crowns */
@@ -257,81 +243,4 @@ export function treeShape(
         })
       : [{ x: 0, z: 0, radius, height: stemHeight, lean: 0 }];
   return { form, variant, crown: { y: crownY, across: canopy, up }, stems };
-}
-
-/* ---------------------------------------------------------------- beds */
-
-export type PlantForm = 'blob' | 'tufted' | 'clipped-mass';
-
-export interface PlantInstance {
-  id: string;
-  form: PlantForm;
-  variant: number;
-  at: LocalPoint;
-  spread: number;
-  height: number;
-  rotation: number;
-  colour: string;
-}
-
-/**
- * The plants in a bed, exactly where the 2D plan draws them: the plan's own `buildPlants`, on the
- * bed's whole world outline with the same exclusions and seeds, then turned into the structure's
- * frame and cut to the window.
- */
-export function bedPlants(
-  bed: DesignElement,
-  elements: DesignElement[],
-  frame: LocalFrame,
-  half: number,
-): PlantInstance[] {
-  const material = resolvePattern(bed.material);
-  if (!material) return [];
-  const outline = elementOutline(bed);
-  const layers = resolveLayers(material, bed);
-  const plants = buildPlants(bed, layers, outline, plantingExclusions(bed, elements));
-  const found: PlantInstance[] = [];
-  for (const plant of plants) {
-    const at = frame.toLocal(plant.at);
-    const reach = plant.spread / 2;
-    if (Math.abs(at.x) - reach > half || Math.abs(at.z) - reach > half) continue;
-    const palette = plant.blob.palette;
-    found.push({
-      id: plant.id,
-      form: plant.blob.form,
-      variant: hashString(plant.id) % CROWN_VARIANTS,
-      at,
-      spread: plant.spread,
-      height: plant.height,
-      rotation: plant.rotation,
-      colour:
-        palette[Math.min(palette.length - 1, Math.floor(plant.tone * palette.length))] ?? '#6f8c52',
-    });
-  }
-  return found;
-}
-
-/** The most bed plants drawn around one structure: a border's worth is hundreds, not thousands. */
-export const MAX_BED_PLANTS = 2500;
-
-/* ---------------------------------------------------------------- boundaries */
-
-/** Where a boundary's posts stand along its run, both ends included, at most `spacing` apart. */
-export function postsAlong(
-  run: NonNullable<NeighbourhoodSolid['run']>,
-  spacing: number,
-): LocalPoint[] {
-  const dx = run.end.x - run.start.x;
-  const dz = run.end.z - run.start.z;
-  const length = Math.hypot(dx, dz);
-  const bays = Math.max(1, Math.ceil(length / spacing));
-  return Array.from({ length: bays + 1 }, (_, i) => ({
-    x: run.start.x + (dx * i) / bays,
-    z: run.start.z + (dz * i) / bays,
-  }));
-}
-
-/** A colour lightened or darkened by a factor: the one tone a hedge's crown and body share. */
-export function shade(colour: string, factor: number): string {
-  return `#${new Color(colour).multiplyScalar(factor).getHexString()}`;
 }

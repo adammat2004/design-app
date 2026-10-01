@@ -230,6 +230,7 @@ export function FenceLine({
   transform,
   light,
   gaps,
+  replaced = [],
 }: {
   polygon: Point[];
   /**
@@ -246,6 +247,8 @@ export function FenceLine({
   light?: Point;
   /** Gates: the run is broken and no post stands in the gap. From `gateGaps`. */
   gaps?: [Point, Point][];
+  /** The survey's stretches a proposed fence or wall replaces, drawn as a dashed "to be removed". */
+  replaced?: BoundaryRun[];
 }) {
   if (polygon.length < 3) return null;
 
@@ -278,9 +281,20 @@ export function FenceLine({
         />
       ))}
 
+      {replaced.map((run) => (
+        <Line
+          key={`replaced-${run.id ?? run.edgeVertexId}`}
+          points={flat([run.start, run.end])}
+          stroke={COLOUR.replacedBoundary}
+          strokeWidth={1}
+          dash={[4, 3]}
+        />
+      ))}
+
       {resolved.map((run) => {
         const palette = BOUNDARY_PALETTE[run.kind];
-        const inward = inwardNormal(run, clockwise);
+        /* A proposed run says which way it is laid; a survey side is worked out from the plot. */
+        const inward = run.inward ?? inwardNormal(run, clockwise);
         const band = boundaryBand(run, inward);
         const bandPx = run.thickness * transform.scale;
 
@@ -303,7 +317,7 @@ export function FenceLine({
           : [];
 
         return (
-          <Group key={run.edgeVertexId}>
+          <Group key={run.id ?? run.edgeVertexId}>
             {asLine ? (
               <Line
                 points={flat([run.start, run.end])}

@@ -155,7 +155,7 @@ export interface PatternRequest {
    */
   plantingStyle?: string;
   /** The element itself, for the layer stack. Its style is what goes in the key, not this. */
-  element?: Pick<DesignElement, 'plantingStyle' | 'category'>;
+  element?: Pick<DesignElement, 'plantingStyle' | 'category'> & Partial<Pick<DesignElement, 'planting'>>;
 }
 
 interface CacheEntry {
@@ -215,6 +215,8 @@ export function patternKey(request: PatternRequest): string {
     hashString(JSON.stringify(request.exclusions ?? [])).toString(36),
     request.cutEdge ? hashString(request.cutEdge.map(Number).join('')).toString(36) : 'all',
     request.layers ? hashString(JSON.stringify(request.layers)).toString(36) : 'resolved-by-material',
+    /* A bed's own mix is pixels too: two beds of one material planted differently draw differently. */
+    request.element?.planting ? hashString(JSON.stringify(request.element.planting)).toString(36) : 'mix-by-material',
     zoomBucket(request.pxPerMetre),
     request.pixelRatio ?? 1,
     request.plantingStyle ?? request.element?.plantingStyle ?? '',

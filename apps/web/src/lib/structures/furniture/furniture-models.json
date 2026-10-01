@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "models": {
+    "dining-set-4": {
+      "key": "dining-set-4",
+      "file": "models/furniture/dining-set-4.glb",
+      "bytes": 64572,
+      "sha256": "c155bcdb690ef7db1484d5a85bf7eeca95e34d14ce566fafddcf47f91c242eb5",
+      "triangles": 3092,
+      "naturalSize": [
+        2.4,
+        0.9565,
+        2.4
+      ],
+      "pivot": "base-centre",
+      "front": "+z",
+      "slots": [
+        "finish"
+      ],
+      "maxTexturePx": 0,
+      "licence": "CC0-1.0",
+      "sources": [
+        {
+          "asset": "wooden_table_02",
+          "author": "Serhii Khromov",
+          "page": "https://polyhaven.com/a/wooden_table_02",
+          "md5": "957c5d94784eed976cb4c6f0256a85e7"
+        },
+        {
+          "asset": "painted_wooden_chair_01",
+          "author": "Kuutti Siitonen",
+          "page": "https://polyhaven.com/a/painted_wooden_chair_01",
+          "md5": "28e739db9799cdadf820ead2b486d463"
+        }
+      ],
+      "fetchedAt": "2026-09-30T18:58:43.304Z"
+    },
+    "dining-set-6": {
+      "key": "dining-set-6",
+      "file": "models/furniture/dining-set-6.glb",
+      "bytes": 99780,
+      "sha256": "3e97973e9679851b914f77472e8e5faeec16e6bfa464dac604e51a1ea02d486b",
+      "triangles": 4944,
+      "naturalSize": [
+        3.2,
+        0.9565,
+        2.4
+      ],
+      "pivot": "base-centre",
+      "front": "+z",
+      "slots": [
+        "finish"
+      ],
+      "maxTexturePx": 0,
+      "licence": "CC0-1.0",
+      "sources": [
+        {
+          "asset": "painted_wooden_table",
+          "author": "Kirill Sannikov",
+          "page": "https://polyhaven.com/a/painted_wooden_table",
+          "md5": "081543cfe302f198aaf2e49f80ab6e31"
+        },
+        {
+          "asset": "painted_wooden_chair_01",
+          "author": "Kuutti Siitonen",
+          "page": "https://polyhaven.com/a/painted_wooden_chair_01",
+          "md5": "28e739db9799cdadf820ead2b486d463"
+        }
+      ],
+      "fetchedAt": "2026-09-30T18:58:43.328Z"
+    },
+    "sofa-set": {
+      "key": "sofa-set",
+      "file": "models/furniture/sofa-set.glb",
+      "bytes": 90504,
+      "sha256": "b945bf0fa09cc2a6938ab6afd6058c636ff50ef8ece963dd595d9d2c2fc466b8",
+      "triangles": 5000,
+      "naturalSize": [
+        3,
+        1.3017,
+        2.4
+      ],
+      "pivot": "base-centre",
+      "front": "+z",
+      "slots": [
+        "finish"
+      ],
+      "maxTexturePx": 0,
+      "licence": "CC0-1.0",
+      "sources": [
+        {
+          "asset": "painted_wooden_sofa",
+          "author": "Kirill Sannikov",
+          "page": "https://polyhaven.com/a/painted_wooden_sofa",
+          "md5": "2648c458e6639629c5dcb67fcbf07e6c"
+        },
+        {
+          "asset": "small_wooden_table_01",
+          "author": "Ulan Cabanilla",
+          "page": "https://polyhaven.com/a/small_wooden_table_01",
+          "md5": "716b66952dc473d09a3ac5f48ef50a68"
+        }
+      ],
+      "fetchedAt": "2026-09-30T18:58:43.356Z"
+    },
+    "bench": {
+      "key": "bench",
+      "file": "models/furniture/bench.glb",
+      "bytes": 14180,
+      "sha256": "d708812d2124285dd761ed05e0da408515a132d6b9438e69c0334449e6521efc",
+      "triangles": 630,
+      "naturalSize": [
+        1.1649,
+        0.8893,
+        0.4965
+      ],
+      "pivot": "base-centre",
+      "front": "+z",
+      "slots": [
+        "finish"
+      ],
+      "maxTexturePx": 0,
+      "licence": "CC0-1.0",
+      "sources": [
+        {
+          "asset": "painted_wooden_bench",
+          "author": "Kirill Sannikov",
+          "page": "https://polyhaven.com/a/painted_wooden_bench",
+          "md5": "784a49250144aa5299a93c1f3b6968d7"
+        }
+      ],
+      "fetchedAt": "2026-09-30T18:58:43.359Z"
+    }
+  }
+}

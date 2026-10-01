@@ -3,10 +3,31 @@
 import { create } from 'zustand';
 import {
   FENCE_REFUSAL,
-  LOCKED_REFUSAL,
+  lockRefusal,
+  boundingBox,
+  edgesAfterVertexEdit,
+  geometryVertices,
+  minimumGeometryVertices,
+  rectToPolygon,
+  vertexEditRefusal,
+  withCornerRadius,
+  withGeometryVertices,
+  bearingOfElement,
+  cornersOf,
+  nearestEdgeBearing,
+  SNAP_REACH_PX,
+  snapPointTo,
+  snapShapeDelta,
+  snapTargetsFor,
+  type PlanSnapTargets,
   SYMBOLS,
   PLANT_CATALOGUE,
+  ENCLOSURE_KINDS,
+  type EnclosureKind,
   associatePlants,
+  isPlantingMix,
+  normalisedMix,
+  type BedPlanting,
   isPlantSymbol,
   mergeStructureConfig,
   structureDefinitionFor,
@@ -45,12 +66,14 @@ import type {
   Point,
   ProposedChange,
 } from '@garden-studio/schema';
-import { draftPolygon, polygonCentroid } from '@/lib/boundary-geometry';
+import { draftPolygon, polygonCentroid, reflowEdge } from '@/lib/boundary-geometry';
 import { highestId } from '@/lib/hydration';
 import { CATEGORY_COLOURS } from '@/lib/concept-colours';
 import {
   elementAnchor,
+  isGroundLayer,
   isLocked,
+  isUserLocked,
   layoutFingerprint,
   type DesignElement,
   type ElementCategory,
@@ -62,15 +85,11 @@ import {
   translateFeature,
   type PlanGeometry,
 } from '@/lib/features';
-import { snapPoint } from '@/lib/grid';
-import {
-  alignmentGuidesFor,
-  boxSnapLines,
-  collectSnapTargets,
-  cornerSnapLines,
-  type AlignmentGuide,
-  type SnapTargets,
-} from '@/lib/guides';
+import { snapLength, snapPoint, snapRotation } from '@/lib/grid';
+import { NUDGE_STEP } from '@/lib/editor-shortcuts';
+import { draftStep, finishedGeometry } from '@/lib/draw-draft';
+import { isShown, viewGroupOf, type ViewGroup } from '@/lib/view-groups';
+import type { AlignmentGuide } from '@/lib/guides';
 import { housePolygon } from '@/lib/house';
 import { defaultMaterial } from '@/lib/materials';
 import { zoneAt, type ZoneId } from '@/lib/zones';
@@ -100,7 +119,7 @@ import { emitDesignEvent } from './design-events';
 const HISTORY_LIMIT = 50;
 
 /** Arrow-key nudge in metres; Shift makes it a whole metre. Matches step 2. */
-export const NUDGE = 0.1;
+export const NUDGE = NUDGE_STEP;
 
 /** Smallest side a resize handle will produce, in metres. Matches step 2's features. */
 export const MIN_ELEMENT_SIDE = 0.3;
@@ -115,9 +134,22 @@ export const MIN_ELEMENT_SIDE = 0.3;
  * drift into describing one rule two ways.
  */
 const FENCE_CLASH = FENCE_REFUSAL;
-const LOCKED_CLASH = LOCKED_REFUSAL;
 
 export type PlanEditorMode = 'select' | 'pan' | 'measure';
+
+export type PlacingTool = 'rect' | 'polygon' | 'polyline';
+
+/** A new path's width, in metres, until the user changes it: a comfortable single-file path. */
+export const DRAWN_PATH_WIDTH = 1;
+
+/** The canvas's zoom, passed with a pointer so a snap reaches the same distance on screen at any zoom. */
+export interface SnapZoom {
+  pxPerMetre?: number;
+}
+
+function zoomReach(options: SnapZoom | undefined) {
+  return { px: SNAP_REACH_PX, ...(options?.pxPerMetre ? { pxPerMetre: options.pxPerMetre } : {}) };
+}
 
 export interface PlanEditorDraft {
   elements: DesignElement[];
@@ -156,6 +188,11 @@ export interface EdgeEditState {
   hoveredRunId: string | null;
 }
 
+export interface VertexEditState {
+  id: string;
+  selectedIndex: number | null;
+}
+
 /** Which structure the 3D editor has open. */
 export interface StructureEditState {
   elementId: string;
@@ -189,11 +226,32 @@ export interface PlanEditorState {
    * garden, not which tool was last pressed.
    */
   mode: PlanEditorMode;
+  /**
+   * The primary selection — what the inspector, the Edges tab, the 3D editor and the AI run follow.
+   * Always a member of `selectedIds` when set, so every reader that thinks in one element keeps
+   * reading exactly what it always read.
+   */
   selectedId: string | null;
+  /** Everything selected, the primary last. Shift-click and the marquee add to it. */
+  selectedIds: string[];
+  /** A Shift-drag on bare canvas, in metres, while it is being drawn. */
+  marquee: { start: Point; current: Point } | null;
   placingCategory: ElementCategory | null;
   /** With `placingCategory`: the thing being placed, when it is a piece of furniture. */
   placingSymbol: SymbolId | null;
   placingPlantId: string | null;
+  /**
+   * With `placingCategory: 'enclosure'`: which kind of fence, wall or screen the line tool is
+   * drawing. An enclosure is only ever drawn along its line, so arming one arms the line tool.
+   */
+  placingEnclosure: EnclosureKind | null;
+  /**
+   * How an armed surface is put down: dragged out as a rectangle (a click drops the default size, as
+   * it always did), drawn corner by corner, or drawn as a path. Symbols ignore it — a bench is placed.
+   */
+  placingTool: PlacingTool;
+  /** The corners clicked so far while drawing a shape or a path. */
+  draftPoints: Point[];
   snapEnabled: boolean;
   /** Graph paper on or off. A view preference, so it never enters the undo history. */
   gridVisible: boolean;
@@ -214,11 +272,12 @@ export interface PlanEditorState {
    *
    * A viewing preference, not a design decision, so it sits in `ephemeralState` beside
    * `gridVisible` rather than on the document — the same reasoning that keeps the grid out of the
-   * saved plan. Labels are on by default because a plan you cannot read is a picture.
+   * saved plan. Off by default: the plan opens on the garden, and the chips are one switch away
+   * for reading it as a document.
    */
   labelsVisible: boolean;
   /**
-   * Zone tints and dimension guides, both view preferences beside `gridVisible`.
+   * Zone names and dimension guides, both view preferences beside `gridVisible`.
    *
    * Zones are **off** by default on this screen and that is deliberate rather than an oversight:
    * they are scaffolding for "which parts do you want designed", and once that is answered writing
@@ -226,11 +285,24 @@ export interface PlanEditorState {
    * garden. The toggle exists because a user checking their own answer should be able to see them
    * again — which they could not before, on any screen.
    *
-   * Dimensions are **on**: a plan without them is a picture.
+   * Dimensions are off by default too, for the reason labels are: the plan opens on the garden, and
+   * the plot's side lengths are one switch away.
    */
   zonesVisible: boolean;
   dimensionsVisible: boolean;
+  /**
+   * The view groups switched off — "hide the furniture so I can see the paving". A view preference
+   * with the same five edit points as the grid, and outside the history for the same reason: Undo
+   * rewinds the garden, not what was being looked at. The per-element eye is a different thing and
+   * stays on the document.
+   */
+  hiddenGroups: ViewGroup[];
   alignments: AlignmentGuide[];
+  /**
+   * The exact corner, midpoint or point on an edge the current drag has snapped to, for the canvas to
+   * mark — a flush pull onto a wall is invisible without it. Mid-gesture only, like the guides.
+   */
+  snapMarker: Point | null;
   measurement: { from: Point; to: Point | null } | null;
   clash: string | null;
   gestureSnapshot: PlanEditorDraft | null;
@@ -253,24 +325,87 @@ export interface PlanEditorState {
    * preference has, `ephemeralState()` included.
    */
   structureEdit: StructureEditState | null;
+  /**
+   * Corner editing, or null. Which polygon or path has its corners showing, and which corner is
+   * picked — Delete removes that one. Ephemeral with the five edit points every view state has;
+   * selecting anything else ends it, the way `edgeEdit` ends.
+   */
+  vertexEdit: VertexEditState | null;
   lastSavedAt: number;
 
   seedFrom: (concept: GeneratedConcept) => void;
-  select: (id: string | null) => void;
+  /** Selects one thing; with `additive`, toggles it in or out of the selection. */
+  select: (id: string | null, options?: { additive?: boolean }) => void;
+  /** Replaces the selection with these, the last one primary. */
+  selectMany: (ids: string[]) => void;
+  /** Everything shown except the ground layer — ⌘A. */
+  selectAll: () => void;
+  beginMarquee: (at: Point) => void;
+  trackMarquee: (at: Point) => void;
+  /** Adds what the marquee touches to the selection. True when it selected anything. */
+  commitMarquee: () => boolean;
+  /** Deletes everything selected, as one undo entry. */
+  deleteSelection: () => void;
+  /** Duplicates everything selected, as one undo entry, and selects the copies. */
+  duplicateSelection: () => void;
+  /** Gives every selected element of one category the same material, as one undo entry. */
+  setMaterialForSelection: (materialId: string) => void;
 
-  addElement: (category: ElementCategory, at: Point) => void;
-  moveElementLive: (id: string, anchor: Point) => void;
+  /**
+   * Places the armed thing at a point. `keepArmed` leaves it armed for the next click — Shift held
+   * while placing — so five trees are five clicks rather than five trips to the palette.
+   */
+  addElement: (
+    category: ElementCategory,
+    at: Point,
+    options?: { keepArmed?: boolean; size?: { width: number; depth: number } },
+  ) => void;
+  setPlacingTool: (tool: PlacingTool) => void;
+  /** A click while drawing: adds a corner, or closes the shape on its first corner. */
+  addDraftPoint: (
+    raw: Point,
+    options?: SnapZoom & { keepArmed?: boolean },
+  ) => 'added' | 'closed' | 'ignored';
+  /** Where a click at `raw` would put the next corner — for the ghost, so it cannot promise otherwise. */
+  previewDraftPoint: (raw: Point, options?: SnapZoom) => Point;
+  /** Ends the drawing and adds the shape, if it is one. */
+  finishDraft: (options?: { keepArmed?: boolean }) => void;
+  cancelDraft: () => void;
+  /**
+   * One frame of a drag. `pxPerMetre` is the canvas's zoom, so a snap reaches the same distance on
+   * screen at every zoom; without it the reach is the old fixed 0.3 m, which is what tests get.
+   */
+  moveElementLive: (id: string, anchor: Point, options?: SnapZoom) => void;
   setPosition: (id: string, anchor: Point) => void;
   setCanopyDiameter: (id: string, metres: number) => void;
   replaceSymbol: (id: string, symbol: SymbolId, plantId?: string) => void;
+  /**
+   * A fence's kind, or a hedge's species. A new kind brings its own thickness and, unless what it
+   * is built of already suits it, its own material — a wall of close-board fencing is not a wall.
+   */
+  setEnclosure: (id: string, patch: { kind?: EnclosureKind; plantId?: string | null }) => void;
+  /** A bed's own species mix, or `undefined` to plant it from its material's again. */
+  setPlanting: (id: string, planting: BedPlanting | undefined) => void;
   setStatus: (id: string, status: DesignElement['status']) => void;
-  resizeElementLive: (id: string, size: Partial<{ width: number; depth: number }>) => void;
+  /**
+   * One frame of a resize. With snap on, a dragged side is tidied to the decimetre; `exact` is for
+   * a typed size, which is already the number the person meant.
+   */
+  resizeElementLive: (
+    id: string,
+    size: Partial<{ width: number; depth: number }>,
+    options?: { exact?: boolean },
+  ) => void;
   /**
    * A typed width or depth: one resize about the centre, keeping the rotation, with one undo entry.
    * The 2D inspector and the 3D editor both call this, so there is one way a structure is resized.
    */
   setSize: (id: string, size: Partial<{ width: number; depth: number }>) => void;
-  rotateElementLive: (id: string, degrees: number) => void;
+  /**
+   * One frame of a rotation. With snap on, a dragged angle lands on a 15° step or square to the
+   * house; `exact` is for a typed or slid value, which is already the number the person meant.
+   */
+  rotateElementLive: (id: string, degrees: number, options?: { exact?: boolean }) => void;
   nudgeSelection: (dx: number, dy: number) => void;
 
   renameElement: (id: string, name: string) => void;
@@ -340,6 +475,30 @@ export interface PlanEditorState {
   setZone: (id: string, zone: ZoneId) => void;
   setElevation: (id: string, metres: number) => void;
   toggleHidden: (id: string) => void;
+  /**
+   * Locks the given elements, or unlocks them if every one is already locked — one undo entry. A
+   * lock holds geometry still by hand and holds everything still against the designer; the ground
+   * layer is locked already and is left out.
+   */
+  toggleLocked: (ids: string[]) => void;
+
+  /** Shows a polygon's or a path's corners for editing. Refused for anything else, or anything locked. */
+  openVertexEdit: (id: string) => void;
+  closeVertexEdit: () => void;
+  selectVertex: (index: number | null) => void;
+  /** One frame of a corner drag: snapped, refused if it folds the outline or leaves the plot. */
+  moveVertexLive: (id: string, index: number, at: Point, options?: SnapZoom) => void;
+  /** A new corner on the edge that starts at `edgeIndex`. One undo entry. */
+  insertVertex: (id: string, edgeIndex: number, at: Point) => void;
+  /** One undo entry; refused below a shape's minimum corners. */
+  deleteVertex: (id: string, index: number) => void;
+  /** A frame of the corner-radius slider — the panel brackets it, so a slide is one undo entry. */
+  setCornerRadiusLive: (id: string, radius: number) => void;
+  setPathWidth: (id: string, width: number) => void;
+  /** A typed side length, moving one corner as step 1's side lengths do. One undo entry. */
+  setSideLength: (id: string, edgeIndex: number, metres: number) => void;
+  /** A rectangular surface becomes a polygon with the same four corners. One undo entry. */
+  convertToPolygon: (id: string) => void;
   duplicateElement: (id: string) => void;
   deleteElement: (id: string) => void;
 
@@ -360,6 +519,8 @@ export interface PlanEditorState {
   toggleLabels: () => void;
   toggleZones: () => void;
   toggleDimensions: () => void;
+  /** Shows or hides a whole view group. Hiding the group the selection is in lets go of it. */
+  toggleGroup: (group: ViewGroup) => void;
   /** Metres tall. Read by the shadow model, and until now invisible to the user who owns it. */
   setHeight: (id: string, metres: number) => void;
   setMode: (mode: PlanEditorMode) => void;
@@ -368,8 +529,10 @@ export interface PlanEditorState {
     symbol?: SymbolId | null,
     plantId?: string | null,
   ) => void;
-  addMeasurePoint: (point: Point) => void;
-  trackMeasurePointer: (point: Point) => void;
+  /** Arms the line tool to draw a fence, a screen, a wall, a hedge, a railing, a kerb or an opening. */
+  setPlacingEnclosure: (kind: EnclosureKind | null) => void;
+  addMeasurePoint: (point: Point, options?: SnapZoom) => void;
+  trackMeasurePointer: (point: Point, options?: SnapZoom) => void;
   clearMeasurement: () => void;
   clearClash: () => void;
 
@@ -454,6 +617,8 @@ const NEW_ELEMENT_SIZE: Record<ElementCategory, { width: number; depth: number }
   /* Only ever a fallback: every light carries a symbol, and `SYMBOLS` gives the real footprint. */
   lighting: { width: 0.2, depth: 0.2 },
   'existing-feature': { width: 2, depth: 2 },
+  /* Only ever a fallback: an enclosure is drawn with the line tool, never dropped as a box. */
+  enclosure: { width: 3, depth: 0.1 },
 };
 
 /** "Patio", then "Patio 2" — the same rule step 2 names features by. */
@@ -466,6 +631,122 @@ function defaultName(category: ElementCategory, existing: DesignElement[]): stri
   let suffix = 2;
   while (taken.has(`${base} ${suffix}`)) suffix += 1;
   return `${base} ${suffix}`;
+}
+
+/**
+ * What a copy is called: the original's own name with the next free number — "Lounger 2", never
+ * "Furniture 2".
+ *
+ * `defaultName` answers from the category, which is right for something new and wrong for a copy:
+ * a copy of the "Dining pergola" is another dining pergola. A name already ending in a number is
+ * counted on from its stem, so copying "Planter 2" gives "Planter 3" rather than "Planter 2 2".
+ */
+export function copyName(element: DesignElement, existing: DesignElement[]): string {
+  if (!element.name) return defaultName(element.category, existing);
+
+  const stem = element.name.replace(/\s+\d+$/, '');
+  const taken = new Set(existing.map((candidate) => candidate.name));
+  let suffix = 2;
+  while (taken.has(`${stem} ${suffix}`)) suffix += 1;
+  return `${stem} ${suffix}`;
+}
+
+/** A selection of exactly one thing, or of nothing. */
+/**
+ * A new material, and for a bed chosen from a mix, the end of any mix of its own: picking "Shade
+ * woodland" is asking for that mix, and a custom one left behind would go on overriding it — the
+ * swatch would light up and the bed would not change. Any other material leaves a custom mix alone,
+ * because there the material is only the drawing base the mix sits on.
+ */
+function withMaterial(element: DesignElement, materialId: string): DesignElement {
+  const next = { ...element, material: materialId };
+  if (element.planting && isPlantingMix(materialId)) delete next.planting;
+  return next;
+}
+
+function only(id: string | null): { selectedId: string | null; selectedIds: string[] } {
+  return { selectedId: id, selectedIds: id ? [id] : [] };
+}
+
+/**
+ * The state that follows from selecting `ids`, the last one primary.
+ *
+ * Returns **the unchanged state** when nothing changed. The AI run's controller calls `select` on
+ * every animation frame with the element it is working on, and a fresh array each time would
+ * re-render every subscriber at frame rate for a selection that never moved.
+ *
+ * The workspaces that belong to one element — its Edges tab, its corners, the 3D editor — stay open
+ * only while that element is still the primary, because each is an editor of exactly one thing.
+ */
+function withSelection<
+  S extends {
+    selectedId: string | null;
+    selectedIds: string[];
+    edgeEdit: EdgeEditState | null;
+    structureEdit: StructureEditState | null;
+    vertexEdit: VertexEditState | null;
+    clash: string | null;
+  },
+>(state: S, ids: string[]): Partial<S> | S {
+  const unique = ids.filter((id, index) => ids.indexOf(id) === index);
+  const primary = unique.at(-1) ?? null;
+  if (
+    primary === state.selectedId &&
+    unique.length === state.selectedIds.length &&
+    unique.every((id, index) => state.selectedIds[index] === id)
+  ) {
+    return state.clash === null ? state : ({ clash: null } as Partial<S>);
+  }
+  return {
+    selectedId: primary,
+    selectedIds: unique,
+    clash: null,
+    edgeEdit: state.edgeEdit && state.edgeEdit.hostId === primary ? state.edgeEdit : null,
+    structureEdit:
+      state.structureEdit && state.structureEdit.elementId === primary ? state.structureEdit : null,
+    vertexEdit: state.vertexEdit && state.vertexEdit.id === primary ? state.vertexEdit : null,
+  } as Partial<S>;
+}
+
+/**
+ * The selection after an undo or a redo lands on `draft`.
+ *
+ * What the step brought back is selected — a redone duplicate, an undone delete — which is what every
+ * editor does and what makes "undo, then redo, then Delete" delete the thing that came back rather
+ * than nothing. Otherwise anything the step took off the plan is let go of, so the inspector never
+ * describes an element that is no longer there.
+ */
+function historySelection(
+  state: { selectedId: string | null; selectedIds: string[]; present: PlanEditorDraft },
+  draft: PlanEditorDraft,
+): Partial<{ selectedId: string | null; selectedIds: string[] }> {
+  const before = new Set(state.present.elements.map((element) => element.id));
+  const returned = draft.elements.filter((element) => !before.has(element.id)).map((element) => element.id);
+  if (returned.length > 0) return { selectedIds: returned, selectedId: returned.at(-1) ?? null };
+
+  const ids = state.selectedIds.filter((id) => draft.elements.some((element) => element.id === id));
+  if (ids.length === state.selectedIds.length) return {};
+  return { selectedIds: ids, selectedId: ids.includes(state.selectedId ?? '') ? state.selectedId : (ids.at(-1) ?? null) };
+}
+
+/**
+ * Whether a rectangle may become a free shape: a surface, and nothing else.
+ *
+ * A structure or a piece of furniture is its rectangle — its parts, its furniture, its 3D model and
+ * its resize rules are all read off the rect — and anything with a symbol is a product of a given
+ * shape. A patio, a lawn, a bed or a panel of gravel is only a rectangle because that is how it was
+ * dropped.
+ */
+export function canConvertToPolygon(element: DesignElement): boolean {
+  return (
+    element.shape.kind === 'rect' &&
+    !element.symbol &&
+    element.category !== 'structure' &&
+    element.category !== 'furniture' &&
+    element.category !== 'lighting' &&
+    element.category !== 'existing-feature' &&
+    !isLocked(element)
+  );
 }
 
 export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
@@ -505,7 +786,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       if (!element) return null;
 
       if (checkGeometry && isLocked(element)) {
-        refusal = LOCKED_CLASH;
+        refusal = lockRefusal(element);
         return null;
       }
 
@@ -544,7 +825,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     set((state) => {
       const element = state.present.elements.find((candidate) => candidate.id === id);
       if (!element) return state;
-      if (isLocked(element)) return { clash: LOCKED_CLASH };
+      if (isLocked(element)) return { clash: lockRefusal(element) };
 
       const next = mutate(element);
       if (next === element) return state;
@@ -590,20 +871,182 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     return snapPoint(point, useBoundaryStore.getState().unit);
   }
 
-  /** Everything a dragged element can line up with, minus the one being dragged. */
-  function snapTargetsExcluding(id: string): SnapTargets {
-    const house = housePolygonNow();
-    const sources: SnapTargets[] = [cornerSnapLines(boundaryNow())];
+  /*
+   * The plan's snap targets, built once per gesture rather than on every mousemove: a drag asks for
+   * them forty times a second and they cannot change while the drag is holding the plan. Kept in the
+   * closure rather than the state because nothing draws them, so they need none of the five edit
+   * points a view preference has — `beginGesture` and `endGesture` are the only two that matter.
+   */
+  let gestureTargets: { key: string; targets: PlanSnapTargets } | null = null;
 
-    if (house) sources.push(boxSnapLines(house));
+  function planTargetsExcluding(ids: string[]): PlanSnapTargets {
+    const key = ids.join(',');
+    const inGesture = get().gestureSnapshot !== null;
+    if (inGesture && gestureTargets?.key === key) return gestureTargets.targets;
 
-    for (const element of get().present.elements) {
-      // Base fills are the whole zone, so their edges are the zone's edges — useful to align to.
-      if (element.id === id || element.hidden) continue;
-      sources.push(boxSnapLines(geometryOutline(element.shape)));
+    const hiddenGroups = get().hiddenGroups;
+    const targets = snapTargetsFor({
+      boundary: boundaryNow(),
+      house: housePolygonNow(),
+      elements: get().present.elements.filter(
+        (element) => !ids.includes(element.id) && isShown(element, hiddenGroups),
+      ),
+    });
+    gestureTargets = inGesture ? { key, targets } : null;
+    return targets;
+  }
+
+  /** Where a pointer lands for the tape: a corner, a midpoint or an edge, never the grid. */
+  function snappedPointer(point: Point, options: SnapZoom | undefined): Point {
+    return snapPointTo(point, planTargetsExcluding([]), {
+      enabled: get().snapEnabled,
+      unit: useBoundaryStore.getState().unit,
+      grid: false,
+      threshold: zoomReach(options),
+    }).point;
+  }
+
+  /**
+   * A frame of a group move: every member by the same amount, or none of them.
+   *
+   * All-or-nothing, like step 2's group drag: half a selection crossing the fence while the rest
+   * follows the pointer would break the arrangement the user selected them to keep. A locked member
+   * refuses the whole move and says so.
+   */
+  function moveGroupLive(ids: string[], dx: number, dy: number): boolean {
+    const state = get();
+    const members = state.present.elements.filter((element) => ids.includes(element.id));
+    const held = members.find(isLocked);
+    if (held) {
+      set({ clash: lockRefusal(held) });
+      return false;
     }
+    const moved = new Map(
+      members.map((element) => {
+        const at = elementAnchor(element);
+        return [element.id, translateTo(element, { x: at.x + dx, y: at.y + dy })] as const;
+      }),
+    );
+    for (const next of moved.values()) {
+      const refusal = refusalFor(next);
+      if (refusal) {
+        set({ clash: refusal });
+        return false;
+      }
+    }
+    set({
+      present: {
+        ...state.present,
+        elements: associatePlants(state.present.elements.map((element) => moved.get(element.id) ?? element)),
+      },
+      clash: null,
+    });
+    return true;
+  }
 
-    return collectSnapTargets(sources);
+  /**
+   * A change to an outline's corners, checked and applied.
+   *
+   * The attempt is built first and refused with its reason — an outline folding through itself, a
+   * shape too small to be one, a corner over the fence — rather than clamped, and the edge plan is
+   * reset where the corner count changed, because every custom run is keyed on a side's index.
+   * `live` writes a frame of a drag with no history entry (the gesture bracket supplies one);
+   * otherwise it is one undo entry of its own.
+   */
+  function reshapeCorners(
+    id: string,
+    reshape: (shape: PlanGeometry) => PlanGeometry | null,
+    mode: 'live' | 'commit',
+  ): boolean {
+    const element = get().present.elements.find((candidate) => candidate.id === id);
+    if (!element) return false;
+    if (isLocked(element)) {
+      set({ clash: lockRefusal(element) });
+      return false;
+    }
+    const shape = reshape(element.shape);
+    if (!shape) return false;
+    const refusal = vertexEditRefusal(shape);
+    if (refusal) {
+      set({ clash: refusal });
+      return false;
+    }
+    const next = edgesAfterVertexEdit(element, { ...element, shape });
+    if (mode === 'live') applyLive(id, () => next);
+    else commitElement(id, () => next);
+    return get().clash === null;
+  }
+
+  /**
+   * Where a drawn corner lands: on a corner, a midpoint or an edge of what is already there, else
+   * square to the last side drawn, else the grid. The ghost and the click both ask this, so the
+   * preview cannot promise a position the click then fails to deliver.
+   */
+  function draftSnap(raw: Point, points: Point[], options: SnapZoom | undefined): Point {
+    return snapPointTo(raw, planTargetsExcluding([]), {
+      enabled: get().snapEnabled,
+      unit: useBoundaryStore.getState().unit,
+      threshold: zoomReach(options),
+      rightAngle: points.length > 0 ? { vertices: points } : null,
+    }).point;
+  }
+
+  /** A drawn shape, named, zoned and checked the way a placed one is. True when it landed. */
+  function addDrawnElement(
+    category: ElementCategory,
+    shape: PlanGeometry,
+    extra: Partial<DesignElement> = {},
+  ): boolean {
+    const id = nextElementId();
+    const zones = selectZones({ present: useBoundaryStore.getState().present });
+    const outline = geometryOutline(shape);
+    const added: DesignElement = {
+      id,
+      category,
+      role: 'feature',
+      name: defaultName(category, get().present.elements),
+      shape,
+      zone: zoneAt(polygonCentroid(outline), zones)?.id ?? 'back',
+      material: defaultMaterial(category),
+      elevation: 0,
+      ...extra,
+    };
+    const refusal = refusalFor(added);
+    if (refusal) {
+      set({ clash: refusal });
+      return false;
+    }
+    commit((draft) => ({ ...draft, elements: [...draft.elements, added] }));
+    set(only(id));
+    emitDesignEvent('element_added', { elementId: id, category });
+    return true;
+  }
+
+  /**
+   * The bearings a dragged rotation may square to: the house, the wall and the fence nearest the
+   * element, and the nearest thing beside it — so a bench can be turned square to the bed it faces,
+   * not only to the building. Each is good at every quarter turn (`snapRotation`).
+   */
+  function rotationReferences(element: DesignElement): number[] {
+    const centre = elementAnchor(element);
+    const house = useBoundaryStore.getState().present.house;
+    const houseRing = housePolygonNow();
+    const references = [
+      house?.rotation,
+      nearestEdgeBearing(boundaryNow(), centre),
+      houseRing ? nearestEdgeBearing(houseRing, centre) : null,
+    ];
+
+    let nearest: { element: DesignElement; distance: number } | null = null;
+    for (const other of get().present.elements) {
+      if (other.id === element.id || isGroundLayer(other) || !isShown(other, get().hiddenGroups)) continue;
+      const at = elementAnchor(other);
+      const distance = Math.hypot(at.x - centre.x, at.y - centre.y);
+      if (!nearest || distance < nearest.distance) nearest = { element: other, distance };
+    }
+    if (nearest) references.push(bearingOfElement(nearest.element));
+
+    return references.filter((bearing): bearing is number => typeof bearing === 'number');
   }
 
   function translateTo(element: DesignElement, anchor: Point): DesignElement {
@@ -635,21 +1078,29 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     mode: 'select',
     selectedId: null,
+    selectedIds: [],
+    marquee: null,
     placingCategory: null,
     placingSymbol: null,
     placingPlantId: null,
+    placingEnclosure: null,
+    placingTool: 'rect',
+    draftPoints: [],
     snapEnabled: true,
     gridVisible: false,
     shadowsVisible: true,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,
+    hiddenGroups: [],
     alignments: [],
+    snapMarker: null,
     measurement: null,
     clash: null,
     gestureSnapshot: null,
     edgeEdit: null,
     structureEdit: null,
+    vertexEdit: null,
     lastSavedAt: Date.now(),
 
     /**
@@ -675,10 +1126,12 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         pristine: elements,
         /* A fresh concept is a different garden; an offer to undo a redesign of the old one is not. */
         revision: null,
-        selectedId: null,
+        ...only(null),
         placingCategory: null,
         placingSymbol: null,
         placingPlantId: null,
+        placingEnclosure: null,
+        draftPoints: [],
         alignments: [],
         measurement: null,
         clash: null,
@@ -691,17 +1144,146 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      * Selecting something else leaves edge editing without a mode to exit: the Edges tab belongs to
      * the surface it was opened on, so clicking another element simply closes it.
      */
-    select: (id) =>
-      set((state) => ({
-        selectedId: id,
-        clash: null,
-        edgeEdit: state.edgeEdit && state.edgeEdit.hostId === id ? state.edgeEdit : null,
-        structureEdit:
-          state.structureEdit && state.structureEdit.elementId === id ? state.structureEdit : null,
-      })),
+    select: (id, options = {}) =>
+      set((state) => {
+        let ids: string[];
+        if (id === null) ids = [];
+        else if (options.additive) {
+          ids = state.selectedIds.includes(id)
+            ? state.selectedIds.filter((candidate) => candidate !== id)
+            : [...state.selectedIds, id];
+        } else ids = [id];
+        return withSelection(state, ids);
+      }),
 
-    addElement: (category, at) => {
-      const centre = snapped(at);
+    selectMany: (ids) => set((state) => withSelection(state, ids)),
+
+    selectAll: () =>
+      set((state) =>
+        withSelection(
+          state,
+          state.present.elements
+            .filter((element) => !isGroundLayer(element) && isShown(element, state.hiddenGroups))
+            .map((element) => element.id),
+        ),
+      ),
+
+    beginMarquee: (at) => set({ marquee: { start: at, current: at } }),
+
+    trackMarquee: (at) => set((state) => (state.marquee ? { marquee: { ...state.marquee, current: at } } : state)),
+
+    commitMarquee: () => {
+      const { marquee, present, hiddenGroups, selectedIds } = get();
+      set({ marquee: null });
+      if (!marquee) return false;
+      /*
+       * Touching counts, not only enclosing — step 2's rule, and the one a person expects when they
+       * sweep across a row of beds. The ground layer is left out: it is under everything, so every
+       * sweep would catch it.
+       */
+      const box = {
+        minX: Math.min(marquee.start.x, marquee.current.x),
+        maxX: Math.max(marquee.start.x, marquee.current.x),
+        minY: Math.min(marquee.start.y, marquee.current.y),
+        maxY: Math.max(marquee.start.y, marquee.current.y),
+      };
+      const caught = present.elements
+        .filter((element) => !isGroundLayer(element) && isShown(element, hiddenGroups))
+        .filter((element) => {
+          const bounds = boundingBox(geometryOutline(element.shape));
+          return (
+            bounds.minX <= box.maxX &&
+            bounds.minX + bounds.width >= box.minX &&
+            bounds.minY <= box.maxY &&
+            bounds.minY + bounds.length >= box.minY
+          );
+        })
+        .map((element) => element.id);
+      if (caught.length === 0) return false;
+      set((state) => withSelection(state, [...selectedIds.filter((id) => !caught.includes(id)), ...caught]));
+      return true;
+    },
+
+    deleteSelection: () => {
+      const { selectedIds, present } = get();
+      const targets = present.elements.filter((element) => selectedIds.includes(element.id));
+      if (targets.length === 0) return;
+      if (targets.length === 1) {
+        get().deleteElement(targets[0]!.id);
+        return;
+      }
+      const held = targets.find(isLocked);
+      if (held) {
+        set({ clash: lockRefusal(held) });
+        return;
+      }
+      commit((draft) => ({
+        ...draft,
+        elements: draft.elements.filter((element) => !selectedIds.includes(element.id)),
+      }));
+      set((state) => ({ ...withSelection(state, []), structureEdit: null }));
+      for (const element of targets) {
+        emitDesignEvent('element_deleted', { elementId: element.id, category: element.category });
+      }
+    },
+
+    duplicateSelection: () => {
+      const { selectedIds, present } = get();
+      const targets = present.elements.filter((element) => selectedIds.includes(element.id));
+      if (targets.length <= 1) {
+        if (targets[0]) get().duplicateElement(targets[0].id);
+        return;
+      }
+      const held = targets.find(isLocked);
+      if (held) {
+        set({ clash: lockRefusal(held) });
+        return;
+      }
+      /*
+       * The group moves together by one offset, so it keeps its arrangement; the first diagonal every
+       * copy can take is the one used, and a group with nowhere to go is refused whole.
+       */
+      const offsets = [
+        { x: 1, y: 1 },
+        { x: -1, y: 1 },
+        { x: 1, y: -1 },
+        { x: -1, y: -1 },
+      ];
+      let names = present.elements;
+      for (const offset of offsets) {
+        const copies = targets.map((element) => {
+          const at = elementAnchor(element);
+          return translateTo(element, { x: at.x + offset.x, y: at.y + offset.y });
+        });
+        if (copies.some((copy) => refusalFor(copy) !== null)) continue;
+        const named = copies.map((copy, index) => {
+          const next = { ...copy, id: nextElementId(), name: copyName(targets[index]!, names) };
+          names = [...names, next];
+          return next;
+        });
+        commit((draft) => ({ ...draft, elements: [...draft.elements, ...named] }));
+        set((state) => withSelection(state, named.map((copy) => copy.id)));
+        return;
+      }
+      set({ clash: FENCE_CLASH });
+    },
+
+    setMaterialForSelection: (materialId) => {
+      const { selectedIds, present } = get();
+      const targets = present.elements.filter((element) => selectedIds.includes(element.id));
+      if (targets.length === 0) return;
+      const category = targets[0]!.category;
+      if (targets.some((element) => element.category !== category)) return;
+      commit((draft) => ({
+        ...draft,
+        elements: draft.elements.map((element) =>
+          selectedIds.includes(element.id) ? withMaterial(element, materialId) : element,
+        ),
+      }));
+    },
+
+    addElement: (category, at, options = {}) => {
+      const centre = options.size ? at : snapped(at);
       const symbol = get().placingSymbol;
       const plantId = get().placingPlantId;
       const plant = plantId ? PLANT_CATALOGUE[plantId] : undefined;
@@ -711,7 +1293,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
        * and a round one is placed as a point, the way the generator places a fire pit bowl.
        */
       const footprint = symbol ? SYMBOLS[symbol].footprint : null;
-      const size = footprint?.kind === 'rect' ? footprint : NEW_ELEMENT_SIZE[category];
+      const size = options.size ?? (footprint?.kind === 'rect' ? footprint : NEW_ELEMENT_SIZE[category]);
       const shape: PlanGeometry =
         footprint?.kind === 'point'
           ? { kind: 'point', at: centre, radius: plant ? plant.spread / 2 : footprint.radius }
@@ -746,25 +1328,67 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
       commit((draft) => ({ ...draft, elements: [...draft.elements, added] }));
 
-      set({ selectedId: id, placingCategory: null, placingSymbol: null, placingPlantId: null });
+      set(
+        options.keepArmed
+          ? only(id)
+          : { ...only(id), placingCategory: null, placingSymbol: null, placingPlantId: null },
+      );
       /* Something the generator did not think of. See `state/design-events.ts`. */
       emitDesignEvent('element_added', { elementId: id, category });
     },
 
-    moveElementLive: (id, anchor) => {
+    moveElementLive: (id, anchor, options) => {
       const element = get().present.elements.find((candidate) => candidate.id === id);
       if (!element || isLocked(element)) return;
 
-      const target = snapped(anchor);
+      /* Dragging one member of a selection moves the selection, by the same amount, as one. */
+      const { selectedIds } = get();
+      const group = selectedIds.length > 1 && selectedIds.includes(id) ? selectedIds : null;
+
+      let target = snapped(anchor);
+      let guides: AlignmentGuide[] = [];
+      let marker: Point | null = null;
+
+      /*
+       * Pull onto what the shape has come close to — a corner onto a corner, a corner onto an edge
+       * (which is what puts a patio flush against a house wall however the house is turned), or its
+       * box level with a line — and report the guides so the canvas can draw them. Snap first, check
+       * second, and never snap into a refusal: a pull that would carry the shape over the fence is
+       * passed over for the next, so a shape can still be dragged flush past a guide pointing out.
+       *
+       * A point — a tree, a light — offers no corners: its centre is not a thing anyone lays against
+       * a wall, and pulling a trunk onto the edge of a bed would feel like the tree slipping.
+       */
+      if (get().snapEnabled) {
+        const placed = translateTo(element, target);
+        const from = target;
+        const result = snapShapeDelta(
+          {
+            corners: placed.shape.kind === 'point' ? [] : cornersOf(placed.shape).points,
+            outline: geometryOutline(placed.shape),
+          },
+          planTargetsExcluding(group ?? [id]),
+          {
+            enabled: true,
+            threshold: zoomReach(options),
+            accept: (delta) =>
+              group
+                ? true
+                : refusalFor(translateTo(element, { x: from.x + delta.x, y: from.y + delta.y })) === null,
+          },
+        );
+        target = { x: from.x + result.delta.x, y: from.y + result.delta.y };
+        guides = result.guides;
+        marker = result.marker;
+      }
+
+      set({ alignments: guides, snapMarker: marker });
+      if (group) {
+        const at = elementAnchor(element);
+        moveGroupLive(group, target.x - at.x, target.y - at.y);
+        return;
+      }
       const moved = translateTo(element, target);
-
-      // Nudge onto any alignment the shape has come close to, then report the guides so the
-      // canvas can draw them.
-      const outline = geometryOutline(moved.shape);
-      const targets = snapTargetsExcluding(id);
-      const guides = get().snapEnabled ? alignmentGuidesFor(outline, targets) : [];
-
-      set({ alignments: guides });
       applyLive(id, () => moved);
     },
 
@@ -792,12 +1416,23 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           (isPlantSymbol(symbol) && element.shape.kind !== 'point')
         )
           return element;
+        /*
+         * A species brings its own size: a switch from a rowan to an oak is a tree three times the
+         * height and twice the spread, and keeping the old numbers would draw, shade and count the
+         * rowan under the oak's name. A bare type keeps the canopy the user sized and takes the
+         * type's height, which is all the type knows.
+         */
+        const shape =
+          plant && element.shape.kind === 'point'
+            ? { ...element.shape, radius: plant.spread / 2 }
+            : element.shape;
         return {
           ...element,
           symbol,
           plantId,
+          shape,
           name: plant?.name ?? spec.label,
-          height: element.height ?? plant?.height ?? spec.height,
+          height: plant?.height ?? spec.height,
         };
       });
     },
@@ -805,13 +1440,23 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     setStatus: (id, status) =>
       commitElement(id, (element) => ({ ...element, status }), { checkGeometry: false }),
 
-    resizeElementLive: (id, size) =>
+    resizeElementLive: (id, size, options = {}) =>
       applyLive(id, (element) => {
         if (element.shape.kind !== 'rect') return element;
 
+        /*
+         * A side snaps to the decimetre, the unit a garden is measured in — but only a side that is
+         * being changed, so dragging the width of a 3.14 m generated terrace does not also round its
+         * depth, and only when it has actually moved.
+         */
+        const unit = useBoundaryStore.getState().unit;
+        const tidy = (value: number | undefined, current: number) =>
+          value === undefined || value === current || !get().snapEnabled || options.exact
+            ? value
+            : snapLength(value, unit);
         const wanted = {
-          width: Math.max(MIN_ELEMENT_SIDE, size.width ?? element.shape.width),
-          depth: Math.max(MIN_ELEMENT_SIDE, size.depth ?? element.shape.depth),
+          width: Math.max(MIN_ELEMENT_SIDE, tidy(size.width, element.shape.width) ?? element.shape.width),
+          depth: Math.max(MIN_ELEMENT_SIDE, tidy(size.depth, element.shape.depth) ?? element.shape.depth),
         };
         // A pergola dragged by its handles stops at the largest one made, as a typed size does.
         const definition = structureDefinitionFor(element);
@@ -819,23 +1464,25 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         return { ...element, shape: { ...element.shape, ...next } };
       }),
 
-    rotateElementLive: (id, degrees) =>
+    rotateElementLive: (id, degrees, options = {}) =>
       applyLive(id, (element) => {
         if (element.shape.kind !== 'rect') return element;
-        const normalised = ((degrees % 360) + 360) % 360;
+        /*
+         * With snap on, a dragged rotation lands on a 15° step or square to the house — a patio
+         * turned 31.7° by hand is never what anybody meant. The house's bearing is the one
+         * reference worth offering: it is what a terrace, a path and a pergola are laid square to.
+         */
+        const normalised = get().snapEnabled && !options.exact
+          ? snapRotation(degrees, rotationReferences(element))
+          : ((degrees % 360) + 360) % 360;
 
         return { ...element, shape: { ...element.shape, rotation: normalised } };
       }),
 
     nudgeSelection: (dx, dy) => {
-      const { selectedId } = get();
+      const { selectedId, selectedIds } = get();
       if (!selectedId) return;
-
-      const element = get().present.elements.find((candidate) => candidate.id === selectedId);
-      if (!element) return;
-
-      const at = elementAnchor(element);
-      applyLive(selectedId, () => translateTo(element, { x: at.x + dx, y: at.y + dy }));
+      moveGroupLive(selectedIds.length > 1 ? selectedIds : [selectedId], dx, dy);
     },
 
     renameElement: (id, name) =>
@@ -846,9 +1493,45 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
     // Material is the one edit a locked base fill accepts — turning the lawn to gravel is a real
     // decision, and it cannot open a gap in the ground.
     setMaterial: (id, materialId) =>
-      commitElement(id, (element) => ({ ...element, material: materialId }), {
+      commitElement(id, (element) => withMaterial(element, materialId), {
         checkGeometry: false,
       }),
+
+    setEnclosure: (id, patch) =>
+      commitElement(id, (element) => {
+        if (element.category !== 'enclosure' || element.shape.kind !== 'polyline') return element;
+        const kind = patch.kind ?? element.enclosure?.kind ?? 'fence';
+        const spec = ENCLOSURE_KINDS[kind];
+        const next: DesignElement = { ...element, enclosure: { ...element.enclosure, kind } };
+        if (patch.kind && patch.kind !== element.enclosure?.kind) {
+          next.shape = { ...element.shape, width: spec.thickness };
+          if (!element.material || !spec.materials.includes(element.material)) next.material = spec.material;
+          /* A height typed for a fence is not the height of the wall it became. */
+          delete next.height;
+          next.name = spec.label;
+        }
+        if (kind !== 'hedge' || patch.plantId === null) delete next.plantId;
+        else if (patch.plantId) next.plantId = patch.plantId;
+        return next;
+      }),
+
+    /*
+     * A bed's own mix, or `undefined` to go back to its material's. Normalised on the way in, so a
+     * stored mix always sums to a whole bed whatever the panel sent.
+     */
+    setPlanting: (id, planting) =>
+      commitElement(
+        id,
+        (element) => {
+          if (element.category !== 'planting-bed' || element.shape.kind === 'point') return element;
+          const next = { ...element };
+          const mix = planting ? normalisedMix(planting.mix) : [];
+          if (mix.length > 0) next.planting = { mix };
+          else delete next.planting;
+          return next;
+        },
+        { checkGeometry: false },
+      ),
 
     /*
      * Like `setMaterial`, this is accepted on a locked base fill: edging the lawn is a real
@@ -885,7 +1568,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       const element = get().present.elements.find((candidate) => candidate.id === id);
       if (!element || !structureDefinitionFor(element)) return;
       set({
-        selectedId: id,
+        ...only(id),
         edgeEdit: null,
         clash: null,
         structureEdit: { elementId: id, pieceId: null },
@@ -1120,29 +1803,191 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         checkGeometry: false,
       }),
 
+    openVertexEdit: (id) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element || !geometryVertices(element.shape)) return;
+      if (isLocked(element)) {
+        set({ clash: lockRefusal(element) });
+        return;
+      }
+      set((state) => ({
+        ...only(id),
+        vertexEdit: { id, selectedIndex: null },
+        edgeEdit: null,
+        clash: null,
+        ...(state.structureEdit ? { structureEdit: null } : {}),
+      }));
+    },
+
+    closeVertexEdit: () => set({ vertexEdit: null }),
+
+    selectVertex: (index) =>
+      set((state) => (state.vertexEdit ? { vertexEdit: { ...state.vertexEdit, selectedIndex: index } } : state)),
+
+    moveVertexLive: (id, index, raw, options) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element) return;
+      const points = geometryVertices(element.shape);
+      if (!points) return;
+
+      /*
+       * The corner lands on what it is near — another corner, a wall, a line something is level
+       * with, the grid — and never somewhere the outline would be refused: a snap that would fold
+       * the shape or carry it over the fence is passed over for the next.
+       */
+      const attempt = (at: Point) =>
+        withGeometryVertices(
+          element.shape,
+          points.map((point, at_) => (at_ === index ? at : point)),
+        );
+      const snap = snapPointTo(raw, planTargetsExcluding([id]), {
+        enabled: get().snapEnabled,
+        unit: useBoundaryStore.getState().unit,
+        threshold: zoomReach(options),
+        accept: (at) => {
+          const shape = attempt(at);
+          return vertexEditRefusal(shape) === null && refusalFor({ ...element, shape }) === null;
+        },
+      });
+      set({ alignments: snap.guides, snapMarker: snap.marker });
+      reshapeCorners(id, () => attempt(snap.point), 'live');
+    },
+
+    insertVertex: (id, edgeIndex, at) => {
+      const inserted = reshapeCorners(
+        id,
+        (shape) => {
+          const points = geometryVertices(shape);
+          if (!points) return null;
+          if (shape.kind === 'polyline' && edgeIndex >= points.length - 1) return null;
+          return withGeometryVertices(shape, [
+            ...points.slice(0, edgeIndex + 1),
+            { x: at.x, y: at.y },
+            ...points.slice(edgeIndex + 1),
+          ]);
+        },
+        'commit',
+      );
+      if (inserted) get().selectVertex(edgeIndex + 1);
+    },
+
+    deleteVertex: (id, index) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element) return;
+      const points = geometryVertices(element.shape);
+      if (!points) return;
+      if (points.length <= minimumGeometryVertices(element.shape)) {
+        set({
+          clash:
+            element.shape.kind === 'polygon'
+              ? 'A shape needs at least three corners.'
+              : 'A path needs at least two points.',
+        });
+        return;
+      }
+      const removed = reshapeCorners(
+        id,
+        (shape) => withGeometryVertices(shape, points.filter((_, at) => at !== index)),
+        'commit',
+      );
+      if (removed) get().selectVertex(null);
+    },
+
+    setCornerRadiusLive: (id, radius) => {
+      reshapeCorners(id, (shape) => (shape.kind === 'polygon' ? withCornerRadius(shape, radius) : null), 'live');
+    },
+
+    setPathWidth: (id, width) => {
+      if (!Number.isFinite(width) || width < MIN_ELEMENT_SIDE) return;
+      reshapeCorners(
+        id,
+        (shape) => (shape.kind === 'polyline' ? { ...shape, width: Math.min(width, 5) } : null),
+        'commit',
+      );
+    },
+
+    setSideLength: (id, edgeIndex, metres) => {
+      if (!Number.isFinite(metres) || metres <= 0) return;
+      reshapeCorners(
+        id,
+        (shape) =>
+          shape.kind === 'polygon' ? { ...shape, points: reflowEdge(shape.points, edgeIndex, metres) } : null,
+        'commit',
+      );
+    },
+
+    convertToPolygon: (id) => {
+      const element = get().present.elements.find((candidate) => candidate.id === id);
+      if (!element || !canConvertToPolygon(element) || element.shape.kind !== 'rect') return;
+      /*
+       * The same four corners in the order `rectToPolygon` gives them, which is the order the side
+       * chains number a rectangle's sides in — so every custom edge run stays on the side it was on.
+       */
+      const points = rectToPolygon(element.shape);
+      commitElement(id, (current) => ({ ...current, shape: { kind: 'polygon', points, cornerRadius: 0 } }));
+    },
+
+    toggleLocked: (ids) =>
+      commit((draft) => {
+        const targets = draft.elements.filter(
+          (element) => ids.includes(element.id) && !isGroundLayer(element),
+        );
+        if (targets.length === 0) return null;
+        const lock = !targets.every(isUserLocked);
+        return {
+          ...draft,
+          elements: draft.elements.map((element) => {
+            if (!targets.includes(element)) return element;
+            if (lock) return { ...element, locked: true };
+            const { locked: _locked, ...unlocked } = element;
+            return unlocked;
+          }),
+        };
+      }),
+
     duplicateElement: (id) => {
       const element = get().present.elements.find((candidate) => candidate.id === id);
       if (!element || isLocked(element)) {
-        if (element) set({ clash: LOCKED_CLASH });
+        if (element) set({ clash: lockRefusal(element) });
         return;
       }
 
-      // Offset by a metre so the copy is visible rather than exactly behind the original.
+      /*
+       * Offset by a metre so the copy is visible rather than exactly behind the original — down and
+       * right first, then the other three diagonals, because a bench against the right-hand fence
+       * has nowhere to go down and right and the copy would be refused for a reason nobody chose.
+       */
       const at = elementAnchor(element);
-      const copy: DesignElement = {
-        ...translateTo(element, { x: at.x + 1, y: at.y + 1 }),
-        id: nextElementId(),
-        name: defaultName(element.category, get().present.elements),
-      };
+      const copyId = nextElementId();
+      const name = copyName(element, get().present.elements);
+      const offsets = [
+        { x: 1, y: 1 },
+        { x: -1, y: 1 },
+        { x: 1, y: -1 },
+        { x: -1, y: -1 },
+      ];
+      let copy: DesignElement | null = null;
+      let refusal: string | null = null;
+      for (const offset of offsets) {
+        const candidate: DesignElement = {
+          ...translateTo(element, { x: at.x + offset.x, y: at.y + offset.y }),
+          id: copyId,
+          name,
+        };
+        refusal = refusalFor(candidate);
+        if (!refusal) {
+          copy = candidate;
+          break;
+        }
+      }
 
-      const refusal = refusalFor(copy);
-      if (refusal) {
+      if (!copy) {
         set({ clash: refusal });
         return;
       }
 
       commit((draft) => ({ ...draft, elements: [...draft.elements, copy] }));
-      set({ selectedId: copy.id });
+      set(only(copy.id));
     },
 
     deleteElement: (id) => {
@@ -1150,7 +1995,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       if (!element) return;
 
       if (isLocked(element)) {
-        set({ clash: LOCKED_CLASH });
+        set({ clash: lockRefusal(element) });
         return;
       }
 
@@ -1159,7 +2004,10 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         elements: draft.elements.filter((candidate) => candidate.id !== id),
       }));
       set((state) => ({
-        selectedId: state.selectedId === id ? null : state.selectedId,
+        ...withSelection(
+          state,
+          state.selectedIds.filter((candidate) => candidate !== id),
+        ),
         structureEdit:
           state.structureEdit?.elementId === id
             ? null
@@ -1183,11 +2031,14 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
      *
      * The same bracket is what makes an applied AI diff a single undo step.
      */
-    beginGesture: () => set((state) => ({ gestureSnapshot: state.present })),
+    beginGesture: () => {
+      gestureTargets = null;
+      set((state) => ({ gestureSnapshot: state.present }));
+    },
 
     setSize: (id, size) => {
       get().beginGesture();
-      get().resizeElementLive(id, size);
+      get().resizeElementLive(id, size, { exact: true });
       get().endGesture();
     },
 
@@ -1195,8 +2046,9 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       set((state) => {
         const snapshot = state.gestureSnapshot;
         // The guides only mean anything mid-gesture.
-        if (!snapshot) return { gestureSnapshot: null, alignments: [] };
-        if (sameElements(snapshot, state.present)) return { gestureSnapshot: null, alignments: [] };
+        if (!snapshot) return { gestureSnapshot: null, alignments: [], snapMarker: null };
+        if (sameElements(snapshot, state.present))
+          return { gestureSnapshot: null, alignments: [], snapMarker: null };
 
         /*
          * One event per gesture, which is the same unit the undo stack uses and for the same
@@ -1215,6 +2067,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         return {
           gestureSnapshot: null,
           alignments: [],
+          snapMarker: null,
           past: [...state.past, snapshot].slice(-HISTORY_LIMIT),
           future: [],
           lastSavedAt: Date.now(),
@@ -1244,7 +2097,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
       if (layoutFingerprint(present.elements) !== revision.afterFingerprint) return;
 
       commit((draft) => ({ ...draft, elements: revision.before }));
-      set({ revision: null, selectedId: null });
+      set({ revision: null, ...only(null) });
     },
 
     undo: () =>
@@ -1257,6 +2110,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           present: previous,
           future: [state.present, ...state.future].slice(0, HISTORY_LIMIT),
           clash: null,
+          ...historySelection(state, previous),
         };
       }),
 
@@ -1270,6 +2124,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           present: { ...next, elements: associatePlants(next.elements) },
           future: rest,
           clash: null,
+          ...historySelection(state, next),
         };
       }),
 
@@ -1283,7 +2138,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
           past: [...state.past, state.present].slice(-HISTORY_LIMIT),
           present: { elements: state.pristine },
           future: [],
-          selectedId: null,
+          ...only(null),
           clash: null,
           lastSavedAt: Date.now(),
         };
@@ -1306,38 +2161,138 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
     toggleDimensions: () => set((state) => ({ dimensionsVisible: !state.dimensionsVisible })),
 
+    toggleGroup: (group) =>
+      set((state) => {
+        const hiding = !state.hiddenGroups.includes(group);
+        const hiddenGroups = hiding
+          ? [...state.hiddenGroups, group]
+          : state.hiddenGroups.filter((candidate) => candidate !== group);
+        /* A selection nobody can see is a selection Delete would act on blind: the hidden members go. */
+        const kept = hiding
+          ? state.selectedIds.filter((id) => {
+              const element = state.present.elements.find((candidate) => candidate.id === id);
+              return element !== undefined && viewGroupOf(element) !== group;
+            })
+          : state.selectedIds;
+        return { hiddenGroups, ...(kept.length === state.selectedIds.length ? {} : withSelection(state, kept)) };
+      }),
+
     setMode: (mode) =>
       set({
         mode,
         placingCategory: null,
         placingSymbol: null,
         placingPlantId: null,
+        placingEnclosure: null,
+        draftPoints: [],
         measurement: null,
         clash: null,
       }),
 
     setPlacing: (category, symbol = null, plantId = null) =>
-      set({
+      set((state) => ({
         placingCategory: category,
         placingSymbol: symbol,
         placingPlantId: plantId,
+        placingEnclosure: null,
+        draftPoints: [],
+        /* A path is only offered for paving and gravel; switching to anything else drops back. */
+        placingTool:
+          state.placingTool === 'polyline' && category !== 'paved-area' && category !== 'gravel-mulch'
+            ? 'rect'
+            : state.placingTool,
+        mode: 'select',
+        clash: null,
+      })),
+
+    setPlacingEnclosure: (kind) =>
+      set({
+        placingCategory: kind ? 'enclosure' : null,
+        placingSymbol: null,
+        placingPlantId: null,
+        placingEnclosure: kind,
+        placingTool: kind ? 'polyline' : 'rect',
+        draftPoints: [],
         mode: 'select',
         clash: null,
       }),
 
-    addMeasurePoint: (point) =>
+    setPlacingTool: (tool) => set({ placingTool: tool, draftPoints: [], clash: null }),
+
+    previewDraftPoint: (raw, options) => draftSnap(raw, get().draftPoints, options),
+
+    addDraftPoint: (raw, options = {}) => {
+      const { placingTool, draftPoints } = get();
+      if (placingTool === 'rect') return 'ignored';
+      const step = draftStep(draftPoints, raw, placingTool, (at, points) => draftSnap(at, points, options));
+      if (step.kind === 'close') {
+        get().finishDraft(options);
+        return 'closed';
+      }
+      if (step.kind === 'ignore') return 'ignored';
+      set({ draftPoints: [...draftPoints, step.point], clash: null });
+      return 'added';
+    },
+
+    finishDraft: (options = {}) => {
+      const { placingCategory, placingTool, draftPoints, placingEnclosure } = get();
+      if (!placingCategory || placingTool === 'rect') return;
+      /* A fence is drawn at its own thickness — a line of the kind's width, not a path's. */
+      const kind = placingCategory === 'enclosure' ? (placingEnclosure ?? 'fence') : null;
+      const shape = finishedGeometry(draftPoints, placingTool, kind ? ENCLOSURE_KINDS[kind].thickness : DRAWN_PATH_WIDTH);
+      if (!shape) {
+        set({
+          clash:
+            placingTool === 'polygon'
+              ? 'A shape needs at least three corners, and must not cross itself.'
+              : kind
+                ? 'A line needs at least two points, half a metre apart.'
+                : 'A path needs at least two points, half a metre apart.',
+        });
+        return;
+      }
+      const extra: Partial<DesignElement> = kind
+        ? {
+            enclosure: { kind },
+            material: ENCLOSURE_KINDS[kind].material,
+            name: ENCLOSURE_KINDS[kind].label,
+          }
+        : {};
+      if (addDrawnElement(placingCategory, shape, extra)) {
+        set(
+          options.keepArmed
+            ? { draftPoints: [] }
+            : {
+                draftPoints: [],
+                placingCategory: null,
+                placingSymbol: null,
+                placingPlantId: null,
+                placingEnclosure: null,
+                ...(kind ? { placingTool: 'rect' as const } : {}),
+              },
+        );
+      }
+    },
+
+    cancelDraft: () => set({ draftPoints: [], clash: null }),
+
+    addMeasurePoint: (raw, options) => {
+      const point = snappedPointer(raw, options);
       set((state) => {
         if (!state.measurement || state.measurement.to)
           return { measurement: { from: point, to: null } };
         return { measurement: { ...state.measurement, to: point } };
-      }),
+      });
+    },
 
-    trackMeasurePointer: (point) =>
+    trackMeasurePointer: (raw, options) => {
+      const point = snappedPointer(raw, options);
       set((state) =>
         state.measurement && !state.measurement.to
           ? { measurement: { ...state.measurement, to: point } }
           : state,
-      ),
+      );
+    },
 
     clearMeasurement: () => set({ measurement: null }),
 
@@ -1391,7 +2346,7 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
 
         if (change.kind === 'remove') {
           if (isLocked(existing)) {
-            outcome.refused.push({ changeId: change.id, reason: LOCKED_CLASH });
+            outcome.refused.push({ changeId: change.id, reason: lockRefusal(existing) });
             continue;
           }
 
@@ -1408,8 +2363,13 @@ export const usePlanEditorStore = create<PlanEditorState>((set, get) => {
         // A material or an edge treatment cannot move anything, so neither answers to the geometry.
         const movesGeometry = change.kind !== 'material' && change.kind !== 'edge';
 
-        if (movesGeometry && isLocked(existing)) {
-          outcome.refused.push({ changeId: change.id, reason: LOCKED_CLASH });
+        /*
+         * A user's lock holds against the designer entirely — its material and its edging too. Only
+         * the ground layer's lock is about geometry alone, because turning the lawn to gravel is the
+         * edit a base fill exists to accept.
+         */
+        if ((movesGeometry && isLocked(existing)) || isUserLocked(existing)) {
+          outcome.refused.push({ changeId: change.id, reason: lockRefusal(existing) });
           continue;
         }
 
@@ -1526,9 +2486,13 @@ function sameElements(a: PlanEditorDraft, b: PlanEditorDraft): boolean {
       element.zone === other.zone &&
       element.elevation === other.elevation &&
       element.hidden === other.hidden &&
+      element.locked === other.locked &&
       element.edging === other.edging &&
       element.height === other.height &&
       element.symbol === other.symbol &&
+      element.plantId === other.plantId &&
+      JSON.stringify(element.planting ?? null) === JSON.stringify(other.planting ?? null) &&
+      JSON.stringify(element.enclosure ?? null) === JSON.stringify(other.enclosure ?? null) &&
       JSON.stringify(element.structure ?? null) === JSON.stringify(other.structure ?? null) &&
       JSON.stringify(element.shape) === JSON.stringify(other.shape) &&
       /*
@@ -1576,21 +2540,29 @@ function ephemeralState() {
     future: [] as PlanEditorDraft[],
     mode: 'select' as PlanEditorMode,
     selectedId: null as string | null,
+    selectedIds: [] as string[],
+    marquee: null as { start: Point; current: Point } | null,
     placingCategory: null as ElementCategory | null,
     placingSymbol: null as SymbolId | null,
     placingPlantId: null as string | null,
+    placingEnclosure: null as EnclosureKind | null,
+    placingTool: 'rect' as PlacingTool,
+    draftPoints: [] as Point[],
     snapEnabled: true,
     gridVisible: false,
     shadowsVisible: true,
     labelsVisible: false,
     zonesVisible: false,
     dimensionsVisible: false,
+    hiddenGroups: [] as ViewGroup[],
     alignments: [] as AlignmentGuide[],
+    snapMarker: null as Point | null,
     measurement: null,
     clash: null as string | null,
     gestureSnapshot: null as PlanEditorDraft | null,
     edgeEdit: null as EdgeEditState | null,
     structureEdit: null as StructureEditState | null,
+    vertexEdit: null as VertexEditState | null,
   };
 }
 

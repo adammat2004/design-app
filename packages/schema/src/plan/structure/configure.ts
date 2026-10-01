@@ -1,4 +1,4 @@
-import type { Point } from '../../geometry/primitives.js';
+import { normaliseDegrees, type Point } from '../../geometry/primitives.js';
 import type { BudgetBand, StyleDirection } from '../brief.js';
 import type { DesignElement } from '../concepts.js';
 import type { PrivacyStrategy } from '../design/vocabulary.js';
@@ -204,9 +204,4 @@ function clampToDefinition(element: DesignElement, definition: StructureDefiniti
   const depth = Math.min(shape.depth, definition.dimensions.depth.max);
   if (width === shape.width && depth === shape.depth) return element;
   return { ...element, shape: { ...shape, width, depth } };
-}
-
-function normaliseDegrees(degrees: number): number {
-  const turned = degrees % 360;
-  return turned < 0 ? turned + 360 : turned;
 }

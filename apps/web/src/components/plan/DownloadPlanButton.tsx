@@ -10,6 +10,7 @@ import { useBoundaryStore } from '@/state/boundary-store';
 import { usePlanEditorStore } from '@/state/plan-editor-store';
 import { ToolbarButton } from './ToolbarButton';
 import { edgeRulesNow } from '@/lib/edge-rules';
+import { isShown } from '@/lib/view-groups';
 
 /**
  * Downloads the plan as a PNG, drawn by the same composer the concept cards use.
@@ -34,7 +35,16 @@ export function DownloadPlanButton({ variant = 'toolbar' }: { variant?: 'toolbar
         {
           boundary: draftPolygon(boundaryDraft),
           house: boundaryDraft.house,
-          elements: editor.present.elements,
+          /*
+           * From the editor's toolbar the file is of the screen, hidden groups included — somebody
+           * who switched the furniture off to show the paving wants a picture of the paving. From
+           * the review screen it is of the design: nothing there says a group is hidden, so a
+           * download missing the lighting would be a file that disagrees with the page it came from.
+           */
+          elements:
+            variant === 'toolbar'
+              ? editor.present.elements.filter((element) => isShown(element, editor.hiddenGroups))
+              : editor.present.elements,
           // The same brief the screen resolves its edging against, or the download would differ.
           edgeRules: edgeRulesNow(),
           site: boundaryDraft,
@@ -45,6 +55,7 @@ export function DownloadPlanButton({ variant = 'toolbar' }: { variant?: 'toolbar
           shadows: editor.shadowsVisible,
           rendererVersion: browserRendererVersion(),
           fileName: planFileName(projectName),
+          title: projectName,
         },
       );
       /*

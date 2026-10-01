@@ -1,7 +1,6 @@
 import {
-  boundingBox,
   defaultMaterial,
-  elementOutline,
+  plantingExclusions,
   structureFloor,
   type DesignElement,
   type Point,
@@ -16,6 +15,8 @@ export function scenePasses(elements: DesignElement[]) {
   const objects: DesignElement[] = [];
   for (const element of elements) {
     if (element.hidden) continue;
+    /* A fence or a wall is drawn by the boundary painter as a run, never as a surface. */
+    if (element.category === 'enclosure') continue;
     const raised =
       element.category === 'structure' ||
       element.category === 'furniture' ||
@@ -59,30 +60,8 @@ export function scenePasses(elements: DesignElement[]) {
   return { ground, objects };
 }
 
-/** Only nearby footprints enter a bed's cache key; distant edits leave its raster intact. */
-export function plantingExclusions(bed: DesignElement, elements: DesignElement[]): Point[][] {
-  if (bed.category !== 'planting-bed' || bed.shape.kind === 'point' || bed.material === 'hedging')
-    return [];
-  const box = boundingBox(elementOutline(bed));
-  return elements
-    .filter(
-      (element) =>
-        element.id !== bed.id &&
-        !element.hidden &&
-        (element.role === 'feature' || element.shape.kind === 'point') &&
-        !(element.category === 'planting-bed' && element.shape.kind !== 'point'),
-    )
-    .map(elementOutline)
-    .filter((outline) => {
-      const other = boundingBox(outline);
-      return (
-        other.minX < box.minX + box.width &&
-        other.minX + other.width > box.minX &&
-        other.minY < box.minY + box.length &&
-        other.minY + other.length > box.minY
-      );
-    });
-}
+/** What leaves a gap in a bed's planting is geometry, and lives with the placements in the schema. */
+export { plantingExclusions };
 
 export function exclusionMap(elements: DesignElement[]): Map<string, Point[][]> {
   return new Map(

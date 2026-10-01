@@ -76,6 +76,15 @@ export const StructureConfigSchema = z.object({
    * structure did before this existed, so a stored plan is unchanged.
    */
   floor: z.string().optional(),
+  /**
+   * How it is drawn in 3D: absent (or `auto`) lets a renderer use a library model wherever one
+   * depicts exactly this configuration and fits its size; `procedural` always draws the parts; any
+   * other value is a library model id, pinned — used while it still depicts this configuration and
+   * fits, and the parts drawn otherwise. **Presentation only**: it never changes the rect, the
+   * height, the plan symbol, the shadows or the schedule, and a stale value draws the parts rather
+   * than refusing to load — the rule every field here follows. (See "Library models from Meshy".)
+   */
+  look: z.string().optional(),
 });
 export type StructureConfig = z.infer<typeof StructureConfigSchema>;
 
@@ -98,6 +107,7 @@ export interface StructureConfigPatch {
   sides?: Partial<Record<StructureSide, string | undefined>>;
   lighting?: boolean | undefined;
   floor?: string | undefined;
+  look?: string | undefined;
 }
 
 export function mergeStructureConfig(

@@ -9,8 +9,7 @@ import { materialFill, useSurfacePattern } from '@/lib/materials';
 import {
   canopiesForSymbol,
   CONTACT_SHADOW_SPRITE,
-  SYMBOL_SPRITES,
-} from '@/lib/materials/assets/material-assets';
+  SYMBOL_SPRITES, speciesPin } from '@/lib/materials/assets/material-assets';
 import { getAssetVariants, type LoadedAsset } from '@/lib/materials/assets/registry';
 import { useAssetVersion } from '@/lib/materials/assets/use-assets';
 import {
@@ -196,6 +195,25 @@ export function ElementDrawing({
               }
             : null
         }
+      />
+    );
+  }
+
+  /*
+   * A fence, a screen or a wall is drawn by the boundary painter as a run — posts, piers, a coping —
+   * so here it is only something to pick up: its line, invisible, with a hit width a finger can find
+   * at any zoom. Drawn as a path here as well, it would be paving laid under the fence.
+   */
+  if (element.category === 'enclosure' && shape.kind === 'polyline') {
+    return (
+      <Line
+        points={toPx(shape.points)}
+        stroke="#000"
+        opacity={0}
+        strokeWidth={Math.max(2, shape.width * transform.scale)}
+        hitStrokeWidth={Math.max(14, shape.width * transform.scale)}
+        lineCap="butt"
+        lineJoin="miter"
       />
     );
   }
@@ -702,6 +720,7 @@ function CanopySprite({
     element.id,
     canopies.length,
     (variant) => canopies[variant]?.entry.opaqueRadiusRatio ?? 1,
+    speciesPin(element.plantId)?.index ?? null,
   );
   const sprite = canopies[box.variant]!;
   const shadow = getAssetVariants(CONTACT_SHADOW_SPRITE)[0] ?? null;

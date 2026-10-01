@@ -339,6 +339,25 @@ describe.skipIf(connection === null)('GeometryValidationService', () => {
 
   /* ---------------------------------------------------------------- layout elements */
 
+  /*
+   * A fence is judged on its centreline, which lies *on* the boundary when it is built along one — a
+   * line with no interior point inside the plot, which `ST_Contains` would call outside. Covered, it
+   * is legal; one that runs out across the fence is still refused.
+   */
+  it('accepts a fence on the boundary line and refuses one that leaves the plot', async () => {
+    const fence = (id: string, points: Point[]): DesignElement => ({
+      ...element(id, { kind: 'polyline', points, width: 0.1 }),
+      category: 'enclosure',
+      enclosure: { kind: 'fence' },
+      material: 'closeboard-fence',
+    });
+    const onLine = await service.validate(plan({ elements: [fence('f-on', [{ x: 0, y: 0 }, { x: 10, y: 0 }])] }));
+    expect(onLine.violations).toEqual([]);
+
+    const out = await service.validate(plan({ elements: [fence('f-out', [{ x: 5, y: 4 }, { x: 12, y: 4 }])] }));
+    expect(out.violations.map((violation) => violation.code)).toEqual(['element_outside_boundary']);
+  });
+
   it('flags a layout element hanging over the boundary', async () => {
     const result = await service.validate(
       plan({

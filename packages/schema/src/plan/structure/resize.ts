@@ -4,7 +4,7 @@ import {
   polygonContainsPolygon,
   type Point,
 } from '../../geometry/primitives.js';
-import { elementOutline, isLocked, type DesignElement, type ElementCategory } from '../concepts.js';
+import { elementOutline, isGroundLayer, type DesignElement, type ElementCategory } from '../concepts.js';
 import { geometryOutline } from '../features.js';
 import { elementIsLegal, legalFootprint } from '../footprint.js';
 import { formatLength, formatLengthValue, type Unit } from '../units.js';
@@ -212,7 +212,7 @@ export function anchoredResize(
  * trunk may not stand in it), a bench beside it.
  */
 function isObstacle(other: DesignElement): boolean {
-  if (other.hidden || isLocked(other)) return false;
+  if (other.hidden || isGroundLayer(other)) return false;
   switch (other.category) {
     case 'lawn':
     case 'gravel-mulch':
@@ -285,7 +285,8 @@ export function structureConflicts(
       continue;
     }
     if (!isObstacle(other)) continue;
-    const footprint = geometryOutline(legalFootprint(other));
+    /* A fence is judged legal on its line, but it is in the way across its whole thickness. */
+    const footprint = geometryOutline(other.category === 'enclosure' ? other.shape : legalFootprint(other));
     const grown = overlapArea(footprint, after) - overlapArea(footprint, before);
     if (grown > OVERLAP_TOLERANCE) conflicts.push(elementConflict(other, 'overlaps'));
   }

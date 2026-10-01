@@ -1,5 +1,15 @@
-import type { PlanDocument } from '@garden-studio/schema';
-import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { ModelAssetSpec, ModelJobResult, PlanDocument } from '@garden-studio/schema';
+import { sql } from 'drizzle-orm';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 /**
  * A saved plan is stored as a JSONB document rather than normalised spatial columns.
@@ -69,3 +79,55 @@ export const designEvents = pgTable(
 );
 
 export type DesignEventRow = typeof designEvents.$inferSelect;
+
+/**
+ * The ledger of library models being made with Meshy — not the library itself.
+ *
+ * The library is `apps/web/public/models/library/library.json`, checked in, because a fresh clone,
+ * a marker and the phone all need it without this database. What lives here is the work in progress
+ * and what it cost: a spec, which Meshy task is making it, where it has got to, and the credits it
+ * consumed. The files themselves are on disk under `MODEL_STORAGE_DIR` (gitignored), one folder per
+ * job, because Meshy deletes its own copy three days after it finishes.
+ *
+ * `status` is advanced one step at a time by `ModelJobsService.advance`, every step claimed with a
+ * compare-and-swap on it, so two pollers can never both submit (and pay twice) or both download.
+ *
+ * **One live job per spec**, by a partial unique index: asking twice for the same gazebo while the
+ * first is still being made — or is waiting for review — finds the first instead of paying for a
+ * second. A failed, rejected or cancelled job releases the spec; an approved one is in the library,
+ * which is checked first anyway.
+ */
+export const modelGenerationJobs = pgTable(
+  'model_generation_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spec: jsonb('spec').$type<ModelAssetSpec>().notNull(),
+    specHash: text('spec_hash').notNull(),
+    status: text('status').notNull(),
+    /** A generated reference's file stem, or null for an uploaded picture. */
+    referenceName: text('reference_name'),
+    referenceSha256: text('reference_sha256').notNull(),
+    aiModel: text('ai_model').notNull(),
+    meshyTaskId: text('meshy_task_id'),
+    progress: integer('progress').notNull().default(0),
+    /** What Meshy says the task consumed: 0 until it finishes, and 0 when it fails. */
+    credits: integer('credits').notNull().default(0),
+    /** Times it has been submitted. A Meshy failure costs nothing and is retried once. */
+    attempts: integer('attempts').notNull().default(0),
+    error: text('error'),
+    /** When Meshy deletes the result; past this an unfetched result is gone. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    result: jsonb('result').$type<ModelJobResult>(),
+    publishedAssetId: text('published_asset_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('model_generation_jobs_live_spec_idx')
+      .on(table.specHash)
+      .where(sql`status not in ('failed', 'rejected', 'cancelled', 'approved')`),
+    index('model_generation_jobs_status_idx').on(table.status),
+  ],
+);
+
+export type ModelGenerationJobRow = typeof modelGenerationJobs.$inferSelect;

@@ -43,6 +43,8 @@ export const CATEGORY_COLOURS: Record<ElementCategory, CategoryStyle> = {
     stroke: STATUS_COLOURS.keep.stroke,
     label: 'Existing feature',
   },
+  /** Timber-brown: most of what a design proposes along a line is a fence or a screen. */
+  enclosure: { fill: '#c4ae8c', stroke: '#7a6747', label: 'Boundary' },
 };
 
 /**
